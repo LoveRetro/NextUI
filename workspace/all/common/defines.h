@@ -71,6 +71,10 @@
 #define FONT_SMALL 12	// button hint
 #define FONT_TINY 10	// multi char button label
 
+#ifndef MAX_LIGHTS
+#define MAX_LIGHTS 0
+#endif
+
 ///////////////////////////////
 
 #define STR_HELPER(x) #x

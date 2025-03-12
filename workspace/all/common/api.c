@@ -2404,6 +2404,17 @@ int PLAT_setDateTime(int y, int m, int d, int h, int i, int s) {
 	return 0; // why does this return an int?
 }
 
+///////////////////////////////
+// RGB LED cruft
+
+FALLBACK_IMPLEMENTATION void PLAT_initLeds(LightSettings *lights) {}
+FALLBACK_IMPLEMENTATION void PLAT_setLedBrightness(LightSettings *led) {}
+FALLBACK_IMPLEMENTATION void PLAT_setLedEffect(LightSettings *led){}
+FALLBACK_IMPLEMENTATION void PLAT_setLedColor(LightSettings *led){}
+FALLBACK_IMPLEMENTATION void PLAT_setLedInbrightness(LightSettings *led){}
+FALLBACK_IMPLEMENTATION void PLAT_setLedEffectCycles(LightSettings *led){}
+FALLBACK_IMPLEMENTATION void PLAT_setLedEffectSpeed(LightSettings *led){}
+
 // only indicator leds may work when battery is below PWR_LOW_CHARGE
 void LED_setIndicator(int effect,uint32_t color, int cycles,int ledindex) {
 	int lightsize = sizeof(lights) / sizeof(lights[0]);

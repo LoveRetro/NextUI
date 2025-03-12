@@ -60,7 +60,9 @@ system:
 	cp ./workspace/all/battery/build/$(PLATFORM)/battery.elf ./build/EXTRAS/Tools/$(PLATFORM)/Battery.pak/
   
 	cp ./workspace/all/settings/build/$(PLATFORM)/settings.elf ./build/EXTRAS/Tools/$(PLATFORM)/Settings.pak/
+ifeq ($(PLATFORM), tg5040)
 	cp ./workspace/all/ledcontrol/build/$(PLATFORM)/ledcontrol.elf ./build/EXTRAS/Tools/$(PLATFORM)/LedControl.pak/
+endif
 
 
 cores: # TODO: can't assume every platform will have the same stock cores (platform should be responsible for copy too)

@@ -11,6 +11,8 @@
 #define NUM_MAIN_OPTIONS 5
 #define MAX_NAME_LEN 255
 
+int is_brick = 0;
+
 const char *lightnames[4];
 #define NROF_TRIGGERS 14
 const char *triggernames[] = {

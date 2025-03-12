@@ -2,7 +2,7 @@
 
 # dmesg > /storage/TF1/dmesg.txt
 
-export PLATFORM="magicmini"
+export PLATFORM="v10"
 export SDCARD_PATH="/storage/TF2"
 export BIOS_PATH="$SDCARD_PATH/Bios"
 export SAVES_PATH="$SDCARD_PATH/Saves"

@@ -1,0 +1,4 @@
+font=1
+color1=0xffffff
+color2=0x9b2257
+color3=0x1e2329
