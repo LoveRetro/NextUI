@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <msettings.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -1782,7 +1783,7 @@ int main (int argc, char *argv[]) {
 			oy = 0; // (screen->h - ph) / 2;
 
 			// window
-			// GFX_blitRect(ASSET_STATE_BG, screen, &(SDL_Rect){ox,oy,pw,ph});
+			GFX_blitRect(ASSET_STATE_BG, screen, &(SDL_Rect){ox,oy,pw,ph});
 
 			if(recents->count > 0) {
 				Entry *selectedEntry = entryFromRecent(recents->items[switcher_selected]);
@@ -1791,19 +1792,34 @@ int main (int argc, char *argv[]) {
 				if(has_preview) {
 					// lotta memory churn here
 					SDL_Surface* bmp = IMG_Load(preview_path);
-					SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA32, 0);
-					if (raw_preview) {
-						SDL_FreeSurface(bmp); 
-						bmp = raw_preview; 
+					// looks weird in a lot of cases, but fills the screen.
+					// TODO: maybe bring back as an option?
+					const bool roundAndStretched = false;
+					if(roundAndStretched) {
+						SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA32, 0);
+						if (raw_preview) {
+							SDL_FreeSurface(bmp); 
+							bmp = raw_preview; 
+						}
+						if(bmp) {
+							SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGBA32);					
+							SDL_Rect image_rect = {0, 0, screen->w, screen->h};
+							SDL_BlitScaled(bmp, NULL, scaled, &image_rect);
+							SDL_FreeSurface(bmp);
+							GFX_ApplyRounderCorners(scaled,30);
+							SDL_BlitSurface(scaled, NULL, screen, &image_rect);
+        					SDL_FreeSurface(scaled);  // Free after rendering
+						}
 					}
-					if(bmp) {
-						SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGBA32);					
-						SDL_Rect image_rect = {0, 0, screen->w, screen->h};
-						SDL_BlitScaled(bmp, NULL, scaled, &image_rect);
+					else {
+						SDL_Surface* raw_preview = SDL_ConvertSurface(bmp, screen->format, SDL_SWSURFACE);
+						SDL_Rect image_rect = {0, 0, raw_preview->w, raw_preview->h};
+						SDL_Rect preview_rect = {ox, oy, hw, hh};
+						SDL_Rect scaled_rect = GFX_scaled_rect(preview_rect, image_rect);
+						SDL_FillRect(screen, NULL, 0);
+						SDL_BlitScaled(raw_preview, NULL, screen, &scaled_rect);
+						SDL_FreeSurface(raw_preview);
 						SDL_FreeSurface(bmp);
-						GFX_ApplyRounderCorners(scaled,30);
-						SDL_BlitSurface(scaled, NULL, screen, &image_rect);
-						SDL_FreeSurface(scaled);  // Free after rendering
 					}
 				}
 				else {
