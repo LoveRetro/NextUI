@@ -3,7 +3,7 @@
 
 PLATFORM="miyoomini"
 SDCARD_PATH="/mnt/SDCARD"
-UPDATE_PATH="$SDCARD_PATH/MinUI.zip"
+UPDATE_PATH="$SDCARD_PATH/NextUI.zip"
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
 CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
@@ -40,7 +40,7 @@ if [ -f "$UPDATE_PATH" ]; then
 fi
 
 # or launch (and keep launched)
-LAUNCH_PATH="$SYSTEM_PATH/$PLATFORM/paks/MinUI.pak/launch.sh"
+LAUNCH_PATH="$SYSTEM_PATH/$PLATFORM/paks/NextUI.pak/launch.sh"
 while [ -f "$LAUNCH_PATH" ] ; do
 	"$LAUNCH_PATH"
 done

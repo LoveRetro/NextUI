@@ -14,5 +14,5 @@ show with
 70 is the bitmap header (as saved by Photoshop)
 +1 to address white (xxFFFFFF) shifting to teal (00FFFFxx)
 
-installing and updating bmp will be copied to SYSTEM.squashfs/usr/config/minui/
+installing and updating bmp will be copied to SYSTEM.squashfs/usr/config/nextui/
 boot.sh will become SYSTEM.squashfs/usr/bin/autostart.sh

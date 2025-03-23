@@ -528,7 +528,7 @@ void PLAT_enableBacklight(int enable) {
 }
 
 void PLAT_powerOff(void) {
-	system("rm -f /tmp/minui_exec && sync");
+	system("rm -f /tmp/nextui_exec && sync");
 	sleep(2);
 
 	SetRawVolume(MUTE_VOLUME_RAW);

@@ -4,7 +4,7 @@
 
 PLATFORM="m17"
 SDCARD_PATH="/sdcard"
-UPDATE_PATH="$SDCARD_PATH/MinUI.zip"
+UPDATE_PATH="$SDCARD_PATH/NextUI.zip"
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
 # install/update
@@ -27,7 +27,7 @@ if [ -f "$UPDATE_PATH" ]; then
 	dd if=/tmp/$ACTION of=/dev/fb0
 	sync
 	
-	# finally unzip MinUI.zip
+	# finally unzip NextUI.zip
 	unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH"
 	rm -f "$UPDATE_PATH"
 	sync
@@ -37,7 +37,7 @@ if [ -f "$UPDATE_PATH" ]; then
 	dd if=/dev/zero of=/dev/fb0
 fi
 
-LAUNCH_PATH="$SYSTEM_PATH/$PLATFORM/paks/MinUI.pak/launch.sh"
+LAUNCH_PATH="$SYSTEM_PATH/$PLATFORM/paks/NextUI.pak/launch.sh"
 while [ -f "$LAUNCH_PATH" ] ; do
 	taskset 8 "$LAUNCH_PATH"
 done

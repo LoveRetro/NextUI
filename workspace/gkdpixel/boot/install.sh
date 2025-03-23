@@ -8,7 +8,7 @@ fi
 
 cp boot.sh /usr/sbin/frontend_start
 
-mkdir -p /usr/share/minui
-cp *.bmp /usr/share/minui
+mkdir -p /usr/share/nextui
+cp *.bmp /usr/share/nextui
 
 /usr/sbin/frontend_start

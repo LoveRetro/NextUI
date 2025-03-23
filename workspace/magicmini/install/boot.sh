@@ -4,7 +4,7 @@
 
 SDCARD_PATH=/storage/TF2
 SYSTEM_FRAG=/.system/magicmini
-UPDATE_FRAG=/MinUI.zip
+UPDATE_FRAG=/NextUI.zip
 SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
 UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
 
@@ -14,14 +14,14 @@ if [ -f $UPDATE_PATH ]; then
 	
 	if [ ! -d $SYSTEM_PATH ]; then
 		ACTION=installing
-		echo "install MinUI" >> $SDCARD_PATH/log.txt
+		echo "install NextUI" >> $SDCARD_PATH/log.txt
 	else
 		ACTION=updating
-		echo "update MinUI" >> $SDCARD_PATH/log.txt
+		echo "update NextUI" >> $SDCARD_PATH/log.txt
 	fi
 	
 	# show action
-	dd if=/usr/config/minui/$ACTION.bmp of=/dev/fb0 bs=71 skip=1
+	dd if=/usr/config/nextui/$ACTION.bmp of=/dev/fb0 bs=71 skip=1
 	echo 0,0 > /sys/class/graphics/fb0/pan
 
 	unzip -o $UPDATE_PATH -d $SDCARD_PATH >> $SDCARD_PATH/log.txt
@@ -33,7 +33,7 @@ if [ -f $UPDATE_PATH ]; then
 	fi
 fi
 
-LAUNCH_PATH=$SYSTEM_PATH/paks/MinUI.pak/launch.sh
+LAUNCH_PATH=$SYSTEM_PATH/paks/NextUI.pak/launch.sh
 if [ -f $LAUNCH_PATH ]; then
 	$LAUNCH_PATH
 fi

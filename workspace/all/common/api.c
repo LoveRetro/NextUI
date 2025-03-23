@@ -118,7 +118,7 @@ static inline uint32_t UintMult(uint32_t color, uint32_t modulate_rgb)
 
 char *FONT_PATH;
 
-MinUISettings settings;
+NextUISettings settings;
 
 void loadSettings() {
 

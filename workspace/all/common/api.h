@@ -20,7 +20,7 @@ typedef struct
     uint32_t color2;
     uint32_t color3;
     uint32_t backgroundColor;
-} MinUISettings;
+} NextUISettings;
 
 
 
@@ -90,7 +90,7 @@ extern int currentcpuspeed;
 extern double currentcpuse;
 extern int currentcputemp;
 extern int should_rotate;
-extern MinUISettings settings;
+extern NextUISettings settings;
 volatile int useAutoCpu;
 
 enum {

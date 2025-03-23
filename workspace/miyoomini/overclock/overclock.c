@@ -90,15 +90,15 @@ void set_cpuclock(int clock) {
 
 int cpu_clocks[] = {
 	1700000, // 1.7GHz, Miyoo Mini max
-	1488000, // 1.5GHz, MinUI Performance + launch
+	1488000, // 1.5GHz, NextUI Performance + launch
 	1392000, // 1.4GHz
-	1296000, // 1.3GHz, MinUI Normal
+	1296000, // 1.3GHz, NextUI Normal
 	1200000, // 1.2GHz, Miyoo Mini default
-	1104000, // 1.1GHz, MinUI Powersave
+	1104000, // 1.1GHz, NextUI Powersave
 	1008000, // 1.0GHz, Anbernic RG35XX default
 	 840000, // 840MHz, 
 	 720000, // 720MHz, 
-	 504000, // 500MHz, MinUI menus
+	 504000, // 500MHz, NextUI menus
 	 240000, // 240MHz, 
 	      0,
 };

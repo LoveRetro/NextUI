@@ -1,7 +1,7 @@
 {
-"label":"MinUI Next Settings",
+"label":"NextUI Settings",
 "icon":"icon.png",
 "iconsel":"icon.png",
 "launch":"launch.sh",
-"description":"Adjust MinUI Next settings"
+"description":"Adjust NextUI settings"
 }

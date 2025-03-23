@@ -13,7 +13,7 @@
 #define fontcount 2
 const char *fontnames[] = {
     "Next", "OG"};
-MinUISettings uisettings;
+NextUISettings uisettings;
 
 int read_settings(const char *filename)
 {
