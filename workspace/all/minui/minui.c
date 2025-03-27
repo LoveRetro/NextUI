@@ -1502,7 +1502,6 @@ int main (int argc, char *argv[]) {
 			}
 		}
 		else if(show_switcher) {
-			PLAT_hapticMenu();
 			if (PAD_justPressed(BTN_B) || PAD_justReleased(BTN_SELECT)) {
 				show_switcher = 0;
 				switcher_selected = 0;
