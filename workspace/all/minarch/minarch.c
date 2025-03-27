@@ -4887,8 +4887,8 @@ static void Menu_loop(void) {
 	// GFX_setVsync(VSYNC_STRICT);
 	GFX_setEffect(EFFECT_NONE);
 	
+	VIB_setStrength(6);
 	int rumble_strength = VIB_getStrength();
-	VIB_setStrength(0);
 	
 	PWR_enableAutosleep();
 	PAD_reset();

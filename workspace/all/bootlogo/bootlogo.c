@@ -68,6 +68,7 @@ int loadImages()
     } else {
         // could not open directory
         LOG_error("could not open directory");
+        PLAT_hapticError();
         return 0;
     }
     return count;

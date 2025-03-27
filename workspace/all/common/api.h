@@ -429,6 +429,13 @@ void *PLAT_cpu_monitor(void *arg);
 void PLAT_setCPUSpeed(int speed); // enum
 void PLAT_setCustomCPUSpeed(int speed);
 void PLAT_setRumble(int strength);
+void PLAT_hapticShutdown(void);
+void PLAT_hapticBootup(void);
+void PLAT_hapticMenu(void);
+void PLAT_hapticSelect(void);
+void PLAT_hapticError(void);
+void PLAT_hapticMute(void);
+void PLAT_hapticSleep(void);
 int PLAT_pickSampleRate(int requested, int max);
 
 char* PLAT_getModel(void);

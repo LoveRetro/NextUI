@@ -125,6 +125,16 @@ int main (int argc, char *argv[]) {
 					else if (ev.code==CODE_MUTE) {
 						printf("mute: %i\n", val);
 						SetMute(val);
+						if (val) {
+							// don't want to use PLAT_hapticMute() because it complicates things
+							SetRumble(7);
+							usleep(150000);
+							SetRumble(0);
+							usleep(150000);
+							SetRumble(7);
+							usleep(150000);
+							SetRumble(0);
+						}
 					}
 				}
 				if (( ev.type != EV_KEY ) || ( val > REPEAT )) continue;

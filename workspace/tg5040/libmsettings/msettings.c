@@ -52,10 +52,24 @@ typedef struct SettingsV5 {
 	int jack; 
 } SettingsV5;
 
+// Current NextUI settings format
+typedef struct SettingsV6 {
+	int version; // future proofing
+	int brightness;
+	int colortemperature;
+	int headphones;
+	int speaker;
+	int mute;
+	int vibration;
+	int unused[2]; // for future use
+	// NOTE: doesn't really need to be persisted but still needs to be shared
+	int jack; 
+} SettingsV6;
+
 // When incrementing SETTINGS_VERSION, update the Settings typedef and add
 // backwards compatibility to InitSettings!
-#define SETTINGS_VERSION 5
-typedef SettingsV5 Settings;
+#define SETTINGS_VERSION 6
+typedef SettingsV6 Settings;
 static Settings DefaultSettings = {
 	.version = SETTINGS_VERSION,
 	.brightness = 2,
@@ -63,6 +77,7 @@ static Settings DefaultSettings = {
 	.headphones = 4,
 	.speaker = 8,
 	.mute = 0,
+	.vibration = 6,
 	.jack = 0,
 };
 static Settings* settings;
@@ -77,6 +92,20 @@ static int shm_size = sizeof(Settings);
 // #define BRIGHTNESS_PATH "/sys/class/backlight/backlight/brightness"
 // #define JACK_STATE_PATH "/sys/bus/platform/devices/singleadc-joypad/hp"
 // #define HDMI_STATE_PATH "/sys/class/extcon/hdmi/cable.0/state"
+
+
+void putFile(char* path, char* contents) {
+	FILE* file = fopen(path, "w");
+	if (file) {
+		fputs(contents, file);
+		fclose(file);
+	}
+}
+void putInt(char* path, int value) {
+	char buffer[8];
+	sprintf(buffer, "%d", value);
+	putFile(path, buffer);
+}
 
 int getInt(char* path) {
 	int i = 0;
@@ -136,6 +165,10 @@ void InitSettings(void) {
 					// read the rest
 					read(fd, settings, shm_size);
 				}
+				else if(version==5) {
+					SettingsV5 old;
+					read(fd, &old, sizeof(SettingsV5));
+				}
 				else if(version==4) {
 					SettingsV4 old;
 					read(fd, &old, sizeof(SettingsV4));
@@ -182,6 +215,7 @@ void InitSettings(void) {
 	SetVolume(GetVolume());
 	SetBrightness(GetBrightness());
 	SetColortemp(GetColortemp());
+	settings->vibration = 6;
 }
 void QuitSettings(void) {
 	munmap(settings, shm_size);
@@ -309,6 +343,37 @@ void SetVolume(int value) { // 0-20
 	SaveSettings();
 }
 
+int GetRumble(void) { // 0-10
+	return settings->vibration;
+}
+
+#define MAX_STRENGTH 0xFFFF
+#define MAX_SCALED_STRENGTH 10
+#define MIN_VOLTAGE 500000
+#define MAX_VOLTAGE 3300000
+
+void SetRumble(int value) {
+	// if (settings->vibration == value) return;
+	int voltage = MAX_VOLTAGE;
+
+	if(value > 0 && value < MAX_SCALED_STRENGTH) {
+		voltage = MIN_VOLTAGE + (int)(value * ((long long)(MAX_VOLTAGE - MIN_VOLTAGE) / MAX_SCALED_STRENGTH));
+	}
+	else if(value == 0) {
+		SetRawRumble(0);
+		SaveSettings();
+		return;
+	}
+	else {
+		voltage = MAX_VOLTAGE;
+	}
+
+	// enable
+	SetRawRumble(voltage);
+	SaveSettings();
+}
+
+
 #define DISP_LCD_SET_BRIGHTNESS  0x102
 void SetRawBrightness(int val) { // 0 - 255
 	// if (settings->hdmi) return;
@@ -369,6 +434,18 @@ void SetRawVolume(int val) { // 0-100
 	// sprintf(cmd, "amixer sset 'digital volume' %i%% &> /dev/null", 100-val);
 	// // puts(cmd); fflush(stdout);
 	// system(cmd);
+}
+
+#define RUMBLE_PATH "/sys/class/gpio/gpio227/value"
+#define RUMBLE_VOLTAGE_PATH "/sys/class/motor/voltage"
+void SetRawRumble(int val) {
+	if(val == 0) {
+		putInt(RUMBLE_VOLTAGE_PATH, MAX_VOLTAGE);
+		putInt(RUMBLE_PATH, 0);
+		return;
+	}
+	putInt(RUMBLE_VOLTAGE_PATH, val);
+	putInt(RUMBLE_PATH, (val) ? 1 : 0);
 }
 
 // monitored and set by thread in keymon
