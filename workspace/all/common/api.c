@@ -597,6 +597,7 @@ FALLBACK_IMPLEMENTATION void PLAT_hapticBootup(void) { }
 FALLBACK_IMPLEMENTATION void PLAT_hapticMenu(void) { }
 FALLBACK_IMPLEMENTATION void PLAT_hapticSelect(void) { }
 FALLBACK_IMPLEMENTATION void PLAT_hapticError(void) { }
+FALLBACK_IMPLEMENTATION void PLAT_hapticSleep(void) { }
 
 
 int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding) {
