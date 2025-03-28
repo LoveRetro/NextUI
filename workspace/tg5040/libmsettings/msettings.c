@@ -325,7 +325,8 @@ void SetVolume(int value) { // 0-20
 }
 
 int GetRumble(void) { // 0-10
-	return settings->vibration;
+	// TODO: implement or remove from msettings
+	return 0;
 }
 
 #define MAX_STRENGTH 0xFFFF
