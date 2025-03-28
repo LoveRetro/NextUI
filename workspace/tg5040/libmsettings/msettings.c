@@ -52,24 +52,11 @@ typedef struct SettingsV5 {
 	int jack; 
 } SettingsV5;
 
-// Current NextUI settings format
-typedef struct SettingsV6 {
-	int version; // future proofing
-	int brightness;
-	int colortemperature;
-	int headphones;
-	int speaker;
-	int mute;
-	int vibration;
-	int unused[2]; // for future use
-	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
-} SettingsV6;
 
 // When incrementing SETTINGS_VERSION, update the Settings typedef and add
 // backwards compatibility to InitSettings!
-#define SETTINGS_VERSION 6
-typedef SettingsV6 Settings;
+#define SETTINGS_VERSION 5
+typedef SettingsV5 Settings;
 static Settings DefaultSettings = {
 	.version = SETTINGS_VERSION,
 	.brightness = 2,
@@ -77,7 +64,6 @@ static Settings DefaultSettings = {
 	.headphones = 4,
 	.speaker = 8,
 	.mute = 0,
-	.vibration = 6,
 	.jack = 0,
 };
 static Settings* settings;
@@ -165,10 +151,6 @@ void InitSettings(void) {
 					// read the rest
 					read(fd, settings, shm_size);
 				}
-				else if(version==5) {
-					SettingsV5 old;
-					read(fd, &old, sizeof(SettingsV5));
-				}
 				else if(version==4) {
 					SettingsV4 old;
 					read(fd, &old, sizeof(SettingsV4));
@@ -215,7 +197,6 @@ void InitSettings(void) {
 	SetVolume(GetVolume());
 	SetBrightness(GetBrightness());
 	SetColortemp(GetColortemp());
-	settings->vibration = 6;
 }
 void QuitSettings(void) {
 	munmap(settings, shm_size);
