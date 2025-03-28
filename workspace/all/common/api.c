@@ -2343,7 +2343,7 @@ static void* VIB_thread(void *arg) {
 			vib.strength = vib.queued_strength;
 			defer = 0;
 
-			PLAT_setRumble(vib.strength);
+			SetRumble(vib.strength);
 		}
 	}
 	return 0;
