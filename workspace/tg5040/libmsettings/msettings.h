@@ -7,14 +7,17 @@ void QuitSettings(void);
 int GetBrightness(void);
 int GetColortemp(void);
 int GetVolume(void);
+int GetRumble(void);
 
 void SetRawBrightness(int value); // 0-255
 void SetRawColortemp(int value); // 0-255
 void SetRawVolume(int value); // 0-100
+void SetRawRumble(int value); // 0-10
 
 void SetBrightness(int value); // 0-10
 void SetColortemp(int value); // 0-10
 void SetVolume(int value); // 0-20
+void SetRumble(int value); // 0-10
 
 int GetJack(void);
 void SetJack(int value); // 0-1

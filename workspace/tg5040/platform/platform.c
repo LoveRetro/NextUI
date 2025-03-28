@@ -617,6 +617,7 @@ void PLAT_enableBacklight(int enable) {
 }
 
 void PLAT_powerOff(void) {
+	VIB_longPulse(5);
 	system("rm -f /tmp/minui_exec && sync");
 	sleep(2);
 
@@ -793,23 +794,9 @@ void PLAT_setCPUSpeed(int speed) {
 	putInt(GOVERNOR_PATH, freq);
 }
 
-#define RUMBLE_PATH "/sys/class/gpio/gpio227/value"
-#define RUMBLE_VOLTAGE_PATH "/sys/class/motor/voltage"
-#define MAX_STRENGTH 0xFFFF
-#define MIN_VOLTAGE 500000
-#define MAX_VOLTAGE 3300000
 
 void PLAT_setRumble(int strength) {
-	if(strength != 0) {
-		int voltage = MIN_VOLTAGE + (int)((strength * (long long)(MAX_VOLTAGE - MIN_VOLTAGE)) / MAX_STRENGTH);
-		putInt(RUMBLE_VOLTAGE_PATH, voltage);
-	}
-	else {
-		putInt(RUMBLE_VOLTAGE_PATH, MAX_VOLTAGE);
-	}
-
-	// enable
-	putInt(RUMBLE_PATH, (strength && !GetMute()) ? 1 : 0);
+	SetRumble(strength);
 }
 
 int PLAT_pickSampleRate(int requested, int max) {
@@ -1172,4 +1159,6 @@ void PLAT_setLedColor(LightSettings *led)
     }
     PLAT_chmod(filepath, 0);
 }
+
+
 

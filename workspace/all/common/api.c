@@ -590,6 +590,7 @@ void GFX_delay(void) {
 FALLBACK_IMPLEMENTATION int PLAT_supportsOverscan(void) { return 0; }
 FALLBACK_IMPLEMENTATION void PLAT_setEffectColor(int next_color) { }
 
+
 int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding) {
 	int text_width;
 	strcpy(out_name, in_name);
@@ -2352,7 +2353,7 @@ static void* VIB_thread(void *arg) {
 			vib.strength = vib.queued_strength;
 			defer = 0;
 
-			PLAT_setRumble(vib.strength);
+			SetRumble(vib.strength);
 		}
 	}
 	return 0;
@@ -2375,6 +2376,42 @@ void VIB_setStrength(int strength) {
 }
 int VIB_getStrength(void) {
 	return vib.strength;
+}
+
+// generic vibration functions
+#define VIB_SHORT_PULSE_DURATION 250
+#define VIB_DOUBLE_PULSE_DURATION 400
+#define VIB_TRIPLE_PULSE_DURATION 600
+#define VIB_LONG_PULSE_DURATION 750
+
+void VIB_shortPulse(int strength) {
+    VIB_setStrength(0);
+	VIB_setStrength(strength);
+    usleep(VIB_SHORT_PULSE_DURATION * 1000);
+    VIB_setStrength(0);
+}
+
+void VIB_doublePulse(int strength, int gap_ms) {
+    VIB_setStrength(0);
+	VIB_shortPulse(strength);
+    usleep(gap_ms * 1000);
+    VIB_shortPulse(strength);
+}
+
+void VIB_triplePulse(int strength, int gap_ms) {
+    VIB_setStrength(0);
+	VIB_shortPulse(strength);
+    usleep(gap_ms * 1000);
+    VIB_shortPulse(strength);
+    usleep(gap_ms * 1000);
+    VIB_shortPulse(strength);
+}
+
+void VIB_longPulse(int strength) {
+	VIB_setStrength(0);
+    VIB_setStrength(strength);
+    usleep(VIB_LONG_PULSE_DURATION * 1000);
+    VIB_setStrength(0);
 }
 
 ///////////////////////////////
@@ -2426,8 +2463,9 @@ void PWR_init(void) {
 	pwr.charge = PWR_LOW_CHARGE;
 	
 	PWR_initOverlay();
-
 	PWR_updateBatteryStatus();
+	// Add bootup haptic feedback
+    VIB_longPulse(5);
 	pthread_create(&pwr.battery_pt, NULL, &PWR_monitorBattery, NULL);
 	pwr.initialized = 1;
 }
@@ -2602,6 +2640,7 @@ void PWR_powerOff(void) {
 		PLAT_clearVideo(gfx.screen);
 		GFX_blitMessage(font.large, msg, gfx.screen,&(SDL_Rect){0,0,gfx.screen->w,gfx.screen->h}); //, NULL);
 		GFX_flip(gfx.screen);
+
 		PLAT_powerOff();
 	}
 }
@@ -2615,6 +2654,7 @@ static void PWR_enterSleep(void) {
 	}
 	else {
 		SetRawVolume(MUTE_VOLUME_RAW);
+		VIB_shortPulse(5);
 		PLAT_enableBacklight(0);
 	}
 	system("killall -STOP keymon.elf");
@@ -2634,6 +2674,7 @@ static void PWR_exitSleep(void) {
 		// buh
 	}
 	else {
+		VIB_shortPulse(5);
 		PLAT_enableBacklight(1);
 		SetVolume(GetVolume());
 	}
