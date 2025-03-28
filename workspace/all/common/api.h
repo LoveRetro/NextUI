@@ -339,10 +339,10 @@ void VIB_quit(void);
 void VIB_setStrength(int strength);
 int VIB_getStrength(void);
 
-void VIB_shortPulse(int strength, int duration_ms);
-void VIB_doublePulse(int strength, int duration_ms, int gap_ms);
-void VIB_triplePulse(int strength, int duration_ms, int gap_ms);
-void VIB_longPulse(int strength, int duration_ms);
+void VIB_shortPulse(int strength);
+void VIB_doublePulse(int strength, int gap_ms);
+void VIB_triplePulse(int strength, int gap_ms);
+void VIB_longPulse(int strength);
 
 ///////////////////////////////
 

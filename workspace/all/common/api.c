@@ -2369,29 +2369,38 @@ int VIB_getStrength(void) {
 }
 
 // generic vibration functions
-void VIB_shortPulse(int strength, int duration_ms) {
-    VIB_setStrength(strength);
-    usleep(duration_ms * 1000);
+#define VIB_SHORT_PULSE_DURATION 250
+#define VIB_DOUBLE_PULSE_DURATION 400
+#define VIB_TRIPLE_PULSE_DURATION 600
+#define VIB_LONG_PULSE_DURATION 750
+
+void VIB_shortPulse(int strength) {
+    VIB_setStrength(0);
+	VIB_setStrength(strength);
+    usleep(VIB_SHORT_PULSE_DURATION * 1000);
     VIB_setStrength(0);
 }
 
-void VIB_doublePulse(int strength, int duration_ms, int gap_ms) {
-    VIB_shortPulse(strength, duration_ms);
+void VIB_doublePulse(int strength, int gap_ms) {
+    VIB_setStrength(0);
+	VIB_shortPulse(strength);
     usleep(gap_ms * 1000);
-    VIB_shortPulse(strength, duration_ms);
+    VIB_shortPulse(strength);
 }
 
-void VIB_triplePulse(int strength, int duration_ms, int gap_ms) {
-    VIB_shortPulse(strength, duration_ms);
+void VIB_triplePulse(int strength, int gap_ms) {
+    VIB_setStrength(0);
+	VIB_shortPulse(strength);
     usleep(gap_ms * 1000);
-    VIB_shortPulse(strength, duration_ms);
+    VIB_shortPulse(strength);
     usleep(gap_ms * 1000);
-    VIB_shortPulse(strength, duration_ms);
+    VIB_shortPulse(strength);
 }
 
-void VIB_longPulse(int strength, int duration_ms) {
+void VIB_longPulse(int strength) {
+	VIB_setStrength(0);
     VIB_setStrength(strength);
-    usleep(duration_ms * 1000);
+    usleep(VIB_LONG_PULSE_DURATION * 1000);
     VIB_setStrength(0);
 }
 

@@ -68,7 +68,7 @@ int loadImages()
     } else {
         // could not open directory
         LOG_error("could not open directory");
-        VIB_triplePulse(6, 500, 200);
+        VIB_triplePulse(6, 200);
         return 0;
     }
     return count;
