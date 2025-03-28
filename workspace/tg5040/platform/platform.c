@@ -794,14 +794,6 @@ void PLAT_setCPUSpeed(int speed) {
 	putInt(GOVERNOR_PATH, freq);
 }
 
-#define RUMBLE_PATH "/sys/class/gpio/gpio227/value"
-#define RUMBLE_VOLTAGE_PATH "/sys/class/motor/voltage"
-#define MAX_STRENGTH 0xFFFF
-#define MAX_SCALED_STRENGTH 10
-#define MIN_VOLTAGE 500000
-#define MAX_VOLTAGE 3300000
-
-
 
 void PLAT_setRumble(int strength) {
 	SetRumble(strength);
