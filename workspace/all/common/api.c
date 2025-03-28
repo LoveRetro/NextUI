@@ -2455,7 +2455,7 @@ void PWR_init(void) {
 	PWR_initOverlay();
 	PWR_updateBatteryStatus();
 	// Add bootup haptic feedback
-    VIB_longPulse(5, 900);
+    VIB_longPulse(5);
 	pthread_create(&pwr.battery_pt, NULL, &PWR_monitorBattery, NULL);
 	pwr.initialized = 1;
 }
@@ -2644,7 +2644,7 @@ static void PWR_enterSleep(void) {
 	}
 	else {
 		SetRawVolume(MUTE_VOLUME_RAW);
-		VIB_shortPulse(5, 150);
+		VIB_shortPulse(5);
 		PLAT_enableBacklight(0);
 	}
 	system("killall -STOP keymon.elf");
@@ -2664,7 +2664,7 @@ static void PWR_exitSleep(void) {
 		// buh
 	}
 	else {
-		VIB_shortPulse(5, 150);
+		VIB_shortPulse(5);
 		PLAT_enableBacklight(1);
 		SetVolume(GetVolume());
 	}

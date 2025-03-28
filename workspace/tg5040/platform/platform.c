@@ -617,7 +617,7 @@ void PLAT_enableBacklight(int enable) {
 }
 
 void PLAT_powerOff(void) {
-	VIB_longPulse(5, 900);
+	VIB_longPulse(5);
 	system("rm -f /tmp/minui_exec && sync");
 	sleep(2);
 
