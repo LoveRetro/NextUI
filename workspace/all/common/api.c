@@ -591,13 +591,6 @@ void GFX_delay(void) {
 FALLBACK_IMPLEMENTATION int PLAT_supportsOverscan(void) { return 0; }
 FALLBACK_IMPLEMENTATION void PLAT_setEffectColor(int next_color) { }
 
-FALLBACK_IMPLEMENTATION void PLAT_hapticMute(void) { }
-FALLBACK_IMPLEMENTATION void PLAT_hapticShutdown(void) { }
-FALLBACK_IMPLEMENTATION void PLAT_hapticBootup(void) { }
-FALLBACK_IMPLEMENTATION void PLAT_hapticMenu(void) { }
-FALLBACK_IMPLEMENTATION void PLAT_hapticSelect(void) { }
-FALLBACK_IMPLEMENTATION void PLAT_hapticError(void) { }
-
 
 int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding) {
 	int text_width;
@@ -2375,6 +2368,33 @@ int VIB_getStrength(void) {
 	return vib.strength;
 }
 
+// generic vibration functions
+void VIB_shortPulse(int strength, int duration_ms) {
+    VIB_setStrength(strength);
+    usleep(duration_ms * 1000);
+    VIB_setStrength(0);
+}
+
+void VIB_doublePulse(int strength, int duration_ms, int gap_ms) {
+    VIB_shortPulse(strength, duration_ms);
+    usleep(gap_ms * 1000);
+    VIB_shortPulse(strength, duration_ms);
+}
+
+void VIB_triplePulse(int strength, int duration_ms, int gap_ms) {
+    VIB_shortPulse(strength, duration_ms);
+    usleep(gap_ms * 1000);
+    VIB_shortPulse(strength, duration_ms);
+    usleep(gap_ms * 1000);
+    VIB_shortPulse(strength, duration_ms);
+}
+
+void VIB_longPulse(int strength, int duration_ms) {
+    VIB_setStrength(strength);
+    usleep(duration_ms * 1000);
+    VIB_setStrength(0);
+}
+
 ///////////////////////////////
 
 static void PWR_initOverlay(void) {
@@ -2426,7 +2446,7 @@ void PWR_init(void) {
 	PWR_initOverlay();
 	PWR_updateBatteryStatus();
 	// Add bootup haptic feedback
-    PLAT_hapticBootup();
+    VIB_longPulse(5, 900);
 	pthread_create(&pwr.battery_pt, NULL, &PWR_monitorBattery, NULL);
 	pwr.initialized = 1;
 }
@@ -2615,7 +2635,7 @@ static void PWR_enterSleep(void) {
 	}
 	else {
 		SetRawVolume(MUTE_VOLUME_RAW);
-		PLAT_hapticSleep();
+		VIB_shortPulse(5, 150);
 		PLAT_enableBacklight(0);
 	}
 	system("killall -STOP keymon.elf");
@@ -2635,7 +2655,7 @@ static void PWR_exitSleep(void) {
 		// buh
 	}
 	else {
-		PLAT_hapticSleep();
+		VIB_shortPulse(5, 150);
 		PLAT_enableBacklight(1);
 		SetVolume(GetVolume());
 	}

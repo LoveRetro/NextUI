@@ -617,7 +617,7 @@ void PLAT_enableBacklight(int enable) {
 }
 
 void PLAT_powerOff(void) {
-	PLAT_hapticShutdown();
+	VIB_longPulse(5, 900);
 	system("rm -f /tmp/minui_exec && sync");
 	sleep(2);
 
@@ -1166,60 +1166,6 @@ void PLAT_setLedColor(LightSettings *led)
         fclose(file);
     }
     PLAT_chmod(filepath, 0);
-}
-
-void PLAT_hapticShutdown(void) {
-	PLAT_setRumble(5);
-	usleep(900000);
-	PLAT_setRumble(0);
-}
-
-void PLAT_hapticBootup(void) {
-	PLAT_setRumble(7);
-	usleep(400000);
-	PLAT_setRumble(0);
-	usleep(400000);
-	PLAT_setRumble(7);
-	usleep(400000);
-	PLAT_setRumble(0);
-}
-
-void PLAT_hapticSleep(void) {
-	PLAT_setRumble(7);
-	usleep(150000);
-	PLAT_setRumble(0);
-}
-
-void PLAT_hapticMenu(void) {
-	PLAT_setRumble(3);
-	usleep(80000);
-	PLAT_setRumble(0);
-}
-
-void PLAT_hapticSelect(void) {
-	PLAT_setRumble(3);
-	usleep(80000);
-	PLAT_setRumble(0);
-}
-
-void PLAT_hapticError(void) {
-	for (int i = 0; i < 3; i++) {
-		PLAT_setRumble(6);
-		usleep(80000);
-		PLAT_setRumble(0);
-		usleep(80000);
-	}
-}
-
-// unused for now
-void PLAT_hapticMute(void) {
-	PLAT_setRumble(6);
-	usleep(15000);
-	PLAT_setRumble(0);
-	usleep(15000);
-	PLAT_setRumble(6);
-	usleep(15000);
-	PLAT_setRumble(0);
 }
 
 

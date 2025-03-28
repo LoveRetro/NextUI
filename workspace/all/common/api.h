@@ -337,8 +337,13 @@ int PAD_tappedMenu(uint32_t now); // special case, returns 1 on release of BTN_M
 void VIB_init(void);
 void VIB_quit(void);
 void VIB_setStrength(int strength);
- int VIB_getStrength(void);
-	
+int VIB_getStrength(void);
+
+void VIB_shortPulse(int strength, int duration_ms);
+void VIB_doublePulse(int strength, int duration_ms, int gap_ms);
+void VIB_triplePulse(int strength, int duration_ms, int gap_ms);
+void VIB_longPulse(int strength, int duration_ms);
+
 ///////////////////////////////
 
 #define BRIGHTNESS_BUTTON_LABEL "+ -" // ew
@@ -429,13 +434,6 @@ void *PLAT_cpu_monitor(void *arg);
 void PLAT_setCPUSpeed(int speed); // enum
 void PLAT_setCustomCPUSpeed(int speed);
 void PLAT_setRumble(int strength);
-void PLAT_hapticShutdown(void);
-void PLAT_hapticBootup(void);
-void PLAT_hapticMenu(void);
-void PLAT_hapticSelect(void);
-void PLAT_hapticError(void);
-void PLAT_hapticMute(void);
-void PLAT_hapticSleep(void);
 int PLAT_pickSampleRate(int requested, int max);
 
 char* PLAT_getModel(void);
@@ -494,7 +492,7 @@ void CFG_setFontId(int fontid);
 // The colors to use for the UI. These are 0xRRGGBB values.
 // 0 - Color1 (primary hint/asset colour)
 // 1 - Color2 (accent colour)
-// 2 - Color3 (secondary accent colour
+// 2 - Color3 (secondary accent colour)
 // 3 - Background Color (unused)
 uint32_t CFG_getColor(int id);
 void CFG_setColor(int id, uint32_t color);

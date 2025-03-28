@@ -126,7 +126,6 @@ int main (int argc, char *argv[]) {
 						printf("mute: %i\n", val);
 						SetMute(val);
 						if (val) {
-							// don't want to use PLAT_hapticMute() because it complicates things
 							SetRumble(7);
 							usleep(150000);
 							SetRumble(0);
