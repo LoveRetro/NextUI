@@ -956,8 +956,21 @@ void GFX_freeAAScaler(void) {
 
 ///////////////////////////////
 
-// blits to the destination and stretches to fit.
-void GFX_blitScaled(SDL_Surface *src, SDL_Surface *dst)
+void GFX_blitScaled(int scale, SDL_Surface *src, SDL_Surface *dst)
+{
+	switch(scale) {
+		case SCALE_FIT: 
+			GFX_blitScaleAspect(src, dst);
+			break;
+		case SCALE_FILL:
+			GFX_blitScaleToFill(src, dst);
+			break;
+		default:
+			GFX_blitStretch(src, dst);
+		}
+}
+
+void GFX_blitStretch(SDL_Surface *src, SDL_Surface *dst)
 {
 	if(!src || !dst)
 		return;
@@ -991,8 +1004,7 @@ static inline SDL_Rect GFX_scaledRectAspect(SDL_Rect src, SDL_Rect dst) {
     return scaled_rect;
 }
 
-// blits to the destination while keeping the aspect ratio.
-void GFX_blitScaledAspect(SDL_Surface *src, SDL_Surface *dst)
+void GFX_blitScaleAspect(SDL_Surface *src, SDL_Surface *dst)
 {
 	if(!src || !dst)
 		return;
@@ -1032,8 +1044,7 @@ static inline SDL_Rect GFX_scaledRectAspectFill(SDL_Rect src, SDL_Rect dst)
 	return scaled_rect;
 }
 
-// same as GFX_blitScaledAspect, but fills both dimensions.
-void GFX_blitScaledAspectFill(SDL_Surface *src, SDL_Surface *dst)
+void GFX_blitScaleToFill(SDL_Surface *src, SDL_Surface *dst)
 {
 	if(!src || !dst)
 		return;
@@ -1046,7 +1057,7 @@ void GFX_blitScaledAspectFill(SDL_Surface *src, SDL_Surface *dst)
 
 ///////////////////////////////
 void GFX_ApplyRounderCorners16(SDL_Surface* surface, int radius) {
-    if (!surface) return;
+    if (!surface || radius == 0) return;
 
     int width = surface->w;
     int height = surface->h;
@@ -2989,9 +3000,10 @@ void CFG_defaults(MinUISettings* cfg)
 		.showMenuAnimations = true,
 		.showRecents = true,
 		.showGameArt = true,
+		.gameSwitcherScaling = SCALE_FULLSCREEN,
 
-		.screenTimeoutSecs = 60,
-		.suspendTimeoutSecs = 30,
+	.screenTimeoutSecs = 60,
+	.suspendTimeoutSecs = 30,
 	};
 	
 	*cfg = defaults;
@@ -3097,6 +3109,11 @@ void CFG_init(MinUISettings* cfg)
 			if (sscanf(line, "suspendTimeout=%i", &temp_value) == 1)
 			{
 				CFG_setSuspendTimeoutSecs(temp_value);
+				continue;
+			}
+			if (sscanf(line, "switcherscale=%i", &temp_value) == 1)
+			{
+				CFG_setGameSwitcherScaling(temp_value);
 				continue;
 			}
 
@@ -3307,6 +3324,16 @@ void CFG_setShowGameArt(bool show)
 	settings.showGameArt = show;
 }
 
+int CFG_getGameSwitcherScaling(void)
+{
+	return settings.gameSwitcherScaling;
+}
+
+void CFG_setGameSwitcherScaling(int enumValue)
+{
+	settings.gameSwitcherScaling = clamp(enumValue, 0, SCALE_NUM_OPTIONS);
+}
+
 void CFG_sync(void)
 {
 	// write to file
@@ -3334,6 +3361,7 @@ void CFG_sync(void)
     fprintf(file, "gameart=%i\n", settings.showGameArt);
     fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
     fprintf(file, "suspendTimeout=%i\n", settings.suspendTimeoutSecs);
+    fprintf(file, "switcherscale=%i\n", settings.gameSwitcherScaling);
     
     fclose(file);
 }

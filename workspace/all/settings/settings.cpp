@@ -64,6 +64,9 @@ static const std::vector<std::string> timeout_labels = {"Never", "5s", "10s", "1
 
 static const std::vector<std::string> on_off = {"Off", "On"};
 
+static const std::vector<std::string> scaling_strings = {"Fullscreen", "Fit", "Fill"};
+static const std::vector<std::any> scaling = {(int)SCALE_FULLSCREEN, (int)SCALE_FIT, (int)SCALE_FILL};
+
 int main(int argc, char *argv[])
 {
     try
@@ -144,6 +147,10 @@ int main(int argc, char *argv[])
                     { return CFG_getShowGameArt(); },
                     [](const std::any &value)
                     { CFG_setShowGameArt(std::any_cast<bool>(value)); }},
+            MenuItem{Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
+                    { return CFG_getGameSwitcherScaling(); },
+                    [](const std::any &value)
+                    { CFG_setGameSwitcherScaling(std::any_cast<int>(value)); }},
         });
 
         auto systemMenu = new MenuList(MenuItemType::Fixed, "System",

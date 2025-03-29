@@ -1864,12 +1864,11 @@ int main (int argc, char *argv[]) {
 							bmp = raw_preview; 
 						}
 						if(bmp) {
-							SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGB565);					
-							SDL_Rect image_rect = {0, 0, screen->w, screen->h};
-							SDL_BlitScaled(bmp, NULL, scaled, &image_rect);
+							SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGB565);
+							GFX_blitScaled(CFG_getGameSwitcherScaling(), bmp, scaled);
 							SDL_FreeSurface(bmp);
 							GFX_ApplyRounderCorners16(scaled,CFG_getThumbnailRadius()*3/2);
-							SDL_BlitSurface(scaled, NULL, screen, &image_rect);
+							SDL_BlitSurface(scaled, NULL, screen, NULL);
 							SDL_FreeSurface(scaled);  // Free after rendering
 						}
 					}

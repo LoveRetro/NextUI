@@ -244,8 +244,17 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
 scaler_t GFX_getAAScaler(GFX_Renderer* renderer);
 void GFX_freeAAScaler(void);
 
+enum
+{
+	SCALE_FULLSCREEN = 0,
+	SCALE_FIT,
+	SCALE_FILL,
+	SCALE_NUM_OPTIONS // do not use 
+};
+// calls the appropriate scale function based on the enum value.
+void GFX_blitScaled(int scale, SDL_Surface *src, SDL_Surface *dst);
 // blits to the destination and stretches to fit.
-void GFX_blitScale(SDL_Surface *src, SDL_Surface *dst);
+void GFX_blitStretch(SDL_Surface *src, SDL_Surface *dst);
 // blits to the destination while keeping the aspect ratio.
 void GFX_blitScaleAspect(SDL_Surface *src, SDL_Surface *dst);
 // same as GFX_blitScaledAspect, but fills both dimensions.
@@ -481,6 +490,7 @@ typedef struct
 	uint32_t backgroundColor;
 	uint32_t backgroundColor_255; // not screen mapped
 	int thumbRadius;
+	int gameSwitcherScaling; // enum
 
 	// UI
 	bool showClock;
@@ -537,6 +547,9 @@ void CFG_setShowRecents(bool show);
 // Show/hide game art in the main menu.
 bool CFG_getShowGameArt(void);
 void CFG_setShowGameArt(bool show);
+// The scaling algorithm used for the game switcher preview image.
+int CFG_getGameSwitcherScaling(void);
+void CFG_setGameSwitcherScaling(int enumValue);
 
 void CFG_sync(void);
 void CFG_quit(void);
