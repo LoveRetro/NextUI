@@ -1347,31 +1347,6 @@ static void Menu_quit(void) {
 
 ///////////////////////////////////////
 
-static SDL_Rect GFX_scaled_rect(SDL_Rect preview_rect, SDL_Rect image_rect) {
-    SDL_Rect scaled_rect;
-    
-    // Calculate the aspect ratios
-    float image_aspect = (float)image_rect.w / (float)image_rect.h;
-    float preview_aspect = (float)preview_rect.w / (float)preview_rect.h;
-    
-    // Determine scaling factor
-    if (image_aspect > preview_aspect) {
-        // Image is wider than the preview area
-        scaled_rect.w = preview_rect.w;
-        scaled_rect.h = (int)(preview_rect.w / image_aspect);
-    } else {
-        // Image is taller than or equal to the preview area
-        scaled_rect.h = preview_rect.h;
-        scaled_rect.w = (int)(preview_rect.h * image_aspect);
-    }
-    
-    // Center the scaled rectangle within preview_rect
-    scaled_rect.x = preview_rect.x + (preview_rect.w - scaled_rect.w) / 2;
-    scaled_rect.y = preview_rect.y + (preview_rect.h - scaled_rect.h) / 2;
-    
-    return scaled_rect;
-}
-
 static float selection_offset = 1.0f; 
 static int previous_selected = -1; 
 static int dirty = 1;
@@ -1470,9 +1445,7 @@ int main (int argc, char *argv[]) {
 	if (convertedbg) {
 		SDL_FreeSurface(bgbmp); 
 		SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGB565);
-		SDL_Rect image_rect = {0, 0, screen->w, screen->h};
-		SDL_BlitScaled(convertedbg, NULL, scaled, &image_rect);
-
+		GFX_blitScaleToFill(convertedbg, scaled);
 		bgbmp = scaled;
 	}
 	unsigned long cputimer = SDL_GetTicks();

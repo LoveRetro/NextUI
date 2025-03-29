@@ -955,6 +955,96 @@ void GFX_freeAAScaler(void) {
 }
 
 ///////////////////////////////
+
+// blits to the destination and stretches to fit.
+void GFX_blitScaled(SDL_Surface *src, SDL_Surface *dst)
+{
+	if(!src || !dst)
+		return;
+
+	SDL_Rect image_rect = {0, 0, dst->w, dst->h};
+	SDL_BlitScaled(src, NULL, dst, &image_rect);
+}
+
+static inline SDL_Rect GFX_scaledRectAspect(SDL_Rect src, SDL_Rect dst) {
+    SDL_Rect scaled_rect;
+    
+    // Calculate the aspect ratios
+    float image_aspect = (float)src.w / (float)src.h;
+    float preview_aspect = (float)dst.w / (float)dst.h;
+    
+    // Determine scaling factor
+    if (image_aspect > preview_aspect) {
+        // Image is wider than the preview area
+        scaled_rect.w = dst.w;
+        scaled_rect.h = (int)(dst.w / image_aspect);
+    } else {
+        // Image is taller than or equal to the preview area
+        scaled_rect.h = dst.h;
+        scaled_rect.w = (int)(dst.h * image_aspect);
+    }
+    
+    // Center the scaled rectangle within preview_rect
+    scaled_rect.x = dst.x + (dst.w - scaled_rect.w) / 2;
+    scaled_rect.y = dst.y + (dst.h - scaled_rect.h) / 2;
+    
+    return scaled_rect;
+}
+
+// blits to the destination while keeping the aspect ratio.
+void GFX_blitScaledAspect(SDL_Surface *src, SDL_Surface *dst)
+{
+	if(!src || !dst)
+		return;
+
+	SDL_Rect src_rect = {0, 0, src->w, src->h};
+	SDL_Rect dst_rect = {0, 0, dst->w, dst->h};
+	SDL_Rect scaled_rect = GFX_scaledRectAspect(src_rect, dst_rect);
+	SDL_FillRect(dst, NULL, 0);
+	SDL_BlitScaled(src, NULL, dst, &scaled_rect);
+}
+
+static inline SDL_Rect GFX_scaledRectAspectFill(SDL_Rect src, SDL_Rect dst)
+{
+	SDL_Rect scaled_rect;
+
+    // Calculate the aspect ratios
+    float image_aspect = (float)src.w / (float)src.h;
+    float preview_aspect = (float)dst.w / (float)dst.h;
+
+	// Determine scaling factor
+    if (preview_aspect > image_aspect) {
+        scaled_rect.w  = src.w;
+        scaled_rect.h = (int)(src.w / preview_aspect + 0.5f);
+    }
+    else {
+        scaled_rect.w  = (int)(src.h * preview_aspect + 0.5f);
+        scaled_rect.h = src.h;
+    }
+
+    // Calculate the coordinates of the visible part of the input image
+    int offsetX = abs(scaled_rect.w - src.w) / 2;
+    int offsetY = abs(scaled_rect.h - src.h) / 2;
+
+	scaled_rect.x = offsetX;
+	scaled_rect.y = offsetY;
+
+	return scaled_rect;
+}
+
+// same as GFX_blitScaledAspect, but fills both dimensions.
+void GFX_blitScaledAspectFill(SDL_Surface *src, SDL_Surface *dst)
+{
+	if(!src || !dst)
+		return;
+
+	SDL_Rect src_rect = {0, 0, src->w, src->h};
+	SDL_Rect dst_rect = {0, 0, dst->w, dst->h};
+	SDL_Rect scaled_rect = GFX_scaledRectAspectFill(src_rect, dst_rect);
+	SDL_BlitScaled(src, &scaled_rect, dst, NULL);
+}
+
+///////////////////////////////
 void GFX_ApplyRounderCorners16(SDL_Surface* surface, int radius) {
     if (!surface) return;
 

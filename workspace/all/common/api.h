@@ -244,6 +244,13 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
 scaler_t GFX_getAAScaler(GFX_Renderer* renderer);
 void GFX_freeAAScaler(void);
 
+// blits to the destination and stretches to fit.
+void GFX_blitScale(SDL_Surface *src, SDL_Surface *dst);
+// blits to the destination while keeping the aspect ratio.
+void GFX_blitScaleAspect(SDL_Surface *src, SDL_Surface *dst);
+// same as GFX_blitScaledAspect, but fills both dimensions.
+void GFX_blitScaleToFill(SDL_Surface *src, SDL_Surface *dst);
+
 // NOTE: all dimensions should be pre-scaled
 void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color);
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);

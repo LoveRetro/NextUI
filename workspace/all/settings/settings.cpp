@@ -171,9 +171,7 @@ int main(int argc, char *argv[])
         if (convertedbg) {
             SDL_FreeSurface(bgbmp); 
             SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, ctx.screen->w, ctx.screen->h, 32, SDL_PIXELFORMAT_RGB565);
-            SDL_Rect image_rect = {0, 0, ctx.screen->w, ctx.screen->h};
-            SDL_BlitScaled(convertedbg, NULL, scaled, &image_rect);
-
+            GFX_blitScaleToFill(convertedbg, scaled);
             bgbmp = scaled;
         }
 
