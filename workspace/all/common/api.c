@@ -959,12 +959,13 @@ void GFX_freeAAScaler(void) {
 void GFX_blitScaled(int scale, SDL_Surface *src, SDL_Surface *dst)
 {
 	switch(scale) {
-		case SCALE_FIT: 
+		case GFX_SCALE_FIT: 
 			GFX_blitScaleAspect(src, dst);
 			break;
-		case SCALE_FILL:
+		case GFX_SCALE_FILL:
 			GFX_blitScaleToFill(src, dst);
 			break;
+		case GFX_SCALE_FULLSCREEN:
 		default:
 			GFX_blitStretch(src, dst);
 		}
@@ -3000,7 +3001,7 @@ void CFG_defaults(MinUISettings* cfg)
 		.showMenuAnimations = true,
 		.showRecents = true,
 		.showGameArt = true,
-		.gameSwitcherScaling = SCALE_FULLSCREEN,
+		.gameSwitcherScaling = GFX_SCALE_FULLSCREEN,
 
 	.screenTimeoutSecs = 60,
 	.suspendTimeoutSecs = 30,
@@ -3331,7 +3332,7 @@ int CFG_getGameSwitcherScaling(void)
 
 void CFG_setGameSwitcherScaling(int enumValue)
 {
-	settings.gameSwitcherScaling = clamp(enumValue, 0, SCALE_NUM_OPTIONS);
+	settings.gameSwitcherScaling = clamp(enumValue, 0, GFX_SCALE_NUM_OPTIONS);
 }
 
 void CFG_sync(void)

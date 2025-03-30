@@ -246,10 +246,10 @@ void GFX_freeAAScaler(void);
 
 enum
 {
-	SCALE_FULLSCREEN = 0,
-	SCALE_FIT,
-	SCALE_FILL,
-	SCALE_NUM_OPTIONS // do not use 
+	GFX_SCALE_FULLSCREEN = 0,
+	GFX_SCALE_FIT,
+	GFX_SCALE_FILL,
+	GFX_SCALE_NUM_OPTIONS // do not use 
 };
 // calls the appropriate scale function based on the enum value.
 void GFX_blitScaled(int scale, SDL_Surface *src, SDL_Surface *dst);

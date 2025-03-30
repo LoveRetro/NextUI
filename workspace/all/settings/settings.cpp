@@ -65,7 +65,7 @@ static const std::vector<std::string> timeout_labels = {"Never", "5s", "10s", "1
 static const std::vector<std::string> on_off = {"Off", "On"};
 
 static const std::vector<std::string> scaling_strings = {"Fullscreen", "Fit", "Fill"};
-static const std::vector<std::any> scaling = {(int)SCALE_FULLSCREEN, (int)SCALE_FIT, (int)SCALE_FILL};
+static const std::vector<std::any> scaling = {(int)GFX_SCALE_FULLSCREEN, (int)GFX_SCALE_FIT, (int)GFX_SCALE_FILL};
 
 int main(int argc, char *argv[])
 {
