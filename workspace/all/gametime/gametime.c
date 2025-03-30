@@ -183,7 +183,7 @@ SDL_Surface *loadRomImage(char *image_path)
 
     SDL_FreeSurface(img);
 
-    GFX_ApplyRounderCorners(dst, SCALE1(18));
+    GFX_ApplyRoundedCorners(dst, NULL, SCALE1(18));
 
     return dst;
 }

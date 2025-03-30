@@ -1722,9 +1722,9 @@ int main (int argc, char *argv[]) {
 								SDL_Rect art_rect = {0, 0, (int)(screen->w * 0.45), (int)(screen->h * 0.6)};
 								thumbbmp = SDL_CreateRGBSurfaceWithFormat(0, art_rect.w, art_rect.h, 16, SDL_PIXELFORMAT_RGBA4444);
 
-								GFX_blitScaleAspect(optimized, thumbbmp);
+								SDL_Rect imgRect = GFX_blitScaleAspect(optimized, thumbbmp);
 								// i wrote my own blit function cause its faster at converting rgba4444 to rgba565 then SDL's one lol
-								GFX_ApplyRoundedCorners_RGBA4444(thumbbmp, SCALE1(CFG_getThumbnailRadius())); 
+								GFX_ApplyRoundedCorners_RGBA4444(thumbbmp, &imgRect, SCALE1(CFG_getThumbnailRadius())); 
 								SDL_FreeSurface(optimized);
 								had_thumb = 1;
 							}
@@ -1845,9 +1845,9 @@ int main (int argc, char *argv[]) {
 						}
 						if(bmp) {
 							SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGB565);
-							GFX_blitScaled(CFG_getGameSwitcherScaling(), bmp, scaled);
+							SDL_Rect imgRect = GFX_blitScaled(CFG_getGameSwitcherScaling(), bmp, scaled);
 							SDL_FreeSurface(bmp);
-							GFX_ApplyRounderCorners16(scaled,CFG_getThumbnailRadius()*3/2);
+							GFX_ApplyRoundedCorners16(scaled, &imgRect, CFG_getThumbnailRadius()*3/2);
 							SDL_BlitSurface(scaled, NULL, screen, NULL);
 							SDL_FreeSurface(scaled);  // Free after rendering
 						}

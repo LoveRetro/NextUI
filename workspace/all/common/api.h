@@ -252,13 +252,14 @@ enum
 	GFX_SCALE_NUM_OPTIONS // do not use 
 };
 // calls the appropriate scale function based on the enum value.
-void GFX_blitScaled(int scale, SDL_Surface *src, SDL_Surface *dst);
+// returns the SDL_Rect of the resulting image in screen coordinates.
+SDL_Rect GFX_blitScaled(int scale, SDL_Surface *src, SDL_Surface *dst);
 // blits to the destination and stretches to fit.
-void GFX_blitStretch(SDL_Surface *src, SDL_Surface *dst);
+SDL_Rect GFX_blitStretch(SDL_Surface *src, SDL_Surface *dst);
 // blits to the destination while keeping the aspect ratio.
-void GFX_blitScaleAspect(SDL_Surface *src, SDL_Surface *dst);
+SDL_Rect GFX_blitScaleAspect(SDL_Surface *src, SDL_Surface *dst);
 // same as GFX_blitScaledAspect, but fills both dimensions.
-void GFX_blitScaleToFill(SDL_Surface *src, SDL_Surface *dst);
+SDL_Rect GFX_blitScaleToFill(SDL_Surface *src, SDL_Surface *dst);
 
 // NOTE: all dimensions should be pre-scaled
 void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color);
@@ -281,9 +282,9 @@ void GFX_sizeText(TTF_Font* font, const char* str, int leading, int* w, int* h);
 void GFX_blitText(TTF_Font* font, const char* str, int leading, SDL_Color color, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch,int mode);
 
-void GFX_ApplyRounderCorners(SDL_Surface* surface, int radius);
-void GFX_ApplyRounderCorners16(SDL_Surface* surface, int radius);
-void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, int radius);
+void GFX_ApplyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius);
+void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius);
+void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, SDL_Rect* rect, int radius);
 void BlitRGBA4444toRGB565(SDL_Surface* src, SDL_Surface* dest, SDL_Rect* dest_rect);
 ///////////////////////////////
 

@@ -956,28 +956,31 @@ void GFX_freeAAScaler(void) {
 
 ///////////////////////////////
 
-void GFX_blitScaled(int scale, SDL_Surface *src, SDL_Surface *dst)
+SDL_Rect GFX_blitScaled(int scale, SDL_Surface *src, SDL_Surface *dst)
 {
 	switch(scale) {
 		case GFX_SCALE_FIT: 
-			GFX_blitScaleAspect(src, dst);
+			return GFX_blitScaleAspect(src, dst);
 			break;
 		case GFX_SCALE_FILL:
-			GFX_blitScaleToFill(src, dst);
+			return GFX_blitScaleToFill(src, dst);
 			break;
 		case GFX_SCALE_FULLSCREEN:
 		default:
-			GFX_blitStretch(src, dst);
+			return GFX_blitStretch(src, dst);
 		}
 }
 
-void GFX_blitStretch(SDL_Surface *src, SDL_Surface *dst)
+SDL_Rect GFX_blitStretch(SDL_Surface *src, SDL_Surface *dst)
 {
-	if(!src || !dst)
-		return;
+	if(!src || !dst){
+		SDL_Rect none = {0,0};
+		return none;
+	}
 
 	SDL_Rect image_rect = {0, 0, dst->w, dst->h};
 	SDL_BlitScaled(src, NULL, dst, &image_rect);
+	return image_rect;
 }
 
 static inline SDL_Rect GFX_scaledRectAspect(SDL_Rect src, SDL_Rect dst) {
@@ -1005,16 +1008,19 @@ static inline SDL_Rect GFX_scaledRectAspect(SDL_Rect src, SDL_Rect dst) {
     return scaled_rect;
 }
 
-void GFX_blitScaleAspect(SDL_Surface *src, SDL_Surface *dst)
+SDL_Rect GFX_blitScaleAspect(SDL_Surface *src, SDL_Surface *dst)
 {
-	if(!src || !dst)
-		return;
+	if(!src || !dst) {
+		SDL_Rect none = {0,0};
+		return none;
+	}
 
 	SDL_Rect src_rect = {0, 0, src->w, src->h};
 	SDL_Rect dst_rect = {0, 0, dst->w, dst->h};
 	SDL_Rect scaled_rect = GFX_scaledRectAspect(src_rect, dst_rect);
 	SDL_FillRect(dst, NULL, 0);
 	SDL_BlitScaled(src, NULL, dst, &scaled_rect);
+	return scaled_rect;
 }
 
 static inline SDL_Rect GFX_scaledRectAspectFill(SDL_Rect src, SDL_Rect dst)
@@ -1045,26 +1051,31 @@ static inline SDL_Rect GFX_scaledRectAspectFill(SDL_Rect src, SDL_Rect dst)
 	return scaled_rect;
 }
 
-void GFX_blitScaleToFill(SDL_Surface *src, SDL_Surface *dst)
+SDL_Rect GFX_blitScaleToFill(SDL_Surface *src, SDL_Surface *dst)
 {
-	if(!src || !dst)
-		return;
+	if(!src || !dst){
+		SDL_Rect none = {0,0};
+		return none;
+	}
 
 	SDL_Rect src_rect = {0, 0, src->w, src->h};
 	SDL_Rect dst_rect = {0, 0, dst->w, dst->h};
 	SDL_Rect scaled_rect = GFX_scaledRectAspectFill(src_rect, dst_rect);
 	SDL_BlitScaled(src, &scaled_rect, dst, NULL);
+
+	return dst_rect;
 }
 
 ///////////////////////////////
-void GFX_ApplyRounderCorners16(SDL_Surface* surface, int radius) {
+void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius) {
     if (!surface || radius == 0) return;
 
-    int width = surface->w;
-    int height = surface->h;
-    SDL_PixelFormat* fmt = surface->format;
+	SDL_PixelFormat *fmt = surface->format;
+	SDL_Rect target = {0, 0, surface->w, surface->h};
+	if (rect)
+		target = *rect;
 
-    if (fmt->format != SDL_PIXELFORMAT_RGB565) {
+	if (fmt->format != SDL_PIXELFORMAT_RGB565) {
         SDL_Log("Unsupported pixel format: %s", SDL_GetPixelFormatName(fmt->format));
         return;
     }
@@ -1072,54 +1083,70 @@ void GFX_ApplyRounderCorners16(SDL_Surface* surface, int radius) {
     Uint16* pixels = (Uint16*)surface->pixels;  // RGB565 uses 16-bit pixels
     Uint16 transparent_black = 0x0000;  // RGB565 has no alpha, so use black (0)
 
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            int dx = (x < radius) ? radius - x : (x >= width - radius) ? x - (width - radius - 1) : 0;
-            int dy = (y < radius) ? radius - y : (y >= height - radius) ? y - (height - radius - 1) : 0;
+	const int xBeg = target.x;
+	const int xEnd = target.x + target.w;
+	const int yBeg = target.y;
+	const int yEnd = target.y + target.h;
+	for (int y = yBeg; y < yEnd; ++y)
+	{
+		for (int x = xBeg; x < xEnd; ++x) {
+            int dx = (x < xBeg + radius) ? xBeg + radius - x : (x >= xEnd - radius) ? x - (xEnd - radius - 1) : 0;
+            int dy = (y < yBeg + radius) ? yBeg + radius - y : (y >= yEnd - radius) ? y - (yEnd - radius - 1) : 0;
             if (dx * dx + dy * dy > radius * radius) {
                 pixels[y * (surface->pitch / 2) + x] = transparent_black;  // Set to black (0)
             }
         }
-    }
+	}
 }
 
-void GFX_ApplyRounderCorners(SDL_Surface* surface, int radius) {
+void GFX_ApplyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius) {
 	if (!surface) return;
 
     Uint32* pixels = (Uint32*)surface->pixels;
-    int width = surface->w;
-    int height = surface->h;
     SDL_PixelFormat* fmt = surface->format;
+	SDL_Rect target = {0, 0, surface->w, surface->h};
+	if (rect)
+		target = *rect;
     
     Uint32 transparent_black = SDL_MapRGBA(fmt, 0, 0, 0, 0);  // Fully transparent black
 
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            int dx = (x < radius) ? radius - x : (x >= width - radius) ? x - (width - radius - 1) : 0;
-            int dy = (y < radius) ? radius - y : (y >= height - radius) ? y - (height - radius - 1) : 0;
+	const int xBeg = target.x;
+	const int xEnd = target.x + target.w;
+	const int yBeg = target.y;
+	const int yEnd = target.y + target.h;
+	for (int y = yBeg; y < yEnd; ++y)
+	{
+		for (int x = xBeg; x < xEnd; ++x) {
+            int dx = (x < xBeg + radius) ? xBeg + radius - x : (x >= xEnd - radius) ? x - (xEnd - radius - 1) : 0;
+            int dy = (y < yBeg + radius) ? yBeg + radius - y : (y >= yEnd - radius) ? y - (yEnd - radius - 1) : 0;
             if (dx * dx + dy * dy > radius * radius) {
-                pixels[y * width + x] = transparent_black;  // Set to fully transparent black
+                pixels[y * target.w + x] = transparent_black;  // Set to fully transparent black
             }
         }
     }
 }
 
 // Need a roundercorners for rgba4444 now too to have transparant rounder corners :D
-void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, int radius) {
+void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, SDL_Rect* rect, int radius) {
     if (!surface || surface->format->format != SDL_PIXELFORMAT_RGBA4444) return;
 
     Uint16* pixels = (Uint16*)surface->pixels; 
-    int width = surface->w;
-    int height = surface->h;
     int pitch = surface->pitch / 2;  
+	SDL_Rect target = {0, 0, surface->w, surface->h};
+	if (rect)
+		target = *rect;
 
     Uint16 transparent_black = 0x0000; 
 
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            int dx = (x < radius) ? radius - x : (x >= width - radius) ? x - (width - radius - 1) : 0;
-            int dy = (y < radius) ? radius - y : (y >= height - radius) ? y - (height - radius - 1) : 0;
-
+	const int xBeg = target.x;
+	const int xEnd = target.x + target.w;
+	const int yBeg = target.y;
+	const int yEnd = target.y + target.h;
+	for (int y = yBeg; y < yEnd; ++y)
+	{
+		for (int x = xBeg; x < xEnd; ++x) {
+            int dx = (x < xBeg + radius) ? xBeg + radius - x : (x >= xEnd - radius) ? x - (xEnd - radius - 1) : 0;
+            int dy = (y < yBeg + radius) ? yBeg + radius - y : (y >= yEnd - radius) ? y - (yEnd - radius - 1) : 0;
             if (dx * dx + dy * dy > radius * radius) {
                 pixels[y * pitch + x] = transparent_black; 
             }
