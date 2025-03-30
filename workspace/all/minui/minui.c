@@ -1847,7 +1847,7 @@ int main (int argc, char *argv[]) {
 							SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGB565);
 							SDL_Rect imgRect = GFX_blitScaled(CFG_getGameSwitcherScaling(), bmp, scaled);
 							SDL_FreeSurface(bmp);
-							GFX_ApplyRoundedCorners16(scaled, &imgRect, CFG_getThumbnailRadius());
+							GFX_ApplyRoundedCorners16(scaled, &imgRect, SCALE1(CFG_getThumbnailRadius()));
 							SDL_BlitSurface(scaled, NULL, screen, NULL);
 							SDL_FreeSurface(scaled);  // Free after rendering
 						}
