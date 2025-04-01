@@ -52,7 +52,6 @@ typedef struct SettingsV5 {
 	int jack; 
 } SettingsV5;
 
-
 // When incrementing SETTINGS_VERSION, update the Settings typedef and add
 // backwards compatibility to InitSettings!
 #define SETTINGS_VERSION 5
@@ -78,20 +77,6 @@ static int shm_size = sizeof(Settings);
 // #define BRIGHTNESS_PATH "/sys/class/backlight/backlight/brightness"
 // #define JACK_STATE_PATH "/sys/bus/platform/devices/singleadc-joypad/hp"
 // #define HDMI_STATE_PATH "/sys/class/extcon/hdmi/cable.0/state"
-
-
-void putFile(char* path, char* contents) {
-	FILE* file = fopen(path, "w");
-	if (file) {
-		fputs(contents, file);
-		fclose(file);
-	}
-}
-void putInt(char* path, int value) {
-	char buffer[8];
-	sprintf(buffer, "%d", value);
-	putFile(path, buffer);
-}
 
 int getInt(char* path) {
 	int i = 0;
@@ -323,7 +308,6 @@ void SetVolume(int value) { // 0-20
 	SetRawVolume(raw);
 	SaveSettings();
 }
-
 
 #define DISP_LCD_SET_BRIGHTNESS  0x102
 void SetRawBrightness(int val) { // 0 - 255
