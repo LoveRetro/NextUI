@@ -132,6 +132,9 @@ int main (int argc, char *argv[]) {
 							usleep(100000);
 							system("echo 0 > /sys/class/gpio/gpio243/value");
 							usleep(100000);
+							system("echo 1 > /sys/class/gpio/gpio227/value");
+							usleep(100000);
+							system("echo 0 > /sys/class/gpio/gpio227/value");
 						}
 					}
 				}
