@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 
 #include "utils.h"
+#include "config.h"
 
 #include <pthread.h>
 
@@ -32,21 +33,24 @@ void LOG_note(int level, const char* fmt, ...) {
 #ifdef DEBUG
 	case LOG_DEBUG:
 		printf("[DEBUG] %s", buf);
+		fflush(stdout);
 		break;
 #endif
 	case LOG_INFO:
 		printf("[INFO] %s", buf);
+		fflush(stdout);
 		break;
 	case LOG_WARN:
 		fprintf(stderr, "[WARN] %s", buf);
+		fflush(stderr);
 		break;
 	case LOG_ERROR:
 		fprintf(stderr, "[ERROR] %s", buf);
+		fflush(stderr);
 		break;
 	default:
 		break;
 	}
-	fflush(stdout);
 }
 
 ///////////////////////////////
@@ -78,12 +82,10 @@ GFX_Fonts font;
 uint32_t THEME_COLOR1;
 uint32_t THEME_COLOR2;
 uint32_t THEME_COLOR3;
-uint32_t THEME_COLOR1_255;
-uint32_t THEME_COLOR2_255;
-uint32_t THEME_COLOR3_255;
+uint32_t THEME_COLOR4;
+uint32_t THEME_COLOR5;
+uint32_t THEME_COLOR6;
 SDL_Color ALT_BUTTON_TEXT_COLOR;
-char *FONT_PATH;
-MinUISettings settings = {0};
 
 // move to utils?
 
@@ -119,20 +121,10 @@ static inline uint32_t mapUint(uint32_t col)
 	return SDL_MapRGB(gfx.screen->format, r, g, b);
 }
 
-static inline SDL_Color UintToColour(uint32_t colour)
-{
-	SDL_Color tempcol;
-	tempcol.a = 255;
-	tempcol.r = (colour >> 16) & 0xFF;
-	tempcol.g = (colour >> 8) & 0xFF;
-	tempcol.b = colour & 0xFF;
-	return tempcol;
-}
-
 static inline uint32_t UintMult(uint32_t color, uint32_t modulate_rgb)
 {
-	SDL_Color dest = UintToColour(color);
-	SDL_Color modulate = UintToColour(modulate_rgb);
+	SDL_Color dest = uintToColour(color);
+	SDL_Color modulate = uintToColour(modulate_rgb);
 
 	dest.r = (int)dest.r * modulate.r / 255;
 	dest.g = (int)dest.g * modulate.g / 255;
@@ -209,6 +201,46 @@ FALLBACK_IMPLEMENTATION void PLAT_getCPUTemp() {
 	currentcputemp = 0;
 }
 
+int GFX_loadSystemFont(const char *fontPath)
+{
+	// Load/Reload fonts
+	if (!TTF_WasInit())
+        TTF_Init();
+
+    TTF_CloseFont(font.large);
+    TTF_CloseFont(font.medium);
+    TTF_CloseFont(font.small);
+    TTF_CloseFont(font.tiny);
+    TTF_CloseFont(font.micro);
+
+    font.large = TTF_OpenFont(fontPath, SCALE1(FONT_LARGE));
+    font.medium = TTF_OpenFont(fontPath, SCALE1(FONT_MEDIUM));
+    font.small = TTF_OpenFont(fontPath, SCALE1(FONT_SMALL));
+    font.tiny = TTF_OpenFont(fontPath, SCALE1(FONT_TINY));
+    font.micro = TTF_OpenFont(fontPath, SCALE1(FONT_MICRO));
+
+    TTF_SetFontStyle(font.large, TTF_STYLE_BOLD);
+    TTF_SetFontStyle(font.medium, TTF_STYLE_BOLD);
+    TTF_SetFontStyle(font.small, TTF_STYLE_BOLD);
+    TTF_SetFontStyle(font.tiny, TTF_STYLE_BOLD);
+    TTF_SetFontStyle(font.micro, TTF_STYLE_BOLD);
+
+	return 0;
+}
+
+int GFX_updateColors()
+{
+	// We are currently micro managing all of these screen-mapped colors, 
+	// should just move this to the caller.
+	THEME_COLOR1 = mapUint(CFG_getColor(1));
+	THEME_COLOR2 = mapUint(CFG_getColor(2));
+	THEME_COLOR3 = mapUint(CFG_getColor(3));
+	THEME_COLOR4 = mapUint(CFG_getColor(4));
+	THEME_COLOR5 = mapUint(CFG_getColor(5));
+	THEME_COLOR6 = mapUint(CFG_getColor(6));
+	ALT_BUTTON_TEXT_COLOR = uintToColour(CFG_getColor(3));
+}
+
 SDL_Surface* GFX_init(int mode)
 {
 	// TODO: this doesn't really belong here...
@@ -222,7 +254,7 @@ SDL_Surface* GFX_init(int mode)
 	gfx.vsync = VSYNC_STRICT;
 	gfx.mode = mode;
 
-	CFG_init(&settings);
+	CFG_init(GFX_loadSystemFont, GFX_updateColors);
 
 	RGB_WHITE		= SDL_MapRGB(gfx.screen->format, TRIAD_WHITE);
 	RGB_BLACK		= SDL_MapRGB(gfx.screen->format, TRIAD_BLACK);
@@ -519,14 +551,14 @@ void GFX_flip_fixed_rate(SDL_Surface* screen, double target_fps) {
 		if (offset > max_lost_frames * frame_duration) {
 			frame_index = -1;
 			last_target_fps = 0.0;
-			LOG_warn("%s: lost sync by more than %d frames (late) @%llu -> reset\n\n", __FUNCTION__, max_lost_frames, SDL_GetPerformanceCounter());
+			LOG_debug("%s: lost sync by more than %d frames (late) @%llu -> reset\n\n", __FUNCTION__, max_lost_frames, SDL_GetPerformanceCounter());
 		}
 	}
 	else {
 		if (offset < -max_lost_frames * frame_duration) {
 			frame_index = -1;
 			last_target_fps = 0.0;
-			LOG_warn("%s: lost sync by more than %d frames (early ?!) @%llu -> reset\n\n", __FUNCTION__, max_lost_frames, SDL_GetPerformanceCounter());
+			LOG_debug("%s: lost sync by more than %d frames (early ?!) @%llu -> reset\n\n", __FUNCTION__, max_lost_frames, SDL_GetPerformanceCounter());
 		}
 		else if (offset < 0) {
 			useconds_t time_to_sleep_us = (useconds_t) ((time_of_frame - now) * 1e6 / perf_freq);
@@ -656,7 +688,6 @@ void GFX_scrollTextSurface(TTF_Font* font, const char* in_name, SDL_Surface** ou
 
     char scroll_text[1024]; 
     snprintf(scroll_text, sizeof(scroll_text), "%s  %s", in_name, in_name); 
-
     SDL_Surface* full_text_surface = TTF_RenderUTF8_Blended(font, scroll_text, color);
     if (!full_text_surface) {
         printf("Text rendering failed: %s\n", TTF_GetError());
@@ -958,14 +989,137 @@ void GFX_freeAAScaler(void) {
 }
 
 ///////////////////////////////
-void GFX_ApplyRounderCorners16(SDL_Surface* surface, int radius) {
-    if (!surface) return;
 
-    int width = surface->w;
-    int height = surface->h;
-    SDL_PixelFormat* fmt = surface->format;
+SDL_Color /*GFX_*/uintToColour(uint32_t colour)
+{
+	SDL_Color tempcol;
+	tempcol.a = 255;
+	tempcol.r = (colour >> 16) & 0xFF;
+	tempcol.g = (colour >> 8) & 0xFF;
+	tempcol.b = colour & 0xFF;
+	return tempcol;
+}
 
-    if (fmt->format != SDL_PIXELFORMAT_RGB565) {
+SDL_Rect GFX_blitScaled(int scale, SDL_Surface *src, SDL_Surface *dst)
+{
+	switch(scale) {
+		case GFX_SCALE_FIT: 
+			return GFX_blitScaleAspect(src, dst);
+			break;
+		case GFX_SCALE_FILL:
+			return GFX_blitScaleToFill(src, dst);
+			break;
+		case GFX_SCALE_FULLSCREEN:
+		default:
+			return GFX_blitStretch(src, dst);
+		}
+}
+
+SDL_Rect GFX_blitStretch(SDL_Surface *src, SDL_Surface *dst)
+{
+	if(!src || !dst){
+		SDL_Rect none = {0,0};
+		return none;
+	}
+
+	SDL_Rect image_rect = {0, 0, dst->w, dst->h};
+	SDL_BlitScaled(src, NULL, dst, &image_rect);
+	return image_rect;
+}
+
+static inline SDL_Rect GFX_scaledRectAspect(SDL_Rect src, SDL_Rect dst) {
+    SDL_Rect scaled_rect;
+    
+    // Calculate the aspect ratios
+    float image_aspect = (float)src.w / (float)src.h;
+    float preview_aspect = (float)dst.w / (float)dst.h;
+    
+    // Determine scaling factor
+    if (image_aspect > preview_aspect) {
+        // Image is wider than the preview area
+        scaled_rect.w = dst.w;
+        scaled_rect.h = (int)(dst.w / image_aspect);
+    } else {
+        // Image is taller than or equal to the preview area
+        scaled_rect.h = dst.h;
+        scaled_rect.w = (int)(dst.h * image_aspect);
+    }
+    
+    // Center the scaled rectangle within preview_rect
+    scaled_rect.x = dst.x + (dst.w - scaled_rect.w) / 2;
+    scaled_rect.y = dst.y + (dst.h - scaled_rect.h) / 2;
+    
+    return scaled_rect;
+}
+
+SDL_Rect GFX_blitScaleAspect(SDL_Surface *src, SDL_Surface *dst)
+{
+	if(!src || !dst) {
+		SDL_Rect none = {0,0};
+		return none;
+	}
+
+	SDL_Rect src_rect = {0, 0, src->w, src->h};
+	SDL_Rect dst_rect = {0, 0, dst->w, dst->h};
+	SDL_Rect scaled_rect = GFX_scaledRectAspect(src_rect, dst_rect);
+	SDL_FillRect(dst, NULL, 0);
+	SDL_BlitScaled(src, NULL, dst, &scaled_rect);
+	return scaled_rect;
+}
+
+static inline SDL_Rect GFX_scaledRectAspectFill(SDL_Rect src, SDL_Rect dst)
+{
+	SDL_Rect scaled_rect;
+
+    // Calculate the aspect ratios
+    float image_aspect = (float)src.w / (float)src.h;
+    float preview_aspect = (float)dst.w / (float)dst.h;
+
+	// Determine scaling factor
+    if (preview_aspect > image_aspect) {
+        scaled_rect.w  = src.w;
+        scaled_rect.h = (int)(src.w / preview_aspect + 0.5f);
+    }
+    else {
+        scaled_rect.w  = (int)(src.h * preview_aspect + 0.5f);
+        scaled_rect.h = src.h;
+    }
+
+    // Calculate the coordinates of the visible part of the input image
+    int offsetX = abs(scaled_rect.w - src.w) / 2;
+    int offsetY = abs(scaled_rect.h - src.h) / 2;
+
+	scaled_rect.x = offsetX;
+	scaled_rect.y = offsetY;
+
+	return scaled_rect;
+}
+
+SDL_Rect GFX_blitScaleToFill(SDL_Surface *src, SDL_Surface *dst)
+{
+	if(!src || !dst){
+		SDL_Rect none = {0,0};
+		return none;
+	}
+
+	SDL_Rect src_rect = {0, 0, src->w, src->h};
+	SDL_Rect dst_rect = {0, 0, dst->w, dst->h};
+	SDL_Rect scaled_rect = GFX_scaledRectAspectFill(src_rect, dst_rect);
+	SDL_BlitScaled(src, &scaled_rect, dst, NULL);
+
+	return dst_rect;
+}
+
+///////////////////////////////
+void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius) {
+    if (!surface || radius == 0) return;
+
+	SDL_PixelFormat *fmt = surface->format;
+	SDL_Rect target = {0, 0, surface->w, surface->h};
+	if (rect)
+		target = *rect;
+
+	if (fmt->format != SDL_PIXELFORMAT_RGB565) {
         SDL_Log("Unsupported pixel format: %s", SDL_GetPixelFormatName(fmt->format));
         return;
     }
@@ -973,54 +1127,70 @@ void GFX_ApplyRounderCorners16(SDL_Surface* surface, int radius) {
     Uint16* pixels = (Uint16*)surface->pixels;  // RGB565 uses 16-bit pixels
     Uint16 transparent_black = 0x0000;  // RGB565 has no alpha, so use black (0)
 
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            int dx = (x < radius) ? radius - x : (x >= width - radius) ? x - (width - radius - 1) : 0;
-            int dy = (y < radius) ? radius - y : (y >= height - radius) ? y - (height - radius - 1) : 0;
+	const int xBeg = target.x;
+	const int xEnd = target.x + target.w;
+	const int yBeg = target.y;
+	const int yEnd = target.y + target.h;
+	for (int y = yBeg; y < yEnd; ++y)
+	{
+		for (int x = xBeg; x < xEnd; ++x) {
+            int dx = (x < xBeg + radius) ? xBeg + radius - x : (x >= xEnd - radius) ? x - (xEnd - radius - 1) : 0;
+            int dy = (y < yBeg + radius) ? yBeg + radius - y : (y >= yEnd - radius) ? y - (yEnd - radius - 1) : 0;
             if (dx * dx + dy * dy > radius * radius) {
                 pixels[y * (surface->pitch / 2) + x] = transparent_black;  // Set to black (0)
             }
         }
-    }
+	}
 }
 
-void GFX_ApplyRounderCorners(SDL_Surface* surface, int radius) {
+void GFX_ApplyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius) {
 	if (!surface) return;
 
     Uint32* pixels = (Uint32*)surface->pixels;
-    int width = surface->w;
-    int height = surface->h;
     SDL_PixelFormat* fmt = surface->format;
+	SDL_Rect target = {0, 0, surface->w, surface->h};
+	if (rect)
+		target = *rect;
     
     Uint32 transparent_black = SDL_MapRGBA(fmt, 0, 0, 0, 0);  // Fully transparent black
 
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            int dx = (x < radius) ? radius - x : (x >= width - radius) ? x - (width - radius - 1) : 0;
-            int dy = (y < radius) ? radius - y : (y >= height - radius) ? y - (height - radius - 1) : 0;
+	const int xBeg = target.x;
+	const int xEnd = target.x + target.w;
+	const int yBeg = target.y;
+	const int yEnd = target.y + target.h;
+	for (int y = yBeg; y < yEnd; ++y)
+	{
+		for (int x = xBeg; x < xEnd; ++x) {
+            int dx = (x < xBeg + radius) ? xBeg + radius - x : (x >= xEnd - radius) ? x - (xEnd - radius - 1) : 0;
+            int dy = (y < yBeg + radius) ? yBeg + radius - y : (y >= yEnd - radius) ? y - (yEnd - radius - 1) : 0;
             if (dx * dx + dy * dy > radius * radius) {
-                pixels[y * width + x] = transparent_black;  // Set to fully transparent black
+                pixels[y * target.w + x] = transparent_black;  // Set to fully transparent black
             }
         }
     }
 }
 
 // Need a roundercorners for rgba4444 now too to have transparant rounder corners :D
-void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, int radius) {
+void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, SDL_Rect* rect, int radius) {
     if (!surface || surface->format->format != SDL_PIXELFORMAT_RGBA4444) return;
 
     Uint16* pixels = (Uint16*)surface->pixels; 
-    int width = surface->w;
-    int height = surface->h;
     int pitch = surface->pitch / 2;  
+	SDL_Rect target = {0, 0, surface->w, surface->h};
+	if (rect)
+		target = *rect;
 
     Uint16 transparent_black = 0x0000; 
 
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            int dx = (x < radius) ? radius - x : (x >= width - radius) ? x - (width - radius - 1) : 0;
-            int dy = (y < radius) ? radius - y : (y >= height - radius) ? y - (height - radius - 1) : 0;
-
+	const int xBeg = target.x;
+	const int xEnd = target.x + target.w;
+	const int yBeg = target.y;
+	const int yEnd = target.y + target.h;
+	for (int y = yBeg; y < yEnd; ++y)
+	{
+		for (int x = xBeg; x < xEnd; ++x) {
+            int dx = (x < xBeg + radius) ? xBeg + radius - x : (x >= xEnd - radius) ? x - (xEnd - radius - 1) : 0;
+            int dy = (y < yBeg + radius) ? yBeg + radius - y : (y >= yEnd - radius) ? y - (yEnd - radius - 1) : 0;
             if (dx * dx + dy * dy > radius * radius) {
                 pixels[y * pitch + x] = transparent_black; 
             }
@@ -1082,11 +1252,6 @@ void BlitRGBA4444toRGB565(SDL_Surface* src, SDL_Surface* dest, SDL_Rect* dest_re
     }
 }
 
-
-
-
-
-
 void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color) {
 
 	SDL_Rect* rect = &asset_rects[asset];
@@ -1114,6 +1279,12 @@ void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rec
 			asset_color = THEME_COLOR2_255;
 		else if(asset_color == THEME_COLOR3)
 			asset_color = THEME_COLOR3_255;
+		else if(asset_color == THEME_COLOR4)
+			asset_color = THEME_COLOR4_255;
+		else if(asset_color == THEME_COLOR5)
+			asset_color = THEME_COLOR5_255;
+		else if(asset_color == THEME_COLOR6)
+			asset_color = THEME_COLOR6_255;
 
 		SDL_Color restore;
 		SDL_GetSurfaceColorMod(gfx.assets, &restore.r, &restore.g, &restore.b);
@@ -1193,18 +1364,18 @@ int GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect) {
 	y += (SCALE1(PILL_SIZE) - rect.h) / 2;
 	
 	if (pwr.is_charging) {
-		GFX_blitAssetColor(ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR1);
-		GFX_blitAssetColor(ASSET_BATTERY_BOLT, NULL, dst, &(SDL_Rect){x+SCALE1(3),y+SCALE1(2)}, THEME_COLOR1);
+		GFX_blitAssetColor(ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR6);
+		GFX_blitAssetColor(ASSET_BATTERY_BOLT, NULL, dst, &(SDL_Rect){x+SCALE1(3),y+SCALE1(2)}, THEME_COLOR6);
 		return rect.w + FIXED_SCALE;
 	}
 	else {
 		int percent = pwr.charge;
-		GFX_blitAssetColor(percent<=10?ASSET_BATTERY_LOW:ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR1);
+		GFX_blitAssetColor(percent<=10?ASSET_BATTERY_LOW:ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR6);
 		
 		if(CFG_getShowBatteryPercent()) {
 			char percentage[16];
 			sprintf(percentage, "%i", pwr.charge);
-			SDL_Surface *text = TTF_RenderUTF8_Blended(font.micro, percentage, UintToColour(THEME_COLOR1_255));
+			SDL_Surface *text = TTF_RenderUTF8_Blended(font.micro, percentage, uintToColour(THEME_COLOR6_255));
 			SDL_Rect target = {
 				x + (rect.w - text->w) / 2 + FIXED_SCALE, 
 				y + (rect.h - text->h) / 2 - 1
@@ -1223,7 +1394,7 @@ int GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect) {
 			clip.x = rect.w - clip.w;
 			clip.y = 0;
 			
-			GFX_blitAssetColor(percent<=20?ASSET_BATTERY_FILL_LOW:ASSET_BATTERY_FILL, &clip, dst, &(SDL_Rect){x+SCALE1(3)+clip.x,y+SCALE1(2)}, THEME_COLOR1);
+			GFX_blitAssetColor(percent<=20?ASSET_BATTERY_FILL_LOW:ASSET_BATTERY_FILL, &clip, dst, &(SDL_Rect){x+SCALE1(3)+clip.x,y+SCALE1(2)}, THEME_COLOR6);
 			return rect.w + FIXED_SCALE;
 		}
 	}
@@ -1279,7 +1450,8 @@ void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rec
 	ox += SCALE1(BUTTON_MARGIN);
 
 	// hint text
-	text = TTF_RenderUTF8_Blended(font.small, hint, COLOR_WHITE);
+	SDL_Color text_color = uintToColour(THEME_COLOR6_255);
+	text = TTF_RenderUTF8_Blended(font.small, hint, text_color);
 	SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){ox+dst_rect->x,dst_rect->y+(SCALE1(BUTTON_SIZE)-text->h)/2,text->w,text->h});
 	SDL_FreeSurface(text);
 }
@@ -1369,7 +1541,7 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 		int asset = show_setting==3?ASSET_BUTTON:show_setting==1?ASSET_BRIGHTNESS:(setting_value>0?ASSET_VOLUME:ASSET_VOLUME_MUTE);
 		int ax = ox + (show_setting==1 || show_setting == 3 ? SCALE1(6) : SCALE1(8));
 		int ay = oy + (show_setting==1 || show_setting == 3 ? SCALE1(5) : SCALE1(7));
-		GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){ax,ay}, THEME_COLOR1);
+		GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){ax,ay}, THEME_COLOR6_255);
 		
 		ox += SCALE1(PILL_SIZE);
 		oy += SCALE1((PILL_SIZE - SETTINGS_SIZE) / 2);
@@ -1412,7 +1584,7 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 			// why does this need to copy strings around?
 			char display_name[6];
 			clockWidth = GFX_getTextWidth(font.small, timeString, display_name, SCALE1(PILL_SIZE), SCALE1(2 * BUTTON_MARGIN));
-			clock = TTF_RenderUTF8_Blended(font.small, display_name, UintToColour(THEME_COLOR1_255));
+			clock = TTF_RenderUTF8_Blended(font.small, display_name, uintToColour(THEME_COLOR6_255));
 			ow += clockWidth;
 		}
 
@@ -1431,7 +1603,7 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 			x += (SCALE1(PILL_SIZE) - rect.w) / 2;
 			y += (SCALE1(PILL_SIZE) - rect.h) / 2;
 			
-			GFX_blitAssetColor(ASSET_WIFI, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR1);
+			GFX_blitAssetColor(ASSET_WIFI, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR6);
 			ox += ww;
 		}
 		ox += GFX_blitBattery(dst, &(SDL_Rect){ox,oy});
@@ -1577,6 +1749,11 @@ void GFX_blitText(TTF_Font* font, const char* str, int leading, SDL_Color color,
 			SDL_FreeSurface(text);
 		}
 	}
+}
+
+SDL_Color GFX_mapColor(uint32_t c)
+{
+	return uintToColour(c);
 }
 
 ///////////////////////////////
@@ -2901,358 +3078,3 @@ FALLBACK_IMPLEMENTATION FILE *PLAT_WriteSettings(const char *filename)
 	return file;
 }
 
-void CFG_defaults(MinUISettings* cfg)
-{
-	if(!cfg)
-		return;
-
-	MinUISettings defaults = {
-		.font = 1, // Next
-		.color1 = HexToUint("ffffff"),
-		.color2 = HexToUint("9b2257"),
-		.color3 = HexToUint("1e2329"),
-		.backgroundColor = HexToUint("000000"),
-		.color1_255 = HexToUint32_unmapped("ffffff"),
-		.color2_255 = HexToUint32_unmapped("9b2257"),
-		.color3_255 = HexToUint32_unmapped("1e2329"),
-		.backgroundColor_255 = HexToUint32_unmapped("000000"),
-		.thumbRadius = 20, // unscaled!
-
-		.showClock = false,
-		.clock24h = true,
-		.showBatteryPercent = false,
-		.showMenuAnimations = true,
-		.showRecents = true,
-		.showGameArt = true,
-
-		.screenTimeoutSecs = 60,
-		.suspendTimeoutSecs = 30,
-		.haptics = true,
-	};
-	
-	*cfg = defaults;
-}
-
-void CFG_init(MinUISettings* cfg)
-{
-	if(!cfg)
-		return;
-
-	CFG_defaults(&settings);
-	bool fontLoaded = false;
-
-	FILE *file = PLAT_OpenSettings("minuisettings.txt");
-	if (file == NULL)
-    {
-		LOG_info("Unable to open settings file, loading defaults\n");
-	}
-	else {
-		char line[256];
-		while (fgets(line, sizeof(line), file))
-		{
-			int temp_value;
-			uint32_t temp_color;
-			if (sscanf(line, "font=%i", &temp_value) == 1)
-			{
-				CFG_setFontId(temp_value);
-				fontLoaded = true;
-				continue;
-			}
-			if (sscanf(line, "color1=%x", &temp_color) == 1)
-			{
-				char hexColor[7];
-				snprintf(hexColor, sizeof(hexColor), "%06x", temp_color);
-				CFG_setColor(1, HexToUint32_unmapped(hexColor));
-				continue;
-			}
-			if (sscanf(line, "color2=%x", &temp_color) == 1)
-			{
-				CFG_setColor(2, temp_color);
-				continue;
-			}
-			if (sscanf(line, "color3=%x", &temp_color) == 1)
-			{
-				CFG_setColor(3, temp_color);
-				continue;
-			}
-			if (sscanf(line, "bgcolor=%x", &temp_color) == 1)
-			{
-				CFG_setColor(4, temp_color);
-				continue;
-			}
-			if (sscanf(line, "radius=%i", &temp_value) == 1)
-			{
-				CFG_setThumbnailRadius(temp_value);
-				continue;
-			}
-			if (sscanf(line, "showclock=%i", &temp_value) == 1)
-			{
-				CFG_setShowClock((bool)temp_value);
-				continue;
-			}
-			if (sscanf(line, "clock24h=%i", &temp_value) == 1)
-			{
-				CFG_setClock24H((bool)temp_value);
-				continue;
-			}
-			if (sscanf(line, "batteryperc=%i", &temp_value) == 1)
-			{
-				CFG_setShowBatteryPercent((bool)temp_value);
-				continue;
-			}
-			if (sscanf(line, "menuanim=%i", &temp_value) == 1)
-			{
-				CFG_setMenuAnimations((bool)temp_value);
-				continue;
-			}
-			if (sscanf(line, "recents=%i", &temp_value) == 1)
-			{
-				CFG_setShowRecents((bool)temp_value);
-				continue;
-			}
-			if (sscanf(line, "gameart=%i", &temp_value) == 1)
-			{
-				CFG_setShowGameArt((bool)temp_value);
-				continue;
-			}
-			if (sscanf(line, "screentimeout=%i", &temp_value) == 1)
-			{
-				CFG_setScreenTimeoutSecs(temp_value);
-				continue;
-			}
-			if (sscanf(line, "suspendTimeout=%i", &temp_value) == 1)
-			{
-				CFG_setSuspendTimeoutSecs(temp_value);
-				continue;
-			}
-			if (sscanf(line, "haptics=%i", &temp_value) == 1)
-			{
-				CFG_setHaptics((bool)temp_value);
-				continue;
-			}
-		}
-		fclose(file);
-	}
-
-	// load gfx related stuff until we drop the indirection
-	CFG_setColor(1, CFG_getColor(1));
-	CFG_setColor(2, CFG_getColor(2));
-	CFG_setColor(3, CFG_getColor(3));
-	CFG_setColor(4, CFG_getColor(4));
-	// avoid reloading the font if not neccessary
-	if(!fontLoaded)
-		CFG_setFontId(CFG_getFontId());
-}
-
-int CFG_getFontId(void)
-{
-	return settings.font;
-}
-
-void CFG_setFontId(int id) 
-{
-	settings.font = clamp(id, 0, 1);
-
-	if (settings.font == 1)
-		FONT_PATH = RES_PATH "/chillroundm.ttf";
-	else
-		FONT_PATH = RES_PATH "/BPreplayBold-unhinted.otf";
-
-	// Load/Reload fonts
-	if(!TTF_WasInit())
-		TTF_Init();
-
-	TTF_CloseFont(font.large);
-	TTF_CloseFont(font.medium);
-	TTF_CloseFont(font.small);
-	TTF_CloseFont(font.tiny);
-	TTF_CloseFont(font.micro);
-
-	font.large = TTF_OpenFont(FONT_PATH, SCALE1(FONT_LARGE));
-	font.medium = TTF_OpenFont(FONT_PATH, SCALE1(FONT_MEDIUM));
-	font.small 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_SMALL));
-	font.tiny 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_TINY));
-	font.micro 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_MICRO));
-
-	TTF_SetFontStyle(font.large, TTF_STYLE_BOLD);
-	TTF_SetFontStyle(font.medium, TTF_STYLE_BOLD);
-	TTF_SetFontStyle(font.small, TTF_STYLE_BOLD);
-	TTF_SetFontStyle(font.tiny, TTF_STYLE_BOLD);
-	TTF_SetFontStyle(font.micro, TTF_STYLE_BOLD);
-}
-
-uint32_t CFG_getColor(int color_id) {
-	switch (color_id) {
-	case 1:
-		return settings.color1_255;
-	case 2:
-		return settings.color2_255;
-	case 3:
-		return settings.color3_255;
-	case 4:
-		return settings.backgroundColor_255;
-	default:
-		return 0;
-	}
-}
-
-void CFG_setColor(int color_id, uint32_t color) {
-	switch (color_id) {
-	case 1:
-		settings.color1_255 = color;
-		settings.color1 = mapUint(color);
-		THEME_COLOR1 = settings.color1;
-		THEME_COLOR1_255 = settings.color1_255;
-		break;
-	case 2:
-		settings.color2_255 = color;
-		settings.color2 = mapUint(color);
-		THEME_COLOR2 = settings.color2;
-		THEME_COLOR2_255 = settings.color2_255;
-		break;
-	case 3:
-		settings.color3_255 = color;
-		settings.color3 = mapUint(color);
-		THEME_COLOR3 = settings.color3;
-		THEME_COLOR3_255 = settings.color3_255;
-		ALT_BUTTON_TEXT_COLOR = UintToColour(THEME_COLOR3_255);
-		break;
-	case 4: 
-		settings.backgroundColor_255 = color;
-		settings.backgroundColor = mapUint(color);
-		break;
-	default:
-		break;
-	}
-
-}
-
-uint32_t CFG_getScreenTimeoutSecs(void) {
-	return settings.screenTimeoutSecs;
-}
-
-void CFG_setScreenTimeoutSecs(uint32_t secs) {
-	settings.screenTimeoutSecs = secs;
-}
-
-uint32_t CFG_getSuspendTimeoutSecs(void) {
-	return settings.suspendTimeoutSecs;
-}
-
-void CFG_setSuspendTimeoutSecs(uint32_t secs) {
-	settings.suspendTimeoutSecs = secs;
-}
-
-bool CFG_getShowClock(void)
-{
-	return settings.showClock;
-}
-
-void CFG_setShowClock(bool show)
-{
-	settings.showClock = show;
-}
-
-bool CFG_getHaptics(void)
-{
-	return settings.haptics;
-}
-
-void CFG_setHaptics(bool enable)
-{
-	settings.haptics = enable;
-}
-
-bool CFG_getClock24H(void)
-{
-	return settings.clock24h;
-}
-
-void CFG_setClock24H(bool is24)
-{
-	settings.clock24h = is24;
-}
-
-bool CFG_getShowBatteryPercent(void)
-{
-	return settings.showBatteryPercent;
-}
-
-void CFG_setShowBatteryPercent(bool show)
-{
-	settings.showBatteryPercent = show;
-}
-
-bool CFG_getMenuAnimations(void)
-{
-	return settings.showMenuAnimations;
-}
-
-void CFG_setMenuAnimations(bool anims)
-{
-	settings.showMenuAnimations = anims;
-}
-
-int CFG_getThumbnailRadius(void)
-{
-	return settings.thumbRadius;
-}
-
-void CFG_setThumbnailRadius(int radius)
-{
-	settings.thumbRadius = clamp(radius, 0, 24);
-}
-
-bool CFG_getShowRecents(void)
-{
-	return settings.showRecents;
-}
-
-void CFG_setShowRecents(bool show)
-{
-	settings.showRecents = show;
-}
-
-bool CFG_getShowGameArt(void)
-{
-	return settings.showGameArt;
-}
-
-void CFG_setShowGameArt(bool show)
-{
-	settings.showGameArt = show;
-}
-
-void CFG_sync(void)
-{
-	// write to file
-	FILE *file = PLAT_WriteSettings("minuisettings.txt");
-	if (file == NULL)
-    {
-		LOG_info("Unable to open settings file, cant write\n");
-		return;
-	}
-
-	fprintf(file, "font=%i\n", settings.font);
-    fprintf(file, "color1=0x%06X\n", settings.color1_255);
-    fprintf(file, "color2=0x%06X\n", settings.color2_255);
-    fprintf(file, "color3=0x%06X\n", settings.color3_255);
-    fprintf(file, "bgcolor=0x%06X\n", settings.backgroundColor_255);
-    fprintf(file, "radius=%i\n", settings.thumbRadius);
-    fprintf(file, "showclock=%i\n", settings.showClock);
-    fprintf(file, "clock24h=%i\n", settings.clock24h);
-    fprintf(file, "batteryperc=%i\n", settings.showBatteryPercent);
-    fprintf(file, "menuanim=%i\n", settings.showMenuAnimations);
-    fprintf(file, "recents=%i\n", settings.showRecents);
-    fprintf(file, "gameart=%i\n", settings.showGameArt);
-    fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
-    fprintf(file, "suspendTimeout=%i\n", settings.suspendTimeoutSecs);
-	fprintf(file, "haptics=%i\n", settings.haptics);
-    
-    fclose(file);
-}
-
-void CFG_quit(void)
-{
-	CFG_sync();
-}

@@ -64,6 +64,9 @@ static const std::vector<std::string> timeout_labels = {"Never", "5s", "10s", "1
 
 static const std::vector<std::string> on_off = {"Off", "On"};
 
+static const std::vector<std::string> scaling_strings = {"Fullscreen", "Fit", "Fill"};
+static const std::vector<std::any> scaling = {(int)GFX_SCALE_FULLSCREEN, (int)GFX_SCALE_FIT, (int)GFX_SCALE_FILL};
+
 int main(int argc, char *argv[])
 {
     try
@@ -99,6 +102,15 @@ int main(int argc, char *argv[])
             MenuItem{Color, "Secondary Accent Color", "A secondary highlight color.", colors, color_strings, []() -> std::any
                     { return CFG_getColor(3); }, [](const std::any &value)
                     { CFG_setColor(3, std::any_cast<uint32_t>(value)); }},
+            MenuItem{Color, "Hint info Color", "Color for button hints and info", colors, color_strings, []() -> std::any
+                    { return CFG_getColor(6); }, [](const std::any &value)
+                    { CFG_setColor(6, std::any_cast<uint32_t>(value)); }},
+            MenuItem{Color, "List Text", "List text color", colors, color_strings, []() -> std::any
+                    { return CFG_getColor(4); }, [](const std::any &value)
+                    { CFG_setColor(4, std::any_cast<uint32_t>(value)); }},
+            MenuItem{Color, "List Text Selected", "List selected text color", colors, color_strings, []() -> std::any
+                    { return CFG_getColor(5); }, [](const std::any &value)
+                    { CFG_setColor(5, std::any_cast<uint32_t>(value)); }},
             MenuItem{Generic, "Brightness", "Display brightness (0-10)", 0, 10, []() -> std::any
                     { return GetBrightness(); }, [](const std::any &value)
                     { SetBrightness(std::any_cast<int>(value)); }},
@@ -135,6 +147,10 @@ int main(int argc, char *argv[])
                     { return CFG_getShowGameArt(); },
                     [](const std::any &value)
                     { CFG_setShowGameArt(std::any_cast<bool>(value)); }},
+            MenuItem{Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
+                    { return CFG_getGameSwitcherScaling(); },
+                    [](const std::any &value)
+                    { CFG_setGameSwitcherScaling(std::any_cast<int>(value)); }},
         });
 
         auto systemMenu = new MenuList(MenuItemType::Fixed, "System",
@@ -161,6 +177,15 @@ int main(int argc, char *argv[])
         const bool showIndicator = true;
         const bool showHints = false;
 
+        SDL_Surface* bgbmp = IMG_Load(SDCARD_PATH "/bg.png");
+        SDL_Surface* convertedbg = SDL_ConvertSurfaceFormat(bgbmp, SDL_PIXELFORMAT_RGB565, 0);
+        if (convertedbg) {
+            SDL_FreeSurface(bgbmp); 
+            SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, ctx.screen->w, ctx.screen->h, 32, SDL_PIXELFORMAT_RGB565);
+            GFX_blitScaleToFill(convertedbg, scaled);
+            bgbmp = scaled;
+        }
+
         // main content (list)
         // PADDING all around
         SDL_Rect listRect = {SCALE1(PADDING), SCALE1(PADDING), ctx.screen->w - SCALE1(PADDING * 2), ctx.screen->h - SCALE1(PADDING * 2)};
@@ -184,8 +209,12 @@ int main(int argc, char *argv[])
 
             if (ctx.dirty)
             {
-                // CFG_init();
                 GFX_clear(ctx.screen);
+                if(bgbmp) {
+                    SDL_Rect image_rect = {0, 0, ctx.screen->w, ctx.screen->h};
+                    SDL_BlitSurface(bgbmp, NULL, ctx.screen, &image_rect);
+                }
+
                 int ow = 0;
 
                 // indicator area top right

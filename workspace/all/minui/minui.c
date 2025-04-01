@@ -10,6 +10,7 @@
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+#include "config.h"
 #include <sys/resource.h>
 #include <pthread.h>
 
@@ -1324,6 +1325,11 @@ static void loadLast(void) { // call after loading root directory
 	}
 	
 	StringArray_free(last);
+
+	if (top->selected >= 0 && top->selected < top->entries->count) {
+		Entry *selected_entry = top->entries->items[top->selected];
+		readyResume(selected_entry);
+	}
 }
 
 ///////////////////////////////////////
@@ -1341,31 +1347,6 @@ static void Menu_quit(void) {
 }
 
 ///////////////////////////////////////
-
-static SDL_Rect GFX_scaled_rect(SDL_Rect preview_rect, SDL_Rect image_rect) {
-    SDL_Rect scaled_rect;
-    
-    // Calculate the aspect ratios
-    float image_aspect = (float)image_rect.w / (float)image_rect.h;
-    float preview_aspect = (float)preview_rect.w / (float)preview_rect.h;
-    
-    // Determine scaling factor
-    if (image_aspect > preview_aspect) {
-        // Image is wider than the preview area
-        scaled_rect.w = preview_rect.w;
-        scaled_rect.h = (int)(preview_rect.w / image_aspect);
-    } else {
-        // Image is taller than or equal to the preview area
-        scaled_rect.h = preview_rect.h;
-        scaled_rect.w = (int)(preview_rect.h * image_aspect);
-    }
-    
-    // Center the scaled rectangle within preview_rect
-    scaled_rect.x = preview_rect.x + (preview_rect.w - scaled_rect.w) / 2;
-    scaled_rect.y = preview_rect.y + (preview_rect.h - scaled_rect.h) / 2;
-    
-    return scaled_rect;
-}
 
 static float selection_offset = 1.0f; 
 static int previous_selected = -1; 
@@ -1460,14 +1441,12 @@ int main (int argc, char *argv[]) {
 	int ox;
 	int oy;
 	int is_scrolling = 1;
-	SDL_Surface* bgbmp = IMG_Load("/mnt/SDCARD/bg.png");
+	SDL_Surface* bgbmp = IMG_Load(SDCARD_PATH "/bg.png");
 	SDL_Surface* convertedbg = SDL_ConvertSurfaceFormat(bgbmp, SDL_PIXELFORMAT_RGB565, 0);
 	if (convertedbg) {
 		SDL_FreeSurface(bgbmp); 
-		SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGB565);					
-		SDL_Rect image_rect = {0, 0, screen->w, screen->h};
-		SDL_BlitScaled(convertedbg, NULL, scaled, &image_rect);
-
+		SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGB565);
+		GFX_blitScaleToFill(convertedbg, scaled);
 		bgbmp = scaled;
 	}
 	unsigned long cputimer = SDL_GetTicks();
@@ -1520,10 +1499,12 @@ int main (int argc, char *argv[]) {
 			}
 			else if (recents->count > 0 && PAD_justReleased(BTN_Y)) {
 				// remove
-				Recent* recentEntry = recents->items[switcher_selected];
+				Recent* recentEntry = recents->items[switcher_selected--];
 				Array_remove(recents, recentEntry);
 				Recent_free(recentEntry);
 				saveRecents();
+				if(switcher_selected < 0)
+					switcher_selected = recents->count - 1; // wrap
 				dirty = 1;
 			}
 			else if (PAD_justPressed(BTN_RIGHT)) {
@@ -1677,13 +1658,9 @@ int main (int argc, char *argv[]) {
 			// PWR_setCPUSpeed(CPU_SPEED_PERFORMANCE);
 			GFX_clear(screen);
 			if(bgbmp) {
-				
 				SDL_Rect image_rect = {0, 0, screen->w, screen->h};
-	
 				SDL_BlitSurface(bgbmp, NULL, screen, &image_rect);
-
 			}
-			
 			
 			// simple thumbnail support a thumbnail for a file or folder named NAME.EXT needs a corresponding /.res/NAME.EXT.png 
 			// that is no bigger than platform FIXED_HEIGHT x FIXED_HEIGHT
@@ -1691,9 +1668,9 @@ int main (int argc, char *argv[]) {
 			if (!show_version && total > 0) {
 				Entry* entry = top->entries->items[top->selected];
 			
-				char res_root[MAX_PATH];
-				strncpy(res_root, entry->path, sizeof(res_root) - 1);
-				res_root[sizeof(res_root) - 1] = '\0';  
+				//char res_root[MAX_PATH];
+				//strncpy(res_root, entry->path, sizeof(res_root) - 1);
+				//res_root[sizeof(res_root) - 1] = '\0';  
 			
 				char tmp_path[MAX_PATH];
 				strncpy(tmp_path, entry->path, sizeof(tmp_path) - 1);
@@ -1706,12 +1683,6 @@ int main (int argc, char *argv[]) {
 					char path_copy[1024];
 					strncpy(path_copy, entry->path, sizeof(path_copy) - 1);
 					path_copy[sizeof(path_copy) - 1] = '\0';
-			
-					char* tmp = strrchr(res_root, '/');
-					if (tmp) *tmp = '\0'; 
-			
-					char res_path[1024];
-					snprintf(res_path, sizeof(res_path), "%s/.res/%s.png", res_root, res_name);
 			
 					char* rompath = dirname(path_copy);
 			
@@ -1764,7 +1735,7 @@ int main (int argc, char *argv[]) {
 
 								thumbbmp = SDL_CreateRGBSurfaceWithFormat(0, scale_rect.w, scale_rect.h, 16, SDL_PIXELFORMAT_RGBA4444);
 								SDL_BlitScaled(optimized, NULL, thumbbmp, &scale_rect);
-								GFX_ApplyRoundedCorners_RGBA4444(thumbbmp, SCALE1(CFG_getThumbnailRadius())); // i wrote my own blit function cause its faster at converting rgba4444 to rgba565 then SDL's one lol
+								GFX_ApplyRoundedCorners_RGBA4444(thumbbmp, &(SDL_Rect){0,0,thumbbmp->w, thumbbmp->h}, SCALE1(CFG_getThumbnailRadius())); // i wrote my own blit function cause its faster at converting rgba4444 to rgba565 then SDL's one lol
 								SDL_FreeSurface(optimized);
 								had_thumb = 1;
 							}
@@ -1884,12 +1855,11 @@ int main (int argc, char *argv[]) {
 							bmp = raw_preview; 
 						}
 						if(bmp) {
-							SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGB565);					
-							SDL_Rect image_rect = {0, 0, screen->w, screen->h};
-							SDL_BlitScaled(bmp, NULL, scaled, &image_rect);
+							SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGB565);
+							SDL_Rect imgRect = GFX_blitScaled(CFG_getGameSwitcherScaling(), bmp, scaled);
 							SDL_FreeSurface(bmp);
-							GFX_ApplyRounderCorners16(scaled,CFG_getThumbnailRadius()*3/2);
-							SDL_BlitSurface(scaled, NULL, screen, &image_rect);
+							GFX_ApplyRoundedCorners16(scaled, &imgRect, SCALE1(CFG_getThumbnailRadius()));
+							SDL_BlitSurface(scaled, NULL, screen, NULL);
 							SDL_FreeSurface(scaled);  // Free after rendering
 						}
 					}
@@ -1909,7 +1879,8 @@ int main (int argc, char *argv[]) {
 						max_width = MIN(max_width, text_width);
 
 						SDL_Surface* text;
-						text = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_WHITE);
+						SDL_Color textColor = uintToColour(THEME_COLOR6_255);
+						text = TTF_RenderUTF8_Blended(font.large, display_name, textColor);
 						GFX_blitPillLight(ASSET_WHITE_PILL, screen, &(SDL_Rect){
 							SCALE1(PADDING),
 							SCALE1(PADDING),
@@ -1967,8 +1938,8 @@ int main (int argc, char *argv[]) {
 						char* entry_unique = entry->unique;
 						int available_width = (had_thumb ? ox - SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_PADDING)) - SCALE1(PADDING * 2);
 						if (i == top->start && !(had_thumb)) available_width -= ow;
-						SDL_Color text_color = COLOR_WHITE;
-						
+					
+						SDL_Color text_color = uintToColour(THEME_COLOR4_255);
 						trimSortingMeta(&entry_name);
 
 						if (entry_unique) { // Only render if a unique name exists
@@ -1978,7 +1949,9 @@ int main (int argc, char *argv[]) {
 						char display_name[256];
 						int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name,display_name, available_width, SCALE1(BUTTON_PADDING * 2));
 						int max_width = MIN(available_width, text_width);
+					
 						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
+						
 						SDL_Surface* text_unique = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_DARK_TEXT);
 						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING), text->h };
 						SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)+4) };
@@ -2004,7 +1977,8 @@ int main (int argc, char *argv[]) {
 						float inverted_offset = 1.0f - selection_offset;
 
 						if (j == selected_row) {
-							SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_BLACK);
+							SDL_Color text_color = uintToColour(THEME_COLOR5_255);
+							SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, text_color);
 							SDL_Rect src_text_rect = {  0, 0, max_width - SCALE1(BUTTON_PADDING * 2), text->h };
 												
 							SDL_Rect text_rect = {  SCALE1(BUTTON_PADDING), SCALE1((last_selection != selected_row ? last_selection < selected_row ? (inverted_offset * PILL_SIZE):(inverted_offset * -PILL_SIZE):0) +4) };
@@ -2078,8 +2052,9 @@ int main (int argc, char *argv[]) {
 				int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name,display_name, available_width, SCALE1(BUTTON_PADDING * 2));
 				int max_width = MIN(available_width, text_width);
 
-				
-				SDL_Surface* text2 = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_BLACK);
+				SDL_Color text_color = uintToColour(THEME_COLOR5_255);
+					
+				SDL_Surface* text2 = TTF_RenderUTF8_Blended(font.large, display_name, text_color);
 				SDL_Rect clear_rect = { SCALE1(BUTTON_MARGIN+BUTTON_PADDING),SCALE1(PADDING + (remember_selection * PILL_SIZE) +4),max_width - SCALE1((BUTTON_PADDING*2)-6),text2->h};
 		
 				SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN+BUTTON_PADDING), SCALE1(PADDING + ((remember_selection) * PILL_SIZE) +4) };
@@ -2088,7 +2063,7 @@ int main (int argc, char *argv[]) {
 				SDL_Rect src_text_rect = {  0, 0, max_width - SCALE1(BUTTON_PADDING * 2), text2->h };
 
 				SDL_FillRect(screen, &clear_rect, THEME_COLOR1);
-				GFX_scrollTextSurface(font.large, display_name, &text2,max_width - ((SCALE1(BUTTON_PADDING*2))),text2->h, 0, COLOR_BLACK, 1);
+				GFX_scrollTextSurface(font.large, display_name, &text2,max_width - ((SCALE1(BUTTON_PADDING*2))),text2->h, 0, text_color, 1);
 				
 				
 				SDL_BlitSurface(text2, &src_text_rect, screen, &dest_rect);

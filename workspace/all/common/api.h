@@ -3,6 +3,7 @@
 #include "sdl.h"
 #include "platform.h"
 #include "scaler.h"
+#include "config.h"
 #include <stdbool.h>
 
 ///////////////////////////////
@@ -60,13 +61,15 @@ extern uint32_t RGB_BLACK;
 extern uint32_t RGB_LIGHT_GRAY;
 extern uint32_t RGB_GRAY;
 extern uint32_t RGB_DARK_GRAY;
-//extern MinUISettings settings;
+
+// screen-mapped to RGB565
 extern uint32_t THEME_COLOR1;
 extern uint32_t THEME_COLOR2;
 extern uint32_t THEME_COLOR3;
-extern uint32_t THEME_COLOR1_255;
-extern uint32_t THEME_COLOR2_255;
-extern uint32_t THEME_COLOR3_255;
+extern uint32_t THEME_COLOR4;
+extern uint32_t THEME_COLOR5;
+extern uint32_t THEME_COLOR6;
+extern SDL_Color ALT_BUTTON_TEXT_COLOR;
 
 // TODO: do we need that many free externs? This should move
 // to a structure or something.
@@ -194,14 +197,16 @@ enum {
 };
 
 SDL_Surface* GFX_init(int mode);
-#define GFX_resize PLAT_resizeVideo // (int w, int h, int pitch);
+#define GFX_resize PLAT_resizeVideo				// (int w, int h, int pitch);
 #define GFX_setScaleClip PLAT_setVideoScaleClip // (int x, int y, int width, int height)
 #define GFX_setNearestNeighbor PLAT_setNearestNeighbor // (int enabled)
 #define GFX_setSharpness PLAT_setSharpness // (int sharpness)
 #define GFX_setEffectColor PLAT_setEffectColor // (int color)
 #define GFX_setEffect PLAT_setEffect // (int effect)
+#define GFX_setOverlay PLAT_setOverlay// (int effect)
 void GFX_setMode(int mode);
 int GFX_hdmiChanged(void);
+SDL_Color /*GFX_*/uintToColour(uint32_t colour);
 
 #define GFX_clear PLAT_clearVideo // (SDL_Surface* screen)
 #define GFX_clearAll PLAT_clearAll // (void)
@@ -238,6 +243,16 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
 scaler_t GFX_getAAScaler(GFX_Renderer* renderer);
 void GFX_freeAAScaler(void);
 
+// calls the appropriate scale function based on the enum value.
+// returns the SDL_Rect of the resulting image in screen coordinates.
+SDL_Rect GFX_blitScaled(int scale, SDL_Surface *src, SDL_Surface *dst);
+// blits to the destination and stretches to fit.
+SDL_Rect GFX_blitStretch(SDL_Surface *src, SDL_Surface *dst);
+// blits to the destination while keeping the aspect ratio.
+SDL_Rect GFX_blitScaleAspect(SDL_Surface *src, SDL_Surface *dst);
+// same as GFX_blitScaledAspect, but fills both dimensions.
+SDL_Rect GFX_blitScaleToFill(SDL_Surface *src, SDL_Surface *dst);
+
 // NOTE: all dimensions should be pre-scaled
 void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color);
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);
@@ -259,9 +274,9 @@ void GFX_sizeText(TTF_Font* font, const char* str, int leading, int* w, int* h);
 void GFX_blitText(TTF_Font* font, const char* str, int leading, SDL_Color color, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch,int mode);
 
-void GFX_ApplyRounderCorners(SDL_Surface* surface, int radius);
-void GFX_ApplyRounderCorners16(SDL_Surface* surface, int radius);
-void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, int radius);
+void GFX_ApplyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius);
+void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius);
+void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, SDL_Rect* rect, int radius);
 void BlitRGBA4444toRGB565(SDL_Surface* src, SDL_Surface* dest, SDL_Rect* dest_rect);
 ///////////////////////////////
 
@@ -415,6 +430,7 @@ void PLAT_setNearestNeighbor(int enabled);
 void PLAT_setSharpness(int sharpness);
 void PLAT_setEffectColor(int color);
 void PLAT_setEffect(int effect);
+void PLAT_setOverlay(int select, const char* tag);
 void PLAT_vsync(int remaining);
 scaler_t PLAT_getScaler(GFX_Renderer* renderer);
 void PLAT_blitRenderer(GFX_Renderer* renderer);
@@ -450,90 +466,5 @@ void PLAT_setLedBrightness(LightSettings *led);
 void PLAT_setLedInbrightness(LightSettings *led);
 void PLAT_setLedEffectSpeed(LightSettings *led);
 void PLAT_setLedEffectCycles(LightSettings *led);
-
-///////////////////////////////
-
-// This should move to cfg.h/.c
-// Read-only interface for minui.c usage
-// Read/Write interface for settings.cpp usage
-
-typedef struct
-{
-	// Theme
-    int font;
-    uint32_t color1;
-    uint32_t color1_255; // not screen mapped
-    uint32_t color2;
-    uint32_t color2_255; // not screen mapped
-    uint32_t color3;
-    uint32_t color3_255; // not screen mapped
-    uint32_t backgroundColor;
-    uint32_t backgroundColor_255; // not screen mapped
-	int thumbRadius;
-
-	// Haptics
-	bool haptics;
-
-	// UI
-	bool showClock;
-	bool clock24h;
-	bool showBatteryPercent;
-	bool showMenuAnimations;
-	bool showRecents;
-	bool showGameArt;
-
-	// Power
-	uint32_t screenTimeoutSecs;
-	uint32_t suspendTimeoutSecs;
-
-} MinUISettings;
-
-void CFG_init(MinUISettings*);
-//void CFG_defaults(MinUISettings*);
-// The font id to use as the UI font.
-// 0 - Default MinUI font
-// 1 - Default NextUI font (default)
-int CFG_getFontId(void);
-void CFG_setFontId(int fontid);
-// The colors to use for the UI. These are 0xRRGGBB values.
-// 0 - Color1 (primary hint/asset colour)
-// 1 - Color2 (accent colour)
-// 2 - Color3 (secondary accent colour)
-// 3 - Background Color (unused)
-uint32_t CFG_getColor(int id);
-void CFG_setColor(int id, uint32_t color);
-// Time in secs before the device enters screen-off mode.
-uint32_t CFG_getScreenTimeoutSecs(void);
-void CFG_setScreenTimeoutSecs(uint32_t secs);
-// Time in secs before the device enters suspend mode (aka deep sleep).
-uint32_t CFG_getSuspendTimeoutSecs(void);
-void CFG_setSuspendTimeoutSecs(uint32_t secs);
-// Haptics
-bool CFG_getHaptics(void);
-void CFG_setHaptics(bool enable);
-// Show/hide clock in the status pill.
-bool CFG_getShowClock(void);
-void CFG_setShowClock(bool show);
-// Sets the time format to 12/24hrs.
-bool CFG_getClock24H(void);
-void CFG_setClock24H(bool);
-// Show/hide battery percentage in the status pill.
-bool CFG_getShowBatteryPercent(void);
-void CFG_setShowBatteryPercent(bool show);
-// Show/hide menu animations in main menu.
-bool CFG_getMenuAnimations(void);
-void CFG_setMenuAnimations(bool anims);
-// Set thumbnail rounding radius.
-int CFG_getThumbnailRadius(void);
-void CFG_setThumbnailRadius(int radius);
-// Show/hide recently played in the main menu.
-bool CFG_getShowRecents(void);
-void CFG_setShowRecents(bool show);
-// Show/hide game art in the main menu.
-bool CFG_getShowGameArt(void);
-void CFG_setShowGameArt(bool show);
-
-void CFG_sync(void);
-void CFG_quit(void);
 
 #endif
