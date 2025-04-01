@@ -31,6 +31,8 @@
 #define CODE_MUTE		1
 #define CODE_JACK		2
 
+#define HAPTIC_DURATION_MS 200
+
 // keymon and api might need different codes
 
 //	for ev.value
@@ -126,13 +128,12 @@ int main (int argc, char *argv[]) {
 						printf("mute: %i\n", val);
 						SetMute(val);
 						if (val) {
-							SetRumble(7);
-							usleep(150000);
-							SetRumble(0);
-							usleep(150000);
-							SetRumble(7);
-							usleep(150000);
-							SetRumble(0);
+							// TODO: tmp solution
+							system("echo 1500000 > /sys/class/motor/voltage");
+							system("echo 1 > /sys/class/gpio/gpio227/value");
+							usleep(HAPTIC_DURATION_MS);
+							system("echo 0 > /sys/class/gpio/gpio243/value");
+							usleep(HAPTIC_DURATION_MS);
 						}
 					}
 				}
