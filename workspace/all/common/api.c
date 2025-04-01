@@ -2343,7 +2343,7 @@ static void* VIB_thread(void *arg) {
 			vib.strength = vib.queued_strength;
 			defer = 0;
 
-			SetRumble(vib.strength);
+			PLAT_setRumble(vib.strength);
 		}
 	}
 	return 0;
@@ -2374,35 +2374,29 @@ int VIB_getStrength(void) {
 #define VIB_TRIPLE_PULSE_DURATION 600
 #define VIB_LONG_PULSE_DURATION 750
 
-void VIB_shortPulse(int strength) {
+void VIB_singlePulse(int strength, int duration_ms) {
     VIB_setStrength(0);
 	VIB_setStrength(strength);
-    usleep(VIB_SHORT_PULSE_DURATION * 1000);
+    usleep(duration_ms * 1000);
     VIB_setStrength(0);
 }
 
-void VIB_doublePulse(int strength, int gap_ms) {
+void VIB_doublePulse(int strength, int duration_ms, int gap_ms) {
     VIB_setStrength(0);
-	VIB_shortPulse(strength);
+	VIB_singlePulse(strength, duration_ms);
     usleep(gap_ms * 1000);
-    VIB_shortPulse(strength);
+    VIB_singlePulse(strength, duration_ms);
 }
 
-void VIB_triplePulse(int strength, int gap_ms) {
+void VIB_triplePulse(int strength, int duration_ms, int gap_ms) {
     VIB_setStrength(0);
-	VIB_shortPulse(strength);
+	VIB_singlePulse(strength, duration_ms);
     usleep(gap_ms * 1000);
-    VIB_shortPulse(strength);
+    VIB_singlePulse(strength, duration_ms);
     usleep(gap_ms * 1000);
-    VIB_shortPulse(strength);
+    VIB_singlePulse(strength, duration_ms);
 }
 
-void VIB_longPulse(int strength) {
-	VIB_setStrength(0);
-    VIB_setStrength(strength);
-    usleep(VIB_LONG_PULSE_DURATION * 1000);
-    VIB_setStrength(0);
-}
 
 ///////////////////////////////
 
@@ -2452,10 +2446,12 @@ void PWR_init(void) {
 	pwr.should_warn = 0;
 	pwr.charge = PWR_LOW_CHARGE;
 	
+	if (CFG_getHaptics()) {
+		VIB_singlePulse(VIB_bootStrength, VIB_bootDuration_ms);
+	}
 	PWR_initOverlay();
 	PWR_updateBatteryStatus();
-	// Add bootup haptic feedback
-    VIB_longPulse(5);
+
 	pthread_create(&pwr.battery_pt, NULL, &PWR_monitorBattery, NULL);
 	pwr.initialized = 1;
 }
@@ -2644,7 +2640,9 @@ static void PWR_enterSleep(void) {
 	}
 	else {
 		SetRawVolume(MUTE_VOLUME_RAW);
-		VIB_shortPulse(5);
+		if (CFG_getHaptics()) {
+			VIB_singlePulse(VIB_sleepStrength, VIB_sleepDuration_ms);
+		}
 		PLAT_enableBacklight(0);
 	}
 	system("killall -STOP keymon.elf");
@@ -2664,7 +2662,9 @@ static void PWR_exitSleep(void) {
 		// buh
 	}
 	else {
-		VIB_shortPulse(5);
+		if (CFG_getHaptics()) {
+			VIB_singlePulse(VIB_sleepStrength, VIB_sleepDuration_ms);
+		}
 		PLAT_enableBacklight(1);
 		SetVolume(GetVolume());
 	}
@@ -2927,6 +2927,7 @@ void CFG_defaults(MinUISettings* cfg)
 
 		.screenTimeoutSecs = 60,
 		.suspendTimeoutSecs = 30,
+		.haptics = true,
 	};
 	
 	*cfg = defaults;
@@ -3024,7 +3025,11 @@ void CFG_init(MinUISettings* cfg)
 				CFG_setSuspendTimeoutSecs(temp_value);
 				continue;
 			}
-
+			if (sscanf(line, "haptics=%i", &temp_value) == 1)
+			{
+				CFG_setHaptics((bool)temp_value);
+				continue;
+			}
 		}
 		fclose(file);
 	}
@@ -3148,6 +3153,16 @@ void CFG_setShowClock(bool show)
 	settings.showClock = show;
 }
 
+bool CFG_getHaptics(void)
+{
+	return settings.haptics;
+}
+
+void CFG_setHaptics(bool enable)
+{
+	settings.haptics = enable;
+}
+
 bool CFG_getClock24H(void)
 {
 	return settings.clock24h;
@@ -3232,6 +3247,7 @@ void CFG_sync(void)
     fprintf(file, "gameart=%i\n", settings.showGameArt);
     fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
     fprintf(file, "suspendTimeout=%i\n", settings.suspendTimeoutSecs);
+	fprintf(file, "haptics=%i\n", settings.haptics);
     
     fclose(file);
 }
