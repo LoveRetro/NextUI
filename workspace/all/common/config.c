@@ -45,7 +45,7 @@ void CFG_defaults(MinUISettings *cfg)
         .screenTimeoutSecs = 60,
         .suspendTimeoutSecs = 30,
 
-        .haptics = true,
+        .haptics = false,
     };
 
     *cfg = defaults;

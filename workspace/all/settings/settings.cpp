@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
             MenuItem{Generic, "Suspend timeout", "Time before device goes to sleep (0-600s)", timeout_secs, timeout_labels, []() -> std::any
                     { return CFG_getSuspendTimeoutSecs(); }, [](const std::any &value)
                     { CFG_setSuspendTimeoutSecs(std::any_cast<uint32_t>(value)); }},
-            MenuItem{Generic, "Haptics", "Enable or disable haptics in the OS", {false, true}, on_off, []() -> std::any
+            MenuItem{Generic, "Haptic feedback", "Enable or disable haptic feedback on certain actions in the OS", {false, true}, on_off, []() -> std::any
                     { return CFG_getHaptics(); },
                     [](const std::any &value)
                     { CFG_setHaptics(std::any_cast<bool>(value)); }},
