@@ -2500,7 +2500,6 @@ int PAD_tappedMenu(uint32_t now) {
 }
 
 ///////////////////////////////
-
 static struct VIB_Context {
 	int initialized;
 	pthread_t pt;
@@ -2545,33 +2544,36 @@ int VIB_getStrength(void) {
 	return vib.strength;
 }
 
-// generic vibration functions
-#define VIB_SHORT_PULSE_DURATION 250
-#define VIB_DOUBLE_PULSE_DURATION 400
-#define VIB_TRIPLE_PULSE_DURATION 600
-#define VIB_LONG_PULSE_DURATION 750
+#define MIN_STRENGTH 0x0000
+#define MAX_STRENGTH 0xFFFF
+#define NUM_INCREMENTS 10
+
+int VIB_scaleStrength(int strength) { // scale through 0-10 (NUM_INCREMENTS)
+	int scaled_strength = MIN_STRENGTH + (int)(strength * ((long long)(MAX_STRENGTH - MIN_STRENGTH) / NUM_INCREMENTS));
+	return scaled_strength; // between 0x0000 and 0xFFFF
+}
 
 void VIB_singlePulse(int strength, int duration_ms) {
     VIB_setStrength(0);
-	VIB_setStrength(strength);
+	VIB_setStrength(VIB_scaleStrength(strength));
     usleep(duration_ms * 1000);
     VIB_setStrength(0);
 }
 
 void VIB_doublePulse(int strength, int duration_ms, int gap_ms) {
     VIB_setStrength(0);
-	VIB_singlePulse(strength, duration_ms);
+	VIB_singlePulse(VIB_scaleStrength(strength), duration_ms);
     usleep(gap_ms * 1000);
-    VIB_singlePulse(strength, duration_ms);
+    VIB_singlePulse(VIB_scaleStrength(strength), duration_ms);
 }
 
 void VIB_triplePulse(int strength, int duration_ms, int gap_ms) {
     VIB_setStrength(0);
-	VIB_singlePulse(strength, duration_ms);
+	VIB_singlePulse(VIB_scaleStrength(strength), duration_ms);
     usleep(gap_ms * 1000);
-    VIB_singlePulse(strength, duration_ms);
+    VIB_singlePulse(VIB_scaleStrength(strength), duration_ms);
     usleep(gap_ms * 1000);
-    VIB_singlePulse(strength, duration_ms);
+    VIB_singlePulse(VIB_scaleStrength(strength), duration_ms);
 }
 
 

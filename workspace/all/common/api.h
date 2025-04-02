@@ -357,7 +357,7 @@ void VIB_init(void);
 void VIB_quit(void);
 void VIB_setStrength(int strength);
 int VIB_getStrength(void);
-
+int VIB_scaleStrength(int strength);
 void VIB_singlePulse(int strength, int duration_ms);
 void VIB_doublePulse(int strength, int duration_ms, int gap_ms);
 void VIB_triplePulse(int strength, int duration_ms, int gap_ms);

@@ -868,7 +868,6 @@ void PLAT_setCPUSpeed(int speed) {
 	putInt(GOVERNOR_PATH, freq);
 }
 
-#define MAX_SCALED_STRENGTH 10
 #define MAX_STRENGTH 0xFFFF
 #define MIN_VOLTAGE 500000
 #define MAX_VOLTAGE 3300000
@@ -878,15 +877,16 @@ void PLAT_setCPUSpeed(int speed) {
 void PLAT_setRumble(int strength) {
 	int voltage = MAX_VOLTAGE;
 
-	if(strength > 0 && strength < MAX_SCALED_STRENGTH) {
-		voltage = MIN_VOLTAGE + (int)(strength * ((long long)(MAX_VOLTAGE - MIN_VOLTAGE) / MAX_SCALED_STRENGTH));
+	if(strength > 0 && strength < MAX_STRENGTH) {
+		voltage = MIN_VOLTAGE + (int)(strength * ((long long)(MAX_VOLTAGE - MIN_VOLTAGE) / MAX_STRENGTH));
 		putInt(RUMBLE_VOLTAGE_PATH, voltage);
 	}
 	else {
 		putInt(RUMBLE_VOLTAGE_PATH, MAX_VOLTAGE);
 	}
 
-	// enable
+	// enable rumble - removed the FN switch disabling haptics
+	// did not make sense 
 	putInt(RUMBLE_PATH, (strength) ? 1 : 0);
 }
 
