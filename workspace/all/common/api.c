@@ -2564,16 +2564,26 @@ void VIB_doublePulse(int strength, int duration_ms, int gap_ms) {
     VIB_setStrength(0);
 	VIB_singlePulse(VIB_scaleStrength(strength), duration_ms);
     usleep(gap_ms * 1000);
+	VIB_setStrength(0);
+	usleep(gap_ms * 1000);
     VIB_singlePulse(VIB_scaleStrength(strength), duration_ms);
+	usleep(gap_ms * 1000);
+	VIB_setStrength(0);
 }
 
 void VIB_triplePulse(int strength, int duration_ms, int gap_ms) {
     VIB_setStrength(0);
 	VIB_singlePulse(VIB_scaleStrength(strength), duration_ms);
     usleep(gap_ms * 1000);
+	VIB_setStrength(0);
+	usleep(gap_ms * 1000);
     VIB_singlePulse(VIB_scaleStrength(strength), duration_ms);
     usleep(gap_ms * 1000);
+	VIB_setStrength(0);
+	usleep(gap_ms * 1000);
     VIB_singlePulse(VIB_scaleStrength(strength), duration_ms);
+	usleep(gap_ms * 1000);
+	VIB_setStrength(0);
 }
 
 
