@@ -350,10 +350,10 @@ int PAD_justRepeated(int btn);
 int PAD_tappedMenu(uint32_t now); // special case, returns 1 on release of BTN_MENU within 250ms if BTN_PLUS/BTN_MINUS haven't been pressed
 
 ///////////////////////////////
-#define VIB_sleepStrength 3
-#define VIB_sleepDuration_ms 200
-#define VIB_bootStrength 4
-#define VIB_bootDuration_ms 200
+#define VIB_sleepStrength 4
+#define VIB_sleepDuration_ms 100
+#define VIB_bootStrength 5
+#define VIB_bootDuration_ms 100
 
 void VIB_init(void);
 void VIB_quit(void);
