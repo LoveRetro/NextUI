@@ -1382,6 +1382,33 @@ void updateSelectionAnimation(int selected) {
 
 ///////////////////////////////////////
 
+SDL_Surface* folderbgbmp;
+bool loadFolderBackground(char* rompath)
+{
+	if(folderbgbmp) {
+		SDL_FreeSurface(folderbgbmp);
+		folderbgbmp = NULL;
+	}
+
+	char imagePath[MAX_PATH];
+	snprintf(imagePath, sizeof(imagePath), "%s/.media/bg.png", rompath);
+
+	//LOG_info("Loading folder bg from %s\n", imagePath);
+
+	SDL_Surface *image = IMG_Load(imagePath);
+	SDL_Surface* image565 = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGB565, 0);
+	if (image565) {
+		SDL_FreeSurface(image); 
+		SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, FIXED_WIDTH, FIXED_HEIGHT, 32, SDL_PIXELFORMAT_RGB565);
+		GFX_blitScaleToFill(image565, scaled);
+		folderbgbmp = scaled;
+	}
+
+	return folderbgbmp != NULL;
+}
+
+///////////////////////////////////////
+
 
 
 
@@ -1441,6 +1468,7 @@ int main (int argc, char *argv[]) {
 	int ox;
 	int oy;
 	int is_scrolling = 1;
+	folderbgbmp = NULL;
 	SDL_Surface* bgbmp = IMG_Load(SDCARD_PATH "/bg.png");
 	SDL_Surface* convertedbg = SDL_ConvertSurfaceFormat(bgbmp, SDL_PIXELFORMAT_RGB565, 0);
 	if (convertedbg) {
@@ -1685,6 +1713,14 @@ int main (int argc, char *argv[]) {
 					path_copy[sizeof(path_copy) - 1] = '\0';
 			
 					char* rompath = dirname(path_copy);
+
+					// folder-specific background for roms (or not)
+					if(entry->type == ENTRY_DIR || CFG_getRomsUseFolderBackground()) {
+						if(loadFolderBackground(entry->type == ENTRY_DIR ? tmp_path : rompath)) {
+							SDL_Rect image_rect = {0, 0, screen->w, screen->h};
+							SDL_BlitSurface(folderbgbmp, NULL, screen, &image_rect);
+						}
+					}
 			
 					char res_copy[1024];
 					strncpy(res_copy, res_name, sizeof(res_copy) - 1);
@@ -1696,6 +1732,8 @@ int main (int argc, char *argv[]) {
 					char thumbpath[1024];
 					if(CFG_getShowGameArt())
 						snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
+
+					//LOG_info("Loading game art from %s\n", thumbpath);
 			
 					had_thumb = 0;
 					if (exists(thumbpath)) {
@@ -2097,6 +2135,7 @@ int main (int argc, char *argv[]) {
 	if(bgbmp) 	SDL_FreeSurface(bgbmp);
 	if (version) SDL_FreeSurface(version);
 	if (preview) SDL_FreeSurface(preview);
+	if (folderbgbmp) SDL_FreeSurface(folderbgbmp);
 	if (thumbbmp) SDL_FreeSurface(thumbbmp);
 
 	Menu_quit();
