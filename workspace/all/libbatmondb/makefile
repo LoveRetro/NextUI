@@ -37,7 +37,8 @@ SOURCE = $(TARGET).c ../common/utils.c ../common/api.c ../../$(PLATFORM)/platfor
 # INCLUDEDIR = $(SYSROOT)/usr/include
 
 CFLAGS   = $(ARCH) -fomit-frame-pointer
-CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -DUSE_$(SDL) -Ofast 
+CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -DUSE_$(SDL) -Ofast
+CFLAGS += -I/usr/include 
 LDFLAGS = -ldl -lrt $(LIBS) -l$(SDL) -l$(SDL)_image -l$(SDL)_ttf -lsqlite3 -s
 
 PRODUCT= build/$(PLATFORM)/lib$(TARGET).so

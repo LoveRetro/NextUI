@@ -26,6 +26,7 @@ SOURCE = $(TARGET).c ../common/utils.c ../common/api.c ../common/config.c ../com
 CC = $(CROSS_COMPILE)gcc
 CFLAGS   = $(ARCH) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -DUSE_$(SDL)  -Ofast 
+CFLAGS += -I/usr/include
 LDFLAGS	 = -ldl $(LIBS) -l$(SDL) -l$(SDL)_image -l$(SDL)_ttf -lpthread -lm -lz
 LDFLAGS +=  -lmsettings
 

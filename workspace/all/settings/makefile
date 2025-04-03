@@ -27,7 +27,8 @@ CXXSOURCE = $(TARGET).cpp menu.cpp build/$(PLATFORM)/utils.o build/$(PLATFORM)/a
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 CFLAGS = $(ARCH) -fomit-frame-pointer
-CFLAGS += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -DUSE_$(SDL)  -Ofast 
+CFLAGS += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -DUSE_$(SDL)  -Ofast
+CFLAGS += -I/usr/include 
 CXXFLAGS += $(CFLAGS) -std=c++17
 CFLAGS += -fpermissive
 LDFLAGS	 = -ldl $(LIBS) -l$(SDL) -l$(SDL)_image -l$(SDL)_ttf -lpthread -lm -lz
