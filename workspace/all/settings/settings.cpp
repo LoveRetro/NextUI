@@ -57,7 +57,7 @@ static const std::vector<std::string> color_strings = {
     "0x221100", "0x442200", "0x663300", "0x884400", "0xAA5500", "0xCC6600", "0xFF8833", "0xFF994D", "0xFFAA66", "0xFFBB80", "0xFFCC99", "0xFFDDB3",
     "0x000000", "0x141414", "0x282828", "0x3C3C3C", "0x505050", "0x646464", "0x8C8C8C", "0xA0A0A0", "0xB4B4B4", "0xC8C8C8", "0xDCDCDC", "0xFFFFFF"};
 
-static const std::vector<std::string> font_names = {"OG", "Next"};
+static const std::vector<std::string> font_names = {"OG", "Next", "Pixel"};
 
 static const std::vector<std::any> timeout_secs = {0U, 5U, 10U, 15U, 30U, 45U, 60U, 90U, 120U, 240U, 360U, 600U};
 static const std::vector<std::string> timeout_labels = {"Never", "5s", "10s", "15s", "30s", "45s", "60s", "90s", "2m", "4m", "6m", "10m"};
@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
 
         auto appearanceMenu = new MenuList(MenuItemType::Fixed, "Appearance",
         {
-            MenuItem{Generic, "Font", "The font to render all UI text.", {0, 1}, font_names, []() -> std::any
+            MenuItem{Generic, "Font", "The font to render all UI text.", {0, 1, 2}, font_names, []() -> std::any
                     { return CFG_getFontId(); },
                     [](const std::any &value)
                     {

@@ -102,6 +102,9 @@
     "numeric": "cpp",
     "random": "c",
     "bit": "cpp",
-    "*.inc": "c"
+    "*.inc": "c",
+    "netfwd": "cpp",
+    "system_error": "cpp",
+    "stop_token": "cpp"
   },
 }

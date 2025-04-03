@@ -192,13 +192,15 @@ int CFG_getFontId(void)
 
 void CFG_setFontId(int id)
 {
-    settings.font = clamp(id, 0, 1);
+    settings.font = clamp(id, 0, 2);
 
     char *fontPath;
     if (settings.font == 1)
-        fontPath = RES_PATH "/chillroundm.ttf";
+        fontPath = RES_PATH "/font1.ttf";
+    else if (settings.font == 2)
+        fontPath = RES_PATH "/font3.ttf";
     else
-        fontPath = RES_PATH "/BPreplayBold-unhinted.otf";
+        fontPath = RES_PATH "/font2.ttf";
 
     if(settings.onFontChange)
         settings.onFontChange(fontPath);
@@ -469,9 +471,11 @@ void CFG_get(const char *key, char *value)
     else if (strcmp(key, "fontpath") == 0)
     {
         if (CFG_getFontId() == 1)
-            sprintf(value, "\"%s\"", RES_PATH "/chillroundm.ttf");
+            sprintf(value, "\"%s\"", RES_PATH "/font2.ttf");
+        else if (CFG_getFontId() == 2)
+            sprintf(value, "\"%s\"", RES_PATH "/font3.ttf");
         else
-            sprintf(value, "\"%s\"", RES_PATH "/BPreplayBold-unhinted.otf");
+            sprintf(value, "\"%s\"", RES_PATH "/font1.otf");
     }
 
     else {
