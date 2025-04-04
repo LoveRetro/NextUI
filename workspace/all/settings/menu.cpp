@@ -107,6 +107,10 @@ void MenuItem::initSelection()
                     valueIdx = i;
                     break;
                 }
+                else {
+                    //LOG_warn("Cant initialize selection for %s from unknown type %s", name, v.type().name());
+                    //assert(false);
+                }
             }
             // this sadly doesnt work with std::any
             //auto it = std::find(values.cbegin(), values.cend(), on_get());

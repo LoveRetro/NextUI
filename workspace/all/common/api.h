@@ -471,4 +471,19 @@ void PLAT_setLedInbrightness(LightSettings *led);
 void PLAT_setLedEffectSpeed(LightSettings *led);
 void PLAT_setLedEffectCycles(LightSettings *led);
 
+///////////////////
+
+#define MAX_TIMEZONES 500
+#define MAX_TZ_LENGTH 100
+
+void PLAT_initTimezones();
+void PLAT_getTimezones(char timezones[MAX_TIMEZONES][MAX_TZ_LENGTH], int *tz_count);
+char *PLAT_getCurrentTimezone();
+void PLAT_setCurrentTimezone(const char*);
+
+#define TIME_init PLAT_initTimezones
+#define TIME_getTimezones PLAT_getTimezones
+#define TIME_getCurrentTimezone PLAT_getCurrentTimezone
+#define TIME_setCurrentTimezone PLAT_setCurrentTimezone
+
 #endif
