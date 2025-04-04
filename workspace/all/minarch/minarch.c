@@ -3649,7 +3649,25 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
         }
     }
 
-    lastframe = data;
+	Uint32* rgbaData = (Uint32*)malloc(width * height * sizeof(Uint32));
+    if (!rgbaData) {
+        printf("Failed to allocate memory for RGBA8888 data.\n");
+        return;
+    }
+
+    const uint16_t* srcData = (const uint16_t*)data; 
+
+    for (unsigned i = 0; i < width * height; ++i) {
+        uint16_t pixel = srcData[i];
+        
+        uint8_t r = ((pixel >> 11) & 0x1F) << 3; 
+        uint8_t g = ((pixel >> 5) & 0x3F) << 2;   
+        uint8_t b = (pixel & 0x1F) << 3;          
+
+        rgbaData[i] = (r << 24) | (g << 16) | (b << 8) | 0xFF;  
+    }
+
+    lastframe = rgbaData;
 
 	if(!fast_forward ) {
 		if(ambient_mode!=0) {
@@ -3676,7 +3694,9 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 		pthread_cond_signal(&core_rq);
 		pthread_mutex_unlock(&core_mx);
 	}
-	else video_refresh_callback_main(data,width,height,pitch);
+	else video_refresh_callback_main(rgbaData,width,height,pitch);
+
+	free(rgbaData);
 }
 ///////////////////////////////
 

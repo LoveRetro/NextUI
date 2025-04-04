@@ -468,7 +468,7 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 void GFX_flip(SDL_Surface* screen) {
 	int should_vsync = (gfx.vsync!=VSYNC_OFF && (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET));
 	PLAT_flip(screen, should_vsync);
-	
+
 	currentfps = current_fps;
 	fps_counter++;
 
@@ -702,7 +702,7 @@ void GFX_scrollTextSurface(TTF_Font* font, const char* in_name, SDL_Surface** ou
     TTF_SizeUTF8(font, adj_in_name, &text_width, &text_height);
     SDL_Rect src_rect = { text_offset, 0, text_width, height };
 	SDL_Surface *scrolling_surface = SDL_CreateRGBSurfaceWithFormat(
-		SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888
+		SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), 32, SDL_PIXELFORMAT_RGBA8888
 	);
 
     SDL_BlitSurface(full_text_surface, &src_rect, scrolling_surface, NULL);

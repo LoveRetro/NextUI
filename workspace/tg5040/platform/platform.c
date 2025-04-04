@@ -120,15 +120,15 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengl");
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");
-	vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, w,h);
+	vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	vid.background = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	vid.foreground = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	vid.target	= NULL; // only needed for non-native sizes
 	
 	// SDL_SetTextureScaleMode(vid.texture, SDL_ScaleModeNearest);
 	
-	vid.buffer	= SDL_CreateRGBSurfaceWithFormat(0, w, h, FIXED_DEPTH, SDL_PIXELFORMAT_RGB565);
-	vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, FIXED_DEPTH, SDL_PIXELFORMAT_RGB565);
+	vid.buffer	= SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
+	vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
 	// SDL_FillRect(vid.screen, NULL, SDL_MapRGBA(vid.screen->format, 0, 0, 0, 0));
 	SDL_SetTextureBlendMode(vid.foreground, SDL_BLENDMODE_BLEND);
 	SDL_SetTextureBlendMode(vid.texture, SDL_BLENDMODE_BLEND);
@@ -261,17 +261,17 @@ static void resizeVideo(int w, int h, int p) {
 	if (vid.target) SDL_DestroyTexture(vid.target);
 	
 	SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, vid.sharpness==SHARPNESS_SOFT?"1":"0", SDL_HINT_OVERRIDE);
-	vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, w,h);
+	vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	
 	if (vid.sharpness==SHARPNESS_CRISP) {
 		SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, "1", SDL_HINT_OVERRIDE);
-		vid.target = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_TARGET, w * hard_scale,h * hard_scale);
+		vid.target = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w * hard_scale,h * hard_scale);
 	}
 	else {
 		vid.target = NULL;
 	}
 	
-	vid.buffer	= SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, w,h, FIXED_DEPTH, SDL_PIXELFORMAT_RGB565);
+	vid.buffer	= SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, w,h, 32, SDL_PIXELFORMAT_RGBA8888);
 
 	vid.width	= w;
 	vid.height	= h;
