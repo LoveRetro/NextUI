@@ -206,7 +206,8 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_setOverlay PLAT_setOverlay// (int effect)
 #define GFX_setOffsetX PLAT_setOffsetX// (int effect)
 #define GFX_setOffsetY PLAT_setOffsetY// (int effect)
-#define GFX_drawSurface PLAT_drawSurface //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_drawForeground PLAT_drawForeground //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_drawBackground PLAT_drawBackground //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_clearCachedTexture PLAT_clearCachedTexture //(SDL_Surface *inputSurface,int x, int y)
 
 #define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
@@ -440,7 +441,8 @@ void PLAT_setEffect(int effect);
 void PLAT_setOverlay(int select, const char* tag);
 void PLAT_setOffsetX(int x);
 void PLAT_setOffsetY(int y);
-void PLAT_drawSurface(SDL_Surface *inputSurface,int x, int y, int w, int h);
+void PLAT_drawForeground(SDL_Surface *inputSurface,int x, int y, int w, int h);
+void PLAT_drawBackground(SDL_Surface *inputSurface,int x, int y, int w, int h);
 void PLAT_clearCachedTexture();
 void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
 void PLAT_present();

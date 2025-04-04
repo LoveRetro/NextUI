@@ -1475,6 +1475,7 @@ int main (int argc, char *argv[]) {
 	if (convertedbg) {
 		SDL_FreeSurface(bgbmp); 
 		bgbmp = convertedbg;
+		GFX_drawBackground(bgbmp,0, 0, screen->w, screen->h);
 	}
 	unsigned long cputimer = SDL_GetTicks();
 	int readytoscroll = 0;
@@ -1729,12 +1730,7 @@ int main (int argc, char *argv[]) {
 					snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
 				
 				if(folderbgbmp) {
-					SDL_Rect image_rect = {0, 0, screen->w, screen->h};
-					SDL_BlitSurface(folderbgbmp, NULL, screen, &image_rect);
-				}
-				if(bgbmp) {
-					SDL_Rect image_rect = {0, 0, screen->w, screen->h};
-					SDL_BlitSurface(bgbmp, NULL, screen, &image_rect);
+					GFX_drawBackground(folderbgbmp,0, 0, screen->w, screen->h);
 				}
 			}
 
@@ -1786,7 +1782,7 @@ int main (int argc, char *argv[]) {
 								new_w = (int)(new_h / aspect_ratio);
 							}
 							
-							GFX_drawSurface(thumbbmp,target_x,center_y,new_w,new_h);
+							GFX_drawForeground(thumbbmp,target_x,center_y,new_w,new_h);
 							had_thumb = 1;
 						}
 					}
