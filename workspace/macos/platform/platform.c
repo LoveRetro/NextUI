@@ -612,22 +612,4 @@ void PLAT_setCurrentTimezone(const char* tz) {
 		LOG_error("Failed to set timezone: %s\n", strerror(errno));
 	}
 	free(tz_path);
-
-	// not sure we need all of this, but its also not staying in sync on its own
-	// /etc/localtime -> /tmp/localtime -> /usr/share/zoneinfo/Asia/Shanghai
-	// what about /etc/TZ and $TZ -> seem to be empty?
-
-	// /usr/trimui/bin/systemval timezone returns "Europe/Berlin"
-	// /usr/trimui/bin/systemval timezone "Europe/Amsterdam" sets the value
-	// /usr/trimui/bin/systemval usenetworktime 0 // syncs even when off?
-
-	// https://stackoverflow.com/questions/10821641/how-can-i-set-the-timezone-in-linux-if-theres-no-etc-timezone-file-nor-a-usr
-	//root@TinaLinux:~# hwclock -r
-	//Fri Apr  4 04:45:23 2025  0.000000 seconds
-	//root@TinaLinux:~# hwclock -l
-	//Fri Apr  4 04:46:04 2025  0.000000 seconds
-	//root@TinaLinux:~# hwclock -u
-	//Fri Apr  4 12:46:06 2025  0.000000 seconds
-	//root@TinaLinux:~# date
-	//Fri Apr  4 12:46:42 CST 2025
 }

@@ -175,9 +175,6 @@ int main(int argc, char *argv[])
             MenuItem{Generic, "Haptic feedback", "Enable or disable haptic feedback on certain actions in the OS", {false, true}, on_off, []() -> std::any
                     { return CFG_getHaptics(); }, [](const std::any &value)
                     { CFG_setHaptics(std::any_cast<bool>(value)); }},
-            MenuItem{Generic, "Set time and date automatically", "Automatically adjust system time with NTP (requires internet access)", {false, true}, on_off, []() -> std::any
-                    { return TIME_getNetworkTimeSync(); }, [](const std::any &value)
-                    { TIME_setNetworkTimeSync(std::any_cast<bool>(value)); }},
             MenuItem{Generic, "Show 24h time format", "Show clock in the 24hrs time format", {false, true}, on_off, []() -> std::any
                     { return CFG_getClock24H(); },
                     [](const std::any &value)
@@ -186,6 +183,9 @@ int main(int argc, char *argv[])
                     { return CFG_getShowClock(); },
                     [](const std::any &value)
                     { CFG_setShowClock(std::any_cast<bool>(value)); }},
+            MenuItem{Generic, "Set time and date automatically", "Automatically adjust system time\nwith NTP (requires internet access)", {false, true}, on_off, []() -> std::any
+                    { return TIME_getNetworkTimeSync(); }, [](const std::any &value)
+                    { TIME_setNetworkTimeSync(std::any_cast<bool>(value)); }},
             MenuItem{Generic, "Time zone", "Your time zone", tz_values, tz_labels, []() -> std::any
                     { return std::string(TIME_getCurrentTimezone()); }, [](const std::any &value)
                     { TIME_setCurrentTimezone(std::any_cast<std::string>(value).c_str()); }},

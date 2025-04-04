@@ -106,11 +106,15 @@ enum InputReactionHint
     NextItem,
 };
 
-template <class T>
 class MenuItem;
 class MenuList;
+// typedef InputReactionHint (*MenuListCallback)(MenuList* list, int i);
+using MenuListCallback = std::function<InputReactionHint(MenuItem &item)>;
+// using ValueGetCallback = std::function<const std::any&(void)>;
+using ValueGetCallback = std::any (*)(void);
+// using ValueSetCallback = std::function<void(const std::any& value)>;
+using ValueSetCallback = void (*)(const std::any &);
 
-template <class T>
 class MenuItem
 {
     ListItemType type;
@@ -120,13 +124,6 @@ class MenuItem
     std::string key; // optional, used by options
     std::string id;  // optional, used by bindings
     int valueIdx;
-    
-    // typedef InputReactionHint (*MenuListCallback)(MenuList* list, int i);
-    using MenuListCallback = std::function<InputReactionHint(MenuItem<T>> &item)>;
-    // using ValueGetCallback = std::function<const std::any&(void)>;
-    using ValueGetCallback = T (*)(void);
-    // using ValueSetCallback = std::function<void(const std::any& value)>;
-    using ValueSetCallback = void (*)(const T &);
 
     MenuListCallback on_confirm; // handling drill-down and other custom item stuff
     ValueGetCallback on_get;
@@ -140,6 +137,8 @@ class MenuItem
     void initSelection();
     bool nextValue();
     bool prevValue();
+    bool next(int n);
+    bool prev(int n);
 
 public:
     MenuItem(ListItemType type, const std::string &name, const std::string &desc,
@@ -185,7 +184,7 @@ class MenuList
 {
     MenuItemType type;
     std::string desc;
-    std::vector<MenuItem*> items;
+    std::vector<MenuItem> items;
     int max_width{0}; // cached on first draw
     bool layout_called{false};
 

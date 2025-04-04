@@ -1052,7 +1052,7 @@ void PLAT_initLeds(LightSettings *lights) {
     if (file == NULL)
     {
 		
-        LOG_info("Unable to open led settings file");
+        LOG_info("Unable to open led settings file\n");
 	
     }
 	else {
@@ -1339,24 +1339,21 @@ void PLAT_getTimezones(char timezones[MAX_TIMEZONES][MAX_TZ_LENGTH], int *tz_cou
 }
 
 char *PLAT_getCurrentTimezone() {
-	// call readlink -f /tmp/localtime to get the current timezone path, and
-	// then remove /usr/share/zoneinfo/ from the beginning of the path to get the timezone name.
-	char *tz_path = (char *)malloc(256);
-	if (!tz_path) {
-		return NULL;
+
+	char *output = (char *)malloc(256);
+	if (!output) {
+		return false;
 	}
-	if (readlink("/etc/localtime", tz_path, 256) == -1) {
-		free(tz_path);
-		return NULL;
+	FILE *fp = popen("uci get system.@system[0].zonename", "r");
+	if (!fp) {
+		free(output);
+		return false;
 	}
-	tz_path[255] = '\0'; // Ensure null-termination
-	char *tz_name = strstr(tz_path, ZONE_PATH "/");
-	if (tz_name) {
-		tz_name += strlen(ZONE_PATH "/");
-		return strdup(tz_name);
-	} else {
-		return strdup(tz_path);
-	}
+	fgets(output, 256, fp);
+	pclose(fp);
+	trimTrailingNewlines(output);
+
+	return output;
 }
 
 void PLAT_setCurrentTimezone(const char* tz) {
@@ -1365,9 +1362,18 @@ void PLAT_setCurrentTimezone(const char* tz) {
         return;
     }
 
-	// tzset()
+	// This makes it permanent
+	char *zonename = (char *)malloc(256);
+	if (!zonename)
+		return;
+	snprintf(zonename, 256, "uci set system.@system[0].zonename=\"%s\"", tz);
+	system(zonename);
+	//system("uci set system.@system[0].zonename=\"Europe/Berlin\"");
+	system("uci del -q system.@system[0].timezone");
+	system("uci commit system");
+	free(zonename);
 
-	// tz will be in format Asia/Shanghai
+	// This fixes the timezone until the next reboot
 	char *tz_path = (char *)malloc(256);
 	if (!tz_path) {
 		return;
@@ -1382,36 +1388,43 @@ void PLAT_setCurrentTimezone(const char* tz) {
 	}
 	free(tz_path);
 
-	// not sure we need all of this, but its also not staying in sync on its own
-	// /etc/localtime -> /tmp/localtime -> /usr/share/zoneinfo/Asia/Shanghai
-	// what about /etc/TZ and $TZ -> seem to be empty?
-
-	// /usr/trimui/bin/systemval timezone returns "Europe/Berlin"
-	// /usr/trimui/bin/systemval timezone "Europe/Amsterdam" sets the value
-	// /usr/trimui/bin/systemval usenetworktime 0 // syncs even when off?
-
-	// https://stackoverflow.com/questions/10821641/how-can-i-set-the-timezone-in-linux-if-theres-no-etc-timezone-file-nor-a-usr
-	//root@TinaLinux:~# hwclock -r
-	//Fri Apr  4 04:45:23 2025  0.000000 seconds
-	//root@TinaLinux:~# hwclock -l
-	//Fri Apr  4 04:46:04 2025  0.000000 seconds
-	//root@TinaLinux:~# hwclock -u
-	//Fri Apr  4 12:46:06 2025  0.000000 seconds
-	//root@TinaLinux:~# date
-	//Fri Apr  4 12:46:42 CST 2025
+	// apply timezone to kernel
+	system("date -k");
 }
 
-#define SYSVAL_PATH "/usr/trimui/bin/systemval"
-
 bool PLAT_getNetworkTimeSync(void) {
-	// system(SYSVAL_PATH "usenetworktime") returns 0/1, cast to bool and return
-	return (system(SYSVAL_PATH " usenetworktime") == 0);
+	char *output = (char *)malloc(256);
+	if (!output) {
+		return false;
+	}
+	FILE *fp = popen("uci get system.ntp.enable", "r");
+	if (!fp) {
+		free(output);
+		return false;
+	}
+	fgets(output, 256, fp);
+	pclose(fp);
+	bool result = (output[0] == '1');
+	free(output);
 }
 
 void PLAT_setNetworkTimeSync(bool on) {
+	// note: this is not the service residing at /etc/init.d/ntpd - that one has hardcoded time server URLs and does not interact with UCI.
 	if (on) {
-		system(SYSVAL_PATH " usenetworktime 1");
+		// permanment
+		system("uci set system.ntp.enable=1");
+		system("uci commit system");
+		system("/etc/init.d/ntpd reload");
 	} else {
-		system(SYSVAL_PATH " usenetworktime 0");
+		// permanment
+		system("uci set system.ntp.enable=0");
+		system("uci commit system");
+		system("/etc/init.d/ntpd stop");
 	}
 }
+
+/////////////////////////
+
+bool PLAT_supportSSH() { return true; }
+
+// wifi check /etc/rc.d/S20network
