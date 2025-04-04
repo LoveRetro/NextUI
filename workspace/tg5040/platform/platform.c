@@ -1338,7 +1338,7 @@ char *PLAT_getCurrentTimezone() {
 	if (!tz_path) {
 		return NULL;
 	}
-	if (readlink("/tmp/localtime", tz_path, 256) == -1) {
+	if (readlink("/etc/localtime", tz_path, 256) == -1) {
 		free(tz_path);
 		return NULL;
 	}
@@ -1366,8 +1366,12 @@ void PLAT_setCurrentTimezone(const char* tz) {
 		return;
 	}
 	snprintf(tz_path, 256, ZONE_PATH "/%s", tz);
+	// replace existing symlink
+	if (unlink("/tmp/localtime") == -1) {
+		LOG_error("Failed to remove existing symlink: %s\n", strerror(errno));
+	}
 	if (symlink(tz_path, "/tmp/localtime") == -1) {
-		LOG_err("Failed to set timezone: %s\n", strerror(errno));
+		LOG_error("Failed to set timezone: %s\n", strerror(errno));
 	}
 	free(tz_path);
 
@@ -1388,4 +1392,19 @@ void PLAT_setCurrentTimezone(const char* tz) {
 	//Fri Apr  4 12:46:06 2025  0.000000 seconds
 	//root@TinaLinux:~# date
 	//Fri Apr  4 12:46:42 CST 2025
+}
+
+#define SYSVAL_PATH "/usr/trimui/bin/systemval"
+
+bool PLAT_getNetworkTimeSync(void) {
+	// system(SYSVAL_PATH "usenetworktime") returns 0/1, cast to bool and return
+	return (system(SYSVAL_PATH " usenetworktime") == 0);
+}
+
+void PLAT_setNetworkTimeSync(bool on) {
+	if (on) {
+		system(SYSVAL_PATH " usenetworktime 1");
+	} else {
+		system(SYSVAL_PATH " usenetworktime 0");
+	}
 }

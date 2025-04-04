@@ -480,10 +480,14 @@ void PLAT_initTimezones();
 void PLAT_getTimezones(char timezones[MAX_TIMEZONES][MAX_TZ_LENGTH], int *tz_count);
 char *PLAT_getCurrentTimezone();
 void PLAT_setCurrentTimezone(const char*);
+bool PLAT_getNetworkTimeSync(void);
+void PLAT_setNetworkTimeSync(bool on);
 
 #define TIME_init PLAT_initTimezones
 #define TIME_getTimezones PLAT_getTimezones
 #define TIME_getCurrentTimezone PLAT_getCurrentTimezone
 #define TIME_setCurrentTimezone PLAT_setCurrentTimezone
+#define TIME_getNetworkTimeSync PLAT_getNetworkTimeSync
+#define TIME_setNetworkTimeSync PLAT_setNetworkTimeSync
 
 #endif

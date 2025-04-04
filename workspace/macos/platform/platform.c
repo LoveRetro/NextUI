@@ -605,6 +605,9 @@ void PLAT_setCurrentTimezone(const char* tz) {
 		return;
 	}
 	snprintf(tz_path, 256, ZONE_PATH "/%s", tz);
+	if (unlink("/tmp/localtime") == -1) {
+		LOG_error("Failed to remove existing symlink: %s\n", strerror(errno));
+	}
 	if (symlink(tz_path, "/tmp/localtime") == -1) {
 		LOG_error("Failed to set timezone: %s\n", strerror(errno));
 	}

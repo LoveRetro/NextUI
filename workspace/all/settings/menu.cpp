@@ -81,36 +81,51 @@ void MenuItem::initSelection()
         if(on_get) {
             // we know we can convert both std::any values to the same type
             const auto initialVal = on_get();
-            for(int i = 0; i < values.size(); i++) {
-                const auto& v = values[i];
-                if(v.type() != initialVal.type())
-                    LOG_error("type mismatch: %s vs. %s", v.type().name(), initialVal.type().name());
-                
-                assert(v.type() == initialVal.type());
-                if(v.type() == typeid(float) && std::any_cast<float>(initialVal) == std::any_cast<float>(v)) {
-                    valueIdx = i;
-                    break;
+            try {
+                for(int i = 0; i < values.size(); i++) {
+                    const auto& v = values[i];
+                    if(v.type() != initialVal.type())
+                        LOG_error("type mismatch: %s vs. %s", v.type().name(), initialVal.type().name());
+                    
+                    assert(v.type() == initialVal.type());
+                    if(v.type() == typeid(float) && std::any_cast<float>(initialVal) == std::any_cast<float>(v)) {
+                        valueIdx = i;
+                        break;
+                    }
+                    else if(v.type() == typeid(int) && std::any_cast<int>(initialVal) == std::any_cast<int>(v)) {
+                        valueIdx = i;
+                        break;
+                    }
+                    else if(v.type() == typeid(unsigned int) && std::any_cast<unsigned int>(initialVal) == std::any_cast<unsigned int>(v)) {
+                        valueIdx = i;
+                        break;
+                    }
+                    else if(v.type() == typeid(uint32_t) && std::any_cast<uint32_t>(initialVal) == std::any_cast<uint32_t>(v)) {
+                        valueIdx = i;
+                        break;
+                    }
+                    else if(v.type() == typeid(bool) && std::any_cast<bool>(initialVal) == std::any_cast<bool>(v)) {
+                        valueIdx = i;
+                        break;
+                    }
+                    else if(v.type() == typeid(std::string) && std::any_cast<std::string>(initialVal) == std::any_cast<std::string>(v)) {
+                        LOG_info("Found equal strings %s and %s\n", initialVal, v);
+                        valueIdx = i;
+                        break;
+                    }
+                    else if(v.type() == typeid(std::basic_string<char>) && std::any_cast<std::basic_string<char>>(initialVal) == std::any_cast<std::basic_string<char>>(v)) {
+                        LOG_info("Found equal basic strings %s and %s\n", initialVal, v);
+                        valueIdx = i;
+                        break;
+                    }
+                    else {
+                        LOG_warn("Cant initialize selection for %s from unknown type %s\n", this->getName(), v.type().name());
+                        //assert(false);
+                    }
                 }
-                else if(v.type() == typeid(int) && std::any_cast<int>(initialVal) == std::any_cast<int>(v)) {
-                    valueIdx = i;
-                    break;
-                }
-                else if(v.type() == typeid(uint32_t) && std::any_cast<uint32_t>(initialVal) == std::any_cast<uint32_t>(v)) {
-                    valueIdx = i;
-                    break;
-                }
-                else if(v.type() == typeid(std::string) && std::any_cast<std::string>(initialVal) == std::any_cast<std::string>(v)) {
-                    valueIdx = i;
-                    break;
-                }
-                else if(v.type() == typeid(bool) && std::any_cast<bool>(initialVal) == std::any_cast<bool>(v)) {
-                    valueIdx = i;
-                    break;
-                }
-                else {
-                    //LOG_warn("Cant initialize selection for %s from unknown type %s", name, v.type().name());
-                    //assert(false);
-                }
+            }
+            catch(...) {
+                // bad any cast 
             }
             // this sadly doesnt work with std::any
             //auto it = std::find(values.cbegin(), values.cend(), on_get());

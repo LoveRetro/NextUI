@@ -94,11 +94,10 @@ int main(int argc, char *argv[])
         std::vector<std::any> tz_values;
         std::vector<std::string> tz_labels;
         for (int i = 0; i < tz_count; ++i) {
-            LOG_info("Timezone: %s\n", timezones[i]);
-            std::string tz = timezones[i];
-            tz_values.push_back(tz);
+            //LOG_info("Timezone: %s\n", timezones[i]);
+            tz_values.push_back(std::string(timezones[i]));
             // Todo: beautify, remove underscores and so on
-            tz_labels.push_back(tz);
+            tz_labels.push_back(std::string(timezones[i]));
         }
 
         auto appearanceMenu = new MenuList(MenuItemType::Fixed, "Appearance",
@@ -136,14 +135,6 @@ int main(int argc, char *argv[])
             MenuItem{Generic, "Color temperature", "Color temperature (0-40)", 0, 40, []() -> std::any
                     { return GetColortemp(); }, [](const std::any &value)
                     { SetColortemp(std::any_cast<int>(value)); }},
-            MenuItem{Generic, "Show clock", "Show clock in the status pill", {false, true}, on_off, []() -> std::any
-                    { return CFG_getShowClock(); },
-                    [](const std::any &value)
-                    { CFG_setShowClock(std::any_cast<bool>(value)); }},
-            MenuItem{Generic, "Show 24h time format", "Show clock in the 24hrs time format", {false, true}, on_off, []() -> std::any
-                    { return CFG_getClock24H(); },
-                    [](const std::any &value)
-                    { CFG_setClock24H(std::any_cast<bool>(value)); }},
             MenuItem{Generic, "Show battery percentage", "Show battery level as percent in the status pill", {false, true}, on_off, []() -> std::any
                     { return CFG_getShowBatteryPercent(); },
                     [](const std::any &value)
@@ -184,6 +175,17 @@ int main(int argc, char *argv[])
             MenuItem{Generic, "Haptic feedback", "Enable or disable haptic feedback on certain actions in the OS", {false, true}, on_off, []() -> std::any
                     { return CFG_getHaptics(); }, [](const std::any &value)
                     { CFG_setHaptics(std::any_cast<bool>(value)); }},
+            MenuItem{Generic, "Set time and date automatically", "Automatically adjust system time with NTP (requires internet access)", {false, true}, on_off, []() -> std::any
+                    { return TIME_getNetworkTimeSync(); }, [](const std::any &value)
+                    { TIME_setNetworkTimeSync(std::any_cast<bool>(value)); }},
+            MenuItem{Generic, "Show 24h time format", "Show clock in the 24hrs time format", {false, true}, on_off, []() -> std::any
+                    { return CFG_getClock24H(); },
+                    [](const std::any &value)
+                    { CFG_setClock24H(std::any_cast<bool>(value)); }},
+            MenuItem{Generic, "Show clock", "Show clock in the status pill", {false, true}, on_off, []() -> std::any
+                    { return CFG_getShowClock(); },
+                    [](const std::any &value)
+                    { CFG_setShowClock(std::any_cast<bool>(value)); }},
             MenuItem{Generic, "Time zone", "Your time zone", tz_values, tz_labels, []() -> std::any
                     { return std::string(TIME_getCurrentTimezone()); }, [](const std::any &value)
                     { TIME_setCurrentTimezone(std::any_cast<std::string>(value).c_str()); }},

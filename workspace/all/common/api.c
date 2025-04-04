@@ -3094,4 +3094,6 @@ FALLBACK_IMPLEMENTATION FILE *PLAT_WriteSettings(const char *filename)
 FALLBACK_IMPLEMENTATION void PLAT_initTimezones() {}
 FALLBACK_IMPLEMENTATION void PLAT_getTimezones(char timezones[MAX_TIMEZONES][MAX_TZ_LENGTH], int *tz_count){ tz_count = 0;}
 FALLBACK_IMPLEMENTATION char *PLAT_getCurrentTimezone() { "Foo/Bar"; }
-FALLBACK_IMPLEMENTATION void PLAT_setCurrentTimezone(const char*) {}
+FALLBACK_IMPLEMENTATION void PLAT_setCurrentTimezone(const char* tz) {}
+FALLBACK_IMPLEMENTATION bool PLAT_getNetworkTimeSync(void) { return true; }
+FALLBACK_IMPLEMENTATION void PLAT_setNetworkTimeSync(bool on) {}
