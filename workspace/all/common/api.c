@@ -702,7 +702,7 @@ void GFX_scrollTextSurface(TTF_Font* font, const char* in_name, SDL_Surface** ou
     TTF_SizeUTF8(font, adj_in_name, &text_width, &text_height);
     SDL_Rect src_rect = { text_offset, 0, text_width, height };
 	SDL_Surface *scrolling_surface = SDL_CreateRGBSurfaceWithFormat(
-		SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), 16, SDL_PIXELFORMAT_RGBA4444
+		SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888
 	);
 
     SDL_BlitSurface(full_text_surface, &src_rect, scrolling_surface, NULL);
@@ -1119,7 +1119,7 @@ void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius)
 	if (rect)
 		target = *rect;
 
-	if (fmt->format != SDL_PIXELFORMAT_RGB565) {
+	if (fmt->format != SDL_PIXELFORMAT_RGBA8888) {
         SDL_Log("Unsupported pixel format: %s", SDL_GetPixelFormatName(fmt->format));
         return;
     }
@@ -1191,6 +1191,35 @@ void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, SDL_Rect* rect, int 
 		for (int x = xBeg; x < xEnd; ++x) {
             int dx = (x < xBeg + radius) ? xBeg + radius - x : (x >= xEnd - radius) ? x - (xEnd - radius - 1) : 0;
             int dy = (y < yBeg + radius) ? yBeg + radius - y : (y >= yEnd - radius) ? y - (yEnd - radius - 1) : 0;
+            if (dx * dx + dy * dy > radius * radius) {
+                pixels[y * pitch + x] = transparent_black; 
+            }
+        }
+    }
+}
+
+void GFX_ApplyRoundedCorners_RGBA8888(SDL_Surface* surface, SDL_Rect* rect, int radius) {
+    if (!surface || surface->format->format != SDL_PIXELFORMAT_RGBA8888) return;
+
+    Uint32* pixels = (Uint32*)surface->pixels; 
+    int pitch = surface->pitch / 4; // Since each pixel is 4 bytes in RGBA8888
+
+    SDL_Rect target = {0, 0, surface->w, surface->h};
+    if (rect) target = *rect;
+
+    Uint32 transparent_black = 0x00000000; // Fully transparent (RGBA8888: 0xAARRGGBB)
+
+    const int xBeg = target.x;
+    const int xEnd = target.x + target.w;
+    const int yBeg = target.y;
+    const int yEnd = target.y + target.h;
+
+    for (int y = yBeg; y < yEnd; ++y) {
+        for (int x = xBeg; x < xEnd; ++x) {
+            int dx = (x < xBeg + radius) ? xBeg + radius - x : (x >= xEnd - radius) ? x - (xEnd - radius - 1) : 0;
+            int dy = (y < yBeg + radius) ? yBeg + radius - y : (y >= yEnd - radius) ? y - (yEnd - radius - 1) : 0;
+            
+            // Check if the pixel is outside the rounded corner radius
             if (dx * dx + dy * dy > radius * radius) {
                 pixels[y * pitch + x] = transparent_black; 
             }
@@ -1317,8 +1346,8 @@ void GFX_blitPillColor(int asset, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t
 	GFX_blitAssetColor(asset, &(SDL_Rect){0,0,r,h}, dst, &(SDL_Rect){x,y}, asset_color);
 	x += r;
 	if (w>0) {
-		SDL_FillRect(dst, &(SDL_Rect){x,y,w,h}, UintMult(fill_color, asset_color));
-		// SDL_FillRect(dst, &(SDL_Rect){x,y,w,h}, asset_color);
+		// SDL_FillRect(dst, &(SDL_Rect){x,y,w,h}, UintMult(fill_color, asset_color));
+		SDL_FillRect(dst, &(SDL_Rect){x,y,w,h}, asset_color);
 		x += w;
 	}
 	GFX_blitAssetColor(asset, &(SDL_Rect){r,0,r,h}, dst, &(SDL_Rect){x,y}, asset_color);
