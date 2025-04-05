@@ -3616,6 +3616,9 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
     bool can_dupe = false;
     environment_callback(RETRO_ENVIRONMENT_GET_CAN_DUPE, &can_dupe);
 
+	unsigned pixel_format = RETRO_PIXEL_FORMAT_RGB565; // Default fallback
+	environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixel_format);
+
 	// fbneo now has auto rotation, but keeping this here maybe we need in the future?
 	// struct retro_variable var = { "fbneo-vertical-mode", NULL };
     // environment_callback(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
@@ -3648,27 +3651,35 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
             return; // No data to display
         }
     }
+	if (pixel_format == RETRO_PIXEL_FORMAT_RGB565) {
+		// RGB565 format confirmed
 
-	Uint32* rgbaData = (Uint32*)malloc(width * height * sizeof(Uint32));
-    if (!rgbaData) {
-        printf("Failed to allocate memory for RGBA8888 data.\n");
-        return;
-    }
+		Uint32* rgbaData = (Uint32*)malloc(width * height * sizeof(Uint32));
+		if (!rgbaData) {
+			printf("Failed to allocate memory for RGBA8888 data.\n");
+			return;
+		}
 
-    const uint16_t* srcData = (const uint16_t*)data; 
+		const uint16_t* srcData = (const uint16_t*)data;
+		unsigned srcPitchInPixels = pitch / sizeof(uint16_t); // 512 for 1024 pitch
 
-    for (unsigned i = 0; i < width * height; ++i) {
-        uint16_t pixel = srcData[i];
-        
-        uint8_t r = ((pixel >> 11) & 0x1F) << 3; 
-        uint8_t g = ((pixel >> 5) & 0x3F) << 2;   
-        uint8_t b = (pixel & 0x1F) << 3;          
+		for (unsigned y = 0; y < height; ++y) {
+			for (unsigned x = 0; x < width; ++x) {
+				uint16_t pixel = srcData[y * srcPitchInPixels + x];
 
-        rgbaData[i] = (r << 24) | (g << 16) | (b << 8) | 0xFF;  
-    }
+				uint8_t r = ((pixel >> 11) & 0x1F) << 3; 
+				uint8_t g = ((pixel >> 5) & 0x3F) << 2;   
+				uint8_t b = (pixel & 0x1F) << 3;          
 
-    lastframe = rgbaData;
+				rgbaData[y * width + x] = (r << 24) | (g << 16) | (b << 8) | 0xFF;  
+			}
+		}
+		pitch = width * sizeof(Uint32);
 
+		lastframe = rgbaData;
+		data = rgbaData;
+	}
+	
 	if(!fast_forward ) {
 		if(ambient_mode!=0) {
 			GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
@@ -3694,9 +3705,9 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 		pthread_cond_signal(&core_rq);
 		pthread_mutex_unlock(&core_mx);
 	}
-	else video_refresh_callback_main(rgbaData,width,height,pitch);
+	else video_refresh_callback_main(data,width,height,pitch);
 
-	free(rgbaData);
+	free(data);
 }
 ///////////////////////////////
 
