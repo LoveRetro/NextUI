@@ -187,6 +187,7 @@ static struct VID_Context {
 	SDL_Window* window;
 	SDL_Renderer* renderer;
 	SDL_Texture* texture;
+	SDL_Texture* overlay;
 	SDL_Surface* buffer;
 	SDL_Surface* screen;
 	
@@ -201,6 +202,10 @@ static int device_width;
 static int device_height;
 static int device_pitch;
 static int rotate = 0;
+
+#define OVERLAYS_FOLDER SDCARD_PATH "/Overlays"
+static char* overlay_path = NULL;
+
 SDL_Surface* PLAT_initVideo(void) {
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
@@ -277,6 +282,7 @@ void PLAT_quitVideo(void) {
 
 	SDL_FreeSurface(vid.screen);
 	SDL_FreeSurface(vid.buffer);
+	if (vid.overlay) SDL_DestroyTexture(vid.overlay);
 	SDL_DestroyTexture(vid.texture);
 	SDL_DestroyRenderer(vid.renderer);
 	SDL_DestroyWindow(vid.window);
@@ -329,6 +335,76 @@ void PLAT_setNearestNeighbor(int enabled) {
 void PLAT_setSharpness(int sharpness) {
 	// buh
 }
+
+int screenx = 0;
+int screeny = 0;
+void PLAT_setOffsetX(int x) {
+    if (x < 0 || x > 100) return;
+    screenx = x - 50;
+}
+void PLAT_setOffsetY(int y) {
+    if (y < 0 || y > 100) return;
+    screeny = y - 50;  
+}
+void PLAT_setOverlay(int select, const char* tag) {
+    if (vid.overlay) {
+        SDL_DestroyTexture(vid.overlay);
+        vid.overlay = NULL;
+    }
+
+    // Array of overlay filenames
+    static const char* overlay_files[] = {
+        "",
+        "overlay1.png",
+        "overlay2.png",
+        "overlay3.png",
+        "overlay4.png",
+        "overlay5.png"
+    };
+
+    int overlay_count = sizeof(overlay_files) / sizeof(overlay_files[0]);
+
+    if (select < 0 || select >= overlay_count) {
+        printf("Invalid selection. Skipping overlay update.\n");
+        return;
+    }
+
+    const char* filename = overlay_files[select];
+
+    if (!filename || strcmp(filename, "") == 0) {
+        overlay_path = "";
+        printf("Skipping overlay update.\n");
+        return;
+    }
+
+    size_t path_len = strlen(OVERLAYS_FOLDER) + strlen(tag) + strlen(filename) + 4; // +3 for slashes and null-terminator
+    overlay_path = malloc(path_len);
+
+    if (!overlay_path) {
+        perror("malloc failed");
+        return;
+    }
+
+    snprintf(overlay_path, path_len, "%s/%s/%s", OVERLAYS_FOLDER, tag, filename);
+    printf("Overlay path set to: %s\n", overlay_path);
+}
+
+static void updateOverlay(void) {
+	// LOG_info("effect: %s opacity: %i\n", effect_path, opacity);
+	if(!vid.overlay) {
+		if(overlay_path) {
+			SDL_Surface* tmp = IMG_Load(overlay_path);
+			if (tmp) {
+
+				if (vid.overlay) SDL_DestroyTexture(vid.overlay);
+				vid.overlay = SDL_CreateTextureFromSurface(vid.renderer, tmp);
+				SDL_FreeSurface(tmp);
+			}
+		}
+	}
+}
+
+
 void PLAT_setEffect(int next_type) {
 }
 
@@ -353,71 +429,90 @@ void PLAT_blitRenderer(GFX_Renderer* renderer) {
 }
 
 void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
-	if (!vid.blit) {
-		resizeVideo(device_width,device_height,FIXED_PITCH); // !!!???
-		SDL_UpdateTexture(vid.texture,NULL,vid.screen->pixels,vid.screen->pitch);
-		if (rotate) {
-			//LOG_info("rotated\n");
-			SDL_RenderCopyEx(vid.renderer,vid.texture,NULL,&(SDL_Rect){device_height,0,device_width,device_height},rotate*90,&(SDL_Point){0,0},SDL_FLIP_NONE);
-		}
-		else {
-			//LOG_info("not rotated\n");
-			SDL_RenderCopy(vid.renderer, vid.texture, NULL,NULL);
-		}
-		SDL_RenderPresent(vid.renderer);
-		return;
-	}
-	
-	if (!vid.blit) resizeVideo(FIXED_WIDTH,FIXED_HEIGHT,FIXED_PITCH); // !!!???
-	
-	SDL_LockTexture(vid.texture,NULL,&vid.buffer->pixels,&vid.buffer->pitch);
-	SDL_BlitSurface(vid.screen, NULL, vid.buffer, NULL);
-	SDL_UnlockTexture(vid.texture);
-	
-	SDL_Rect* src_rect = NULL;
-	SDL_Rect* dst_rect = NULL;
-	SDL_Rect src_r = {0};
-	SDL_Rect dst_r = {0};
-	if (vid.blit) {
-		src_r.x = vid.blit->src_x;
-		src_r.y = vid.blit->src_y;
-		src_r.w = vid.blit->src_w;
-		src_r.h = vid.blit->src_h;
-		src_rect = &src_r;
-		
-		if (vid.blit->aspect==0) { // native (or cropped?)
-			int w = vid.blit->src_w * vid.blit->scale;
-			int h = vid.blit->src_h * vid.blit->scale;
-			int x = (FIXED_WIDTH - w) / 2;
-			int y = (FIXED_HEIGHT - h) / 2;
-						
-			dst_r.x = x;
-			dst_r.y = y;
-			dst_r.w = w;
-			dst_r.h = h;
-			dst_rect = &dst_r;
-		}
-		else if (vid.blit->aspect>0) { // aspect
-			int h = FIXED_HEIGHT;
-			int w = h * vid.blit->aspect;
-			if (w>FIXED_WIDTH) {
-				double ratio = 1 / vid.blit->aspect;
-				w = FIXED_WIDTH;
-				h = w * ratio;
-			}
-			int x = (FIXED_WIDTH - w) / 2;
-			int y = (FIXED_HEIGHT - h) / 2;
+    if (!vid.blit) {
+        resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
+        SDL_UpdateTexture(vid.texture, NULL, vid.screen->pixels, vid.screen->pitch);
+        SDL_RenderCopy(vid.renderer, vid.texture, NULL, NULL);
+        SDL_RenderPresent(vid.renderer);
+        return;
+    }
 
-			dst_r.x = x;
-			dst_r.y = y;
-			dst_r.w = w;
-			dst_r.h = h;
-			dst_rect = &dst_r;
-		}
-	}
-	SDL_RenderCopy(vid.renderer, vid.texture, src_rect, dst_rect);
-	SDL_RenderPresent(vid.renderer);
-	vid.blit = NULL;
+    SDL_UpdateTexture(vid.texture, NULL, vid.blit->src, vid.blit->src_p);
+
+    SDL_Texture* target = vid.texture;
+    int x = vid.blit->src_x;
+    int y = vid.blit->src_y;
+    int w = vid.blit->src_w;
+    int h = vid.blit->src_h;
+
+    SDL_Rect* src_rect = &(SDL_Rect){x, y, w, h};
+    SDL_Rect* dst_rect = &(SDL_Rect){0, 0, device_width, device_height};
+
+    if (vid.blit->aspect == 0) { // native or cropped
+        w = vid.blit->src_w * vid.blit->scale;
+        h = vid.blit->src_h * vid.blit->scale;
+        x = (device_width - w) / 2;
+        y = (device_height - h) / 2;
+        dst_rect->x = x +screenx;
+        dst_rect->y = y +screeny;
+        dst_rect->w = w;
+        dst_rect->h = h;
+    } else if (vid.blit->aspect > 0) { // aspect scaling mode
+        if (should_rotate) {
+            h = device_width; // Scale height to the screen width
+            w = h * vid.blit->aspect;
+            if (w > device_height) {
+                double ratio = 1 / vid.blit->aspect;
+                w = device_height;
+                h = w * ratio;
+            }
+        } else {
+            h = device_height;
+            w = h * vid.blit->aspect;
+            if (w > device_width) {
+                double ratio = 1 / vid.blit->aspect;
+                w = device_width;
+                h = w * ratio;
+            }
+        }
+        x = (device_width - w) / 2;
+        y = (device_height - h) / 2;
+        dst_rect->x = x +screenx;
+        dst_rect->y = y +screeny;
+        dst_rect->w = w;
+        dst_rect->h = h;
+    } else { // full screen mode
+        if (should_rotate) {
+            dst_rect->w = device_height;
+            dst_rect->h = device_width;
+            dst_rect->x = (device_width - dst_rect->w) / 2;
+            dst_rect->y = (device_height - dst_rect->h) / 2;
+        } else {
+            dst_rect->x = screenx;
+            dst_rect->y = screeny;
+            dst_rect->w = device_width;
+            dst_rect->h = device_height;
+        }
+    }
+
+	// FBneo now has auto rotate but keeping this here in case we need it in the future
+    // if (should_rotate) {
+    //     rotate_and_render(vid.renderer, target, src_rect, dst_rect);
+    // } else {
+	// below rendercopy goes here
+	// }
+    SDL_RenderCopy(vid.renderer, target, src_rect, dst_rect);
+    
+
+    // updateEffect();
+    // if (vid.blit && effect.type != EFFECT_NONE && vid.effect) {
+    //     SDL_RenderCopy(vid.renderer, vid.effect, &(SDL_Rect){0, 0, dst_rect->w, dst_rect->h}, dst_rect);
+    // }
+
+	updateOverlay();
+	SDL_RenderCopy(vid.renderer, vid.overlay, &(SDL_Rect){0, 0,device_width, device_height}, &(SDL_Rect){0, 0,device_width, device_height});
+    SDL_RenderPresent(vid.renderer);
+    vid.blit = NULL;
 }
 
 ///////////////////////////////
@@ -613,3 +708,4 @@ void PLAT_setCurrentTimezone(const char* tz) {
 	}
 	free(tz_path);
 }
+
