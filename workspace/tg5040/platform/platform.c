@@ -527,6 +527,8 @@ void applyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius) {
 void PLAT_clearCachedTexture() {
 	SDL_SetRenderTarget(vid.renderer, vid.foreground);
     SDL_RenderClear(vid.renderer);
+	SDL_SetRenderTarget(vid.renderer, vid.background);
+    SDL_RenderClear(vid.renderer);
 	SDL_SetRenderTarget(vid.renderer, NULL);
 }
 void PLAT_drawBackground(SDL_Surface *inputSurface, int x, int y, int w, int h) {

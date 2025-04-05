@@ -1399,7 +1399,7 @@ SDL_Surface* loadFolderBackground(char* rompath)
 		image = image565;
 	}
 
-	SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, FIXED_WIDTH, FIXED_HEIGHT, FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888);
+	SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, FIXED_WIDTH, FIXED_HEIGHT, 32, SDL_PIXELFORMAT_RGBA8888);
 	GFX_blitScaleToFill(image, scaled);
 	SDL_FreeSurface(image);
 	return scaled;
@@ -1482,7 +1482,7 @@ int main (int argc, char *argv[]) {
 
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
-
+	GFX_clearCachedTexture();
 	while (!quit) {
 
 		GFX_startFrame();
@@ -1747,7 +1747,7 @@ int main (int argc, char *argv[]) {
 				char* res_name = strrchr(tmp_path, '/');
 				if (res_name) res_name++;
 			
-				if (dirty) {
+				if (dirty && !show_switcher && !show_version) {
 					//LOG_info("Loading game art from %s\n", thumbpath);
 					had_thumb = 0;
 					GFX_clearCachedTexture();
@@ -1891,10 +1891,10 @@ int main (int argc, char *argv[]) {
 							bmp = raw_preview; 
 						}
 						if(bmp) {
-							SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888);
+							SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGBA8888);
 							SDL_Rect imgRect = GFX_blitScaled(CFG_getGameSwitcherScaling(), bmp, scaled);
 							SDL_FreeSurface(bmp);
-							GFX_ApplyRoundedCorners16(scaled, &imgRect, SCALE1(CFG_getThumbnailRadius()));
+							GFX_ApplyRoundedCorners_RGBA8888(scaled, &imgRect, SCALE1(CFG_getThumbnailRadius()));
 							SDL_BlitSurface(scaled, NULL, screen, NULL);
 							SDL_FreeSurface(scaled);  // Free after rendering
 						}
