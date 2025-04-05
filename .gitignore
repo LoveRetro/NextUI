@@ -38,3 +38,5 @@ workspace/readmes
 
 FAKESD
 .vscode
+**/.cache/
+compile_commands.json
