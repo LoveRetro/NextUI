@@ -28,6 +28,7 @@ static int simple_mode = 0;
 static int thread_video = 0;
 static int was_threaded = 0;
 static int should_run_core = 1; // used by threaded video
+enum retro_pixel_format fmt;
 
 static pthread_t		core_pt;
 static pthread_mutex_t	core_mx;
@@ -2529,14 +2530,30 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: { /* 10 */
-		const enum retro_pixel_format *format = (enum retro_pixel_format *)data;
-		break;
+		const enum retro_pixel_format *format = (const enum retro_pixel_format *)data;
+		LOG_info("Requested format: %d\n", *format); // Log the requested format (raw integer value)
+	
+		// Check if the requested format is supported
+		if (*format == RETRO_PIXEL_FORMAT_XRGB8888) {
+			fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+			LOG_info("Format supported: RETRO_PIXEL_FORMAT_XRGB8888\n");
+			return true;  // Indicate success
+		} else if (*format == RETRO_PIXEL_FORMAT_RGB565) {
+			fmt = RETRO_PIXEL_FORMAT_RGB565;
+			LOG_info("Format supported: RETRO_PIXEL_FORMAT_RGB565\n");
+			return true;  // Indicate success
+		} 
+		// Log unsupported formats
+		LOG_info("Format not supported, defaulting to RGB565\n");
+		fmt = RETRO_PIXEL_FORMAT_RGB565;
+		return false;  // Indicate failure
 	}
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: { /* 11 */
 		// puts("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
 		Input_init((const struct retro_input_descriptor *)data);
 		return false;
-	} break;
+		break;
+	} 
 	case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE: { /* 13 */
 		const struct retro_disk_control_callback *var =
 			(const struct retro_disk_control_callback *)data;
@@ -3589,17 +3606,6 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 	// bool can_dupe = false;
     // environment_callback(RETRO_ENVIRONMENT_GET_CAN_DUPE, &can_dupe);
 
-	unsigned pixel_format = RETRO_PIXEL_FORMAT_RGB565; // Default fallback
-	environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixel_format);
-	if(!rgbaData || (width * height * sizeof(Uint32)) != sizeof(rgbaData)) {
-		if(rgbaData) free(rgbaData);
-		rgbaData = (Uint32*)malloc(width * height * sizeof(Uint32));
-		if (!rgbaData) {
-			printf("Failed to allocate memory for RGBA8888 data.\n");
-			return;
-		}
-	}
-
 	// fbneo now has auto rotation, but keeping this here maybe we need in the future?
 	// struct retro_variable var = { "fbneo-vertical-mode", NULL };
     // environment_callback(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
@@ -3625,16 +3631,39 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 	// 	should_rotate = 0;
 	// }
 
+	if(!rgbaData || (width * height * sizeof(Uint32)) != sizeof(rgbaData)) {
+		if(rgbaData) free(rgbaData);
+		rgbaData = (Uint32*)malloc(width * height * sizeof(Uint32));
+		if (!rgbaData) {
+			printf("Failed to allocate memory for RGBA8888 data.\n");
+			return;
+		}
+	}
+
+
     if (!data) {
         if (lastframe) {
             data = lastframe;
         } else {
             return; // No data to display
         }
-    } else if (pixel_format == RETRO_PIXEL_FORMAT_RGB565) {
-		// RGB565 format confirmed
+    } else if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
+		// convert XRGB8888 to RGBA8888
+		const uint32_t* src = (const uint32_t*)data;
+		for (unsigned i = 0; i < width * height; ++i) {
+			uint32_t pixel = src[i];
+			uint8_t r = (pixel >> 16) & 0xFF;
+			uint8_t g = (pixel >> 8) & 0xFF;
+			uint8_t b = (pixel >> 0) & 0xFF;
+			uint8_t a = 0xFF;
+			rgbaData[i] = (r << 24) | (g << 16) | (b << 8) | a;
+		}
+		data = rgbaData;
+	} else {
+		// if emulator doesnt support XRGB888 and uses RGB565
+		// convert RGB565 to RGBA8888
 		const uint16_t* srcData = (const uint16_t*)data;
-		unsigned srcPitchInPixels = pitch / sizeof(uint16_t); // 512 for 1024 pitch
+		unsigned srcPitchInPixels = pitch / sizeof(uint16_t); 
 
 		for (unsigned y = 0; y < height; ++y) {
 			for (unsigned x = 0; x < width; ++x) {
@@ -3648,8 +3677,8 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 			}
 		}
 		data = rgbaData;
-		
 	}
+
 	pitch = width * sizeof(Uint32);
 	lastframe = data;
 	if(!fast_forward ) {
@@ -5718,6 +5747,10 @@ int main(int argc , char* argv[]) {
 	// Overrides_init();
 	
 	Core_open(core_path, tag_name);
+
+	fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+	environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
+
 	Game_open(rom_path); // nes tries to load gamegenie setting before this returns ffs
 	if (!game.is_open) goto finish;
 	
