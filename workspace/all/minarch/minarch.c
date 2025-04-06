@@ -5785,7 +5785,7 @@ int main(int argc , char* argv[]) {
 	// force a vsync immediately before loop
 	// for better frame pacing?
 	GFX_clearAll();
-	GFX_clearCachedTexture();
+	GFX_clearForeground();
 	GFX_flip(screen);
 	
 	Special_init(); // after config

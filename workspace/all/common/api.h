@@ -208,7 +208,9 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_setOffsetY PLAT_setOffsetY// (int effect)
 #define GFX_drawForeground PLAT_drawForeground //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_drawBackground PLAT_drawBackground //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_clearCachedTexture PLAT_clearCachedTexture //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_clearForeground PLAT_clearForeground //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_clearBackground PLAT_clearBackground //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
 
 #define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
 void GFX_setMode(int mode);
@@ -443,7 +445,10 @@ void PLAT_setOffsetX(int x);
 void PLAT_setOffsetY(int y);
 void PLAT_drawForeground(SDL_Surface *inputSurface,int x, int y, int w, int h);
 void PLAT_drawBackground(SDL_Surface *inputSurface,int x, int y, int w, int h, float brightness, bool maintainAspectRatio);
-void PLAT_clearCachedTexture();
+void PLAT_clearForeground();
+void PLAT_clearBackground();
+void PLAT_animateSurface(SDL_Surface *inputSurface, int x, int y, int target_x, int target_y, int w, int h, int duration_ms);
+
 void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
 void PLAT_present();
 void PLAT_vsync(int remaining);

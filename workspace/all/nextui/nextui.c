@@ -1354,7 +1354,6 @@ static void Menu_quit(void) {
 static float selection_offset = 1.0f; 
 static int previous_selected = -1; 
 static int dirty = 1;
-static int dirtyanim = 1;
 static int last_selection = -1;
 static int remember_selection = 0;
 // functionooos for like animation haha
@@ -1364,24 +1363,6 @@ float lerp(float a, float b, float t) {
 
 #define ANIMATION_FRAMES 3
 
-void updateSelectionAnimation(int selected) {
-	dirtyanim=1;
-    if ((selected == previous_selected + 1 || selected == previous_selected - 1) && selection_offset >= 1.0f) {
-        selection_offset = 0.0f; 
-    }  else if(selection_offset >= 1.0f) {
-		previous_selected = selected;
-	}
-		
-    if (selection_offset <= 1.0f) {
-        selection_offset += CFG_getMenuAnimations() ? 1.f / ANIMATION_FRAMES : 1.f;
-        if (selection_offset >= 1.0f) {
-            selection_offset = 1.0f;
-            previous_selected = selected;
-			dirtyanim = 0;
-			
-        }
-    } 
-}
 
 ///////////////////////////////////////
 
@@ -1485,7 +1466,7 @@ int main (int argc, char *argv[]) {
 
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
-	GFX_clearCachedTexture();
+	GFX_clearForeground();
 	while (!quit) {
 
 		GFX_startFrame();
@@ -1550,7 +1531,7 @@ int main (int argc, char *argv[]) {
 				dirty = 1;
 			}
 		}
-		else if(!dirtyanim) {
+		else {
 			if (PAD_tappedMenu(now)) {
 				show_version = 1;
 				show_switcher = 0; // just to be sure
@@ -1671,7 +1652,11 @@ int main (int argc, char *argv[]) {
 				Entry_open(top->entries->items[top->selected]);
 				total = top->entries->count;
 				dirty = 1;
-
+				SDL_Surface *tmp = SDL_CreateRGBSurfaceWithFormat(0, 1024, 768, 32, SDL_PIXELFORMAT_RGBA8888);
+				SDL_BlitSurface(screen,NULL,tmp,&(SDL_Rect){0,0,1024,768});
+				GFX_clear(screen);
+				GFX_animateSurface(tmp,0,0,0-FIXED_WIDTH,0,1024,768,100);
+				SDL_FreeSurface(tmp);
 				if (total>0) readyResume(top->entries->items[top->selected]);
 			}
 			else if (PAD_justPressed(BTN_B) && stack->count>1) {
@@ -1679,11 +1664,17 @@ int main (int argc, char *argv[]) {
 				total = top->entries->count;
 				dirty = 1;
 				// can_resume = 0;
+				SDL_Surface *tmp = SDL_CreateRGBSurfaceWithFormat(0, 1024, 768, 32, SDL_PIXELFORMAT_RGBA8888);
+				SDL_BlitSurface(screen,NULL,tmp,&(SDL_Rect){0,0,1024,768});
+				GFX_clearForeground();
+				GFX_clear(screen);
+				GFX_animateSurface(tmp,0,0,0+FIXED_WIDTH,0,1024,768,100);
+				SDL_FreeSurface(tmp);
 				if (total>0) readyResume(top->entries->items[top->selected]);
 			}
 		}
 		
-		if(dirty || dirtyanim) {
+		if(dirty) {
 			// PWR_setCPUSpeed(CPU_SPEED_PERFORMANCE);
 			GFX_clear(screen);
 
@@ -1755,7 +1746,7 @@ int main (int argc, char *argv[]) {
 			
 				if (dirty && !show_switcher && !show_version) {
 					had_thumb = 0;
-					GFX_clearCachedTexture();
+					GFX_clearForeground();
 					if (exists(thumbpath)) {
 						SDL_Surface* newThumb = IMG_Load(thumbpath);
 						if (newThumb) {
@@ -1789,6 +1780,7 @@ int main (int argc, char *argv[]) {
 							
 							GFX_ApplyRoundedCorners_RGBA8888(thumbbmp, &(SDL_Rect){0,0,thumbbmp->w, thumbbmp->h}, SCALE1((float)CFG_getThumbnailRadius() * ((float)img_w / (float)new_w)));
 							GFX_drawForeground(thumbbmp,target_x,center_y,new_w,new_h);
+							
 						
 							ox = (int)(screen->w - new_w) - SCALE1(BUTTON_MARGIN*5);
 
@@ -1865,7 +1857,8 @@ int main (int argc, char *argv[]) {
 				GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
 			}
 			else if(show_switcher) {
-				GFX_clearCachedTexture();
+				GFX_clearForeground();
+				lastbg = 1;
 				// For all recents with resumable state (i.e. has savegame), show game switcher carousel
 
 				#define WINDOW_RADIUS 0 // TODO: this logic belongs in blitRect?
@@ -1954,18 +1947,36 @@ int main (int argc, char *argv[]) {
 				}
 			}
 			else {
-				updateSelectionAnimation(top->selected);
+				// buttons
+				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
+				else if (can_resume) GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, 0, screen, 0);
+				else GFX_blitButtonGroup((char*[]){ 
+					BTN_SLEEP==BTN_POWER?"POWER":"MENU",
+					BTN_SLEEP==BTN_POWER||simple_mode?"SLEEP":"INFO",  
+					NULL }, 0, screen, 0);
+			
+				if (total==0) {
+					if (stack->count>1) {
+						GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
+					}
+				}
+				else {
+					if (stack->count>1) {
+						GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
+					}
+					else {
+						GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, 0, screen, 1);
+					}
+				}
+
 				// list
 				if (total > 0) {
 					selected_row = top->selected - top->start;
+					previousY = (remember_selection) * PILL_SIZE;
+
 					remember_selection = selected_row;
 					targetY = selected_row * PILL_SIZE;
-					previousY = (previous_selected - top->start) * PILL_SIZE;
-				
-					highlightY = (last_selection != selected_row) ? lerp(previousY, targetY, selection_offset) : targetY;
-					if (selection_offset >= 1.0f) {
-						last_selection = selected_row;
-					}
+					
 				
 					for (int i = top->start, j = 0; i < top->end; i++, j++) {
 						Entry* entry = top->entries->items[i];
@@ -2000,67 +2011,32 @@ int main (int argc, char *argv[]) {
 					
 					}
 					for (int i = top->start, j = 0; i < top->end; i++, j++) {
-						Entry* entry = top->entries->items[i];
-						char* entry_name = entry->name;
-						char* entry_unique = entry->unique;
-						int available_width = (had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_MARGIN)) - SCALE1(PADDING * 2);
-						if (i == top->start && !(had_thumb)) available_width -= ow;
-						trimSortingMeta(&entry_name);
-						char display_name[256];
-						int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width, SCALE1(BUTTON_PADDING * 2));
-						int max_width = MIN(available_width, text_width);
-						float inverted_offset = 1.0f - selection_offset;
-
 						if (j == selected_row) {
-							SDL_Color text_color = uintToColour(THEME_COLOR5_255);
-							SDL_Surface* text = TTF_RenderUTF8_Solid(font.large, display_name, text_color);
-							SDL_Rect src_text_rect = {  0, 0, max_width - SCALE1(BUTTON_PADDING * 2), text->h };
-												
-							SDL_Rect text_rect = {  SCALE1(BUTTON_PADDING), SCALE1((last_selection != selected_row ? last_selection < selected_row ? (inverted_offset * PILL_SIZE):(inverted_offset * -PILL_SIZE):0) +4) };
-							SDL_Rect anim_rect = {  SCALE1(BUTTON_MARGIN),SCALE1(highlightY+PADDING) };
+							Entry* entry = top->entries->items[i];
+							char* entry_name = entry->name;
+							char* entry_unique = entry->unique;
+							int available_width = (had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_MARGIN)) - SCALE1(PADDING * 2);
+							if (i == top->start && !(had_thumb)) available_width -= ow;
+							trimSortingMeta(&entry_name);
+							char display_name[256];
+							int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width, SCALE1(BUTTON_PADDING * 2));
+							int max_width = MIN(available_width, text_width);
 
-							SDL_Surface *cool = SDL_CreateRGBSurfaceWithFormat(
+							is_scrolling = GFX_resetScrollText(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
+							SDL_Surface *pill = SDL_CreateRGBSurfaceWithFormat(
 								SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888
 							);
-							is_scrolling = GFX_resetScrollText(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
-							GFX_blitPillDark(ASSET_WHITE_PILL, screen, &(SDL_Rect){
-								SCALE1(BUTTON_MARGIN),SCALE1(highlightY+PADDING), max_width, SCALE1(PILL_SIZE)
+							GFX_blitPillDark(ASSET_WHITE_PILL, pill, &(SDL_Rect){
+								0,0, max_width, SCALE1(PILL_SIZE)
 							});
-
-							SDL_BlitSurface(text, &src_text_rect, cool, &text_rect);
-							SDL_FreeSurface(text);
-							SDL_BlitSurface(cool, NULL, screen, &anim_rect);
-							SDL_FreeSurface(cool);
+							GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),40);
+							SDL_FreeSurface(pill);
 						} 
 					}
-		
 				}
-				
 				else {
 					// TODO: for some reason screen's dimensions end up being 0x0 in GFX_blitMessage...
 					GFX_blitMessage(font.large, "Empty folder", screen, &(SDL_Rect){0,0,screen->w,screen->h}); //, NULL);
-				}
-		
-				// buttons
-				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
-				else if (can_resume) GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, 0, screen, 0);
-				else GFX_blitButtonGroup((char*[]){ 
-					BTN_SLEEP==BTN_POWER?"POWER":"MENU",
-					BTN_SLEEP==BTN_POWER||simple_mode?"SLEEP":"INFO",  
-					NULL }, 0, screen, 0);
-			
-				if (total==0) {
-					if (stack->count>1) {
-						GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
-					}
-				}
-				else {
-					if (stack->count>1) {
-						GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
-					}
-					else {
-						GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, 0, screen, 1);
-					}
 				}
 			}
 			
