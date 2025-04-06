@@ -239,6 +239,8 @@ int GFX_updateColors()
 	THEME_COLOR5 = mapUint(CFG_getColor(5));
 	THEME_COLOR6 = mapUint(CFG_getColor(6));
 	ALT_BUTTON_TEXT_COLOR = uintToColour(CFG_getColor(3));
+
+	return 0;
 }
 
 SDL_Surface* GFX_init(int mode)
