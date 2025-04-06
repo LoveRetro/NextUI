@@ -1693,57 +1693,56 @@ int main (int argc, char *argv[]) {
 			if(total > 0)
 			{
 				Entry* entry = top->entries->items[top->selected];
-				if(dirty) {
-					char tmp_path[MAX_PATH];
-					strncpy(tmp_path, entry->path, sizeof(tmp_path) - 1);
-					tmp_path[sizeof(tmp_path) - 1] = '\0';
-				
-					char* res_name = strrchr(tmp_path, '/');
-					if (res_name) res_name++;
-
-					char path_copy[1024];
-					strncpy(path_copy, entry->path, sizeof(path_copy) - 1);
-					path_copy[sizeof(path_copy) - 1] = '\0';
+		
+				char tmp_path[MAX_PATH];
+				strncpy(tmp_path, entry->path, sizeof(tmp_path) - 1);
+				tmp_path[sizeof(tmp_path) - 1] = '\0';
 			
-					char* rompath = dirname(path_copy);
-				
-					char res_copy[1024];
-					strncpy(res_copy, res_name, sizeof(res_copy) - 1);
-					res_copy[sizeof(res_copy) - 1] = '\0';
-			
-					char* dot = strrchr(res_copy, '.');
-					if (dot) *dot = '\0'; 
+				char* res_name = strrchr(tmp_path, '/');
+				if (res_name) res_name++;
 
-					// folder-specific background for roms (or not)
-					if(entry->type == ENTRY_DIR || CFG_getRomsUseFolderBackground()) {
-						char *newBg = entry->type == ENTRY_DIR ? entry->path : rompath;
-						if(strcmp(newBg, folderBgPath) != 0) {
-							strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
-							folderBgPath[sizeof(folderBgPath) - 1] = '\0';
-							//strcpy(folderBgPath, newBg);
-							SDL_FreeSurface(folderbgbmp);
-							folderbgbmp = loadFolderBackground(folderBgPath);
-							LOG_info("draw bg\n");
-							if(folderbgbmp) {
-								GFX_drawBackground(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0);
-								lastbg=1;
-							} else if (lastbg==1) {
-								GFX_drawBackground(bgbmp,0, 0, screen->w, screen->h,1.0f,0);
-								lastbg=0;
-							}
-						}
-						else {
-							// keep
+				char path_copy[1024];
+				strncpy(path_copy, entry->path, sizeof(path_copy) - 1);
+				path_copy[sizeof(path_copy) - 1] = '\0';
+		
+				char* rompath = dirname(path_copy);
+			
+				char res_copy[1024];
+				strncpy(res_copy, res_name, sizeof(res_copy) - 1);
+				res_copy[sizeof(res_copy) - 1] = '\0';
+		
+				char* dot = strrchr(res_copy, '.');
+				if (dot) *dot = '\0'; 
+
+				if(CFG_getShowGameArt())
+					snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
+				// folder-specific background for roms (or not)
+				if(entry->type == ENTRY_DIR || CFG_getRomsUseFolderBackground()) {
+					char *newBg = entry->type == ENTRY_DIR ? entry->path : rompath;
+					if(strcmp(newBg, folderBgPath) != 0) {
+						strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
+						folderBgPath[sizeof(folderBgPath) - 1] = '\0';
+						//strcpy(folderBgPath, newBg);
+						SDL_FreeSurface(folderbgbmp);
+						folderbgbmp = loadFolderBackground(folderBgPath);
+						if(folderbgbmp) {
+							GFX_drawBackground(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0);
+							lastbg=1;
+						} else if (lastbg==1) {
+							GFX_drawBackground(bgbmp,0, 0, screen->w, screen->h,1.0f,0);
+							lastbg=0;
 						}
 					}
-					if(CFG_getShowGameArt())
-						snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
+					else {
+						// keep
+					}
 				}
+				
+			
 			}
 
 			// simple thumbnail support a thumbnail for a file or folder named NAME.EXT needs a corresponding /.res/NAME.EXT.png 
 			// that is no bigger than platform FIXED_HEIGHT x FIXED_HEIGHT
-			
 			if (!show_version && total > 0) {
 				Entry* entry = top->entries->items[top->selected];
 			
@@ -1755,7 +1754,6 @@ int main (int argc, char *argv[]) {
 				if (res_name) res_name++;
 			
 				if (dirty && !show_switcher && !show_version) {
-					//LOG_info("Loading game art from %s\n", thumbpath);
 					had_thumb = 0;
 					GFX_clearCachedTexture();
 					if (exists(thumbpath)) {
@@ -1769,37 +1767,34 @@ int main (int argc, char *argv[]) {
 							} else {
 								thumbbmp = newThumb;
 							}	
-							GFX_ApplyRoundedCorners_RGBA8888(thumbbmp, &(SDL_Rect){0,0,thumbbmp->w, thumbbmp->h}, SCALE1(CFG_getThumbnailRadius()));
+							
 							int img_w = thumbbmp->w;
 							int img_h = thumbbmp->h;
-							double aspect_ratio = (double)img_h / img_w; 
-							int target_x = (int)(screen->h * 0.65);
-							int target_y = (int)(screen->h * 0.50);
-							int center_y = target_y - (thumbbmp->h / 2);
-
+							double aspect_ratio = (double)img_h / img_w;
+							
 							int max_w = (int)(screen->w * 0.45); 
 							int max_h = (int)(screen->h * 0.6);  
-
+							
 							int new_w = max_w;
 							int new_h = (int)(new_w * aspect_ratio); 
-
-
+							
 							if (new_h > max_h) {
 								new_h = max_h;
 								new_w = (int)(new_h / aspect_ratio);
 							}
 							
+							int target_x = (int)(screen->h * 0.70);
+							int target_y = (int)(screen->h * 0.50);
+							int center_y = target_y - (new_h / 2); // FIX: use new_h instead of thumbbmp->h
+							
+							GFX_ApplyRoundedCorners_RGBA8888(thumbbmp, &(SDL_Rect){0,0,thumbbmp->w, thumbbmp->h}, SCALE1((float)CFG_getThumbnailRadius() * ((float)img_w / (float)new_w)));
 							GFX_drawForeground(thumbbmp,target_x,center_y,new_w,new_h);
+						
+							ox = (int)(screen->w - new_w) - SCALE1(BUTTON_MARGIN*5);
+
 							had_thumb = 1;
 						}
 					}
-				}
-			
-				if (had_thumb) { 
-					int target_y = (int)(screen->h * 0.48);
-					int center_y = target_y - (thumbbmp->h / 2);
-				
-					ox = (int)(screen->w - thumbbmp->w) - SCALE1(BUTTON_MARGIN*5);
 				}
 			}
 			
