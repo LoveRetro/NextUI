@@ -447,6 +447,9 @@ static int switcher_selected = 0;
 static char slot_path[256];
 static char preview_path[256];
 
+// if not using custom bg's i dont want to redraw the bg everytime as it can kinda slow the menu down
+static int lastbg = 0;
+
 static int restore_depth = -1;
 static int restore_relative = -1;
 static int restore_selected = 0;
@@ -1388,21 +1391,21 @@ SDL_Surface* loadFolderBackground(char* rompath)
 	snprintf(imagePath, sizeof(imagePath), "%s/.media/bg.png", rompath);
 
 	//LOG_info("Loading folder bg from %s\n", imagePath);
+	if(exists(imagePath)) {
+		SDL_Surface *image = IMG_Load(imagePath);
+		if(!image)
+			return NULL;
+		
+		SDL_Surface *image565 = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGBA8888, 0);
+		if(image565) {
+			SDL_FreeSurface(image);
+			image = image565;
+		}
 
-	SDL_Surface *image = IMG_Load(imagePath);
-	if(!image)
+		return image;
+	} else {
 		return NULL;
-	
-	SDL_Surface *image565 = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGBA8888, 0);
-	if(image565) {
-		SDL_FreeSurface(image);
-		image = image565;
 	}
-
-	SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, FIXED_WIDTH, FIXED_HEIGHT, 32, SDL_PIXELFORMAT_RGBA8888);
-	GFX_blitScaleToFill(image, scaled);
-	SDL_FreeSurface(image);
-	return scaled;
 }
 
 ///////////////////////////////////////
@@ -1475,7 +1478,7 @@ int main (int argc, char *argv[]) {
 	if (convertedbg) {
 		SDL_FreeSurface(bgbmp); 
 		bgbmp = convertedbg;
-		GFX_drawBackground(bgbmp,0, 0, screen->w, screen->h);
+		GFX_drawBackground(bgbmp,0, 0, screen->w, screen->h,1.0f,0);
 	}
 	unsigned long cputimer = SDL_GetTicks();
 	int readytoscroll = 0;
@@ -1508,6 +1511,7 @@ int main (int argc, char *argv[]) {
 		}
 		else if(show_switcher) {
 			if (PAD_justPressed(BTN_B) || PAD_justReleased(BTN_SELECT)) {
+				strncpy(folderBgPath, "", sizeof(folderBgPath) - 1);
 				show_switcher = 0;
 				switcher_selected = 0;
 				dirty = 1;
@@ -1689,48 +1693,51 @@ int main (int argc, char *argv[]) {
 			if(total > 0)
 			{
 				Entry* entry = top->entries->items[top->selected];
-			
-				char tmp_path[MAX_PATH];
-				strncpy(tmp_path, entry->path, sizeof(tmp_path) - 1);
-				tmp_path[sizeof(tmp_path) - 1] = '\0';
-			
-				char* res_name = strrchr(tmp_path, '/');
-				if (res_name) res_name++;
-
-				char path_copy[1024];
-				strncpy(path_copy, entry->path, sizeof(path_copy) - 1);
-				path_copy[sizeof(path_copy) - 1] = '\0';
-		
-				char* rompath = dirname(path_copy);
-			
-				char res_copy[1024];
-				strncpy(res_copy, res_name, sizeof(res_copy) - 1);
-				res_copy[sizeof(res_copy) - 1] = '\0';
-		
-				char* dot = strrchr(res_copy, '.');
-				if (dot) *dot = '\0'; 
-
-				// folder-specific background for roms (or not)
-				if(entry->type == ENTRY_DIR || CFG_getRomsUseFolderBackground()) {
-					char *newBg = entry->type == ENTRY_DIR ? entry->path : rompath;
-					if(strcmp(newBg, folderBgPath) != 0) {
-						strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
-						folderBgPath[sizeof(folderBgPath) - 1] = '\0';
-						//strcpy(folderBgPath, newBg);
-						SDL_FreeSurface(folderbgbmp);
-						folderbgbmp = loadFolderBackground(folderBgPath);
-					}
-					else {
-						// keep
-					}
-				}
-
-				// game art
-				if(CFG_getShowGameArt())
-					snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
+				if(dirty) {
+					char tmp_path[MAX_PATH];
+					strncpy(tmp_path, entry->path, sizeof(tmp_path) - 1);
+					tmp_path[sizeof(tmp_path) - 1] = '\0';
 				
-				if(folderbgbmp) {
-					GFX_drawBackground(folderbgbmp,0, 0, screen->w, screen->h);
+					char* res_name = strrchr(tmp_path, '/');
+					if (res_name) res_name++;
+
+					char path_copy[1024];
+					strncpy(path_copy, entry->path, sizeof(path_copy) - 1);
+					path_copy[sizeof(path_copy) - 1] = '\0';
+			
+					char* rompath = dirname(path_copy);
+				
+					char res_copy[1024];
+					strncpy(res_copy, res_name, sizeof(res_copy) - 1);
+					res_copy[sizeof(res_copy) - 1] = '\0';
+			
+					char* dot = strrchr(res_copy, '.');
+					if (dot) *dot = '\0'; 
+
+					// folder-specific background for roms (or not)
+					if(entry->type == ENTRY_DIR || CFG_getRomsUseFolderBackground()) {
+						char *newBg = entry->type == ENTRY_DIR ? entry->path : rompath;
+						if(strcmp(newBg, folderBgPath) != 0) {
+							strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
+							folderBgPath[sizeof(folderBgPath) - 1] = '\0';
+							//strcpy(folderBgPath, newBg);
+							SDL_FreeSurface(folderbgbmp);
+							folderbgbmp = loadFolderBackground(folderBgPath);
+							LOG_info("draw bg\n");
+							if(folderbgbmp) {
+								GFX_drawBackground(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0);
+								lastbg=1;
+							} else if (lastbg==1) {
+								GFX_drawBackground(bgbmp,0, 0, screen->w, screen->h,1.0f,0);
+								lastbg=0;
+							}
+						}
+						else {
+							// keep
+						}
+					}
+					if(CFG_getShowGameArt())
+						snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
 				}
 			}
 
@@ -1863,6 +1870,7 @@ int main (int argc, char *argv[]) {
 				GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
 			}
 			else if(show_switcher) {
+				GFX_clearCachedTexture();
 				// For all recents with resumable state (i.e. has savegame), show game switcher carousel
 
 				#define WINDOW_RADIUS 0 // TODO: this logic belongs in blitRect?
@@ -1891,12 +1899,8 @@ int main (int argc, char *argv[]) {
 							bmp = raw_preview; 
 						}
 						if(bmp) {
-							SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGBA8888);
-							SDL_Rect imgRect = GFX_blitScaled(CFG_getGameSwitcherScaling(), bmp, scaled);
-							SDL_FreeSurface(bmp);
-							GFX_ApplyRoundedCorners_RGBA8888(scaled, &imgRect, SCALE1(CFG_getThumbnailRadius()));
-							SDL_BlitSurface(scaled, NULL, screen, NULL);
-							SDL_FreeSurface(scaled);  // Free after rendering
+							GFX_drawBackground(bmp,0,0,screen->w, screen->h,1.0f,CFG_getGameSwitcherScaling() > 0 ? 1:0);
+							SDL_FreeSurface(bmp);  // Free after rendering
 						}
 					}
 					else {

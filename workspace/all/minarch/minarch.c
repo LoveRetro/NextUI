@@ -3937,8 +3937,8 @@ static struct {
 void Menu_init(void) {
 	menu.overlay = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888);
 	SDL_SetSurfaceBlendMode(menu.overlay, SDL_BLENDMODE_BLEND);
-	Uint32 color = SDL_MapRGBA(menu.overlay->format, 0, 0, 0, 128);
-	SDL_FillRect(menu.overlay, NULL, color);
+	Uint32 color = SDL_MapRGBA(menu.overlay->format, 0, 0, 0, 0);
+	SDL_FillRect(screen, NULL, color);
 	
 	char emu_name[256];
 	getEmuName(game.path, emu_name);
@@ -5248,8 +5248,9 @@ static void Menu_loop(void) {
 	menu.bitmap = SDL_CreateRGBSurfaceWithFormatFrom(renderer.src, renderer.true_w, renderer.true_h, 32, renderer.src_p, SDL_PIXELFORMAT_RGBA8888);
 	// LOG_info("Menu_loop:menu.bitmap %ix%i\n", menu.bitmap->w,menu.bitmap->h);
 	SDL_Rect dst = {0, 0, DEVICE_WIDTH, DEVICE_HEIGHT};
-	SDL_Surface* backing = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
+	SDL_Surface* backing = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
 	SDL_BlitScaled(menu.bitmap,NULL,backing,&dst);
+	LOG_info("did this");
 	// Menu_scale(menu.bitmap, backing);
 	
 	int restore_w = screen->w;
@@ -5271,7 +5272,7 @@ static void Menu_loop(void) {
 
 	// why are you even doing this? Because in menu you got no audio buffer to rely on for delaying your code and your GFX_flip code does nothing
 	// so this this would run wild and instead everywhere is GFX_sync() shit to keep it all under control, what a mess!!
-	GFX_setVsync(VSYNC_STRICT);
+
 	GFX_setEffect(EFFECT_NONE);
 	
 	int rumble_strength = VIB_getStrength();
@@ -5407,9 +5408,8 @@ static void Menu_loop(void) {
 							restore_h = screen->h;
 							restore_p = screen->pitch;
 							screen = GFX_resize(DEVICE_WIDTH,DEVICE_HEIGHT,DEVICE_PITCH);
-						
-							SDL_FillRect(backing, NULL, 0);
-							Menu_scale(menu.bitmap, backing);
+							SDL_Rect dst = {0, 0, DEVICE_WIDTH, DEVICE_HEIGHT};
+							SDL_BlitScaled(menu.bitmap,NULL,backing,&dst);
 						}
 						dirty = 1;
 					}
@@ -5428,9 +5428,8 @@ static void Menu_loop(void) {
 		
 		if(dirty) {
 			GFX_clear(screen);
+			GFX_drawBackground(backing,0,0,DEVICE_WIDTH,DEVICE_HEIGHT,0.4f,0);
 
-			SDL_BlitSurface(backing, NULL, screen, NULL);
-			SDL_BlitSurface(menu.overlay, NULL, screen, NULL);
 
 			int ox, oy;
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
@@ -5560,7 +5559,7 @@ static void Menu_loop(void) {
 			GFX_flip(screen);
 			dirty = 0;
 		} else {
-			GFX_delay();
+			GFX_flip(screen);
 		}
 		hdmimon();
 	}
@@ -5761,7 +5760,6 @@ int main(int argc , char* argv[]) {
 	Config_init();
 	Config_readOptions(); // cores with boot logo option (eg. gb) need to load options early
 	setOverclock(overclock);
-	GFX_setVsync(prevent_tearing);
 	
 	Core_init();
 	

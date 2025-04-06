@@ -442,7 +442,7 @@ void PLAT_setOverlay(int select, const char* tag);
 void PLAT_setOffsetX(int x);
 void PLAT_setOffsetY(int y);
 void PLAT_drawForeground(SDL_Surface *inputSurface,int x, int y, int w, int h);
-void PLAT_drawBackground(SDL_Surface *inputSurface,int x, int y, int w, int h);
+void PLAT_drawBackground(SDL_Surface *inputSurface,int x, int y, int w, int h, float brightness, bool maintainAspectRatio);
 void PLAT_clearCachedTexture();
 void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
 void PLAT_present();

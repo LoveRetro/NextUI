@@ -466,8 +466,8 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 }
 
 void GFX_flip(SDL_Surface* screen) {
-	int should_vsync = (gfx.vsync!=VSYNC_OFF && (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET));
-	PLAT_flip(screen, should_vsync);
+
+	PLAT_flip(screen, 0);
 
 	currentfps = current_fps;
 	fps_counter++;
