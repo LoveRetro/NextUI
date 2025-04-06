@@ -197,8 +197,6 @@ void CFG_setFontId(int id)
     char *fontPath;
     if (settings.font == 1)
         fontPath = RES_PATH "/font1.ttf";
-    else if (settings.font == 2)
-        fontPath = RES_PATH "/font3.ttf";
     else
         fontPath = RES_PATH "/font2.ttf";
 
