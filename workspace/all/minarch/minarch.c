@@ -2531,7 +2531,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	}
 	case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: { /* 10 */
 		const enum retro_pixel_format *format = (const enum retro_pixel_format *)data;
-		LOG_info("Requested format: %d\n", *format); // Log the requested format (raw integer value)
+		LOG_info("Requested pixel format by core: %d\n", *format); // Log the requested format (raw integer value)
 	
 		// Check if the requested format is supported
 		if (*format == RETRO_PIXEL_FORMAT_XRGB8888) {
