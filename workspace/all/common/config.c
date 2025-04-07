@@ -24,30 +24,31 @@ void CFG_defaults(NextUISettings *cfg)
         return;
 
     NextUISettings defaults = {
-        .font = 1, // Next
-        .color1_255 = HexToUint32_unmapped("ffffff"),
-        .color2_255 = HexToUint32_unmapped("9b2257"),
-        .color3_255 = HexToUint32_unmapped("1e2329"),
-        .color4_255 = HexToUint32_unmapped("ffffff"),
-        .color5_255 = HexToUint32_unmapped("000000"),
-        .color6_255 = HexToUint32_unmapped("ffffff"),
-        .backgroundColor_255 = HexToUint32_unmapped("000000"),
-        .thumbRadius = 20, // unscaled!
+        .font = CFG_DEFAULT_FONT_ID,
+        .color1_255 = CFG_DEFAULT_COLOR1,
+        .color2_255 = CFG_DEFAULT_COLOR2,
+        .color3_255 = CFG_DEFAULT_COLOR3,
+        .color4_255 = CFG_DEFAULT_COLOR4,
+        .color5_255 = CFG_DEFAULT_COLOR5,
+        .color6_255 = CFG_DEFAULT_COLOR6,
+        .backgroundColor_255 = CFG_DEFAULT_BACKGROUNDCOLOR,
+        .thumbRadius = CFG_DEFAULT_THUMBRADIUS,
 
-        .showClock = false,
-        .clock24h = true,
-        .showBatteryPercent = false,
-        .showMenuAnimations = true,
-        .showRecents = true,
-        .showGameArt = true,
-        .gameSwitcherScaling = GFX_SCALE_FULLSCREEN,
+        .showClock = CFG_DEFAULT_SHOWCLOCK,
+        .clock24h = CFG_DEFAULT_CLOCK24H,
+        .showBatteryPercent = CFG_DEFAULT_SHOWBATTERYPERCENT,
+        .showMenuAnimations = CFG_DEFAULT_SHOWMENUANIMATIONS,
+        .showMenuTransitions = CFG_DEFAULT_SHOWMENUTRANSITIONS,
+        .showRecents = CFG_DEFAULT_SHOWRECENTS,
+        .showGameArt = CFG_DEFAULT_SHOWGAMEART,
+        .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
 
-        .screenTimeoutSecs = 60,
-        .suspendTimeoutSecs = 30,
+        .screenTimeoutSecs = CFG_DEFAULT_SCREENTIMEOUTSECS,
+        .suspendTimeoutSecs = CFG_DEFAULT_SUSPENDTIMEOUTSECS,
 
-        .haptics = false,
-        .romsUseFolderBackground = true,
-        .saveFormat = SAVE_FORMAT_SAV,
+        .haptics = CFG_DEFAULT_HAPTICS,
+        .romsUseFolderBackground = CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND,
+        .saveFormat = CFG_DEFAULT_SAVEFORMAT,
 };
 
     *cfg = defaults;
@@ -172,6 +173,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 CFG_setRomsUseFolderBackground((bool)temp_value);
                 continue;
             }
+            if (sscanf(line, "saveFormat=%i", &temp_value) == 1)
+            {
+                CFG_setSaveFormat(temp_value);
+                continue;
+            }
         }
         fclose(file);
     }
@@ -181,6 +187,8 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
     CFG_setColor(2, CFG_getColor(2));
     CFG_setColor(3, CFG_getColor(3));
     CFG_setColor(4, CFG_getColor(4));
+    CFG_setColor(5, CFG_getColor(5));
+    CFG_setColor(6, CFG_getColor(6));
     // avoid reloading the font if not neccessary
     if (!fontLoaded)
         CFG_setFontId(CFG_getFontId());
@@ -322,9 +330,19 @@ bool CFG_getMenuAnimations(void)
     return settings.showMenuAnimations;
 }
 
-void CFG_setMenuAnimations(bool anims)
+void CFG_setMenuAnimations(bool show)
 {
-    settings.showMenuAnimations = anims;
+    settings.showMenuAnimations = show;
+}
+
+bool CFG_getMenuTransitions(void)
+{
+    return settings.showMenuTransitions;
+}
+
+void CFG_setMenuTransitions(bool show)
+{
+    settings.showMenuTransitions = show;
 }
 
 int CFG_getThumbnailRadius(void)
@@ -451,6 +469,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getMenuAnimations());
     }
+    else if (strcmp(key, "menutransitions") == 0)
+    {
+        sprintf(value, "%i", CFG_getMenuTransitions());
+    }
     else if (strcmp(key, "recents") == 0)
     {
         sprintf(value, "%i", CFG_getShowRecents());
@@ -521,6 +543,7 @@ void CFG_sync(void)
     fprintf(file, "clock24h=%i\n", settings.clock24h);
     fprintf(file, "batteryperc=%i\n", settings.showBatteryPercent);
     fprintf(file, "menuanim=%i\n", settings.showMenuAnimations);
+    fprintf(file, "menutransitions=%i\n", settings.showMenuTransitions);
     fprintf(file, "recents=%i\n", settings.showRecents);
     fprintf(file, "gameart=%i\n", settings.showGameArt);
     fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
@@ -549,6 +572,7 @@ void CFG_print(void)
     printf("\t\"clock24h\": %i,\n", settings.clock24h);
     printf("\t\"batteryperc\": %i,\n", settings.showBatteryPercent);
     printf("\t\"menuanim\": %i,\n", settings.showMenuAnimations);
+    printf("\t\"menutransitions\": %i,\n", settings.showMenuTransitions);
     printf("\t\"recents\": %i,\n", settings.showRecents);
     printf("\t\"gameart\": %i,\n", settings.showGameArt);
     printf("\t\"screentimeout\": %i,\n", settings.screenTimeoutSecs);

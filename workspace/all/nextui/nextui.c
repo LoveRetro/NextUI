@@ -1790,7 +1790,6 @@ int main (int argc, char *argv[]) {
 							
 							GFX_ApplyRoundedCorners_RGBA8888(thumbbmp, &(SDL_Rect){0,0,thumbbmp->w, thumbbmp->h}, SCALE1((float)CFG_getThumbnailRadius() * ((float)img_w / (float)new_w)));
 							GFX_drawForeground(thumbbmp,target_x,center_y,new_w,new_h);
-							
 						
 							ox = (int)(screen->w - new_w) - SCALE1(BUTTON_MARGIN*5);
 
@@ -1802,7 +1801,6 @@ int main (int argc, char *argv[]) {
 			
 			
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
-		
 			if (show_version) {
 				lastswitcherstate = 0;
 				if (!version) {
@@ -2000,8 +1998,8 @@ int main (int argc, char *argv[]) {
 					GFX_blitMessage(font.large, "No Recents", screen, &preview_rect);
 					GFX_blitButtonGroup((char*[]){ "B","BACK", NULL }, 1, screen, 1);
 				}
-				GFX_flipHidden(screen);
-				switchetsur = GFX_captureRendererToSurface(screen);
+				GFX_flipHidden();
+				switchetsur = GFX_captureRendererToSurface();
 				lastswitcherstate = 1;
 			
 			}
@@ -2126,7 +2124,7 @@ int main (int argc, char *argv[]) {
 				
 			}
 			if(animationdirection > 0) {
-				GFX_flipHidden(screen);
+				GFX_flipHidden();
 				SDL_Surface *tmpNewScreen = GFX_captureRendererToSurface();
 				SDL_SetSurfaceBlendMode(tmpNewScreen,SDL_BLENDMODE_BLEND);
 				GFX_clear(screen);

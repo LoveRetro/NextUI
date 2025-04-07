@@ -68,6 +68,7 @@ static struct VID_Context {
 static int device_width;
 static int device_height;
 static int device_pitch;
+static uint32_t SDL_transparentBlack = 0;
 
 #define OVERLAYS_FOLDER SDCARD_PATH "/Overlays"
 static char* overlay_path = NULL;
@@ -144,6 +145,8 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.width	= w;
 	vid.height	= h;
 	vid.pitch	= p;
+
+	SDL_transparentBlack = SDL_MapRGBA(vid.screen->format, 0, 0, 0, 0);
 	
 	device_width	= w;
 	device_height	= h;
@@ -210,10 +213,10 @@ uint32_t PLAT_get_dominant_color() {
 static void clearVideo(void) {
 	for (int i=0; i<3; i++) {
 		SDL_RenderClear(vid.renderer);
-		SDL_FillRect(vid.screen, NULL, SDL_MapRGBA(vid.screen->format, 0, 0, 0, 0));
+		SDL_FillRect(vid.screen, NULL, SDL_transparentBlack);
 		
 		SDL_LockTexture(vid.texture,NULL,&vid.buffer->pixels,&vid.buffer->pitch);
-		SDL_FillRect(vid.buffer, NULL,  SDL_MapRGBA(vid.screen->format, 0, 0, 0, 0));
+		SDL_FillRect(vid.buffer, NULL,  SDL_transparentBlack);
 		SDL_UnlockTexture(vid.texture);
 		SDL_RenderCopy(vid.renderer, vid.texture, NULL, NULL);
 		
@@ -244,7 +247,7 @@ void PLAT_quitVideo(void) {
 
 void PLAT_clearVideo(SDL_Surface* screen) {
 	// SDL_FillRect(screen, NULL, 0); // TODO: revisit
-	SDL_FillRect(screen, NULL, SDL_MapRGBA(vid.screen->format, 0, 0, 0, 0));
+	SDL_FillRect(screen, NULL, SDL_transparentBlack);
 }
 void PLAT_clearAll(void) {
 	PLAT_clearVideo(vid.screen); // TODO: revist
@@ -1056,6 +1059,7 @@ void rotate_and_render(SDL_Renderer* renderer, SDL_Texture* texture, SDL_Rect* s
 	}
     
 }
+
 void PLAT_flipHidden() {
 	SDL_RenderClear(vid.renderer);
 	resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
@@ -1066,8 +1070,8 @@ void PLAT_flipHidden() {
 	SDL_RenderCopy(vid.renderer, vid.foreground, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.animationlayer2, NULL, NULL);
 	//  SDL_RenderPresent(vid.renderer); // no present want to flip  hidden
-
 }
+
 void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 	// dont think we need this here tbh
 	// SDL_RenderClear(vid.renderer);
