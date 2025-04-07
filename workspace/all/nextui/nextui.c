@@ -2057,9 +2057,9 @@ int main (int argc, char *argv[]) {
 				SDL_SetSurfaceBlendMode(tmpNewScreen,SDL_BLENDMODE_BLEND);
 				GFX_clear(screen);
 				GFX_clearAllLayers();
-				if(animationdirection==1) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,119,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
-				if(animationdirection==2) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,119,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
-				if(animationdirection==3) GFX_animateSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,119);
+				if(animationdirection==1) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
+				if(animationdirection==2) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
+				if(animationdirection==3) GFX_animateSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150);
 				SDL_BlitSurface(tmpNewScreen,NULL,screen,&(SDL_Rect){0,0,FIXED_WIDTH,FIXED_HEIGHT});
 				GFX_clearAnimationLayer();
 				
