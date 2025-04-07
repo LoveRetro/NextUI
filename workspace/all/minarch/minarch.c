@@ -5313,7 +5313,7 @@ static void Menu_loop(void) {
 
 	LEDS_initLeds();
 	LEDS_updateLeds();
-	
+	GFX_clearAllLayers();
 	while (show_menu) {
 
 		GFX_startFrame();
@@ -5785,7 +5785,7 @@ int main(int argc , char* argv[]) {
 	// force a vsync immediately before loop
 	// for better frame pacing?
 	GFX_clearAll();
-	GFX_clearForeground();
+	GFX_clearAllLayers();
 	GFX_flip(screen);
 	
 	Special_init(); // after config

@@ -446,7 +446,7 @@ static int show_switcher = 0;
 static int switcher_selected = 0;
 static char slot_path[256];
 static char preview_path[256];
-
+static 	int animationdirection = 0;
 // if not using custom bg's i dont want to redraw the bg everytime as it can kinda slow the menu down
 static int lastbg = 0;
 
@@ -1234,6 +1234,7 @@ static void closeDirectory(void) {
 static void Entry_open(Entry* self) {
 	recent_alias = self->name;  // yiiikes
 	if (self->type==ENTRY_ROM) {
+		animationdirection = 3;
 		char *last = NULL;
 		if (prefixMatch(COLLECTIONS_PATH, top->path)) {
 			char* tmp;
@@ -1249,6 +1250,7 @@ static void Entry_open(Entry* self) {
 		openRom(self->path, last);
 	}
 	else if (self->type==ENTRY_PAK) {
+		animationdirection = 3;
 		openPak(self->path);
 	}
 	else if (self->type==ENTRY_DIR) {
@@ -1452,6 +1454,7 @@ int main (int argc, char *argv[]) {
 	int ox;
 	int oy;
 	int is_scrolling = 1;
+
 	char folderBgPath[1024];
 	folderbgbmp = NULL;
 	SDL_Surface* bgbmp = IMG_Load(SDCARD_PATH "/bg.png");
@@ -1466,7 +1469,7 @@ int main (int argc, char *argv[]) {
 
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
-	GFX_clearForeground();
+	GFX_clearAllLayers();
 	while (!quit) {
 
 		GFX_startFrame();
@@ -1649,32 +1652,27 @@ int main (int argc, char *argv[]) {
 				dirty = 1;
 			}
 			else if (total>0 && PAD_justPressed(BTN_A)) {
+				animationdirection = 1;
 				Entry_open(top->entries->items[top->selected]);
 				total = top->entries->count;
 				dirty = 1;
-				SDL_Surface *tmp = SDL_CreateRGBSurfaceWithFormat(0, 1024, 768, 32, SDL_PIXELFORMAT_RGBA8888);
-				SDL_BlitSurface(screen,NULL,tmp,&(SDL_Rect){0,0,1024,768});
-				GFX_clear(screen);
-				GFX_animateSurface(tmp,0,0,0-FIXED_WIDTH,0,1024,768,100);
-				SDL_FreeSurface(tmp);
+				
 				if (total>0) readyResume(top->entries->items[top->selected]);
 			}
 			else if (PAD_justPressed(BTN_B) && stack->count>1) {
 				closeDirectory();
+				animationdirection = 2;
 				total = top->entries->count;
 				dirty = 1;
 				// can_resume = 0;
-				SDL_Surface *tmp = SDL_CreateRGBSurfaceWithFormat(0, 1024, 768, 32, SDL_PIXELFORMAT_RGBA8888);
-				SDL_BlitSurface(screen,NULL,tmp,&(SDL_Rect){0,0,1024,768});
-				GFX_clearForeground();
-				GFX_clear(screen);
-				GFX_animateSurface(tmp,0,0,0+FIXED_WIDTH,0,1024,768,100);
-				SDL_FreeSurface(tmp);
+				
 				if (total>0) readyResume(top->entries->items[top->selected]);
 			}
 		}
 		
 		if(dirty) {
+			SDL_Surface *tmpOldScreen = GFX_captureRendererToSurface();
+			SDL_SetSurfaceBlendMode(tmpOldScreen,SDL_BLENDMODE_BLEND);
 			// PWR_setCPUSpeed(CPU_SPEED_PERFORMANCE);
 			GFX_clear(screen);
 
@@ -1746,7 +1744,7 @@ int main (int argc, char *argv[]) {
 			
 				if (dirty && !show_switcher && !show_version) {
 					had_thumb = 0;
-					GFX_clearForeground();
+					GFX_clearAllLayers();
 					if (exists(thumbpath)) {
 						SDL_Surface* newThumb = IMG_Load(thumbpath);
 						if (newThumb) {
@@ -1857,7 +1855,7 @@ int main (int argc, char *argv[]) {
 				GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
 			}
 			else if(show_switcher) {
-				GFX_clearForeground();
+				GFX_clearAllLayers();
 				lastbg = 1;
 				// For all recents with resumable state (i.e. has savegame), show game switcher carousel
 
@@ -1947,6 +1945,7 @@ int main (int argc, char *argv[]) {
 				}
 			}
 			else {
+				
 				// buttons
 				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
 				else if (can_resume) GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, 0, screen, 0);
@@ -1983,6 +1982,7 @@ int main (int argc, char *argv[]) {
 						char* entry_name = entry->name;
 						char* entry_unique = entry->unique;
 						int available_width = (had_thumb ? ox - SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_PADDING)) - SCALE1(PADDING * 2);
+						int available_width_pill = (had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_MARGIN)) - SCALE1(PADDING * 2);
 						if (i == top->start && !(had_thumb)) available_width -= ow;
 					
 						SDL_Color text_color = uintToColour(THEME_COLOR4_255);
@@ -1994,15 +1994,20 @@ int main (int argc, char *argv[]) {
 						
 						char display_name[256];
 						int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name,display_name, available_width, SCALE1(BUTTON_PADDING * 2));
+						
 						int max_width = MIN(available_width, text_width);
+						int max_width_pill = MIN(available_width_pill, text_width);
 					
 						SDL_Surface* text = TTF_RenderUTF8_Solid(font.large, entry_name, text_color);
 						
 						SDL_Surface* text_unique = TTF_RenderUTF8_Solid(font.large, display_name, COLOR_DARK_TEXT);
 						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING), text->h };
 						SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)+4) };
-						
-						
+						if (j == selected_row && animationdirection > 0) {
+							GFX_blitPillDark(ASSET_WHITE_PILL, screen, &(SDL_Rect){
+								SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING), max_width_pill, SCALE1(PILL_SIZE)
+							});
+						}
 						SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
 						SDL_BlitSurface(text, &text_rect, screen, &dest_rect);
 						
@@ -2029,7 +2034,9 @@ int main (int argc, char *argv[]) {
 							GFX_blitPillDark(ASSET_WHITE_PILL, pill, &(SDL_Rect){
 								0,0, max_width, SCALE1(PILL_SIZE)
 							});
-							GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),40);
+							if(animationdirection == 0)	{
+								GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),40);
+							} 
 							SDL_FreeSurface(pill);
 						} 
 					}
@@ -2038,9 +2045,25 @@ int main (int argc, char *argv[]) {
 					// TODO: for some reason screen's dimensions end up being 0x0 in GFX_blitMessage...
 					GFX_blitMessage(font.large, "Empty folder", screen, &(SDL_Rect){0,0,screen->w,screen->h}); //, NULL);
 				}
+				
 			}
-			
-			GFX_flip(screen);
+			if(animationdirection > 0) {
+				GFX_flipHidden(screen);
+				SDL_Surface *tmpNewScreen = GFX_captureRendererToSurface();
+				SDL_SetSurfaceBlendMode(tmpNewScreen,SDL_BLENDMODE_BLEND);
+				GFX_clear(screen);
+				GFX_clearAllLayers();
+				if(animationdirection==1) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,119,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
+				if(animationdirection==2) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,119,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
+				if(animationdirection==3) GFX_animateSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,119);
+				SDL_BlitSurface(tmpNewScreen,NULL,screen,&(SDL_Rect){0,0,FIXED_WIDTH,FIXED_HEIGHT});
+				GFX_clearAnimationLayer();
+				SDL_FreeSurface(tmpOldScreen);
+				SDL_FreeSurface(tmpNewScreen);
+				animationdirection=0;
+			} else {
+				GFX_flip(screen);
+			}
 	
 			dirty = 0;
 			readytoscroll = 0;
