@@ -1859,6 +1859,7 @@ int main (int argc, char *argv[]) {
 				GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
 			}
 			else if(show_switcher) {
+				GFX_clearBackground();
 				GFX_clearAllLayers();
 				lastbg = 1;
 				// For all recents with resumable state (i.e. has savegame), show game switcher carousel

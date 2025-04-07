@@ -551,8 +551,6 @@ void PLAT_clearAnimationLayer() {
 void PLAT_clearAllLayers() {
 	SDL_SetRenderTarget(vid.renderer, vid.foreground);
     SDL_RenderClear(vid.renderer);
-	SDL_SetRenderTarget(vid.renderer, vid.background);
-    SDL_RenderClear(vid.renderer);
 	SDL_SetRenderTarget(vid.renderer, vid.animationlayer);
     SDL_RenderClear(vid.renderer);
 	SDL_SetRenderTarget(vid.renderer, NULL);
@@ -600,6 +598,7 @@ void PLAT_drawBackground(SDL_Surface *inputSurface, int x, int y, int w, int h, 
     SDL_RenderCopy(vid.renderer, tempTexture, &srcRect, &dstRect);
     SDL_SetRenderTarget(vid.renderer, NULL);
     SDL_DestroyTexture(tempTexture);
+	LOG_info("drawing bg\n");
 }
 
 void PLAT_drawForeground(SDL_Surface *inputSurface, int x, int y, int w, int h) {
@@ -822,6 +821,7 @@ void PLAT_flipHidden() {
 
 }
 void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
+	// dont think we need this here tbh
 	// SDL_RenderClear(vid.renderer);
     if (!vid.blit) {
         resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
