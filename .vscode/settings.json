@@ -105,6 +105,7 @@
     "*.inc": "c",
     "netfwd": "cpp",
     "system_error": "cpp",
-    "stop_token": "cpp"
+    "stop_token": "cpp",
+    "cassert": "cpp"
   },
 }
