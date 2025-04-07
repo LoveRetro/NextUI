@@ -447,6 +447,7 @@ static int switcher_selected = 0;
 static char slot_path[256];
 static char preview_path[256];
 static 	int animationdirection = 0;
+static 	int gsanimdir = 0;
 // if not using custom bg's i dont want to redraw the bg everytime as it can kinda slow the menu down
 static int lastbg = 0;
 
@@ -1466,7 +1467,7 @@ int main (int argc, char *argv[]) {
 	}
 
 	int readytoscroll = 0;
-
+	int startgame = 0;
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
 	GFX_clearAllLayers();
@@ -1505,6 +1506,7 @@ int main (int argc, char *argv[]) {
 				// super inefficient. Why are Recents not decorated with type, and need
 				// to be remade into Entries via getRecents()? - need to understand the 
 				// architecture more...
+				startgame = 1;
 				Entry *selectedEntry = entryFromRecent(recents->items[switcher_selected]);
 				should_resume = can_resume;
 				Entry_open(selectedEntry);
@@ -1526,12 +1528,14 @@ int main (int argc, char *argv[]) {
 				if(switcher_selected == recents->count)
 					switcher_selected = 0; // wrap
 				dirty = 1;
+				gsanimdir=1;
 			}
 			else if (PAD_justPressed(BTN_LEFT)) {
 				switcher_selected--;
 				if(switcher_selected < 0)
 					switcher_selected = recents->count - 1; // wrap
 				dirty = 1;
+				gsanimdir=2;
 			}
 		}
 		else {
@@ -1672,14 +1676,14 @@ int main (int argc, char *argv[]) {
 		
 		if(dirty) {
 			SDL_Surface *tmpOldScreen;
-
+			static int lastswitcherstate = 0;
+			SDL_Surface * switchetsur;
 			if(animationdirection > 0) {
 				if(tmpOldScreen) SDL_FreeSurface(tmpOldScreen);
 				tmpOldScreen = GFX_captureRendererToSurface();
-		
 				SDL_SetSurfaceBlendMode(tmpOldScreen,SDL_BLENDMODE_BLEND);
 			}
-			// PWR_setCPUSpeed(CPU_SPEED_PERFORMANCE);
+
 			GFX_clear(screen);
 
 			char thumbpath[1024];
@@ -1794,7 +1798,9 @@ int main (int argc, char *argv[]) {
 			
 			
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
+		
 			if (show_version) {
+				lastswitcherstate = 0;
 				if (!version) {
 					char release[256];
 					getFile(ROOT_SYSTEM_PATH "/version.txt", release, 256);
@@ -1858,9 +1864,20 @@ int main (int argc, char *argv[]) {
 				
 				GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
 			}
+			else if(startgame) {
+				
+				animationdirection=0;
+				SDL_Surface *tmpsur = GFX_captureRendererToSurface();
+				GFX_ZoomAndFadeSurface(tmpsur,screen->w/2,screen->h/2,screen->w,screen->h,screen->w*4,screen->h*4,500,NULL,0,0,0,0,0,0,1);
+				SDL_FreeSurface(tmpsur);
+			}
 			else if(show_switcher) {
-				GFX_clearBackground();
-				GFX_clearAllLayers();
+				
+				
+				if(!lastswitcherstate) {
+					GFX_clearBackground();
+					GFX_clearAllLayers();
+				}
 				lastbg = 1;
 				// For all recents with resumable state (i.e. has savegame), show game switcher carousel
 
@@ -1880,26 +1897,6 @@ int main (int argc, char *argv[]) {
 				if(recents->count > 0) {
 					Entry *selectedEntry = entryFromRecent(recents->items[switcher_selected]);
 					readyResume(selectedEntry);
-
-					if(has_preview) {
-						// lotta memory churn here
-						SDL_Surface* bmp = IMG_Load(preview_path);
-						SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888, 0);
-						if (raw_preview) {
-							SDL_FreeSurface(bmp); 
-							bmp = raw_preview; 
-						}
-						if(bmp) {
-							GFX_drawBackground(bmp,0,0,screen->w, screen->h,1.0f,CFG_getGameSwitcherScaling() > 0 ? 1:0);
-							SDL_FreeSurface(bmp);  // Free after rendering
-						}
-					}
-					else {
-						SDL_Rect preview_rect = {ox,oy,hw,hh};
-						SDL_FillRect(screen, &preview_rect, 0);
-						GFX_blitMessage(font.large, "No Preview", screen, &preview_rect);
-					}
-
 					// title pill
 					{
 						
@@ -1940,6 +1937,46 @@ int main (int argc, char *argv[]) {
 
 					GFX_blitButtonGroup((char*[]){ "Y", "REMOVE", "A","RESUME", NULL }, 1, screen, 1);
 					
+					if(has_preview) {
+						// lotta memory churn here
+						SDL_Surface* bmp = IMG_Load(preview_path);
+						SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888, 0);
+						if (raw_preview) {
+							SDL_FreeSurface(bmp); 
+							bmp = raw_preview; 
+						}
+						if(bmp) {
+							if(!lastswitcherstate) {
+								GFX_ZoomAndFadeSurface(bmp,screen->w/2,screen->h/2,0,0,screen->w,screen->h,100,screen,0,0,screen->w,screen->h,255,0,0);
+							} else {
+								if(gsanimdir==1) 
+								GFX_animateSurface(bmp,0+screen->w,0,0,0,screen->w,screen->h,200,0);
+								else
+								GFX_animateSurface(bmp,0-screen->w,0,0,0,screen->w,screen->h,200,0);
+							}
+
+							GFX_drawBackground(bmp,0,0,screen->w, screen->h,1.0f,CFG_getGameSwitcherScaling() > 0 ? 1:0);
+							SDL_FreeSurface(bmp);  // Free after rendering
+						}
+					}
+					else {
+						SDL_Rect preview_rect = {ox,oy,hw,hh};
+						if(!lastswitcherstate) {
+							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
+							SDL_FillRect(tmpsur, &preview_rect, 0);
+							GFX_ZoomAndFadeSurface(tmpsur,screen->w/2,screen->h/2,0,0,screen->w,screen->h,100,screen,0,0,screen->w,screen->h,255,0,0);
+						} else {
+							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
+							SDL_FillRect(tmpsur, &preview_rect, 0);
+							GFX_flip(screen);
+							GFX_animateSurface(tmpsur,0+screen->w,0,0,0,screen->w,screen->h,1000,0);
+						}
+						SDL_FillRect(screen, &preview_rect, 0);
+						
+						GFX_blitMessage(font.large, "No Preview", screen, &preview_rect);
+					}
+
+					
 					Entry_free(selectedEntry);
 				}
 				else {
@@ -1948,9 +1985,14 @@ int main (int argc, char *argv[]) {
 					GFX_blitMessage(font.large, "No Recents", screen, &preview_rect);
 					GFX_blitButtonGroup((char*[]){ "B","BACK", NULL }, 1, screen, 1);
 				}
+				GFX_flipHidden(screen);
+				switchetsur = GFX_captureRendererToSurface(screen);
+				lastswitcherstate = 1;
+			
 			}
 			else {
-				
+			
+			
 				// buttons
 				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
 				else if (can_resume) GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, 0, screen, 0);
@@ -2020,6 +2062,14 @@ int main (int argc, char *argv[]) {
 						SDL_FreeSurface(text); // Free after use
 					
 					}
+					if(lastswitcherstate==1) {
+						if(switchetsur) {
+							GFX_animateSurface(switchetsur,0,0,0,0+screen->h,screen->w,screen->h,100,1);
+							SDL_FreeSurface(switchetsur);
+							animationdirection=0;
+						}
+					}
+					lastswitcherstate=0;
 					for (int i = top->start, j = 0; i < top->end; i++, j++) {
 						if (j == selected_row) {
 							Entry* entry = top->entries->items[i];
@@ -2040,7 +2090,7 @@ int main (int argc, char *argv[]) {
 								0,0, max_width, SCALE1(PILL_SIZE)
 							});
 							if(animationdirection == 0)	{
-								GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),35);
+								GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),35,0);
 							} 
 							SDL_FreeSurface(pill);
 						} 
@@ -2060,7 +2110,7 @@ int main (int argc, char *argv[]) {
 				GFX_clearAllLayers();
 				if(animationdirection==1) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
 				if(animationdirection==2) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
-				if(animationdirection==3) GFX_animateSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150);
+				if(animationdirection==3) GFX_animateSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,0);
 				SDL_BlitSurface(tmpNewScreen,NULL,screen,&(SDL_Rect){0,0,FIXED_WIDTH,FIXED_HEIGHT});
 				GFX_clearAnimationLayer();
 				
@@ -2170,6 +2220,7 @@ int main (int argc, char *argv[]) {
 			}
 			dirty = 0;
 		}
+		
 		// handle HDMI change
 		static int had_hdmi = -1;
 		int has_hdmi = GetHDMI();
