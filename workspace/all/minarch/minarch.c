@@ -5980,8 +5980,8 @@ int main(int argc , char* argv[]) {
 	// force a vsync immediately before loop
 	// for better frame pacing?
 	GFX_clearAll();
-	GFX_clearBackground(); // why do we need to call this again after clearAll()?
-	GFX_clearAllForeground(); // why do we need to call this again after clearAll()?
+	//GFX_clearBackground(); // why do we need to call this again after clearAll()?
+	//GFX_clearAllForeground(); // why do we need to call this again after clearAll()?
 	GFX_flip(screen);
 	
 	Special_init(); // after config

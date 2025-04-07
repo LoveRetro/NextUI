@@ -270,6 +270,8 @@ void PLAT_clearVideo(SDL_Surface* screen) {
 void PLAT_clearAll(void) {
 	PLAT_clearVideo(vid.screen); // TODO: revist
 	SDL_RenderClear(vid.renderer);
+	PLAT_clearAllForeground();
+	PLAT_clearBackground();
 }
 
 void PLAT_setVsync(int vsync) {
