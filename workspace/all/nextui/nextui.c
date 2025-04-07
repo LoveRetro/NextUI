@@ -456,7 +456,7 @@ static int restore_relative = -1;
 static int restore_selected = 0;
 static int restore_start = 0;
 static int restore_end = 0;
-
+static int startgame = 0;
 ///////////////////////////////////////
 
 #define MAX_RECENTS 24 // a multiple of all menu rows
@@ -1236,6 +1236,7 @@ static void Entry_open(Entry* self) {
 	recent_alias = self->name;  // yiiikes
 	if (self->type==ENTRY_ROM) {
 		animationdirection = 3;
+		startgame = 1;
 		char *last = NULL;
 		if (prefixMatch(COLLECTIONS_PATH, top->path)) {
 			char* tmp;
@@ -1440,7 +1441,10 @@ int main (int argc, char *argv[]) {
 	GFX_setVsync(VSYNC_STRICT);
 
 	PAD_reset();
-	
+	GFX_clearBackground();
+	GFX_clearAllLayers();
+	GFX_clear(screen);
+
 	int show_version = 0;
 	int show_setting = 0; // 1=brightness,2=volume
 	int was_online = PLAT_isOnline();
@@ -1467,7 +1471,7 @@ int main (int argc, char *argv[]) {
 	}
 
 	int readytoscroll = 0;
-	int startgame = 0;
+
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
 	GFX_clearAllLayers();
@@ -1716,7 +1720,7 @@ int main (int argc, char *argv[]) {
 				if(CFG_getShowGameArt())
 					snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
 				// folder-specific background for roms (or not)
-				if(entry->type == ENTRY_DIR || CFG_getRomsUseFolderBackground()) {
+				if((entry->type == ENTRY_DIR && CFG_getRomsUseFolderBackground()) || (lastswitcherstate && CFG_getRomsUseFolderBackground())) {
 					char *newBg = entry->type == ENTRY_DIR ? entry->path : rompath;
 					if(strcmp(newBg, folderBgPath) != 0) {
 						strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
@@ -1868,7 +1872,14 @@ int main (int argc, char *argv[]) {
 				
 				animationdirection=0;
 				SDL_Surface *tmpsur = GFX_captureRendererToSurface();
-				GFX_ZoomAndFadeSurface(tmpsur,screen->w/2,screen->h/2,screen->w,screen->h,screen->w*4,screen->h*4,500,NULL,0,0,0,0,0,0,1);
+				GFX_clearBackground();
+				GFX_clearAllLayers();
+				GFX_clear(screen);
+				if(lastswitcherstate)
+				GFX_animateSurfaceOpacityAndScale(tmpsur,0,0,screen->w,screen->h,screen->w*4,screen->h*4,255,0,150,1);
+				else
+				GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,150,1);
+				
 				SDL_FreeSurface(tmpsur);
 			}
 			else if(show_switcher) {
@@ -1947,12 +1958,12 @@ int main (int argc, char *argv[]) {
 						}
 						if(bmp) {
 							if(!lastswitcherstate) {
-								GFX_ZoomAndFadeSurface(bmp,screen->w/2,screen->h/2,0,0,screen->w,screen->h,100,screen,0,0,screen->w,screen->h,255,0,0);
+								GFX_ZoomAndFadeSurface(bmp,screen->w/2,screen->h/2,0,0,screen->w,screen->h,150,screen,0,0,screen->w,screen->h,255,0,0);
 							} else {
 								if(gsanimdir==1) 
-								GFX_animateSurface(bmp,0+screen->w,0,0,0,screen->w,screen->h,200,0);
+									GFX_animateSurface(bmp,0+screen->w,0,0,0,screen->w,screen->h,80,0);
 								else
-								GFX_animateSurface(bmp,0-screen->w,0,0,0,screen->w,screen->h,200,0);
+									GFX_animateSurface(bmp,0-screen->w,0,0,0,screen->w,screen->h,80,0);
 							}
 
 							GFX_drawBackground(bmp,0,0,screen->w, screen->h,1.0f,CFG_getGameSwitcherScaling() > 0 ? 1:0);
@@ -1964,12 +1975,16 @@ int main (int argc, char *argv[]) {
 						if(!lastswitcherstate) {
 							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 							SDL_FillRect(tmpsur, &preview_rect, 0);
-							GFX_ZoomAndFadeSurface(tmpsur,screen->w/2,screen->h/2,0,0,screen->w,screen->h,100,screen,0,0,screen->w,screen->h,255,0,0);
+							GFX_ZoomAndFadeSurface(tmpsur,screen->w/2,screen->h/2,0,0,screen->w,screen->h,150,screen,0,0,screen->w,screen->h,255,0,0);
 						} else {
 							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 							SDL_FillRect(tmpsur, &preview_rect, 0);
 							GFX_flip(screen);
-							GFX_animateSurface(tmpsur,0+screen->w,0,0,0,screen->w,screen->h,1000,0);
+
+							if(gsanimdir==1) 
+								GFX_animateSurface(tmpsur,0+screen->w,0,0,0,screen->w,screen->h,80,0);
+							else
+								GFX_animateSurface(tmpsur,0-screen->w,0,0,0,screen->w,screen->h,80,0);
 						}
 						SDL_FillRect(screen, &preview_rect, 0);
 						
@@ -1992,7 +2007,15 @@ int main (int argc, char *argv[]) {
 			}
 			else {
 			
-			
+				if(lastswitcherstate) {
+					GFX_clearBackground();
+					if(folderbgbmp) {
+						GFX_drawBackground(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0);
+					}
+					else if(bgbmp) {
+						GFX_drawBackground(bgbmp,0, 0, screen->w, screen->h,1.0f,0);
+					}
+				}
 				// buttons
 				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
 				else if (can_resume) GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, 0, screen, 0);

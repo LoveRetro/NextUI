@@ -3504,8 +3504,9 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 		screen = GFX_resize(dst_w,dst_h,dst_p);
 	// }
 }
-
+static int firstframe = 1;
 static void screen_flip(SDL_Surface* screen) {
+	
 	if (use_core_fps) {
 		GFX_flip_fixed_rate(screen, core.fps);
 	}
@@ -3513,6 +3514,25 @@ static void screen_flip(SDL_Surface* screen) {
 		GFX_flip(screen);
 	}
 }
+
+SDL_Surface* createSurfaceFromData(const void *data, int width, int height, int pitch) {
+    SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormatFrom(
+        (void*)data,   // Pointer to pixel data
+        width,         // Surface width
+        height,        // Surface height
+        16,            // 16 bits per pixel (RGB565)
+        pitch,         // Pitch (bytes per row)
+        SDL_PIXELFORMAT_RGB565  // Specify RGB565 format
+    );
+
+    if (!surface) {
+        printf("Failed to create surface: %s\n", SDL_GetError());
+        return NULL;
+    }
+
+    return surface;
+}
+
 
 static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch) {
 	// return;
@@ -3591,11 +3611,22 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	
 	renderer.dst = screen->pixels;
 	// LOG_info("video_refresh_callback: %ix%i@%i %ix%i@%i\n",width,height,pitch,screen->w,screen->h,screen->pitch);
-	 
+	if(firstframe) {
+		GFX_clearAllLayers();
+		GFX_clearBackground();
+		GFX_clear(screen);
+		SDL_Surface * test = createSurfaceFromData(data,width,height,pitch);
+		GFX_animateSurfaceOpacity(test,0,0,screen->w,screen->h,0,255,200,1);
+		SDL_FreeSurface(test);
+		GFX_clearAllLayers();
+		firstframe=0;
+	} 
 
 	GFX_blitRenderer(&renderer);
 
-	if (!thread_video) screen_flip(screen);
+
+
+	screen_flip(screen);
 	last_flip_time = SDL_GetTicks();
 }
 const void* lastframe = NULL;
@@ -5250,7 +5281,6 @@ static void Menu_loop(void) {
 	SDL_Rect dst = {0, 0, DEVICE_WIDTH, DEVICE_HEIGHT};
 	SDL_Surface* backing = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
 	SDL_BlitScaled(menu.bitmap,NULL,backing,&dst);
-	LOG_info("did this");
 	// Menu_scale(menu.bitmap, backing);
 	
 	int restore_w = screen->w;
@@ -5829,6 +5859,12 @@ int main(int argc , char* argv[]) {
 		hdmimon();
 	}
 	if(!rgbaData) free(rgbaData);
+	GFX_clearAllLayers();
+	GFX_clearBackground();
+	GFX_clear(screen);
+	SDL_Surface * test = createSurfaceFromData(renderer.src,renderer.src_w,renderer.src_h,renderer.src_p);
+	GFX_animateSurfaceOpacity(test,0,0,screen->w,screen->h,255,0,200,1);
+	SDL_FreeSurface(test);
 	Menu_quit();
 	QuitSettings();
 	
