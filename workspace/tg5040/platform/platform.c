@@ -686,6 +686,139 @@ void PLAT_animateSurface(SDL_Surface *inputSurface, int x, int y, int target_x, 
 
 	SDL_DestroyTexture(tempTexture);
 }
+void PLAT_animateSurfaceOpacity(
+	SDL_Surface *inputSurface,
+	int x, int y, int w, int h,
+	int start_opacity, int target_opacity,
+	int duration_ms,
+	int layer
+) {
+	if (!inputSurface) return;
+
+	SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
+		SDL_PIXELFORMAT_RGBA8888,
+		SDL_TEXTUREACCESS_TARGET,
+		inputSurface->w, inputSurface->h);
+
+	if (!tempTexture) {
+		printf("Failed to create temporary texture: %s\n", SDL_GetError());
+		return;
+	}
+
+	SDL_UpdateTexture(tempTexture, NULL, inputSurface->pixels, inputSurface->pitch);
+	SDL_SetTextureBlendMode(tempTexture, SDL_BLENDMODE_BLEND); 
+
+	const int fps = 60;
+	const int frame_delay = 1000 / fps;
+	const int total_frames = duration_ms / frame_delay;
+
+	SDL_Texture* target_layer = (layer == 0) ? vid.animationlayer : vid.animationlayer2;
+	if (!target_layer) {
+		SDL_DestroyTexture(tempTexture);
+		return;
+	}
+
+	for (int frame = 0; frame <= total_frames; ++frame) {
+		Uint32 frame_start = SDL_GetTicks();
+
+		float t = (float)frame / total_frames;
+		int current_opacity = start_opacity + (int)((target_opacity - start_opacity) * t);
+		if (current_opacity < 0) current_opacity = 0;
+		if (current_opacity > 255) current_opacity = 255;
+
+		SDL_SetTextureAlphaMod(tempTexture, current_opacity);
+		SDL_SetRenderTarget(vid.renderer, target_layer);
+		SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
+		SDL_RenderClear(vid.renderer);
+
+		SDL_Rect dstRect = { x, y, w, h };
+		SDL_RenderCopy(vid.renderer, tempTexture, NULL, &dstRect);
+
+		SDL_SetRenderTarget(vid.renderer, NULL);
+		PLAT_flip(NULL, 0); 
+
+		Uint32 frame_time = SDL_GetTicks() - frame_start;
+		if (frame_time < frame_delay) {
+			SDL_Delay(frame_delay - frame_time);
+		}
+	}
+
+	SDL_DestroyTexture(tempTexture);
+}
+void PLAT_animateSurfaceOpacityAndScale(
+	SDL_Surface *inputSurface,
+	int x, int y,
+	int start_w, int start_h,
+	int target_w, int target_h,
+	int start_opacity, int target_opacity,
+	int duration_ms,
+	int layer
+) {
+	if (!inputSurface || !vid.renderer) return;
+
+	SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
+		SDL_PIXELFORMAT_RGBA8888,
+		SDL_TEXTUREACCESS_TARGET,
+		inputSurface->w, inputSurface->h);
+
+	if (!tempTexture) {
+		printf("Failed to create temporary texture: %s\n", SDL_GetError());
+		return;
+	}
+
+	SDL_UpdateTexture(tempTexture, NULL, inputSurface->pixels, inputSurface->pitch);
+	SDL_SetTextureBlendMode(tempTexture, SDL_BLENDMODE_BLEND); 
+
+	const int fps = 60;
+	const int frame_delay = 1000 / fps;
+	const int total_frames = duration_ms / frame_delay;
+
+	SDL_Texture* target_layer = (layer == 0) ? vid.animationlayer : vid.animationlayer2;
+	if (!target_layer) {
+		SDL_DestroyTexture(tempTexture);
+		return;
+	}
+
+	for (int frame = 0; frame <= total_frames; ++frame) {
+		Uint32 frame_start = SDL_GetTicks();
+
+		float t = (float)frame / total_frames;
+
+		int current_opacity = start_opacity + (int)((target_opacity - start_opacity) * t);
+		if (current_opacity < 0) current_opacity = 0;
+		if (current_opacity > 255) current_opacity = 255;
+
+		int current_w = start_w + (int)((target_w - start_w) * t);
+		int current_h = start_h + (int)((target_h - start_h) * t);
+
+		SDL_SetTextureAlphaMod(tempTexture, current_opacity);
+
+		SDL_SetRenderTarget(vid.renderer, target_layer);
+		SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
+		SDL_RenderClear(vid.renderer);
+
+		SDL_Rect dstRect = {
+			x + (start_w - current_w) / 2, 
+			y + (start_h - current_h) / 2,
+			current_w,
+			current_h
+		};
+
+		SDL_RenderCopy(vid.renderer, tempTexture, NULL, &dstRect);
+
+		SDL_SetRenderTarget(vid.renderer, NULL);
+		PLAT_flip(NULL, 0);
+
+		Uint32 frame_time = SDL_GetTicks() - frame_start;
+		if (frame_time < frame_delay) {
+			SDL_Delay(frame_delay - frame_time);
+		}
+	}
+
+	SDL_DestroyTexture(tempTexture);
+}
+
+
 
 SDL_Surface* PLAT_captureRendererToSurface() {
 	if (!vid.renderer) return NULL;
@@ -693,22 +826,35 @@ SDL_Surface* PLAT_captureRendererToSurface() {
 	int width, height;
 	SDL_GetRendererOutputSize(vid.renderer, &width, &height);
 
-	// Create a surface to hold the renderer output
 	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA8888);
 	if (!surface) {
 		printf("Failed to create surface: %s\n", SDL_GetError());
 		return NULL;
 	}
 
-	// Read pixels from the renderer into the surface
+	Uint32 black = SDL_MapRGBA(surface->format, 0, 0, 0, 255);
+	SDL_FillRect(surface, NULL, black);
+
 	if (SDL_RenderReadPixels(vid.renderer, NULL, SDL_PIXELFORMAT_RGBA8888, surface->pixels, surface->pitch) != 0) {
 		printf("Failed to read pixels from renderer: %s\n", SDL_GetError());
 		SDL_FreeSurface(surface);
 		return NULL;
 	}
 
+	// remove transparancy
+	Uint32* pixels = (Uint32*)surface->pixels;
+	int total_pixels = (surface->pitch / 4) * surface->h;
+
+	for (int i = 0; i < total_pixels; i++) {
+		Uint8 r, g, b, a;
+		SDL_GetRGBA(pixels[i], surface->format, &r, &g, &b, &a);
+		pixels[i] = SDL_MapRGBA(surface->format, r, g, b, 255);
+	}
+
+	SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_NONE);
 	return surface;
 }
+
 void PLAT_animateAndFadeSurface(
 	SDL_Surface *inputSurface,
 	int x, int y, int target_x, int target_y, int w, int h, int duration_ms,
