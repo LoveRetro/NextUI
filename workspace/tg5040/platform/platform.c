@@ -822,7 +822,7 @@ void PLAT_flipHidden() {
 
 }
 void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
-	SDL_RenderClear(vid.renderer);
+	// SDL_RenderClear(vid.renderer);
     if (!vid.blit) {
         resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
         SDL_UpdateTexture(vid.texture, NULL, vid.screen->pixels, vid.screen->pitch);

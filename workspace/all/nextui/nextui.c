@@ -1464,7 +1464,7 @@ int main (int argc, char *argv[]) {
 		bgbmp = convertedbg;
 		GFX_drawBackground(bgbmp,0, 0, screen->w, screen->h,1.0f,0);
 	}
-	unsigned long cputimer = SDL_GetTicks();
+
 	int readytoscroll = 0;
 
 	pthread_t cpucheckthread;
@@ -2071,49 +2071,101 @@ int main (int argc, char *argv[]) {
 			
 			dirty = 0;
 			readytoscroll = 0;
-			cputimer = SDL_GetTicks();
 		} else {
-			if(!show_switcher && !show_version && is_scrolling && cputimer <= (SDL_GetTicks()-CPU_SWITCH_DELAY_MS)) {
-				// nondirty
-				// PWR_setCPUSpeed(CPU_SPEED_POWERSAVE);
-				
+
+			// honestly this whole thing is here only for the scrolling text, I set it now to run this at 30fps which is enough for scrolling text, should move this to seperate animation function eventually
+			Uint32 now = SDL_GetTicks();
+			// doing some chaching to alter the text only once but honestly dont think it saves much cpu but yeah
+			static char cached_display_name[256] = "";
+			static SDL_Surface* cached_text_surface = NULL;
+			static int cached_max_width = 0;
+			static int cached_text_height = 0;
+			static SDL_Color text_color = {0}; // cached once
+
+			if (!show_switcher && !show_version && is_scrolling) {
+				Uint32 frame_start = now;
+
 				int ow = GFX_blitHardwareGroup(screen, show_setting);
 				Entry* entry = top->entries->items[top->selected];
-				char* entry_name = entry->name;
-				char* entry_unique = entry->unique;
-				trimSortingMeta(&entry_name);
-				int available_width = (had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_PADDING)) - SCALE1(PADDING * 2);
-				if (top->selected == top->start && !(had_thumb)) available_width -= ow;
-		
-				if (entry_unique) { // Only render if a unique name exists
-					trimSortingMeta(&entry_unique);
-				} 
-				char display_name[256];
-				int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name,display_name, available_width, SCALE1(BUTTON_PADDING * 2));
-				int max_width = MIN(available_width, text_width);
 
-				SDL_Color text_color = uintToColour(THEME_COLOR5_255);
-					
-				SDL_Surface* text2 = TTF_RenderUTF8_Blended(font.large, display_name, text_color);
-				SDL_Rect clear_rect = { SCALE1(BUTTON_MARGIN+BUTTON_PADDING),SCALE1(PADDING + (remember_selection * PILL_SIZE) +4),max_width - SCALE1((BUTTON_PADDING*2)-6),text2->h};
-		
-				SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN+BUTTON_PADDING), SCALE1(PADDING + ((remember_selection) * PILL_SIZE) +4) };
-				
-				SDL_Rect src_text_rect = {  0, 0, max_width - SCALE1(BUTTON_PADDING * 2), text2->h };
+				trimSortingMeta(&entry->name);
 
-				SDL_FillRect(screen, &clear_rect, THEME_COLOR1);
-				GFX_scrollTextSurface(font.large, display_name, &text2,max_width - ((SCALE1(BUTTON_PADDING*2))),text2->h, 0, text_color, 1);
-				
-				SDL_BlitSurface(text2, &src_text_rect, screen, &dest_rect);
-
-				SDL_FreeSurface(text2);
-				GFX_flip(screen);
-				
-			} else {
-				GFX_delay();
-				if(cputimer <= (SDL_GetTicks()-CPU_SWITCH_DELAY_MS)) {
-					// PWR_setCPUSpeed(CPU_SPEED_MENU);
+				char* entry_text = entry->name;
+				if (entry->unique) {
+					trimSortingMeta(&entry->unique);
 				}
+
+				int available_width = (had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_PADDING)) - SCALE1(PADDING * 2);
+				if (top->selected == top->start && !had_thumb) available_width -= ow;
+
+				// use themcolor 4 for now until i find some good way to make themecolor 5 work nicely with the new animation system
+				if (text_color.r == 0 && text_color.g == 0 && text_color.b == 0 && text_color.a == 0)
+					text_color = uintToColour(THEME_COLOR4_255);
+
+				if (strcmp(cached_display_name, entry_text) != 0 || cached_max_width != available_width) {
+					if (cached_text_surface) {
+						SDL_FreeSurface(cached_text_surface);
+						cached_text_surface = NULL;
+					}
+
+					strncpy(cached_display_name, entry_text, sizeof(cached_display_name));
+
+					int text_width = GFX_getTextWidth(font.large, entry_text, cached_display_name, available_width, SCALE1(BUTTON_PADDING * 2));
+					cached_max_width = MIN(available_width, text_width);
+
+					cached_text_surface = TTF_RenderUTF8_Blended(font.large, cached_display_name, text_color);
+					cached_text_height = cached_text_surface ? cached_text_surface->h : 0;
+				}
+
+				if (cached_text_surface && cached_max_width > 0) {
+					SDL_Rect clear_rect = {
+						SCALE1(BUTTON_MARGIN + BUTTON_PADDING),
+						SCALE1(PADDING + (remember_selection * PILL_SIZE) + 4),
+						cached_max_width - SCALE1((BUTTON_PADDING * 2) - 6),
+						cached_text_height
+					};
+
+					SDL_Rect dest_rect = { clear_rect.x, clear_rect.y };
+					SDL_Rect src_text_rect = {
+						0, 0,
+						cached_max_width - SCALE1(BUTTON_PADDING * 2),
+						cached_text_height
+					};
+
+					SDL_FillRect(screen, &clear_rect, THEME_COLOR1);
+					GFX_scrollTextSurface(
+						font.large,
+						cached_display_name,
+						&cached_text_surface,
+						cached_max_width - SCALE1(BUTTON_PADDING * 2),
+						cached_text_height,
+						0,
+						text_color,
+						1
+					);
+					SDL_BlitSurface(cached_text_surface, &src_text_rect, screen, &dest_rect);
+				}
+
+				GFX_flip(screen);
+
+				const int fps = 30; // 30fps is more then enough for scrolling text
+				const int frame_delay = 1000 / fps;
+				Uint32 frame_time = SDL_GetTicks() - frame_start;
+				if (frame_time < frame_delay) {
+					SDL_Delay(frame_delay - frame_time);
+				}
+			}
+
+			// Optional cleanup when not scrolling
+			if (!is_scrolling && cached_text_surface) {
+				SDL_FreeSurface(cached_text_surface);
+				cached_text_surface = NULL;
+				cached_display_name[0] = '\0';
+				cached_max_width = 0;
+				cached_text_height = 0;
+			}
+			else {
+				GFX_delay();
 			}
 			dirty = 0;
 		}
