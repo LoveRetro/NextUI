@@ -642,7 +642,7 @@ static void formatSRMPath(char* work_name, char* filename) {
 static void SRAM_getPath(char* filename) {
 	char work_name[MAX_PATH];
 
-	if (exists(SHARED_USERDATA_PATH "/use_srm_saves")) {
+	if (CFG_getSaveFormat() == SAVE_FORMAT_SRM || exists(SHARED_USERDATA_PATH "/use_srm_saves")) {
 		strcpy(work_name, game.name);
 		formatSRMPath(work_name, filename);
 	} else {
@@ -4566,7 +4566,7 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 		Menu_options(&OptionCheats_menu);
 	}
 	else {
-		Menu_message("This core has no cheats.", (char*[]){ "B","BACK", NULL });
+		Menu_message("No cheat file loaded.", (char*[]){ "B","BACK", NULL });
 	}
 	
 	return MENU_CALLBACK_NOP;

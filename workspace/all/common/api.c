@@ -566,8 +566,8 @@ void GFX_flip_fixed_rate(SDL_Surface* screen, double target_fps) {
 			useconds_t time_to_sleep_us = (useconds_t) ((time_of_frame - now) * 1e6 / perf_freq);
 
 			// The OS scheduling algorithm cannot guarantee that
-			// the sleep while last the exact amount of requested time.
-			// We sleep as much as we can using the OS primitive
+			// the sleep will last the exact amount of requested time.
+			// We sleep as much as we can using the OS primitive.
 			const useconds_t min_waiting_time = 2000;
 			if (time_to_sleep_us > min_waiting_time) {
 				usleep(time_to_sleep_us - min_waiting_time);
@@ -2993,7 +2993,7 @@ int PWR_getBattery(void) { // 10-100 in 10-20% fragments
 ///////////////////////////////
 
 // TODO: tmp? move to individual platforms or allow overriding like PAD_poll/PAD_wake?
-int PLAT_setDateTime(int y, int m, int d, int h, int i, int s) {
+FALLBACK_IMPLEMENTATION int PLAT_setDateTime(int y, int m, int d, int h, int i, int s) {
 	char cmd[512];
 	sprintf(cmd, "date -s '%d-%d-%d %d:%d:%d'; hwclock --utc -w", y,m,d,h,i,s);
 	system(cmd);
@@ -3120,4 +3120,11 @@ FALLBACK_IMPLEMENTATION FILE *PLAT_WriteSettings(const char *filename)
     }
 	return file;
 }
+/////////////////////////////////////////////////////////////////////////////////////////
 
+FALLBACK_IMPLEMENTATION void PLAT_initTimezones() {}
+FALLBACK_IMPLEMENTATION void PLAT_getTimezones(char timezones[MAX_TIMEZONES][MAX_TZ_LENGTH], int *tz_count){ tz_count = 0;}
+FALLBACK_IMPLEMENTATION char *PLAT_getCurrentTimezone() { "Foo/Bar"; }
+FALLBACK_IMPLEMENTATION void PLAT_setCurrentTimezone(const char* tz) {}
+FALLBACK_IMPLEMENTATION bool PLAT_getNetworkTimeSync(void) { return true; }
+FALLBACK_IMPLEMENTATION void PLAT_setNetworkTimeSync(bool on) {}
