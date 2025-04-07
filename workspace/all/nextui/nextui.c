@@ -2035,7 +2035,7 @@ int main (int argc, char *argv[]) {
 								0,0, max_width, SCALE1(PILL_SIZE)
 							});
 							if(animationdirection == 0)	{
-								GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),40);
+								GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),34);
 							} 
 							SDL_FreeSurface(pill);
 						} 
