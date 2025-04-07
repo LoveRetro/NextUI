@@ -208,7 +208,14 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_setOffsetY PLAT_setOffsetY// (int effect)
 #define GFX_drawForeground PLAT_drawForeground //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_drawBackground PLAT_drawBackground //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_clearCachedTexture PLAT_clearCachedTexture //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_clearForeground PLAT_clearForeground //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_clearBackground PLAT_clearBackground //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_clearAnimationLayer PLAT_clearAnimationLayer //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_clearAllLayers PLAT_clearAllLayers //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_captureRendererToSurface PLAT_captureRendererToSurface //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_animateAndFadeSurface PLAT_animateAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_flipHidden PLAT_flipHidden //(SDL_Surface *inputSurface,int x, int y)
 
 #define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
 void GFX_setMode(int mode);
@@ -221,6 +228,7 @@ SDL_Color /*GFX_*/uintToColour(uint32_t colour);
 void GFX_startFrame(void);
 void audioFPS(void);
 void GFX_flip(SDL_Surface* screen);
+void PLAT_flipHidden();
 void GFX_flip_fixed_rate(SDL_Surface* screen, double target_fps); // if target_fps is 0, then use the native screen FPS
 #define GFX_supportsOverscan PLAT_supportsOverscan // (void)
 void GFX_sync(void); // call this to maintain 60fps when not calling GFX_flip() this frame
@@ -443,7 +451,20 @@ void PLAT_setOffsetX(int x);
 void PLAT_setOffsetY(int y);
 void PLAT_drawForeground(SDL_Surface *inputSurface,int x, int y, int w, int h);
 void PLAT_drawBackground(SDL_Surface *inputSurface,int x, int y, int w, int h, float brightness, bool maintainAspectRatio);
-void PLAT_clearCachedTexture();
+void PLAT_clearForeground();
+void PLAT_clearBackground();
+void PLAT_clearAnimationLayer();
+void PLAT_clearAllLayers();
+SDL_Surface* PLAT_captureRendererToSurface();
+void PLAT_animateSurface(SDL_Surface *inputSurface, int x, int y, int target_x, int target_y, int w, int h, int duration_ms);
+void PLAT_animateAndFadeSurface(
+	SDL_Surface *inputSurface,
+	int x, int y, int target_x, int target_y, int w, int h, int duration_ms,
+	SDL_Surface *fadeSurface,
+	int fade_x, int fade_y, int fade_w, int fade_h,
+	int start_opacity, int target_opacity
+);
+
 void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
 void PLAT_present();
 void PLAT_vsync(int remaining);
