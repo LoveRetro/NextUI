@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
                 []() -> std::any{ return CFG_getMenuAnimations(); },
                 [](const std::any &value) { CFG_setMenuAnimations(std::any_cast<bool>(value)); },
                 []() { CFG_setMenuAnimations(CFG_DEFAULT_SHOWMENUANIMATIONS);}},
-                new MenuItem{Generic, "Show menu transitions", "Enable or disable animated transitions between screens", {false, true}, on_off, 
+                new MenuItem{Generic, "Show menu transitions", "Enable or disable animated transitions between screens (GPU renderer only)", {false, true}, on_off, 
                 []() -> std::any{ return CFG_getMenuTransitions(); },
                 [](const std::any &value) { CFG_setMenuTransitions(std::any_cast<bool>(value)); },
                 []() { CFG_setMenuTransitions(CFG_DEFAULT_SHOWMENUTRANSITIONS);}},
@@ -201,41 +201,45 @@ int main(int argc, char *argv[])
                 { SetVolume(std::any_cast<int>(value)); },
                 []() { SetVolume(SETTINGS_DEFAULT_VOLUME);}},
                 new MenuItem{Generic, "Screen timeout", "Time before screen turns off (0-600s)", timeout_secs, timeout_labels, []() -> std::any
-                    { return CFG_getScreenTimeoutSecs(); }, [](const std::any &value)
-                    { CFG_setScreenTimeoutSecs(std::any_cast<uint32_t>(value)); },
-                    []() { CFG_setScreenTimeoutSecs(CFG_DEFAULT_SCREENTIMEOUTSECS);}},
-                    new MenuItem{Generic, "Suspend timeout", "Time before device goes to sleep (0-600s)", timeout_secs, timeout_labels, []() -> std::any
-                    { return CFG_getSuspendTimeoutSecs(); }, [](const std::any &value)
-                    { CFG_setSuspendTimeoutSecs(std::any_cast<uint32_t>(value)); },
-                    []() { CFG_setSuspendTimeoutSecs(CFG_DEFAULT_SUSPENDTIMEOUTSECS);}},
-                    new MenuItem{Generic, "Haptic feedback", "Enable or disable haptic feedback on certain actions in the OS", {false, true}, on_off, []() -> std::any
-                    { return CFG_getHaptics(); }, [](const std::any &value)
-                    { CFG_setHaptics(std::any_cast<bool>(value)); },
-                    []() { CFG_setHaptics(CFG_DEFAULT_HAPTICS);}},
-                    new MenuItem{Generic, "Show 24h time format", "Show clock in the 24hrs time format", {false, true}, on_off, []() -> std::any
-                    { return CFG_getClock24H(); },
-                    [](const std::any &value)
-                    { CFG_setClock24H(std::any_cast<bool>(value)); },
-                    []() { CFG_setClock24H(CFG_DEFAULT_CLOCK24H);}},
-                    new MenuItem{Generic, "Show clock", "Show clock in the status pill", {false, true}, on_off, []() -> std::any
-                    { return CFG_getShowClock(); },
-                    [](const std::any &value)
-                    { CFG_setShowClock(std::any_cast<bool>(value)); },
-                    []() { CFG_setShowClock(CFG_DEFAULT_SHOWCLOCK);}},
-                    new MenuItem{Generic, "Set time and date automatically", "Automatically adjust system time\nwith NTP (requires internet access)", {false, true}, on_off, []() -> std::any
-                    { return TIME_getNetworkTimeSync(); }, [](const std::any &value)
-                    { TIME_setNetworkTimeSync(std::any_cast<bool>(value)); },
-                    []() { TIME_setNetworkTimeSync(false);}}, // default from stock
-                    new MenuItem{Generic, "Time zone", "Your time zone", tz_values, tz_labels, []() -> std::any
-                    { return std::string(TIME_getCurrentTimezone()); }, [](const std::any &value)
-                    { TIME_setCurrentTimezone(std::any_cast<std::string>(value).c_str()); },
-                    []() { TIME_setCurrentTimezone("Asia/Shanghai");}}, // default from Stock
-                    new MenuItem{Generic, "Save format", "The save format to use.", {(int)SAVE_FORMAT_SAV, (int)SAVE_FORMAT_SRM}, {".sav", ".srm"}, []() -> std::any
-                    { return CFG_getSaveFormat(); }, [](const std::any &value)
-                    { CFG_setSaveFormat(std::any_cast<int>(value)); },
-                    []() { CFG_setSaveFormat(CFG_DEFAULT_SAVEFORMAT);}},
+                { return CFG_getScreenTimeoutSecs(); }, [](const std::any &value)
+                { CFG_setScreenTimeoutSecs(std::any_cast<uint32_t>(value)); },
+                []() { CFG_setScreenTimeoutSecs(CFG_DEFAULT_SCREENTIMEOUTSECS);}},
+                new MenuItem{Generic, "Suspend timeout", "Time before device goes to sleep (0-600s)", timeout_secs, timeout_labels, []() -> std::any
+                { return CFG_getSuspendTimeoutSecs(); }, [](const std::any &value)
+                { CFG_setSuspendTimeoutSecs(std::any_cast<uint32_t>(value)); },
+                []() { CFG_setSuspendTimeoutSecs(CFG_DEFAULT_SUSPENDTIMEOUTSECS);}},
+                new MenuItem{Generic, "Haptic feedback", "Enable or disable haptic feedback on certain actions in the OS", {false, true}, on_off, []() -> std::any
+                { return CFG_getHaptics(); }, [](const std::any &value)
+                { CFG_setHaptics(std::any_cast<bool>(value)); },
+                []() { CFG_setHaptics(CFG_DEFAULT_HAPTICS);}},
+                new MenuItem{Generic, "Show 24h time format", "Show clock in the 24hrs time format", {false, true}, on_off, []() -> std::any
+                { return CFG_getClock24H(); },
+                [](const std::any &value)
+                { CFG_setClock24H(std::any_cast<bool>(value)); },
+                []() { CFG_setClock24H(CFG_DEFAULT_CLOCK24H);}},
+                new MenuItem{Generic, "Show clock", "Show clock in the status pill", {false, true}, on_off, []() -> std::any
+                { return CFG_getShowClock(); },
+                [](const std::any &value)
+                { CFG_setShowClock(std::any_cast<bool>(value)); },
+                []() { CFG_setShowClock(CFG_DEFAULT_SHOWCLOCK);}},
+                new MenuItem{Generic, "Set time and date automatically", "Automatically adjust system time\nwith NTP (requires internet access)", {false, true}, on_off, []() -> std::any
+                { return TIME_getNetworkTimeSync(); }, [](const std::any &value)
+                { TIME_setNetworkTimeSync(std::any_cast<bool>(value)); },
+                []() { TIME_setNetworkTimeSync(false);}}, // default from stock
+                new MenuItem{Generic, "Time zone", "Your time zone", tz_values, tz_labels, []() -> std::any
+                { return std::string(TIME_getCurrentTimezone()); }, [](const std::any &value)
+                { TIME_setCurrentTimezone(std::any_cast<std::string>(value).c_str()); },
+                []() { TIME_setCurrentTimezone("Asia/Shanghai");}}, // default from Stock
+                new MenuItem{Generic, "Save format", "The save format to use.", {(int)SAVE_FORMAT_SAV, (int)SAVE_FORMAT_SRM}, {".sav", ".srm"}, []() -> std::any
+                { return CFG_getSaveFormat(); }, [](const std::any &value)
+                { CFG_setSaveFormat(std::any_cast<int>(value)); },
+                []() { CFG_setSaveFormat(CFG_DEFAULT_SAVEFORMAT);}},
+                new MenuItem{Generic, "Renderer", "The renderer backend to use. CPU for compatibility, GPU for speed.", {(int)RENDERER_CPU, (int)RENDERER_GPU}, {"Software (CPU)", "Hardware (GPU)"}, []() -> std::any
+                { return CFG_getRendererBackend(); }, [](const std::any &value)
+                { CFG_setRendererBackend(std::any_cast<int>(value)); },
+                []() { CFG_setRendererBackend(CFG_DEFAULT_RENDERER);}},
 
-                    new MenuItem{Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
+                new MenuItem{Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
         });
 
         ctx.menu = new MenuList(MenuItemType::List, "Main",

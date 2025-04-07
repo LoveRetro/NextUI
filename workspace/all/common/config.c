@@ -42,6 +42,7 @@ void CFG_defaults(NextUISettings *cfg)
         .showRecents = CFG_DEFAULT_SHOWRECENTS,
         .showGameArt = CFG_DEFAULT_SHOWGAMEART,
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
+        .renderer = RENDERER_GPU,
 
         .screenTimeoutSecs = CFG_DEFAULT_SCREENTIMEOUTSECS,
         .suspendTimeoutSecs = CFG_DEFAULT_SUSPENDTIMEOUTSECS,
@@ -52,6 +53,35 @@ void CFG_defaults(NextUISettings *cfg)
 };
 
     *cfg = defaults;
+}
+
+int CFG_peekRendererSetting()
+{
+    NextUISettings s;
+    CFG_defaults(&s);
+
+    char settingsPath[MAX_PATH];
+    sprintf(settingsPath, "%s/minuisettings.txt", SHARED_USERDATA_PATH);
+    FILE *file = fopen(settingsPath, "r");
+    if (file != NULL)
+    {
+        char line[256];
+        while (fgets(line, sizeof(line), file))
+        {
+            int temp_value;
+            uint32_t temp_color;
+            
+            if (sscanf(line, "renderer=%i", &temp_value) == 1)
+            {
+                CFG_setRendererBackend(temp_value);
+                continue;
+            }
+            
+        }
+        fclose(file);
+    }
+
+    return s.renderer;
 }
 
 void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
@@ -138,6 +168,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 CFG_setMenuAnimations((bool)temp_value);
                 continue;
             }
+            if (sscanf(line, "menutransitions=%i", &temp_value) == 1)
+            {
+                CFG_setMenuTransitions((bool)temp_value);
+                continue;
+            }
             if (sscanf(line, "recents=%i", &temp_value) == 1)
             {
                 CFG_setShowRecents((bool)temp_value);
@@ -176,6 +211,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "saveFormat=%i", &temp_value) == 1)
             {
                 CFG_setSaveFormat(temp_value);
+                continue;
+            }
+            if (sscanf(line, "renderer=%i", &temp_value) == 1)
+            {
+                CFG_setRendererBackend(temp_value);
                 continue;
             }
         }
@@ -415,6 +455,16 @@ void CFG_setSaveFormat(int f)
     settings.saveFormat = f;
 }
 
+int CFG_getRendererBackend(void)
+{
+    return settings.renderer;
+}
+
+void CFG_setRendererBackend(int renderer)
+{
+    settings.renderer = renderer;
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -501,6 +551,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getSaveFormat());
     }
+    else if (strcmp(key, "renderer") == 0)
+    {
+        sprintf(value, "%i", CFG_getRendererBackend());
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -552,6 +606,7 @@ void CFG_sync(void)
     fprintf(file, "haptics=%i\n", settings.haptics);
     fprintf(file, "romfolderbg=%i\n", settings.romsUseFolderBackground);
     fprintf(file, "saveFormat=%i\n", settings.saveFormat);
+    fprintf(file, "renderer=%i\n", settings.renderer);
 
     fclose(file);
 }
@@ -581,6 +636,7 @@ void CFG_print(void)
     printf("\t\"haptics\": %i,\n", settings.haptics);
     printf("\t\"romfolderbg\": %i,\n", settings.romsUseFolderBackground);
     printf("\t\"saveFormat\": %i,\n", settings.saveFormat);
+    printf("\t\"renderer\": %i,\n", settings.renderer);
 
     // meta, not a real setting
     if (settings.font == 1)

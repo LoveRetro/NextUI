@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "msettings.h"
 
@@ -192,13 +193,15 @@ void PLAT_quitInput(void) {
 static struct VID_Context {
 	SDL_Window* window;
 	SDL_Renderer* renderer;
-	SDL_Texture* texture;
-	SDL_Texture* background;
-	SDL_Texture* animationlayer;
-	SDL_Texture* animationlayer2;
-	SDL_Texture* foreground;
+	SDL_Texture* texture; // TODO: still used?
 	SDL_Surface* buffer;
 	SDL_Surface* screen;
+	SDL_Texture* background;
+	SDL_Texture* foreground;
+
+	// GPU only
+	SDL_Texture* animationlayer;
+	SDL_Texture* animationlayer2;
 	
 	GFX_Renderer* blit; // yeesh
 	
@@ -212,6 +215,9 @@ static int device_height;
 static int device_pitch;
 static int rotate = 0;
 static uint32_t SDL_transparentBlack = 0;
+
+// Comment out to test SW renderer
+bool PLAT_supportsGpu() { return true; }
 
 SDL_Surface *PLAT_initVideo(void)
 {
@@ -242,42 +248,57 @@ SDL_Surface *PLAT_initVideo(void)
 		rotate = 1;
 	LOG_info("Current display mode: %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
 	
+	const int requestGpu = PLAT_supportsGpu() && CFG_peekRendererSetting();
 	int w = FIXED_WIDTH;
 	int h = FIXED_HEIGHT;
 	int p = FIXED_PITCH;
 	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w, h, SDL_WINDOW_SHOWN);
 	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
-	SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
+
 	// SDL_RendererInfo info;
 	// SDL_GetRendererInfo(vid.renderer, &info);
 	// LOG_info("Current render driver: %s\n", info.name);
+
+	if(requestGpu) {
+		SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
+		vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
+		vid.background = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
+		vid.animationlayer = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
+		vid.animationlayer2 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
+		vid.foreground = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
+
+		vid.buffer	= SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
+		vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
+		SDL_SetSurfaceBlendMode(vid.buffer, SDL_BLENDMODE_BLEND);
+		SDL_SetSurfaceBlendMode(vid.screen, SDL_BLENDMODE_BLEND);
+		SDL_SetTextureBlendMode(vid.animationlayer, SDL_BLENDMODE_BLEND);
+		SDL_SetTextureBlendMode(vid.animationlayer2, SDL_BLENDMODE_BLEND);
+		SDL_SetTextureBlendMode(vid.foreground, SDL_BLENDMODE_BLEND);
+		SDL_SetTextureBlendMode(vid.texture, SDL_BLENDMODE_BLEND);
+	}
+	else {
+		vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, rotate != 0 ? h : w, rotate != 0 ? w : h);
+		vid.background = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_TARGET , rotate != 0 ? h : w, rotate != 0 ? w : h);
+		vid.foreground = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_TARGET , rotate != 0 ? h : w, rotate != 0 ? w : h);
+		vid.animationlayer = vid.animationlayer2 = NULL;
+
+		vid.buffer	= SDL_CreateRGBSurfaceFrom(NULL, w,h, FIXED_DEPTH, p, RGBA_MASK_565);
+		vid.screen	= SDL_CreateRGBSurface(SDL_SWSURFACE, w,h, FIXED_DEPTH, RGBA_MASK_565);
+	}
 	
-	vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
-	vid.background = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.animationlayer = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.animationlayer2 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.foreground = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	// SDL_SetTextureScaleMode(vid.texture, SDL_ScaleModeNearest);
 	
-	vid.buffer	= SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
-	vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
-	SDL_SetSurfaceBlendMode(vid.buffer, SDL_BLENDMODE_BLEND);
-	SDL_SetSurfaceBlendMode(vid.screen, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureBlendMode(vid.animationlayer, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureBlendMode(vid.animationlayer2, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureBlendMode(vid.foreground, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureBlendMode(vid.texture, SDL_BLENDMODE_BLEND);
 	vid.width	= w;
 	vid.height	= h;
 	vid.pitch	= p;
 	
-	PWR_disablePowerOff();
-
 	SDL_transparentBlack = SDL_MapRGBA(vid.screen->format, 0, 0, 0, 0);
-
+	
 	device_width	= w;
 	device_height	= h;
 	device_pitch	= p;
+
+	PWR_disablePowerOff();
 	
 	return vid.screen;
 }
@@ -302,8 +323,8 @@ void PLAT_quitVideo(void) {
 	SDL_FreeSurface(vid.screen);
 	SDL_FreeSurface(vid.buffer);
 	SDL_DestroyTexture(vid.texture);
-	if (vid.foreground) SDL_DestroyTexture(vid.foreground);
-	if (vid.background) SDL_DestroyTexture(vid.background);
+	SDL_DestroyTexture(vid.foreground);
+	SDL_DestroyTexture(vid.background);
 	if (vid.animationlayer) SDL_DestroyTexture(vid.animationlayer);
 	if (vid.animationlayer2) SDL_DestroyTexture(vid.animationlayer2);
 	SDL_DestroyRenderer(vid.renderer);
@@ -313,7 +334,6 @@ void PLAT_quitVideo(void) {
 }
 
 void PLAT_clearVideo(SDL_Surface* screen) {
-	//SDL_FillRect(screen, NULL, 0); // TODO: revisit
 	SDL_FillRect(screen, NULL, SDL_transparentBlack);
 }
 void PLAT_clearAll(void) {
@@ -334,11 +354,17 @@ static void resizeVideo(int w, int h, int p) {
 	SDL_DestroyTexture(vid.texture);
 	// PLAT_clearVideo(vid.screen);
 	
-	vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
-	SDL_SetTextureBlendMode(vid.texture, SDL_BLENDMODE_BLEND);
+	// TODO: replace this if/else constructs with GFX_screenFormat() where possible
+	if(GFX_isHardwareBacked()) {
+		vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
+		SDL_SetTextureBlendMode(vid.texture, SDL_BLENDMODE_BLEND);
+	}
+	else vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, w,h);
 	// SDL_SetTextureScaleMode(vid.texture, SDL_ScaleModeNearest);
 	
-	vid.buffer = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, w,h, 32, SDL_PIXELFORMAT_RGBA8888);
+	if(GFX_isHardwareBacked())
+		vid.buffer	= SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, w,h, 32, SDL_PIXELFORMAT_RGBA8888);
+	else vid.buffer = SDL_CreateRGBSurfaceFrom(NULL, w,h, FIXED_DEPTH, p, RGBA_MASK_565);
 
 	vid.width	= w;
 	vid.height	= h;
@@ -382,6 +408,7 @@ void PLAT_blitRenderer(GFX_Renderer* renderer) {
 	);
 }
 
+// how many of these do we need in our codebase?
 void applyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius) {
 	if (!surface) return;
 
@@ -419,17 +446,22 @@ void PLAT_clearBackground() {
     SDL_RenderClear(vid.renderer);
 	SDL_SetRenderTarget(vid.renderer, NULL);
 }
-void PLAT_clearAnimationLayer() {
-	SDL_SetRenderTarget(vid.renderer, vid.animationlayer);
-    SDL_RenderClear(vid.renderer);
+void PLAT_clearAllForeground() {
+	SDL_SetRenderTarget(vid.renderer, vid.foreground);
+	SDL_RenderClear(vid.renderer);
+	if(GFX_isHardwareBacked()) {
+		SDL_SetRenderTarget(vid.renderer, vid.animationlayer);
+		SDL_RenderClear(vid.renderer);
+		SDL_SetRenderTarget(vid.renderer, vid.animationlayer2);
+		SDL_RenderClear(vid.renderer);
+	}
 	SDL_SetRenderTarget(vid.renderer, NULL);
 }
-void PLAT_clearAllLayers() {
-	SDL_SetRenderTarget(vid.renderer, vid.foreground);
-    SDL_RenderClear(vid.renderer);
+void PLAT_clearAnimationLayer() {
+	assert(GFX_isHardwareBacked());
+	if(!GFX_isHardwareBacked())
+		return;
 	SDL_SetRenderTarget(vid.renderer, vid.animationlayer);
-    SDL_RenderClear(vid.renderer);
-	SDL_SetRenderTarget(vid.renderer, vid.animationlayer2);
     SDL_RenderClear(vid.renderer);
 	SDL_SetRenderTarget(vid.renderer, NULL);
 }
@@ -437,7 +469,7 @@ void PLAT_drawBackground(SDL_Surface *inputSurface, int x, int y, int w, int h, 
     if (!inputSurface || !vid.background || !vid.renderer) return; 
 
     SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-                                                 SDL_PIXELFORMAT_RGBA8888, 
+                                                 GFX_screenFormat(), 
                                                  SDL_TEXTUREACCESS_TARGET,  
                                                  inputSurface->w, inputSurface->h); 
 
@@ -482,7 +514,7 @@ void PLAT_drawBackground(SDL_Surface *inputSurface, int x, int y, int w, int h, 
 void PLAT_drawForeground(SDL_Surface *inputSurface, int x, int y, int w, int h) {
     if (!inputSurface || !vid.foreground || !vid.renderer) return; 
     SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-                                                 SDL_PIXELFORMAT_RGBA8888, 
+                                                 GFX_screenFormat(), 
                                                  SDL_TEXTUREACCESS_TARGET,  
                                                  inputSurface->w, inputSurface->h); 
 
@@ -503,6 +535,9 @@ void PLAT_drawForeground(SDL_Surface *inputSurface, int x, int y, int w, int h) 
 }
 
 void PLAT_animateSurface(SDL_Surface *inputSurface, int x, int y, int target_x, int target_y, int w, int h, int duration_ms,int layer) {
+	assert(GFX_isHardwareBacked());
+	if(!GFX_isHardwareBacked())
+		return;
 	if (!inputSurface || !vid.animationlayer || !vid.renderer) return;
 
 	SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
@@ -557,6 +592,9 @@ void PLAT_animateSurface(SDL_Surface *inputSurface, int x, int y, int target_x, 
 }
 
 SDL_Surface* PLAT_captureRendererToSurface() {
+	assert(GFX_isHardwareBacked());
+	if(!GFX_isHardwareBacked())
+		return NULL;
 	if (!vid.renderer) return NULL;
 
 	int width, height;
@@ -585,6 +623,9 @@ void PLAT_animateAndFadeSurface(
 	int fade_x, int fade_y, int fade_w, int fade_h,
 	int start_opacity, int target_opacity
 ) {
+	assert(GFX_isHardwareBacked());
+	if(!GFX_isHardwareBacked())
+		return;
 	if (!inputSurface || !vid.animationlayer || !vid.renderer) return;
 
 	SDL_Texture* moveTexture = SDL_CreateTexture(vid.renderer,
@@ -656,7 +697,7 @@ void PLAT_animateAndFadeSurface(
 	if (fadeTexture) SDL_DestroyTexture(fadeTexture);
 }
 
-void PLAT_ZoomAndFadeSurface(
+void PLAT_zoomAndFadeSurface(
 	SDL_Surface *inputSurface,
 	int x, int y,                 // Center position
 	int start_w, int start_h,
@@ -667,6 +708,9 @@ void PLAT_ZoomAndFadeSurface(
 	int start_opacity, int target_opacity,
 	int layer
 ) {
+	assert(GFX_isHardwareBacked());
+	if(!GFX_isHardwareBacked())
+		return;
 	if (!inputSurface || !vid.animationlayer || !vid.renderer) return;
 
 	SDL_Texture* moveTexture = SDL_CreateTexture(vid.renderer,
@@ -757,10 +801,10 @@ void PLAT_flipHidden() {
 	resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
 	SDL_UpdateTexture(vid.texture, NULL, vid.screen->pixels, vid.screen->pitch);
 	SDL_RenderCopy(vid.renderer, vid.background, NULL, NULL);
-	SDL_RenderCopy(vid.renderer, vid.animationlayer, NULL, NULL);
+	if(GFX_isHardwareBacked())SDL_RenderCopy(vid.renderer, vid.animationlayer, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.texture, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.foreground, NULL, NULL);
-	SDL_RenderCopy(vid.renderer, vid.animationlayer2, NULL, NULL);
+	if(GFX_isHardwareBacked())SDL_RenderCopy(vid.renderer, vid.animationlayer2, NULL, NULL);
 	//  SDL_RenderPresent(vid.renderer); // no present want to flip  hidden
 }
 
@@ -776,7 +820,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 			SDL_RenderCopyEx(vid.renderer, vid.background, NULL,
 				&(SDL_Rect){device_height, 0, device_width, device_height}, 
 				rotate * 90, &(SDL_Point){0, 0}, SDL_FLIP_NONE);
-			SDL_RenderCopyEx(vid.renderer, vid.animationlayer, NULL,
+			if(GFX_isHardwareBacked())SDL_RenderCopyEx(vid.renderer, vid.animationlayer, NULL,
 				&(SDL_Rect){device_height, 0, device_width, device_height}, 
 				rotate * 90, &(SDL_Point){0, 0}, SDL_FLIP_NONE);
 			SDL_RenderCopyEx(vid.renderer, vid.texture, NULL, 
@@ -785,17 +829,17 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 			SDL_RenderCopyEx(vid.renderer, vid.foreground, NULL, 
 				&(SDL_Rect){device_height, 0, device_width, device_height}, 
 				rotate * 90, &(SDL_Point){0, 0}, SDL_FLIP_NONE);
-			SDL_RenderCopyEx(vid.renderer, vid.animationlayer2, NULL,
+			if(GFX_isHardwareBacked())SDL_RenderCopyEx(vid.renderer, vid.animationlayer2, NULL,
 				&(SDL_Rect){device_height, 0, device_width, device_height}, 
 				rotate * 90, &(SDL_Point){0, 0}, SDL_FLIP_NONE);
 		}
 		else {
 			//LOG_info("not rotated\n");
 			SDL_RenderCopy(vid.renderer, vid.background, NULL, NULL);
-			SDL_RenderCopy(vid.renderer, vid.animationlayer, NULL, NULL);
+			if(GFX_isHardwareBacked())SDL_RenderCopy(vid.renderer, vid.animationlayer, NULL, NULL);
 			SDL_RenderCopy(vid.renderer, vid.texture, NULL, NULL);
 			SDL_RenderCopy(vid.renderer, vid.foreground, NULL, NULL);
-			SDL_RenderCopy(vid.renderer, vid.animationlayer2, NULL, NULL);
+			if(GFX_isHardwareBacked())SDL_RenderCopy(vid.renderer, vid.animationlayer2, NULL, NULL);
 		}
 		SDL_RenderPresent(vid.renderer);
 

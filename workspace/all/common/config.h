@@ -24,6 +24,12 @@ enum
 	SAVE_FORMAT_SRM
 };
 
+enum
+{
+	RENDERER_CPU,
+	RENDERER_GPU
+};
+
 typedef struct
 {
 	// Theme
@@ -61,6 +67,9 @@ typedef struct
 	bool showGameArt;
 	bool romsUseFolderBackground;
 
+	// System
+	int renderer;
+
 	// Power
 	uint32_t screenTimeoutSecs;
 	uint32_t suspendTimeoutSecs;
@@ -95,7 +104,11 @@ typedef struct
 #define CFG_DEFAULT_HAPTICS false
 #define CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND true
 #define CFG_DEFAULT_SAVEFORMAT SAVE_FORMAT_SAV
+#define CFG_DEFAULT_RENDERER RENDERER_CPU
 
+// CFG_Init is generally called after PLAT_initVideo,
+// but PLAT_initVideo needs to know what backend to initialize
+int CFG_peekRendererSetting();
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
 void CFG_get(const char *key, char * value);
@@ -156,6 +169,9 @@ void CFG_setHaptics(bool enable);
 // 1 - .srm
 int CFG_getSaveFormat(void);
 void CFG_setSaveFormat(int);
+// Renderer backend (CPU/GPU)
+int CFG_getRendererBackend(void);
+void CFG_setRendererBackend(int);
 
 void CFG_sync(void);
 void CFG_quit(void);

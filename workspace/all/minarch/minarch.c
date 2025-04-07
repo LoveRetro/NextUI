@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <zlib.h>
 #include <pthread.h>
+#include <assert.h>
 
 #include "libretro.h"
 #include "defines.h"
@@ -2534,7 +2535,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		LOG_info("Requested pixel format by core: %d\n", *format); // Log the requested format (raw integer value)
 	
 		// Check if the requested format is supported
-		if (*format == RETRO_PIXEL_FORMAT_XRGB8888) {
+		if (GFX_isHardwareBacked() && *format == RETRO_PIXEL_FORMAT_XRGB8888) {
 			fmt = RETRO_PIXEL_FORMAT_XRGB8888;
 			LOG_info("Format supported: RETRO_PIXEL_FORMAT_XRGB8888\n");
 			return true;  // Indicate success
@@ -3171,35 +3172,67 @@ static const char* bitmap_font[] = {
         "1   1"
         "1   1"
         "1   1",
+};
+static void blitBitmapText16(char* text, int ox, int oy, uint16_t* data, int stride, int width, int height) {
+	#define CHAR_WIDTH 5
+	#define CHAR_HEIGHT 9
+	#define LETTERSPACING 1
+	
+	int len = strlen(text);
+	int w = ((CHAR_WIDTH + LETTERSPACING) * len) - 1;
+	int h = CHAR_HEIGHT;
+	
+	if (ox < 0) ox = width - w + ox;
+	if (oy < 0) oy = height - h + oy;
 
-	};
-	static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int stride, int width, int height) {
-		#define CHAR_WIDTH 5
-		#define CHAR_HEIGHT 9
-		#define LETTERSPACING 1
-		
-		int len = strlen(text);
-		int w = ((CHAR_WIDTH + LETTERSPACING) * len) - 1;
-		int h = CHAR_HEIGHT;
-		
-		if (ox < 0) ox = width - w + ox;
-		if (oy < 0) oy = height - h + oy;
-		
-		data += oy * stride + ox;
-		for (int y = 0; y < CHAR_HEIGHT; y++) {
-			uint32_t* row = data + y * stride;  
-			for (int i = 0; i < len; i++) {
-				const char* c = bitmap_font[(unsigned char)text[i]]; 
-				for (int x = 0; x < CHAR_WIDTH; x++) {
-					if (c[y * CHAR_WIDTH + x] == '1') {
-						*row = 0xFFFFFFFF;  // white in RGBA8888
-					}
-					row++; 
-				}
-				row += LETTERSPACING;
+	data += oy * stride + ox;
+
+	uint16_t* row = data - stride; // TODO: this will crash and burn if ox,oy==0,0 but is fine as used currently :sweat_smile:
+	memset(row-1, 0, (w+2)*2);
+	for (int y=0; y<CHAR_HEIGHT; y++) {
+		row = data + y * stride;
+		memset(row-1, 0, (w+2)*2);
+		for (int i=0; i<len; i++) {
+			const char* c = bitmap_font[text[i]];
+			for (int x=0; x<CHAR_WIDTH; x++) {
+				int j = y * CHAR_WIDTH + x;
+				if (c[j]=='1') *row = 0xffff;
+				row++;
 			}
+			row += LETTERSPACING;
 		}
 	}
+	row = data + CHAR_HEIGHT * stride;
+	memset(row-1, 0, (w+2)*2);
+}
+static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int stride, int width, int height) {
+	#define CHAR_WIDTH 5
+	#define CHAR_HEIGHT 9
+	#define LETTERSPACING 1
+	
+	int len = strlen(text);
+	int w = ((CHAR_WIDTH + LETTERSPACING) * len) - 1;
+	int h = CHAR_HEIGHT;
+	
+	if (ox < 0) ox = width - w + ox;
+	if (oy < 0) oy = height - h + oy;
+	
+	data += oy * stride + ox;
+
+	for (int y = 0; y < CHAR_HEIGHT; y++) {
+		uint32_t* row = data + y * stride;  
+		for (int i = 0; i < len; i++) {
+			const char* c = bitmap_font[(unsigned char)text[i]]; 
+			for (int x = 0; x < CHAR_WIDTH; x++) {
+				if (c[y * CHAR_WIDTH + x] == '1') {
+					*row = 0xFFFFFFFF;  // white in RGBA8888
+				}
+				row++; 
+			}
+			row += LETTERSPACING;
+		}
+	}
+}
 	
 	
 void drawRect(int x, int y, int w, int h, int c, uint16_t *data, int stride) {
@@ -3223,20 +3256,26 @@ void fillRect(int x, int y, int w, int h, int c, uint16_t *data, int stride) {
 }
 
 void drawGauge(int x, int y, float percent, int width, int height, uint16_t *data, int stride) {
-    int red   = (int) (percent * 255);   
-    int green = (int) ((1.0 - percent) * 255); 
-    int blue  = 0;                           
-    uint8_t alpha = 255;                   
-    
-    uint32_t color = (alpha << 24) | (red << 16) | (green << 8) | blue;
-    
-    fillRect(x, y, width, height, 0x00000000, data, stride);  
-    
-    fillRect(x, y, (int) (percent * width), height, color, data, stride);
-    
-    drawRect(x, y, width, height, 0xFFFFFFFF, data, stride);  
+	if(GFX_screenFormat() == SDL_PIXELFORMAT_RGBA8888) {
+		int red   = (int) (percent * 255);   
+		int green = (int) ((1.0 - percent) * 255); 
+		int blue  = 0;
+		uint8_t alpha = 255;
+		uint32_t color = (alpha << 24) | (red << 16) | (green << 8) | blue;
+		fillRect(x, y, width, height, 0x00000000, data, stride);  
+		fillRect(x, y, (int) (percent * width), height, color, data, stride);
+		drawRect(x, y, width, height, 0xFFFFFFFF, data, stride);  
+	}
+	else { // assume RGB565
+		int red   = (int) (percent * 31);
+		int green = (int) ((1.0 - percent) * 15);
+		int blue  = 0;
+		uint16_t color = (red << 11) | (green << 6) | blue;
+		fillRect(x, y, width, height, 0x0000, data, stride);
+		fillRect(x, y, (int) (percent * width), height, color, data, stride);
+		drawRect(x, y, width, height, 0xFFFF, data, stride);
+	}
 }
-
 
 ///////////////////////////////
 
@@ -3265,6 +3304,26 @@ static void buffer_realloc(int w, int h, int p) {
 	buffer_dealloc();
 	buffer = malloc((w * FIXED_BPP) * h);
 	// LOG_info("buffer_realloc(%i,%i,%i)\n", w,h,p);
+}
+
+static void buffer_downsample(const void *data, unsigned width, unsigned height, size_t pitch) {
+	assert(GFX_screenFormat() != SDL_PIXELFORMAT_RGBA8888);
+	// from picoarch! https://git.crowdedwood.com/picoarch/tree/video.c#n51
+	const uint32_t *input = data;
+	uint16_t *output = buffer;
+	size_t extra = pitch / sizeof(uint32_t) - width;
+
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			*output =  (*input & 0xF80000) >> 8;
+			*output |= (*input & 0xFC00) >> 5;
+			*output |= (*input & 0xF8) >> 3;
+			input++;
+			output++;
+		}
+
+		input += extra; // TODO: commenting this out fixes geolith when cropped, it appears to be lying about the pitch...
+	}
 }
 
 static void selectScaler(int src_w, int src_h, int src_p) {
@@ -3564,30 +3623,55 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		if (scale==-1) scale = 1; // nearest neighbor flag
 
 		sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,currentsampleratein,currentsamplerateout);
-		blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
+		if(GFX_screenFormat() == SDL_PIXELFORMAT_RGBA8888)
+			blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
+		else 
+			blitBitmapText16(debug_text,x,y,(uint16_t*)data,pitch/2, width,height);
 		
-		sprintf(debug_text, "%.03f/%i/%.0f/%i", currentratio,
-				currentbuffersize,currentbufferms, currentbufferfree);
-		blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
-					height);
+		sprintf(debug_text, "%.03f/%i/%.0f/%i", currentratio, currentbuffersize,currentbufferms, currentbufferfree);
+		if(GFX_screenFormat() == SDL_PIXELFORMAT_RGBA8888)
+			blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width, height);
+		else 
+			blitBitmapText16(debug_text, x, y + 14, (uint16_t*)data, pitch / 2, width, height);
 
 		sprintf(debug_text, "%i,%i %ix%i", renderer.dst_x,renderer.dst_y, renderer.src_w*scale,renderer.src_h*scale);
-		blitBitmapText(debug_text,-x,y,(uint32_t*)data,pitch / 4, width,height);
+		if(GFX_screenFormat() == SDL_PIXELFORMAT_RGBA8888)
+			blitBitmapText(debug_text,-x,y,(uint32_t*)data,pitch / 4, width,height);
+		else 
+			blitBitmapText16(debug_text,-x,y,(uint16_t*)data,pitch/2, width,height);
 	
 		sprintf(debug_text, "%ix%i", renderer.dst_w,renderer.dst_h);
-		blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
+		if(GFX_screenFormat() == SDL_PIXELFORMAT_RGBA8888)
+			blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
+		else 
+			blitBitmapText16(debug_text,-x,-y,(uint16_t*)data,pitch/2, width,height);
+
 
 		//want this to overwrite bottom right in case screen is too small this info more important tbh
 		PLAT_getCPUTemp();
 		sprintf(debug_text, "%.01f/%.01f/%.0f%%/%ihz/%ic", currentfps, currentreqfps,currentcpuse,currentcpuspeed,currentcputemp);
-		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
+		if(GFX_screenFormat() == SDL_PIXELFORMAT_RGBA8888)
+			blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
+		else 
+			blitBitmapText16(debug_text,x,-y,(uint16_t*)data,pitch/2, width,height);
 	
 		double buffer_fill = (double) (currentbuffersize - currentbufferfree) / (double) currentbuffersize;
-		drawGauge(x, y + 30, buffer_fill, width / 2, 10, (uint16_t*)data, pitch / 2);
+		
+		if(GFX_screenFormat() == SDL_PIXELFORMAT_RGBA8888)
+			drawGauge(x, y + 30, buffer_fill, width / 2, 10, (uint16_t *)data, pitch / 2);
+		else 
+			drawGauge(x, y + 28, buffer_fill, width / 4, 10, (uint16_t*)data, pitch/2);
 	}
-	
 
+	if (downsample) {
+		buffer_downsample(data,width,height,pitch*2);
+		renderer.src = buffer;
+	}
+	else {
 		renderer.src = (void*)data;
+	}
+
+	renderer.src = (void*)data;
 	
 	renderer.dst = screen->pixels;
 	// LOG_info("video_refresh_callback: %ix%i@%i %ix%i@%i\n",width,height,pitch,screen->w,screen->h,screen->pitch);
@@ -3599,6 +3683,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	last_flip_time = SDL_GetTicks();
 }
 const void* lastframe = NULL;
+
 
 Uint32* rgbaData;
 static void video_refresh_callback(const void* data, unsigned width, unsigned height, size_t pitch) {
@@ -3631,15 +3716,16 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 	// 	should_rotate = 0;
 	// }
 
-	if(!rgbaData || (width * height * sizeof(Uint32)) != sizeof(rgbaData)) {
-		if(rgbaData) free(rgbaData);
-		rgbaData = (Uint32*)malloc(width * height * sizeof(Uint32));
-		if (!rgbaData) {
-			printf("Failed to allocate memory for RGBA8888 data.\n");
-			return;
+	if(GFX_screenFormat() == SDL_PIXELFORMAT_RGBA8888) {
+		if(!rgbaData || (width * height * sizeof(Uint32)) != sizeof(rgbaData)) {
+			if(rgbaData) free(rgbaData);
+			rgbaData = (Uint32*)malloc(width * height * sizeof(Uint32));
+			if (!rgbaData) {
+				printf("Failed to allocate memory for RGBA8888 data.\n");
+				return;
+			}
 		}
 	}
-
 
     if (!data) {
         if (lastframe) {
@@ -3648,6 +3734,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
             return; // No data to display
         }
     } else if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
+		assert(GFX_isHardwareBacked());
 		// convert XRGB8888 to RGBA8888
 		const uint32_t* src = (const uint32_t*)data;
 		for (unsigned i = 0; i < width * height; ++i) {
@@ -3660,26 +3747,28 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 		}
 		data = rgbaData;
 	} else {
-		// if emulator doesnt support XRGB888 and uses RGB565
-		// convert RGB565 to RGBA8888
-		const uint16_t* srcData = (const uint16_t*)data;
-		unsigned srcPitchInPixels = pitch / sizeof(uint16_t); 
-
-		for (unsigned y = 0; y < height; ++y) {
-			for (unsigned x = 0; x < width; ++x) {
-				uint16_t pixel = srcData[y * srcPitchInPixels + x];
-
-				uint8_t r = ((pixel >> 11) & 0x1F) << 3; 
-				uint8_t g = ((pixel >> 5) & 0x3F) << 2;   
-				uint8_t b = (pixel & 0x1F) << 3;          
-
-				rgbaData[y * width + x] = (r << 24) | (g << 16) | (b << 8) | 0xFF;  
+		if(GFX_isHardwareBacked()) {
+			// if emulator doesnt support XRGB888 and uses RGB565
+			// convert RGB565 to screen format (RGBA8888 or RGB565)
+			const uint16_t* srcData = (const uint16_t*)data;
+			unsigned srcPitchInPixels = pitch / sizeof(uint16_t); 
+			
+			for (unsigned y = 0; y < height; ++y) {
+				for (unsigned x = 0; x < width; ++x) {
+					uint16_t pixel = srcData[y * srcPitchInPixels + x];
+					
+					uint8_t r = ((pixel >> 11) & 0x1F) << 3; 
+					uint8_t g = ((pixel >> 5) & 0x3F) << 2;   
+					uint8_t b = (pixel & 0x1F) << 3;          
+					
+					rgbaData[y * width + x] = (r << 24) | (g << 16) | (b << 8) | 0xFF;  
+				}
 			}
+			data = rgbaData;
+			pitch = width * sizeof(Uint32);
 		}
-		data = rgbaData;
 	}
 
-	pitch = width * sizeof(Uint32);
 	lastframe = data;
 	if(!fast_forward ) {
 		if(ambient_mode!=0) {
@@ -3688,8 +3777,26 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 		}
 	}
 
-	
-     video_refresh_callback_main(data,width,height,pitch);
+	//if (thread_video) {
+	//	pthread_mutex_lock(&core_mx);
+	//
+	//	if (backbuffer && (backbuffer->w!=width || backbuffer->h!=height || backbuffer->pitch!=pitch)) {
+	//		free(backbuffer->pixels);
+	//		SDL_FreeSurface(backbuffer);
+	//		backbuffer = NULL;
+	//	}
+	//	if (!backbuffer) {
+	//		uint16_t* pixels = malloc(height*pitch);
+	//		// backbuffer = SDL_CreateRGBSurface(0,width,height,FIXED_DEPTH,RGBA_MASK_565);
+	//		backbuffer = SDL_CreateRGBSurfaceFrom(pixels, width, height, FIXED_DEPTH, pitch, RGBA_MASK_565);
+	//	}
+	//
+	//	memcpy(backbuffer->pixels, data, backbuffer->h*backbuffer->pitch);
+	//	pthread_cond_signal(&core_rq);
+	//	pthread_mutex_unlock(&core_mx);
+	//}
+	//else 
+		video_refresh_callback_main(data,width,height,pitch);
 }
 ///////////////////////////////
 
@@ -3935,10 +4042,17 @@ static struct {
 };
 
 void Menu_init(void) {
-	menu.overlay = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888);
-	SDL_SetSurfaceBlendMode(menu.overlay, SDL_BLENDMODE_BLEND);
-	Uint32 color = SDL_MapRGBA(menu.overlay->format, 0, 0, 0, 0);
-	SDL_FillRect(screen, NULL, color);
+	if(GFX_isHardwareBacked()) {
+		menu.overlay = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888);
+		SDL_SetSurfaceBlendMode(menu.overlay, SDL_BLENDMODE_BLEND);
+		Uint32 color = SDL_MapRGBA(menu.overlay->format, 0, 0, 0, 0);
+		SDL_FillRect(screen, NULL, color);
+	}
+	else {
+		menu.overlay = SDL_CreateRGBSurface(SDL_SWSURFACE,DEVICE_WIDTH,DEVICE_HEIGHT,FIXED_DEPTH,RGBA_MASK_AUTO);
+		SDLX_SetAlpha(menu.overlay, SDL_SRCALPHA, 0x80);
+		SDL_FillRect(menu.overlay, NULL, 0);
+	} 
 	
 	char emu_name[256];
 	getEmuName(game.path, emu_name);
@@ -5166,7 +5280,13 @@ static void Menu_saveState(void) {
 	}
 	
 	SDL_Surface* bitmap = menu.bitmap;
-	if (!bitmap) bitmap = SDL_CreateRGBSurfaceWithFormatFrom(renderer.src, renderer.true_w, renderer.true_h, 32, renderer.src_p, SDL_PIXELFORMAT_RGBA8888);
+	if (!bitmap) {
+		if(GFX_isHardwareBacked())
+			bitmap = SDL_CreateRGBSurfaceWithFormatFrom(renderer.src, renderer.true_w, renderer.true_h, 32, renderer.src_p, SDL_PIXELFORMAT_RGBA8888);
+		else 
+			bitmap = SDL_CreateRGBSurfaceFrom(renderer.src, renderer.true_w, renderer.true_h, FIXED_DEPTH, renderer.src_p, RGBA_MASK_565);
+	} 
+		
 	SDL_RWops* out = SDL_RWFromFile(menu.bmp_path, "wb");
 	SDL_SaveBMP_RW(bitmap, out, 1);
 	
@@ -5178,6 +5298,7 @@ static void Menu_saveState(void) {
 	putInt(menu.slot_path, menu.slot);
 	State_write();
 }
+
 static void Menu_loadState(void) {
 	// LOG_info("Menu_loadState\n");
 
@@ -5245,13 +5366,21 @@ static char* getAlias(char* path, char* alias) {
 }
 
 static void Menu_loop(void) {
-	menu.bitmap = SDL_CreateRGBSurfaceWithFormatFrom(renderer.src, renderer.true_w, renderer.true_h, 32, renderer.src_p, SDL_PIXELFORMAT_RGBA8888);
+	SDL_Surface *backing;
+	if (GFX_isHardwareBacked())
+	{
+		menu.bitmap = SDL_CreateRGBSurfaceWithFormatFrom(renderer.src, renderer.true_w, renderer.true_h, 32, renderer.src_p, SDL_PIXELFORMAT_RGBA8888);
+		SDL_Rect dst = {0, 0, DEVICE_WIDTH, DEVICE_HEIGHT};
+		backing = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
+		SDL_BlitScaled(menu.bitmap,NULL,backing,&dst);
+	}
+	else {
+		menu.bitmap = SDL_CreateRGBSurfaceFrom(renderer.src, renderer.true_w, renderer.true_h, FIXED_DEPTH, renderer.src_p, RGBA_MASK_565);
+		backing = SDL_CreateRGBSurface(SDL_SWSURFACE,DEVICE_WIDTH,DEVICE_HEIGHT,FIXED_DEPTH,RGBA_MASK_565); 
+		Menu_scale(menu.bitmap, backing);
+	} 
 	// LOG_info("Menu_loop:menu.bitmap %ix%i\n", menu.bitmap->w,menu.bitmap->h);
-	SDL_Rect dst = {0, 0, DEVICE_WIDTH, DEVICE_HEIGHT};
-	SDL_Surface* backing = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
-	SDL_BlitScaled(menu.bitmap,NULL,backing,&dst);
 	LOG_info("did this");
-	// Menu_scale(menu.bitmap, backing);
 	
 	int restore_w = screen->w;
 	int restore_h = screen->h;
@@ -5309,12 +5438,14 @@ static void Menu_loop(void) {
 	int dirty = 1;
 	int ignore_menu = 0;
 	int menu_start = 0;
-	SDL_Surface* preview = SDL_CreateRGBSurface(SDL_SWSURFACE,DEVICE_WIDTH/2,DEVICE_HEIGHT/2,32,RGBA_MASK_8888); // TODO: retain until changed?
+	SDL_Surface* preview = GFX_isHardwareBacked() 
+		? SDL_CreateRGBSurface(SDL_SWSURFACE,DEVICE_WIDTH/2,DEVICE_HEIGHT/2,32,RGBA_MASK_8888)
+		: SDL_CreateRGBSurface(SDL_SWSURFACE,DEVICE_WIDTH/2,DEVICE_HEIGHT/2,FIXED_DEPTH,RGBA_MASK_565); // TODO: retain until changed?
 
 	LEDS_initLeds();
 	LEDS_updateLeds();
 	GFX_clearBackground();
-	GFX_clearAllLayers();
+	GFX_clearAllForeground();
 	while (show_menu) {
 
 		GFX_startFrame();
@@ -5409,8 +5540,14 @@ static void Menu_loop(void) {
 							restore_h = screen->h;
 							restore_p = screen->pitch;
 							screen = GFX_resize(DEVICE_WIDTH,DEVICE_HEIGHT,DEVICE_PITCH);
-							SDL_Rect dst = {0, 0, DEVICE_WIDTH, DEVICE_HEIGHT};
-							SDL_BlitScaled(menu.bitmap,NULL,backing,&dst);
+							if(GFX_isHardwareBacked()) {
+								SDL_Rect dst = {0, 0, DEVICE_WIDTH, DEVICE_HEIGHT};
+								SDL_BlitScaled(menu.bitmap,NULL,backing,&dst);
+							}
+							else {
+								SDL_FillRect(backing, NULL, 0);
+								Menu_scale(menu.bitmap, backing);
+							}
 						}
 						dirty = 1;
 					}
@@ -5430,7 +5567,6 @@ static void Menu_loop(void) {
 		if(dirty) {
 			GFX_clear(screen);
 			GFX_drawBackground(backing,0,0,DEVICE_WIDTH,DEVICE_HEIGHT,0.4f,0);
-
 
 			int ox, oy;
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
@@ -5530,16 +5666,29 @@ static void Menu_loop(void) {
 				if (menu.preview_exists) { // has save, has preview
 					// lotta memory churn here
 					SDL_Surface* bmp = IMG_Load(menu.bmp_path);
-					SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888,0);
-					if (raw_preview) {
-						SDL_FreeSurface(bmp); 
-						bmp = raw_preview; 
+					if(GFX_isHardwareBacked()) {
+						SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888,0);
+						if (raw_preview) {
+							SDL_FreeSurface(bmp); 
+							bmp = raw_preview; 
+						}
+						// LOG_info("raw_preview %ix%i\n", raw_preview->w,raw_preview->h);
+
+						SDL_BlitScaled(bmp,NULL,preview,NULL);
+						SDL_BlitSurface(preview, NULL, screen, &(SDL_Rect){ox,oy});
+						SDL_FreeSurface(bmp);
 					}
-					// LOG_info("raw_preview %ix%i\n", raw_preview->w,raw_preview->h);
-				
-					SDL_BlitScaled(bmp,NULL,preview,NULL);
-					SDL_BlitSurface(preview, NULL, screen, &(SDL_Rect){ox,oy});
-					SDL_FreeSurface(bmp);
+					else {
+						SDL_Surface* raw_preview = SDL_ConvertSurface(bmp, screen->format, SDL_SWSURFACE);
+
+						// LOG_info("raw_preview %ix%i\n", raw_preview->w,raw_preview->h);
+		
+						SDL_FillRect(preview, NULL, 0);
+						Menu_scale(raw_preview, preview);
+						SDL_BlitSurface(preview, NULL, screen, &(SDL_Rect){ox,oy});
+						SDL_FreeSurface(raw_preview);
+						SDL_FreeSurface(bmp);
+					}
 				}
 				else {
 					SDL_Rect preview_rect = {ox,oy,hw,hh};
@@ -5581,11 +5730,18 @@ static void Menu_loop(void) {
 		GFX_setEffect(screen_effect);
 
 		GFX_clear(screen);
+		//video_refresh_callback(renderer.src, renderer.true_w, renderer.true_h, renderer.src_p);
 
 		setOverclock(overclock); // restore overclock value
 		if (rumble_strength) VIB_setStrength(rumble_strength);
 		
 		if (!HAS_POWER_BUTTON) PWR_disableSleep();
+
+		//if (thread_video) {
+		//	pthread_mutex_lock(&core_mx);
+		//	should_run_core = 1;
+		//	pthread_mutex_unlock(&core_mx);
+		//}
 
 		char act[PATH_MAX];
 		sprintf(act, "gametimectl.elf start '%s' &", replaceString2(game.path, "'", "'\\''"));
@@ -5748,7 +5904,9 @@ int main(int argc , char* argv[]) {
 	
 	Core_open(core_path, tag_name);
 
-	fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+	fmt = GFX_isHardwareBacked() 
+		? RETRO_PIXEL_FORMAT_XRGB8888
+		: RETRO_PIXEL_FORMAT_RGB565;
 	environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
 
 	Game_open(rom_path); // nes tries to load gamegenie setting before this returns ffs
@@ -5761,6 +5919,8 @@ int main(int argc , char* argv[]) {
 	Config_init();
 	Config_readOptions(); // cores with boot logo option (eg. gb) need to load options early
 	setOverclock(overclock);
+	if(!GFX_isHardwareBacked())
+		GFX_setVsync(prevent_tearing);
 	
 	Core_init();
 	
@@ -5779,6 +5939,11 @@ int main(int argc , char* argv[]) {
 	Menu_init();
 	State_resume();
 	Menu_initState(); // make ready for state shortcuts
+	//if (thread_video) {
+	//	core_mx = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+	//	core_rq = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
+	//	pthread_create(&core_pt, NULL, &coreThread, NULL);
+	//}
 	
 	PWR_warn(1);
 	PWR_disableAutosleep();
@@ -5786,8 +5951,8 @@ int main(int argc , char* argv[]) {
 	// force a vsync immediately before loop
 	// for better frame pacing?
 	GFX_clearAll();
-	GFX_clearBackground();
-	GFX_clearAllLayers();
+	GFX_clearBackground(); // why do we need to call this again after clearAll()?
+	GFX_clearAllForeground(); // why do we need to call this again after clearAll()?
 	GFX_flip(screen);
 	
 	Special_init(); // after config
@@ -5801,10 +5966,11 @@ int main(int argc , char* argv[]) {
 	while (!quit) {
 		GFX_startFrame();
 	
+		//if (!thread_video) {
 		core.run();
 		limitFF();
 		trackFPS();
-		
+		//}
 
 		if (has_pending_opt_change) {
 			has_pending_opt_change = 0;
@@ -5816,6 +5982,17 @@ int main(int argc , char* argv[]) {
 			chooseSyncRef();
 		}
 
+		//if (thread_video && !quit) {
+		//	pthread_mutex_lock(&core_mx);
+		//	pthread_cond_wait(&core_rq,&core_mx);
+		//
+		//	if (backbuffer) {
+		//		video_refresh_callback_main(backbuffer->pixels,backbuffer->w,backbuffer->h,backbuffer->pitch);
+		//		screen_flip(screen);
+		//	}
+		//	core_rq = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
+		//	pthread_mutex_unlock(&core_mx);
+		//}
 		
 		if (show_menu) {
 			Menu_loop();
@@ -5825,9 +6002,38 @@ int main(int argc , char* argv[]) {
 			SND_resetAudio(core.sample_rate, core.fps);
 		}
 		
+		//if (toggle_thread) {
+		//	toggle_thread = 0;
+		//	if (was_threaded && !thread_video) {
+		//		// LOG_info("was fast forwarding while previously threaded (%i) so re-enabling threading %i\n", thread_video, !thread_video);
+		//		// revert to pre-fast_forward state before toggling
+		//		was_threaded = 0;
+		//		thread_video = !thread_video;
+		//	}
+		//	// LOG_info("toggling thread from %i to %i\n", thread_video, !thread_video);
+		//	thread_video = !thread_video;
+		//	if (thread_video) {
+		//		// enable
+		//		core_mx = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+		//		core_rq = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
+		//		pthread_create(&core_pt, NULL, &coreThread, NULL);
+		//	}
+		//	else {
+		//		// disable
+		//		pthread_cancel(core_pt);
+		//		pthread_join(core_pt,NULL);
+		//	
+		//		// force a vsync immediately before loop
+		//		// for better frame pacing?
+		//		GFX_clearAll();
+		//		screen_flip(screen);
+		//	}
+		//}
+		// LOG_info("frame duration: %ims\n", SDL_GetTicks()-frame_start);
 		
 		hdmimon();
 	}
+	// This doesnt make sense?
 	if(!rgbaData) free(rgbaData);
 	Menu_quit();
 	QuitSettings();

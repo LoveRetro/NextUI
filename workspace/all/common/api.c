@@ -15,6 +15,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <assert.h>
 
 #include "utils.h"
 #include "config.h"
@@ -71,6 +72,7 @@ static struct GFX_Context {
 
 	int mode;
 	int vsync;
+	int hardware;
 } gfx;
 
 static SDL_Rect asset_rects[ASSET_COUNT];
@@ -258,6 +260,10 @@ SDL_Surface* GFX_init(int mode)
 
 	CFG_init(GFX_loadSystemFont, GFX_updateColors);
 
+	// Use GPU if supported and not forced off by config
+	bool initGPU = GFX_hasGPU() && CFG_getRendererBackend() == RENDERER_GPU;
+	gfx.hardware = (int)initGPU;
+
 	RGB_WHITE		= SDL_MapRGB(gfx.screen->format, TRIAD_WHITE);
 	RGB_BLACK		= SDL_MapRGB(gfx.screen->format, TRIAD_BLACK);
 	RGB_LIGHT_GRAY	= SDL_MapRGB(gfx.screen->format, TRIAD_LIGHT_GRAY);
@@ -329,6 +335,18 @@ void GFX_quit(void) {
 	GFX_clearAll();
 
 	PLAT_quitVideo();
+}
+
+int GFX_isHardwareBacked()
+{
+	return gfx.hardware;
+}
+
+uint32_t GFX_screenFormat()
+{
+	if(GFX_isHardwareBacked())
+		return SDL_PIXELFORMAT_RGBA8888;
+	return SDL_PIXELFORMAT_RGB565;
 }
 
 void GFX_setMode(int mode) {
@@ -468,8 +486,13 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 }
 
 void GFX_flip(SDL_Surface* screen) {
-
-	PLAT_flip(screen, 0);
+	if(GFX_isHardwareBacked()) {
+		PLAT_flip(screen, 0);
+	}
+	else {
+		int should_vsync = (gfx.vsync!=VSYNC_OFF && (gfx.vsync==VSYNC_STRICT || frame_start==0 || SDL_GetTicks()-frame_start<FRAME_BUDGET));
+		PLAT_flip(screen, should_vsync);
+	}
 
 	currentfps = current_fps;
 	fps_counter++;
@@ -625,7 +648,6 @@ void GFX_delay(void) {
 FALLBACK_IMPLEMENTATION int PLAT_supportsOverscan(void) { return 0; }
 FALLBACK_IMPLEMENTATION void PLAT_setEffectColor(int next_color) { }
 
-
 int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding) {
 	int text_width;
 	strcpy(out_name, in_name);
@@ -703,14 +725,13 @@ void GFX_scrollTextSurface(TTF_Font* font, const char* in_name, SDL_Surface** ou
 	snprintf(adj_in_name, sizeof(adj_in_name), "%s  ", in_name); 
     TTF_SizeUTF8(font, adj_in_name, &text_width, &text_height);
     SDL_Rect src_rect = { text_offset, 0, text_width, height };
-	SDL_Surface *scrolling_surface = SDL_CreateRGBSurfaceWithFormat(
-		SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), 32, SDL_PIXELFORMAT_RGBA8888
-	);
+	SDL_Surface *scrolling_surface;
+	if(GFX_isHardwareBacked())
+		scrolling_surface = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), 32, SDL_PIXELFORMAT_RGBA8888);
+	else 
+		scrolling_surface = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), 16, SDL_PIXELFORMAT_RGBA4444);
 
-    SDL_BlitSurface(full_text_surface, &src_rect, scrolling_surface, NULL);
-    
-
-
+	SDL_BlitSurface(full_text_surface, &src_rect, scrolling_surface, NULL);
     SDL_FreeSurface(full_text_surface);
 
     if (*out_surface) {
@@ -729,7 +750,6 @@ void GFX_scrollTextSurface(TTF_Font* font, const char* in_name, SDL_Surface** ou
         }
     }
 }
-
 
 int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines) {
 	if (!str) return 0;
@@ -1113,37 +1133,37 @@ SDL_Rect GFX_blitScaleToFill(SDL_Surface *src, SDL_Surface *dst)
 }
 
 ///////////////////////////////
-void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius) {
-    if (!surface || radius == 0) return;
-
-	SDL_PixelFormat *fmt = surface->format;
-	SDL_Rect target = {0, 0, surface->w, surface->h};
-	if (rect)
-		target = *rect;
-
-	if (fmt->format != SDL_PIXELFORMAT_RGBA8888) {
-        SDL_Log("Unsupported pixel format: %s", SDL_GetPixelFormatName(fmt->format));
-        return;
-    }
-
-    Uint16* pixels = (Uint16*)surface->pixels;  // RGB565 uses 16-bit pixels
-    Uint16 transparent_black = 0x0000;  // RGB565 has no alpha, so use black (0)
-
-	const int xBeg = target.x;
-	const int xEnd = target.x + target.w;
-	const int yBeg = target.y;
-	const int yEnd = target.y + target.h;
-	for (int y = yBeg; y < yEnd; ++y)
-	{
-		for (int x = xBeg; x < xEnd; ++x) {
-            int dx = (x < xBeg + radius) ? xBeg + radius - x : (x >= xEnd - radius) ? x - (xEnd - radius - 1) : 0;
-            int dy = (y < yBeg + radius) ? yBeg + radius - y : (y >= yEnd - radius) ? y - (yEnd - radius - 1) : 0;
-            if (dx * dx + dy * dy > radius * radius) {
-                pixels[y * (surface->pitch / 2) + x] = transparent_black;  // Set to black (0)
-            }
-        }
-	}
-}
+//void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius) {
+//    if (!surface || radius == 0) return;
+//
+//	SDL_PixelFormat *fmt = surface->format;
+//	SDL_Rect target = {0, 0, surface->w, surface->h};
+//	if (rect)
+//		target = *rect;
+//
+//	if (fmt->format != SDL_PIXELFORMAT_RGBA8888) {
+//        SDL_Log("Unsupported pixel format: %s", SDL_GetPixelFormatName(fmt->format));
+//        return;
+//    }
+//
+//    Uint16* pixels = (Uint16*)surface->pixels;  // RGB565 uses 16-bit pixels
+//    Uint16 transparent_black = 0x0000;  // RGB565 has no alpha, so use black (0)
+//
+//	const int xBeg = target.x;
+//	const int xEnd = target.x + target.w;
+//	const int yBeg = target.y;
+//	const int yEnd = target.y + target.h;
+//	for (int y = yBeg; y < yEnd; ++y)
+//	{
+//		for (int x = xBeg; x < xEnd; ++x) {
+//            int dx = (x < xBeg + radius) ? xBeg + radius - x : (x >= xEnd - radius) ? x - (xEnd - radius - 1) : 0;
+//            int dy = (y < yBeg + radius) ? yBeg + radius - y : (y >= yEnd - radius) ? y - (yEnd - radius - 1) : 0;
+//            if (dx * dx + dy * dy > radius * radius) {
+//                pixels[y * (surface->pitch / 2) + x] = transparent_black;  // Set to black (0)
+//            }
+//        }
+//	}
+//}
 
 void GFX_ApplyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius) {
 	if (!surface) return;
@@ -1230,6 +1250,7 @@ void GFX_ApplyRoundedCorners_RGBA8888(SDL_Surface* surface, SDL_Rect* rect, int 
 }
 
 // i wrote my own blit function cause its faster at converting rgba4444 to rgba565 then SDL's one lol
+// TODO: is this still used somewhere?
 void BlitRGBA4444toRGB565(SDL_Surface* src, SDL_Surface* dest, SDL_Rect* dest_rect) {
     Uint8* srcPixels = (Uint8*)src->pixels;
     Uint8* destPixels = (Uint8*)dest->pixels;
@@ -1348,8 +1369,10 @@ void GFX_blitPillColor(int asset, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t
 	GFX_blitAssetColor(asset, &(SDL_Rect){0,0,r,h}, dst, &(SDL_Rect){x,y}, asset_color);
 	x += r;
 	if (w>0) {
-		// SDL_FillRect(dst, &(SDL_Rect){x,y,w,h}, UintMult(fill_color, asset_color));
-		SDL_FillRect(dst, &(SDL_Rect){x,y,w,h}, asset_color);
+		if(GFX_isHardwareBacked())
+			SDL_FillRect(dst, &(SDL_Rect){x,y,w,h}, asset_color); // RGBA8888
+		else 
+			SDL_FillRect(dst, &(SDL_Rect){x,y,w,h}, UintMult(fill_color, asset_color)); // RGB565
 		x += w;
 	}
 	GFX_blitAssetColor(asset, &(SDL_Rect){r,0,r,h}, dst, &(SDL_Rect){x,y}, asset_color);
@@ -3128,3 +3151,39 @@ FALLBACK_IMPLEMENTATION char *PLAT_getCurrentTimezone() { return "Foo/Bar"; }
 FALLBACK_IMPLEMENTATION void PLAT_setCurrentTimezone(const char* tz) {}
 FALLBACK_IMPLEMENTATION bool PLAT_getNetworkTimeSync(void) { return true; }
 FALLBACK_IMPLEMENTATION void PLAT_setNetworkTimeSync(bool on) {}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+
+FALLBACK_IMPLEMENTATION bool PLAT_supportsGpu() { return false; }
+// just mocked up to have symbols available, unsupported in software renderer
+// all assert to make sure your new platform implements them if GPU is active
+FALLBACK_IMPLEMENTATION void PLAT_drawForeground(SDL_Surface *inputSurface, int x, int y, int w, int h) { assert(false); }
+FALLBACK_IMPLEMENTATION void PLAT_drawBackground(SDL_Surface *inputSurface,int x, int y, int w, int h, float brightness, bool maintainAspectRatio) {assert(false);}
+FALLBACK_IMPLEMENTATION void PLAT_clearForeground() {assert(false);}
+FALLBACK_IMPLEMENTATION void PLAT_clearBackground() {assert(false);}
+FALLBACK_IMPLEMENTATION void PLAT_clearAnimationLayer() {assert(false);}
+FALLBACK_IMPLEMENTATION void PLAT_clearAllForeground() {assert(false);}
+FALLBACK_IMPLEMENTATION SDL_Surface *PLAT_captureRendererToSurface() { assert(false); return NULL; }
+FALLBACK_IMPLEMENTATION void PLAT_animateSurface(
+	SDL_Surface *inputSurface, 
+	int x, int y, int target_x, int target_y, int w, int h, int duration_ms,
+	int layer) {assert(false);}
+FALLBACK_IMPLEMENTATION void PLAT_animateAndFadeSurface(
+	SDL_Surface *inputSurface,
+	int x, int y, int target_x, int target_y, int w, int h, int duration_ms,
+	SDL_Surface *fadeSurface,
+	int fade_x, int fade_y, int fade_w, int fade_h,
+	int start_opacity, int target_opacity
+) {assert(false);}
+FALLBACK_IMPLEMENTATION void PLAT_zoomAndFadeSurface(
+	SDL_Surface *inputSurface,
+	int x, int y,                 // Center position
+	int start_w, int start_h,
+	int target_w, int target_h,
+	int duration_ms,
+	SDL_Surface *fadeSurface,
+	int fade_x, int fade_y, int fade_w, int fade_h,
+	int start_opacity, int target_opacity, int layer
+) {assert(false);}
+FALLBACK_IMPLEMENTATION void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect) {assert(false);}
+FALLBACK_IMPLEMENTATION void PLAT_present() {assert(false);}
