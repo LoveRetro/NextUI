@@ -38,6 +38,7 @@ void CFG_defaults(NextUISettings *cfg)
         .clock24h = CFG_DEFAULT_CLOCK24H,
         .showBatteryPercent = CFG_DEFAULT_SHOWBATTERYPERCENT,
         .showMenuAnimations = CFG_DEFAULT_SHOWMENUANIMATIONS,
+        .showMenuTransitions = CFG_DEFAULT_SHOWMENUTRANSITIONS,
         .showRecents = CFG_DEFAULT_SHOWRECENTS,
         .showGameArt = CFG_DEFAULT_SHOWGAMEART,
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
@@ -329,9 +330,19 @@ bool CFG_getMenuAnimations(void)
     return settings.showMenuAnimations;
 }
 
-void CFG_setMenuAnimations(bool anims)
+void CFG_setMenuAnimations(bool show)
 {
-    settings.showMenuAnimations = anims;
+    settings.showMenuAnimations = show;
+}
+
+bool CFG_getMenuTransitions(void)
+{
+    return settings.showMenuTransitions;
+}
+
+void CFG_setMenuTransitions(bool show)
+{
+    settings.showMenuTransitions = show;
 }
 
 int CFG_getThumbnailRadius(void)
@@ -458,6 +469,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getMenuAnimations());
     }
+    else if (strcmp(key, "menutransitions") == 0)
+    {
+        sprintf(value, "%i", CFG_getMenuTransitions());
+    }
     else if (strcmp(key, "recents") == 0)
     {
         sprintf(value, "%i", CFG_getShowRecents());
@@ -528,6 +543,7 @@ void CFG_sync(void)
     fprintf(file, "clock24h=%i\n", settings.clock24h);
     fprintf(file, "batteryperc=%i\n", settings.showBatteryPercent);
     fprintf(file, "menuanim=%i\n", settings.showMenuAnimations);
+    fprintf(file, "menutransitions=%i\n", settings.showMenuTransitions);
     fprintf(file, "recents=%i\n", settings.showRecents);
     fprintf(file, "gameart=%i\n", settings.showGameArt);
     fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
@@ -556,6 +572,7 @@ void CFG_print(void)
     printf("\t\"clock24h\": %i,\n", settings.clock24h);
     printf("\t\"batteryperc\": %i,\n", settings.showBatteryPercent);
     printf("\t\"menuanim\": %i,\n", settings.showMenuAnimations);
+    printf("\t\"menutransitions\": %i,\n", settings.showMenuTransitions);
     printf("\t\"recents\": %i,\n", settings.showRecents);
     printf("\t\"gameart\": %i,\n", settings.showGameArt);
     printf("\t\"screentimeout\": %i,\n", settings.screenTimeoutSecs);

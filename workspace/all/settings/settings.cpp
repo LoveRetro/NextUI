@@ -137,6 +137,10 @@ int main(int argc, char *argv[])
                 []() -> std::any{ return CFG_getMenuAnimations(); },
                 [](const std::any &value) { CFG_setMenuAnimations(std::any_cast<bool>(value)); },
                 []() { CFG_setMenuAnimations(CFG_DEFAULT_SHOWMENUANIMATIONS);}},
+                new MenuItem{Generic, "Show menu transitions", "Enable or disable animated transitions between screens", {false, true}, on_off, 
+                []() -> std::any{ return CFG_getMenuTransitions(); },
+                [](const std::any &value) { CFG_setMenuTransitions(std::any_cast<bool>(value)); },
+                []() { CFG_setMenuTransitions(CFG_DEFAULT_SHOWMENUTRANSITIONS);}},
                 new MenuItem{Generic, "Thumb radius", "Set the thumb radius for the status pill", 0, 24, 
                 []() -> std::any{ return CFG_getThumbnailRadius(); }, 
                 [](const std::any &value) { CFG_setThumbnailRadius(std::any_cast<int>(value)); },
@@ -146,22 +150,22 @@ int main(int argc, char *argv[])
                 [](const std::any &value) { CFG_setShowRecents(std::any_cast<bool>(value)); },
                 []() { CFG_setShowRecents(CFG_DEFAULT_SHOWRECENTS);}},
                 new MenuItem{Generic, "Show game art", "Show game artwork in the main menu", {false, true}, on_off, []() -> std::any
-                        { return CFG_getShowGameArt(); },
-                        [](const std::any &value)
-                        { CFG_setShowGameArt(std::any_cast<bool>(value)); },
-                        []() { CFG_setShowGameArt(CFG_DEFAULT_SHOWGAMEART);}},
-                        new MenuItem{Generic, "Use folder background for ROMs", "If enabled, used the emulator background image. Otherwise uses the default.", {false, true}, on_off, []() -> std::any
-                        { return CFG_getRomsUseFolderBackground(); },
-                        [](const std::any &value)
-                        { CFG_setRomsUseFolderBackground(std::any_cast<bool>(value)); },
-                        []() { CFG_setRomsUseFolderBackground(CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND);}},
-                        new MenuItem{Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
-                        { return CFG_getGameSwitcherScaling(); },
-                        [](const std::any &value)
-                        { CFG_setGameSwitcherScaling(std::any_cast<int>(value)); },
-                        []() { CFG_setGameSwitcherScaling(CFG_DEFAULT_GAMESWITCHERSCALING);}},
+                { return CFG_getShowGameArt(); },
+                [](const std::any &value)
+                { CFG_setShowGameArt(std::any_cast<bool>(value)); },
+                []() { CFG_setShowGameArt(CFG_DEFAULT_SHOWGAMEART);}},
+                new MenuItem{Generic, "Use folder background for ROMs", "If enabled, used the emulator background image. Otherwise uses the default.", {false, true}, on_off, []() -> std::any
+                { return CFG_getRomsUseFolderBackground(); },
+                [](const std::any &value)
+                { CFG_setRomsUseFolderBackground(std::any_cast<bool>(value)); },
+                []() { CFG_setRomsUseFolderBackground(CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND);}},
+                new MenuItem{Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
+                { return CFG_getGameSwitcherScaling(); },
+                [](const std::any &value)
+                { CFG_setGameSwitcherScaling(std::any_cast<int>(value)); },
+                []() { CFG_setGameSwitcherScaling(CFG_DEFAULT_GAMESWITCHERSCALING);}},
 
-                        new MenuItem{Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
+                new MenuItem{Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
         });
 
         auto displayMenu = new MenuList(MenuItemType::Fixed, "Display",
