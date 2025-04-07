@@ -644,7 +644,11 @@ void PLAT_animateSurface(SDL_Surface *inputSurface, int x, int y, int target_x, 
 	const int frame_delay = 1000 / fps;
 	const int total_frames = duration_ms / frame_delay;
 
+	Uint32 start_time = SDL_GetTicks();
+
 	for (int frame = 0; frame <= total_frames; ++frame) {
+		Uint32 frame_start = SDL_GetTicks();
+
 		float t = (float)frame / total_frames;
 
 		int current_x = x + (int)((target_x - x) * t);
@@ -659,13 +663,18 @@ void PLAT_animateSurface(SDL_Surface *inputSurface, int x, int y, int target_x, 
 		SDL_RenderCopy(vid.renderer, tempTexture, &srcRect, &dstRect);
 
 		SDL_SetRenderTarget(vid.renderer, NULL);
-		PLAT_flip(NULL,0);
+		PLAT_flip(NULL, 0);
 
-		SDL_Delay(frame_delay);
+		// Frame timing control to avoid busy waiting
+		Uint32 frame_time = SDL_GetTicks() - frame_start;
+		if (frame_time < frame_delay) {
+			SDL_Delay(frame_delay - frame_time);
+		}
 	}
 
 	SDL_DestroyTexture(tempTexture);
 }
+
 SDL_Surface* PLAT_captureRendererToSurface() {
 	if (!vid.renderer) return NULL;
 

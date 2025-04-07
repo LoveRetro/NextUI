@@ -1671,8 +1671,14 @@ int main (int argc, char *argv[]) {
 		}
 		
 		if(dirty) {
-			SDL_Surface *tmpOldScreen = GFX_captureRendererToSurface();
-			SDL_SetSurfaceBlendMode(tmpOldScreen,SDL_BLENDMODE_BLEND);
+			SDL_Surface *tmpOldScreen;
+
+			if(animationdirection > 0) {
+				if(tmpOldScreen) SDL_FreeSurface(tmpOldScreen);
+				tmpOldScreen = GFX_captureRendererToSurface();
+		
+				SDL_SetSurfaceBlendMode(tmpOldScreen,SDL_BLENDMODE_BLEND);
+			}
 			// PWR_setCPUSpeed(CPU_SPEED_PERFORMANCE);
 			GFX_clear(screen);
 
@@ -1726,8 +1732,6 @@ int main (int argc, char *argv[]) {
 						// keep
 					}
 				}
-				
-			
 			}
 
 			// simple thumbnail support a thumbnail for a file or folder named NAME.EXT needs a corresponding /.res/NAME.EXT.png 
@@ -2035,7 +2039,7 @@ int main (int argc, char *argv[]) {
 								0,0, max_width, SCALE1(PILL_SIZE)
 							});
 							if(animationdirection == 0)	{
-								GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),34);
+								GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),35);
 							} 
 							SDL_FreeSurface(pill);
 						} 
@@ -2064,7 +2068,7 @@ int main (int argc, char *argv[]) {
 			} else {
 				GFX_flip(screen);
 			}
-			SDL_FreeSurface(tmpOldScreen);
+			
 			dirty = 0;
 			readytoscroll = 0;
 			cputimer = SDL_GetTicks();
@@ -2095,12 +2099,10 @@ int main (int argc, char *argv[]) {
 		
 				SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN+BUTTON_PADDING), SCALE1(PADDING + ((remember_selection) * PILL_SIZE) +4) };
 				
-
 				SDL_Rect src_text_rect = {  0, 0, max_width - SCALE1(BUTTON_PADDING * 2), text2->h };
 
 				SDL_FillRect(screen, &clear_rect, THEME_COLOR1);
 				GFX_scrollTextSurface(font.large, display_name, &text2,max_width - ((SCALE1(BUTTON_PADDING*2))),text2->h, 0, text_color, 1);
-				
 				
 				SDL_BlitSurface(text2, &src_text_rect, screen, &dest_rect);
 
