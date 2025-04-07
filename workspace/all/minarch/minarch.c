@@ -3564,6 +3564,7 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 	// }
 }
 
+static int firstframe = 1;
 static void screen_flip(SDL_Surface* screen) {
 	if (use_core_fps) {
 		GFX_flip_fixed_rate(screen, core.fps);
@@ -3571,6 +3572,24 @@ static void screen_flip(SDL_Surface* screen) {
 	else {
 		GFX_flip(screen);
 	}
+}
+
+SDL_Surface* createSurfaceFromData(const void *data, int width, int height, int pitch) {
+    SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormatFrom(
+        (void*)data,   // Pointer to pixel data
+        width,         // Surface width
+        height,        // Surface height
+        16,            // 16 bits per pixel (RGB565)
+        pitch,         // Pitch (bytes per row)
+        SDL_PIXELFORMAT_RGB565  // Specify RGB565 format
+    );
+
+    if (!surface) {
+        printf("Failed to create surface: %s\n", SDL_GetError());
+        return NULL;
+    }
+
+    return surface;
 }
 
 static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch) {
@@ -3675,11 +3694,22 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	
 	renderer.dst = screen->pixels;
 	// LOG_info("video_refresh_callback: %ix%i@%i %ix%i@%i\n",width,height,pitch,screen->w,screen->h,screen->pitch);
-	 
+	
+	if(firstframe && CFG_getMenuTransitions()) {
+		GFX_clearAllForeground();
+		GFX_clearBackground();
+		GFX_clear(screen);
+		SDL_Surface * test = createSurfaceFromData(data,width,height,pitch);
+		GPU_animateSurfaceOpacity(test,0,0,screen->w,screen->h,0,255,200,1);
+		SDL_FreeSurface(test);
+		GFX_clearAllForeground();
+		firstframe=0;
+	} 
 
 	GFX_blitRenderer(&renderer);
 
-	if (!thread_video) screen_flip(screen);
+	//if (!thread_video) 
+	screen_flip(screen);
 	last_flip_time = SDL_GetTicks();
 }
 const void* lastframe = NULL;
@@ -5380,7 +5410,6 @@ static void Menu_loop(void) {
 		Menu_scale(menu.bitmap, backing);
 	} 
 	// LOG_info("Menu_loop:menu.bitmap %ix%i\n", menu.bitmap->w,menu.bitmap->h);
-	LOG_info("did this");
 	
 	int restore_w = screen->w;
 	int restore_h = screen->h;
@@ -6035,6 +6064,14 @@ int main(int argc , char* argv[]) {
 	}
 	// This doesnt make sense?
 	if(!rgbaData) free(rgbaData);
+	if(CFG_getMenuTransitions()) {
+		GFX_clearAllForeground();
+		GFX_clearBackground();
+		GFX_clear(screen);
+		SDL_Surface * test = createSurfaceFromData(renderer.src,renderer.src_w,renderer.src_h,renderer.src_p);
+		GPU_animateSurfaceOpacity(test,0,0,screen->w,screen->h,255,0,200,1);
+		SDL_FreeSurface(test);
+	}
 	Menu_quit();
 	QuitSettings();
 	

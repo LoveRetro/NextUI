@@ -226,6 +226,8 @@ SDL_Color /*GFX_*/uintToColour(uint32_t colour);
 #define GPU_clearAnimationLayer PLAT_clearAnimationLayer //(SDL_Surface *inputSurface,int x, int y)
 #define GPU_captureRendererToSurface PLAT_captureRendererToSurface //(void)
 #define GPU_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
+#define GPU_animateSurfaceOpacity PLAT_animateSurfaceOpacity //(SDL_Surface *inputSurface,int x, int y)
+#define GPU_animateSurfaceOpacityAndScale PLAT_animateSurfaceOpacityAndScale //(SDL_Surface *inputSurface,int x, int y)
 #define GPU_animateAndFadeSurface PLAT_animateAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GPU_zoomAndFadeSurface PLAT_zoomAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
 
@@ -518,6 +520,17 @@ void PLAT_zoomAndFadeSurface(
 	SDL_Surface *fadeSurface,
 	int fade_x, int fade_y, int fade_w, int fade_h,
 	int start_opacity, int target_opacity, int layer
+);
+void PLAT_animateSurfaceOpacity(SDL_Surface *inputSurface, int x, int y, int w, int h,
+	int start_opacity, int target_opacity, int duration_ms, int layer);
+void PLAT_animateSurfaceOpacityAndScale(
+	SDL_Surface *inputSurface,
+	int x, int y,
+	int start_w, int start_h,
+	int target_w, int target_h,
+	int start_opacity, int target_opacity,
+	int duration_ms,
+	int layer
 );
 void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
 void PLAT_present();
