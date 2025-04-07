@@ -212,11 +212,11 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_clearBackground PLAT_clearBackground //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_clearAnimationLayer PLAT_clearAnimationLayer //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_clearAllLayers PLAT_clearAllLayers //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_captureRendererToSurface PLAT_captureRendererToSurface //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_captureRendererToSurface PLAT_captureRendererToSurface //(void)
 #define GFX_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateAndFadeSurface PLAT_animateAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_ZoomAndFadeSurface PLAT_ZoomAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_flipHidden PLAT_flipHidden //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_flipHidden PLAT_flipHidden //(void)
 
 #define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
 void GFX_setMode(int mode);
