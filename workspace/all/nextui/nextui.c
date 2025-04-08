@@ -1726,7 +1726,6 @@ int main (int argc, char *argv[]) {
 
 				if((entry->type == ENTRY_DIR && CFG_getRomsUseFolderBackground())) {
 					char *newBg = entry->type == ENTRY_DIR ? entry->path : rompath;
-					LOG_info("draw bg %s -- %s\n",newBg,folderBgPath);
 					if(strcmp(newBg, folderBgPath) != 0 && sizeof(folderBgPath) != 1) {
 						strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
 						folderBgPath[sizeof(folderBgPath) - 1] = '\0';
