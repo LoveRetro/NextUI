@@ -631,47 +631,6 @@ void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, flo
 	LOG_info("drawing bg\n");
 }
 
-void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h,int layer) {
-    if (!inputSurface || !vid.renderer) return; 
-
-    SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-                                                 SDL_PIXELFORMAT_RGBA8888, 
-                                                 SDL_TEXTUREACCESS_TARGET,  
-                                                 inputSurface->w, inputSurface->h); 
-
-    if (!tempTexture) {
-        printf("Failed to create temporary texture: %s\n", SDL_GetError());
-        return;
-    }
-
-    SDL_UpdateTexture(tempTexture, NULL, inputSurface->pixels, inputSurface->pitch);
-	switch (layer)
-	{
-	case 1:
-		SDL_SetRenderTarget(vid.renderer, vid.target_layer1);
-		break;
-	case 2:
-		SDL_SetRenderTarget(vid.renderer, vid.target_layer2);
-		break;
-	case 3:
-		SDL_SetRenderTarget(vid.renderer, vid.target_layer3);
-		break;
-	case 4:
-		SDL_SetRenderTarget(vid.renderer, vid.target_layer4);
-		break;
-	default:
-		SDL_SetRenderTarget(vid.renderer, vid.target_layer1);
-		break;
-	}
-   
-
-    SDL_Rect srcRect = { 0, 0, inputSurface->w, inputSurface->h }; 
-    SDL_Rect dstRect = { x, y, w, h };  
-
-    SDL_RenderCopy(vid.renderer, tempTexture, &srcRect, &dstRect);
-    SDL_SetRenderTarget(vid.renderer, NULL);
-    SDL_DestroyTexture(tempTexture);
-}
 
 void PLAT_animateSurface(
 	SDL_Surface *inputSurface,
