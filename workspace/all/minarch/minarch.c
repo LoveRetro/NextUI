@@ -3614,9 +3614,9 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	if(firstframe) {
 		GFX_clearLayers(0);
 		GFX_clear(screen);
-		SDL_Surface * test = createSurfaceFromData(data,width,height,pitch);
-		GFX_animateSurfaceOpacity(test,0,0,screen->w,screen->h,0,255,200,1);
-		SDL_FreeSurface(test);
+		SDL_Surface * tmpSur = createSurfaceFromData(data,width,height,pitch);
+		GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,0,255,CFG_getMenuTransitions() ? 200:20,1);
+		SDL_FreeSurface(tmpSur);
 		GFX_clearLayers(0);
 		firstframe=0;
 	} 
@@ -5859,9 +5859,9 @@ int main(int argc , char* argv[]) {
 	if(rgbaData) free(rgbaData);
 	GFX_clearLayers(0);
 	GFX_clear(screen);
-	SDL_Surface * test = createSurfaceFromData(renderer.src,renderer.src_w,renderer.src_h,renderer.src_p);
-	GFX_animateSurfaceOpacity(test,0,0,screen->w,screen->h,255,0,200,1);
-	SDL_FreeSurface(test);
+	SDL_Surface * tmpSur = createSurfaceFromData(renderer.src,renderer.src_w,renderer.src_h,renderer.src_p);
+	GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,1);
+	SDL_FreeSurface(tmpSur);
 	Menu_quit();
 	QuitSettings();
 	

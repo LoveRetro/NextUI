@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
                 []() -> std::any{ return CFG_getMenuAnimations(); },
                 [](const std::any &value) { CFG_setMenuAnimations(std::any_cast<bool>(value)); },
                 []() { CFG_setMenuAnimations(CFG_DEFAULT_SHOWMENUANIMATIONS);}},
-                new MenuItem{Generic, "Show menu transitions", "Enable or disable animated transitions between screens", {false, true}, on_off, 
+                new MenuItem{Generic, "Show menu transitions", "Enable or disable animated transitions", {false, true}, on_off, 
                 []() -> std::any{ return CFG_getMenuTransitions(); },
                 [](const std::any &value) { CFG_setMenuTransitions(std::any_cast<bool>(value)); },
                 []() { CFG_setMenuTransitions(CFG_DEFAULT_SHOWMENUTRANSITIONS);}},

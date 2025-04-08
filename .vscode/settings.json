@@ -106,6 +106,8 @@
     "netfwd": "cpp",
     "system_error": "cpp",
     "stop_token": "cpp",
-    "cassert": "cpp"
+    "cassert": "cpp",
+    "expected": "cpp",
+    "cfenv": "cpp"
   },
 }

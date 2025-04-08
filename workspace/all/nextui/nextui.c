@@ -1874,9 +1874,9 @@ int main (int argc, char *argv[]) {
 				GFX_clearLayers(0);
 				GFX_clear(screen);
 				if(lastScreen==SCREEN_GAMESWITCHER)
-					GFX_animateSurfaceOpacityAndScale(tmpsur,screen->w/2,screen->h/2,screen->w,screen->h,screen->w*4,screen->h*4,255,0,150,1);
+					GFX_animateSurfaceOpacityAndScale(tmpsur,screen->w/2,screen->h/2,screen->w,screen->h,screen->w*4,screen->h*4,255,0,CFG_getMenuTransitions() ? 150:20,1);
 				else
-					GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,150,1);
+					GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,1);
 				
 				SDL_FreeSurface(tmpsur);
 			}
@@ -1949,16 +1949,16 @@ int main (int argc, char *argv[]) {
 						}
 						if(bmp) {
 							if(lastScreen == SCREEN_GAME) {
-								GFX_animateSurfaceOpacityAndScale(bmp,screen->w/2,screen->h/2,screen->w*4,screen->h*4,screen->w,screen->h,0,255,150,0);
+								GFX_animateSurfaceOpacityAndScale(bmp,screen->w/2,screen->h/2,screen->w*4,screen->h*4,screen->w,screen->h,0,255,CFG_getMenuTransitions() ? 150:20,0);
 							} else if(lastScreen == SCREEN_GAMELIST) { 
 								GFX_clearLayers(2);
 								GFX_drawOnLayer(tmpOldScreen,0,0,screen->w, screen->h,1.0f,0,1);
-								GFX_animateSurface(bmp,0,0-screen->h,0,0,screen->w,screen->h,100,255,255,0);
+								GFX_animateSurface(bmp,0,0-screen->h,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 100:20,255,255,0);
 							} else if(lastScreen == SCREEN_GAMESWITCHER) {
 								if(gsanimdir==1) 
-									GFX_animateSurface(bmp,0+screen->w,0,0,0,screen->w,screen->h,80,0,255,0);
+									GFX_animateSurface(bmp,0+screen->w,0,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 80:20,0,255,0);
 								else
-									GFX_animateSurface(bmp,0-screen->w,0,0,0,screen->w,screen->h,80,0,255,0);
+									GFX_animateSurface(bmp,0-screen->w,0,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 80:20,0,255,0);
 							}
 
 							GFX_drawOnLayer(bmp,0,0,screen->w, screen->h,1.0f,CFG_getGameSwitcherScaling() > 0 ? 1:0,1);
@@ -1970,20 +1970,20 @@ int main (int argc, char *argv[]) {
 						if(lastScreen == SCREEN_GAME) {
 							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 							SDL_FillRect(tmpsur, &preview_rect, 0);
-							GFX_animateSurfaceOpacityAndScale(tmpsur,screen->w/2,screen->h/2,screen->w*4,screen->h*4,screen->w,screen->h,255,0,150,1);
+							GFX_animateSurfaceOpacityAndScale(tmpsur,screen->w/2,screen->h/2,screen->w*4,screen->h*4,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,1);
 						} else if(lastScreen == SCREEN_GAMELIST) { 
 							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 							SDL_FillRect(tmpsur, &preview_rect, 0);
-							GFX_animateSurface(tmpsur,0,0-screen->h,0,0,screen->w,screen->h,100,255,255,0);
+							GFX_animateSurface(tmpsur,0,0-screen->h,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 100:20,255,255,0);
 						} else {
 							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 							SDL_FillRect(tmpsur, &preview_rect, 0);
 							GFX_flip(screen);
 
 							if(gsanimdir==1) 
-								GFX_animateSurface(tmpsur,0+screen->w,0,0,0,screen->w,screen->h,80,0,255,0);
+								GFX_animateSurface(tmpsur,0+screen->w,0,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 80:20,0,255,0);
 							else
-								GFX_animateSurface(tmpsur,0-screen->w,0,0,0,screen->w,screen->h,80,0,255,0);
+								GFX_animateSurface(tmpsur,0-screen->w,0,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 80:20,0,255,0);
 						}
 						SDL_FillRect(screen, &preview_rect, 0);
 						
@@ -2084,7 +2084,7 @@ int main (int argc, char *argv[]) {
 					}
 					if(lastScreen==SCREEN_GAMESWITCHER) {
 						if(switchetsur) {
-							GFX_animateSurface(switchetsur,0,0,0,0-screen->h,screen->w,screen->h,100,255,255,1);
+							GFX_animateSurface(switchetsur,0,0,0,0-screen->h,screen->w,screen->h,CFG_getMenuTransitions() ? 100:20,255,255,1);
 							SDL_FreeSurface(switchetsur);
 							animationdirection=0;
 						}
@@ -2109,7 +2109,7 @@ int main (int argc, char *argv[]) {
 								0,0, max_width, SCALE1(PILL_SIZE)
 							});
 							if(animationdirection == 0)	{
-								GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),35,255,255,0);
+								GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN), CFG_getMenuAnimations() ? SCALE1(previousY+PADDING): SCALE1(targetY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),35,255,255,0);
 							} 
 							SDL_FreeSurface(pill);
 						} 
@@ -2127,9 +2127,9 @@ int main (int argc, char *argv[]) {
 				SDL_SetSurfaceBlendMode(tmpNewScreen,SDL_BLENDMODE_BLEND);
 				GFX_clear(screen);
 				GFX_clearLayers(3);
-				if(animationdirection==1) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
-				if(animationdirection==2) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
-				if(animationdirection==3) GFX_animateSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,255,255,0);
+				if(animationdirection==1) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,CFG_getMenuTransitions() ? 150:20,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
+				if(animationdirection==2) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,CFG_getMenuTransitions() ? 150:20,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
+				if(animationdirection==3) GFX_animateSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,CFG_getMenuTransitions() ? 150:20,255,255,0);
 				SDL_BlitSurface(tmpNewScreen,NULL,screen,&(SDL_Rect){0,0,FIXED_WIDTH,FIXED_HEIGHT});
 				GFX_clearLayers(3);
 				

@@ -138,6 +138,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 CFG_setMenuAnimations((bool)temp_value);
                 continue;
             }
+            if (sscanf(line, "menutransitions=%i", &temp_value) == 1)
+            {
+                CFG_setMenuTransitions((bool)temp_value);
+                continue;
+            }
             if (sscanf(line, "recents=%i", &temp_value) == 1)
             {
                 CFG_setShowRecents((bool)temp_value);
