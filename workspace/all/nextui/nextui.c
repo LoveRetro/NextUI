@@ -448,8 +448,7 @@ static char slot_path[256];
 static char preview_path[256];
 static 	int animationdirection = 0;
 static 	int gsanimdir = 0;
-// if not using custom bg's i dont want to redraw the bg everytime as it can kinda slow the menu down
-static int lastbg = 0;
+
 
 static int restore_depth = -1;
 static int restore_relative = -1;
@@ -1393,7 +1392,7 @@ enum {
 	SCREEN_GAME,
 	SCREEN_OFF
 	};
-static int lastScreen = SCREEN_MENU;
+static int lastScreen = SCREEN_OFF;
 
 int main (int argc, char *argv[]) {
 	// LOG_info("time from launch to:\n");
@@ -1685,6 +1684,15 @@ int main (int argc, char *argv[]) {
 				SDL_SetSurfaceBlendMode(tmpOldScreen,SDL_BLENDMODE_BLEND);
 			}
 
+			// clear only background layer on start
+			if(lastScreen==SCREEN_GAME || lastScreen==SCREEN_OFF) {
+				GFX_clearLayers(0);
+			}
+			else {	
+				GFX_clearLayers(2);
+				GFX_clearLayers(3);
+				GFX_clearLayers(4);
+			}
 			GFX_clear(screen);
 
 			char thumbpath[1024];
@@ -1718,19 +1726,18 @@ int main (int argc, char *argv[]) {
 
 				if((entry->type == ENTRY_DIR && CFG_getRomsUseFolderBackground())) {
 					char *newBg = entry->type == ENTRY_DIR ? entry->path : rompath;
-					if(strcmp(newBg, folderBgPath) != 0) {
+					LOG_info("draw bg %s -- %s\n",newBg,folderBgPath);
+					if(strcmp(newBg, folderBgPath) != 0 && sizeof(folderBgPath) != 1) {
 						strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
 						folderBgPath[sizeof(folderBgPath) - 1] = '\0';
-						//strcpy(folderBgPath, newBg);
 						SDL_FreeSurface(folderbgbmp);
 						folderbgbmp = loadFolderBackground(folderBgPath);
 						if(folderbgbmp) {
 							GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
-							lastbg=1;
-						} else if (lastbg==1) {
+						} else {
 							GFX_drawOnLayer(bgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
-							lastbg=0;
 						}
+						
 					}
 					else {
 						// keep
@@ -1752,7 +1759,7 @@ int main (int argc, char *argv[]) {
 			
 				if (dirty && !show_switcher && !show_version) {
 					had_thumb = 0;
-					GFX_clearLayers(0);
+					GFX_clearLayers(3);
 					if (exists(thumbpath)) {
 						SDL_Surface* newThumb = IMG_Load(thumbpath);
 						if (newThumb) {
@@ -1874,7 +1881,6 @@ int main (int argc, char *argv[]) {
 				SDL_FreeSurface(tmpsur);
 			}
 			else if(show_switcher) {
-				lastbg = 1;
 				// For all recents with resumable state (i.e. has savegame), show game switcher carousel
 
 				#define WINDOW_RADIUS 0 // TODO: this logic belongs in blitRect?
@@ -1947,7 +1953,7 @@ int main (int argc, char *argv[]) {
 							} else if(lastScreen == SCREEN_GAMELIST) { 
 								GFX_clearLayers(2);
 								GFX_drawOnLayer(tmpOldScreen,0,0,screen->w, screen->h,1.0f,0,1);
-								GFX_animateSurface(bmp,0,0-screen->h,0,0,screen->w,screen->h,150,255,255,0);
+								GFX_animateSurface(bmp,0,0-screen->h,0,0,screen->w,screen->h,100,255,255,0);
 							} else if(lastScreen == SCREEN_GAMESWITCHER) {
 								if(gsanimdir==1) 
 									GFX_animateSurface(bmp,0+screen->w,0,0,0,screen->w,screen->h,80,0,255,0);
@@ -1968,7 +1974,7 @@ int main (int argc, char *argv[]) {
 						} else if(lastScreen == SCREEN_GAMELIST) { 
 							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 							SDL_FillRect(tmpsur, &preview_rect, 0);
-							GFX_animateSurface(tmpsur,0,0-screen->h,0,0,screen->w,screen->h,150,255,255,0);
+							GFX_animateSurface(tmpsur,0,0-screen->h,0,0,screen->w,screen->h,100,255,255,0);
 						} else {
 							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 							SDL_FillRect(tmpsur, &preview_rect, 0);
@@ -2078,7 +2084,7 @@ int main (int argc, char *argv[]) {
 					}
 					if(lastScreen==SCREEN_GAMESWITCHER) {
 						if(switchetsur) {
-							GFX_animateSurface(switchetsur,0,0,0,0-screen->h,screen->w,screen->h,150,255,255,1);
+							GFX_animateSurface(switchetsur,0,0,0,0-screen->h,screen->w,screen->h,100,255,255,1);
 							SDL_FreeSurface(switchetsur);
 							animationdirection=0;
 						}
@@ -2120,7 +2126,6 @@ int main (int argc, char *argv[]) {
 				SDL_Surface *tmpNewScreen = GFX_captureRendererToSurface();
 				SDL_SetSurfaceBlendMode(tmpNewScreen,SDL_BLENDMODE_BLEND);
 				GFX_clear(screen);
-				GFX_clearLayers(0);
 				if(animationdirection==1) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
 				if(animationdirection==2) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
 				if(animationdirection==3) GFX_animateSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,255,255,0);

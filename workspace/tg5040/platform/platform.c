@@ -554,11 +554,11 @@ void PLAT_clearLayers(int layer) {
 		SDL_RenderClear(vid.renderer);
 	}
 	if(layer==0 || layer==2) {
-		SDL_SetRenderTarget(vid.renderer, vid.target_layer3);
+		SDL_SetRenderTarget(vid.renderer, vid.target_layer2);
 		SDL_RenderClear(vid.renderer);
 	}
 	if(layer==0 || layer==3) {
-		SDL_SetRenderTarget(vid.renderer, vid.target_layer2);
+		SDL_SetRenderTarget(vid.renderer, vid.target_layer3);
 		SDL_RenderClear(vid.renderer);
 	}
 	if(layer==0 || layer==4) {
@@ -628,7 +628,6 @@ void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, flo
     SDL_RenderCopy(vid.renderer, tempTexture, &srcRect, &dstRect);
     SDL_SetRenderTarget(vid.renderer, NULL);
     SDL_DestroyTexture(tempTexture);
-	LOG_info("drawing bg\n");
 }
 
 
@@ -947,80 +946,6 @@ void PLAT_animateAndFadeSurface(
 	if (fadeTexture) SDL_DestroyTexture(fadeTexture);
 }
 
-void PLAT_ZoomAndFadeSurface(
-	SDL_Surface *inputSurface,
-	int x, int y,                 // Center position
-	int start_w, int start_h,
-	int target_w, int target_h,
-	int duration_ms,
-	int start_opacity, int target_opacity,
-	int layer
-) {
-	if (!inputSurface || !vid.target_layer2 || !vid.renderer) return;
-
-	SDL_Texture* texture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
-		SDL_TEXTUREACCESS_TARGET,
-		inputSurface->w, inputSurface->h);
-
-	if (!texture) {
-		printf("Failed to create texture: %s\n", SDL_GetError());
-		return;
-	}
-
-	SDL_UpdateTexture(texture, NULL, inputSurface->pixels, inputSurface->pitch);
-	SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-
-	const int fps = 60;
-	const int frame_delay = 1000 / fps;
-	const int total_frames = duration_ms / frame_delay;
-
-	for (int frame = 0; frame <= total_frames; ++frame) {
-		Uint32 frame_start = SDL_GetTicks();
-
-		float t = (float)frame / total_frames;
-
-		// Interpolate size
-		int current_w = start_w + (int)((target_w - start_w) * t);
-		int current_h = start_h + (int)((target_h - start_h) * t);
-
-		// Keep centered around (x, y)
-		int current_x = x - current_w / 2;
-		int current_y = y - current_h / 2;
-
-		// Interpolate opacity
-		int current_opacity = start_opacity + (int)((target_opacity - start_opacity) * t);
-		current_opacity = current_opacity < 0 ? 0 : (current_opacity > 255 ? 255 : current_opacity);
-		SDL_SetTextureAlphaMod(texture, current_opacity);
-
-		// Set render target to animation layer
-		if (layer == 0)
-			SDL_SetRenderTarget(vid.renderer, vid.target_layer2);
-		else
-			SDL_SetRenderTarget(vid.renderer, vid.target_layer4);
-
-		// Clear layer
-		SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
-		SDL_RenderClear(vid.renderer);
-
-		// Render zoomed & faded texture
-		SDL_Rect srcRect = { 0, 0, inputSurface->w, inputSurface->h };
-		SDL_Rect dstRect = { current_x, current_y, current_w, current_h };
-		SDL_RenderCopy(vid.renderer, texture, &srcRect, &dstRect);
-
-		// Present to screen
-		SDL_SetRenderTarget(vid.renderer, NULL);
-		PLAT_flip(NULL, 0);
-
-		// Maintain frame rate
-		Uint32 frame_time = SDL_GetTicks() - frame_start;
-		if (frame_time < frame_delay) {
-			SDL_Delay(frame_delay - frame_time);
-		}
-	}
-
-	SDL_DestroyTexture(texture);
-}
 
 
 void PLAT_present() {

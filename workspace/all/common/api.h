@@ -213,7 +213,6 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_animateSurfaceOpacity PLAT_animateSurfaceOpacity //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateSurfaceOpacityAndScale PLAT_animateSurfaceOpacityAndScale //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateAndFadeSurface PLAT_animateAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_ZoomAndFadeSurface PLAT_ZoomAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_flipHidden PLAT_flipHidden //(void)
 
 #define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
@@ -469,15 +468,7 @@ void PLAT_animateAndFadeSurface(
 	int start_opacity, int target_opacity
 );
 
-void PLAT_ZoomAndFadeSurface(
-	SDL_Surface *inputSurface,
-	int x, int y,                 // Center position
-	int start_w, int start_h,
-	int target_w, int target_h,
-	int duration_ms,
-	int start_opacity, int target_opacity,
-	int layer
-);
+
 
 void PLAT_animateSurfaceOpacity(SDL_Surface *inputSurface, int x, int y, int w, int h,
 	int start_opacity, int target_opacity, int duration_ms, int layer);
