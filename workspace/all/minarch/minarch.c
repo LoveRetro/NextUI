@@ -5457,7 +5457,7 @@ static void Menu_loop(void) {
 		
 		if(dirty) {
 			GFX_clear(screen);
-			GFX_drawBackground(backing,0,0,DEVICE_WIDTH,DEVICE_HEIGHT,0.4f,0);
+			GFX_drawBackground(backing,0,0,DEVICE_WIDTH,DEVICE_HEIGHT,0.4f,1);
 
 
 			int ox, oy;

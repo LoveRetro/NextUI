@@ -206,12 +206,7 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_setOverlay PLAT_setOverlay// (int effect)
 #define GFX_setOffsetX PLAT_setOffsetX// (int effect)
 #define GFX_setOffsetY PLAT_setOffsetY// (int effect)
-#define GFX_drawForeground PLAT_drawForeground //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_drawBackground PLAT_drawBackground //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_clearForeground PLAT_clearForeground //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_clearBackground PLAT_clearBackground //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_clearAnimationLayer PLAT_clearAnimationLayer //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_clearAllLayers PLAT_clearAllLayers //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_drawOnLayer PLAT_drawOnLayer //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_clearLayers PLAT_clearLayers //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_captureRendererToSurface PLAT_captureRendererToSurface //(void)
 #define GFX_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
@@ -453,8 +448,7 @@ void PLAT_setEffect(int effect);
 void PLAT_setOverlay(int select, const char* tag);
 void PLAT_setOffsetX(int x);
 void PLAT_setOffsetY(int y);
-void PLAT_drawForeground(SDL_Surface *inputSurface,int x, int y, int w, int h);
-void PLAT_drawBackground(SDL_Surface *inputSurface,int x, int y, int w, int h, float brightness, bool maintainAspectRatio);
+void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, float brightness, bool maintainAspectRatio,int layer);
 void PLAT_clearLayers(int layer);
 SDL_Surface* PLAT_captureRendererToSurface();
 void PLAT_animateSurface(
