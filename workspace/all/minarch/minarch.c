@@ -5856,11 +5856,13 @@ int main(int argc , char* argv[]) {
 		
 		hdmimon();
 	}
-	if(rgbaData) free(rgbaData);
+	
+
+	SDL_Surface * tmpSur = createSurfaceFromData(renderer.src,renderer.src_w,renderer.src_h,renderer.src_p);
+	GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,3);
 	GFX_clearLayers(0);
 	GFX_clear(screen);
-	SDL_Surface * tmpSur = createSurfaceFromData(renderer.src,renderer.src_w,renderer.src_h,renderer.src_p);
-	GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,1);
+	if(rgbaData) free(rgbaData);
 	SDL_FreeSurface(tmpSur);
 	Menu_quit();
 	QuitSettings();
