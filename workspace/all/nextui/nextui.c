@@ -1251,7 +1251,7 @@ static void Entry_open(Entry* self) {
 		openRom(self->path, last);
 	}
 	else if (self->type==ENTRY_PAK) {
-		animationdirection = 3;
+		startgame = 1;
 		openPak(self->path);
 	}
 	else if (self->type==ENTRY_DIR) {

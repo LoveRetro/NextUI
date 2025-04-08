@@ -311,7 +311,8 @@ SDL_Surface* GFX_init(int mode)
 	if (!exists(asset_path))
 		LOG_info("missing assets, you're about to segfault dummy!\n");
 	gfx.assets = IMG_Load(asset_path);
-
+	
+	PLAT_clearAll();
 
 	return gfx.screen;
 }
@@ -394,58 +395,79 @@ void chmodfile(const char *file, int writable)
     }
 }
 
-uint32_t GFX_extract_dominant_color(const void *data, unsigned width, unsigned height, size_t pitch) {
+uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned height, size_t pitch) {
 	if (!data) {
-        fprintf(stderr, "Error: data is NULL.\n");
         return 0;
     }
 
-    uint16_t *pixels = (uint16_t *)data;
+    const uint16_t *pixels = (const uint16_t *)data;
     int pixel_count = width * height;
 
     uint64_t total_r = 0;
     uint64_t total_g = 0;
     uint64_t total_b = 0;
-    uint8_t r, g, b;
+    uint32_t colorful_pixel_count = 0;
 
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            uint16_t pixel = pixels[y * (pitch / 2) + x];  // Access pixel data
+    for (unsigned y = 0; y < height; y++) {
+        for (unsigned x = 0; x < width; x++) {
+            uint16_t pixel = pixels[y * (pitch / 2) + x];
 
-            // Manually extract RGB values from RGB565 format
-            r = (pixel & 0xF800) >> 8;  // 5 bits red
-            g = (pixel & 0x07E0) >> 3;  // 6 bits green
-            b = (pixel & 0x001F) << 3;  // 5 bits blue
+            uint8_t r = ((pixel & 0xF800) >> 11) << 3;
+            uint8_t g = ((pixel & 0x07E0) >> 5) << 2;
+            uint8_t b = (pixel & 0x001F) << 3;
 
-            // Normalize RGB values to 8 bits
             r |= r >> 5;
             g |= g >> 6;
             b |= b >> 5;
 
-            // Accumulate the color components
-            total_r += r;
-            total_g += g;
-            total_b += b;
+            uint8_t max_c = fmaxf(fmaxf(r, g), b);
+            uint8_t min_c = fminf(fminf(r, g), b);
+            uint8_t saturation = max_c == 0 ? 0 : (max_c - min_c) * 255 / max_c;
+
+            if (saturation > 50 && max_c > 50) {
+                total_r += r;
+                total_g += g;
+                total_b += b;
+                colorful_pixel_count++;
+            }
         }
     }
 
-    // Calculate the average color components
-    uint8_t avg_r = total_r / pixel_count;
-    uint8_t avg_g = total_g / pixel_count;
-    uint8_t avg_b = total_b / pixel_count;
+    if (colorful_pixel_count == 0) {
 
-    // Combine average color components into a single uint32_t color
-    uint32_t average_color = (avg_r << 16) | (avg_g << 8) | avg_b;
+        colorful_pixel_count = pixel_count;
+        total_r = total_g = total_b = 0;
+        for (unsigned y = 0; y < height; y++) {
+            for (unsigned x = 0; x < width; x++) {
+                uint16_t pixel = pixels[y * (pitch / 2) + x];
+                uint8_t r = ((pixel & 0xF800) >> 11) << 3;
+                uint8_t g = ((pixel & 0x07E0) >> 5) << 2;
+                uint8_t b = (pixel & 0x001F) << 3;
 
-    return average_color;
+                r |= r >> 5;
+                g |= g >> 6;
+                b |= b >> 5;
 
+                total_r += r;
+                total_g += g;
+                total_b += b;
+            }
+        }
+    }
+
+    uint8_t avg_r = total_r / colorful_pixel_count;
+    uint8_t avg_g = total_g / colorful_pixel_count;
+    uint8_t avg_b = total_b / colorful_pixel_count;
+
+    return (avg_r << 16) | (avg_g << 8) | avg_b;
 }
+
 
 
 void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch,int mode) {
 	if(mode==0) return;
 
-	uint32_t dominant_color = GFX_extract_dominant_color(data, width, height,pitch);
+	uint32_t dominant_color = GFX_extract_average_color(data, width, height,pitch);
    
 	if(mode==1 || mode==2 || mode==5) {
 		lights[2].color1 = dominant_color;
@@ -1355,7 +1377,7 @@ void GFX_blitPillColor(int asset, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t
 	GFX_blitAssetColor(asset, &(SDL_Rect){r,0,r,h}, dst, &(SDL_Rect){x,y}, asset_color);
 }
 void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect) {
-	GFX_blitPillColor(asset, dst, dst_rect, RGB_WHITE, asset_rgbs[asset]);
+	GFX_blitPillColor(asset, dst, dst_rect,  asset_rgbs[asset],RGB_WHITE);
 }
 void GFX_blitPillLight(int asset, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	GFX_blitPillColor(asset, dst, dst_rect, THEME_COLOR2, RGB_WHITE);

@@ -258,6 +258,7 @@ void PLAT_clearVideo(SDL_Surface* screen) {
 	SDL_FillRect(screen, NULL, SDL_transparentBlack);
 }
 void PLAT_clearAll(void) {
+	PLAT_clearLayers(0);
 	PLAT_clearVideo(vid.screen); 
 	SDL_RenderClear(vid.renderer);
 }

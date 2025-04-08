@@ -3670,6 +3670,12 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 		}
 	}
 
+	if(!fast_forward && data) {
+		if(ambient_mode!=0) {
+			GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
+			LEDS_updateLeds();
+		}
+	}
 
     if (!data) {
         if (lastframe) {
@@ -3711,12 +3717,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 
 	pitch = width * sizeof(Uint32);
 	lastframe = data;
-	if(!fast_forward ) {
-		if(ambient_mode!=0) {
-			GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
-			LEDS_updateLeds();
-		}
-	}
+	
 
 	
      video_refresh_callback_main(data,width,height,pitch);
