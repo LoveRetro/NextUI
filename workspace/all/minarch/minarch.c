@@ -5855,7 +5855,7 @@ int main(int argc , char* argv[]) {
 		
 		hdmimon();
 	}
-	if(!rgbaData) free(rgbaData);
+	if(rgbaData) free(rgbaData);
 	GFX_clearLayers(0);
 	GFX_clear(screen);
 	SDL_Surface * test = createSurfaceFromData(renderer.src,renderer.src_w,renderer.src_h,renderer.src_p);
