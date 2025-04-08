@@ -312,9 +312,11 @@ SDL_Surface* GFX_init(int mode)
 		LOG_info("missing assets, you're about to segfault dummy!\n");
 	gfx.assets = IMG_Load(asset_path);
 
+
 	return gfx.screen;
 }
 void GFX_quit(void) {
+
 	TTF_CloseFont(font.large);
 	TTF_CloseFont(font.medium);
 	TTF_CloseFont(font.small);
@@ -325,8 +327,6 @@ void GFX_quit(void) {
 	CFG_quit();
 
 	GFX_freeAAScaler();
-	
-	GFX_clearAll();
 
 	PLAT_quitVideo();
 }

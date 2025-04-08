@@ -212,6 +212,7 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_clearBackground PLAT_clearBackground //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_clearAnimationLayer PLAT_clearAnimationLayer //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_clearAllLayers PLAT_clearAllLayers //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_clearLayers PLAT_clearLayers //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_captureRendererToSurface PLAT_captureRendererToSurface //(void)
 #define GFX_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateSurfaceOpacity PLAT_animateSurfaceOpacity //(SDL_Surface *inputSurface,int x, int y)
@@ -454,12 +455,18 @@ void PLAT_setOffsetX(int x);
 void PLAT_setOffsetY(int y);
 void PLAT_drawForeground(SDL_Surface *inputSurface,int x, int y, int w, int h);
 void PLAT_drawBackground(SDL_Surface *inputSurface,int x, int y, int w, int h, float brightness, bool maintainAspectRatio);
-void PLAT_clearForeground();
-void PLAT_clearBackground();
-void PLAT_clearAnimationLayer();
-void PLAT_clearAllLayers();
+void PLAT_clearLayers(int layer);
 SDL_Surface* PLAT_captureRendererToSurface();
-void PLAT_animateSurface(SDL_Surface *inputSurface, int x, int y, int target_x, int target_y, int w, int h, int duration_ms,int layer);
+void PLAT_animateSurface(
+	SDL_Surface *inputSurface,
+	int x, int y,
+	int target_x, int target_y,
+	int w, int h,
+	int duration_ms,
+	int start_opacity,
+	int target_opacity,
+	int layer
+);
 void PLAT_animateAndFadeSurface(
 	SDL_Surface *inputSurface,
 	int x, int y, int target_x, int target_y, int w, int h, int duration_ms,
@@ -467,16 +474,17 @@ void PLAT_animateAndFadeSurface(
 	int fade_x, int fade_y, int fade_w, int fade_h,
 	int start_opacity, int target_opacity
 );
+
 void PLAT_ZoomAndFadeSurface(
 	SDL_Surface *inputSurface,
 	int x, int y,                 // Center position
 	int start_w, int start_h,
 	int target_w, int target_h,
 	int duration_ms,
-	SDL_Surface *fadeSurface,
-	int fade_x, int fade_y, int fade_w, int fade_h,
-	int start_opacity, int target_opacity, int layer
+	int start_opacity, int target_opacity,
+	int layer
 );
+
 void PLAT_animateSurfaceOpacity(SDL_Surface *inputSurface, int x, int y, int w, int h,
 	int start_opacity, int target_opacity, int duration_ms, int layer);
 void PLAT_animateSurfaceOpacityAndScale(

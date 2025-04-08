@@ -1395,8 +1395,14 @@ SDL_Surface* loadFolderBackground(char* rompath)
 
 ///////////////////////////////////////
 
-
-
+enum {
+	SCREEN_MENU,
+	SCREEN_GAMELIST,
+	SCREEN_GAMESWITCHER,
+	SCREEN_GAME,
+	SCREEN_OFF
+	};
+static int lastScreen = SCREEN_MENU;
 
 int main (int argc, char *argv[]) {
 	// LOG_info("time from launch to:\n");
@@ -1428,8 +1434,10 @@ int main (int argc, char *argv[]) {
 
 	show_switcher = exists(GAME_SWITCHER_PERSIST_PATH);
 	if (show_switcher) {
+
 		// consider this "consumed", dont bring up the switcher next time we regularly exit a game
 		unlink(GAME_SWITCHER_PERSIST_PATH);
+		lastScreen = SCREEN_GAME;
 		// todo: map recent slot to last used game
 	}
 
@@ -1441,8 +1449,7 @@ int main (int argc, char *argv[]) {
 	GFX_setVsync(VSYNC_STRICT);
 
 	PAD_reset();
-	GFX_clearBackground();
-	GFX_clearAllLayers();
+	GFX_clearLayers(0);
 	GFX_clear(screen);
 
 	int show_version = 0;
@@ -1474,7 +1481,7 @@ int main (int argc, char *argv[]) {
 
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
-	GFX_clearAllLayers();
+
 	while (!quit) {
 
 		GFX_startFrame();
@@ -1682,7 +1689,7 @@ int main (int argc, char *argv[]) {
 			SDL_Surface *tmpOldScreen;
 			static int lastswitcherstate = 0;
 			SDL_Surface * switchetsur;
-			if(animationdirection > 0) {
+			if(animationdirection > 0 || (lastScreen==SCREEN_GAMELIST && show_switcher)) {
 				if(tmpOldScreen) SDL_FreeSurface(tmpOldScreen);
 				tmpOldScreen = GFX_captureRendererToSurface();
 				SDL_SetSurfaceBlendMode(tmpOldScreen,SDL_BLENDMODE_BLEND);
@@ -1692,7 +1699,6 @@ int main (int argc, char *argv[]) {
 
 			char thumbpath[1024];
 
-			// Update background if neccessary
 			if(total > 0)
 			{
 				Entry* entry = top->entries->items[top->selected];
@@ -1756,7 +1762,7 @@ int main (int argc, char *argv[]) {
 			
 				if (dirty && !show_switcher && !show_version) {
 					had_thumb = 0;
-					GFX_clearAllLayers();
+					GFX_clearLayers(0);
 					if (exists(thumbpath)) {
 						SDL_Surface* newThumb = IMG_Load(thumbpath);
 						if (newThumb) {
@@ -1870,23 +1876,16 @@ int main (int argc, char *argv[]) {
 				
 				animationdirection=0;
 				SDL_Surface *tmpsur = GFX_captureRendererToSurface();
-				GFX_clearBackground();
-				GFX_clearAllLayers();
+				GFX_clearLayers(0);
 				GFX_clear(screen);
 				if(lastswitcherstate)
-				GFX_animateSurfaceOpacityAndScale(tmpsur,0,0,screen->w,screen->h,screen->w*4,screen->h*4,255,0,150,1);
+				GFX_animateSurfaceOpacityAndScale(tmpsur,screen->w/2,screen->h/2,screen->w,screen->h,screen->w*4,screen->h*4,255,0,150,1);
 				else
 				GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,150,1);
 				
 				SDL_FreeSurface(tmpsur);
 			}
 			else if(show_switcher) {
-				
-				
-				if(!lastswitcherstate) {
-					GFX_clearBackground();
-					GFX_clearAllLayers();
-				}
 				lastbg = 1;
 				// For all recents with resumable state (i.e. has savegame), show game switcher carousel
 
@@ -1955,13 +1954,17 @@ int main (int argc, char *argv[]) {
 							bmp = raw_preview; 
 						}
 						if(bmp) {
-							if(!lastswitcherstate) {
-								GFX_ZoomAndFadeSurface(bmp,screen->w/2,screen->h/2,0,0,screen->w,screen->h,150,screen,0,0,screen->w,screen->h,255,0,0);
-							} else {
+							if(lastScreen == SCREEN_GAME) {
+								GFX_animateSurfaceOpacityAndScale(bmp,screen->w/2,screen->h/2,screen->w*4,screen->h*4,screen->w,screen->h,0,255,150,0);
+							} else if(lastScreen == SCREEN_GAMELIST) { 
+								GFX_clearLayers(2);
+								GFX_drawBackground(tmpOldScreen,0,0,screen->w, screen->h,1.0f,0);
+								GFX_animateSurface(bmp,0,0-screen->h,0,0,screen->w,screen->h,150,255,255,0);
+							} else if(lastScreen == SCREEN_GAMESWITCHER) {
 								if(gsanimdir==1) 
-									GFX_animateSurface(bmp,0+screen->w,0,0,0,screen->w,screen->h,80,0);
+									GFX_animateSurface(bmp,0+screen->w,0,0,0,screen->w,screen->h,80,0,255,0);
 								else
-									GFX_animateSurface(bmp,0-screen->w,0,0,0,screen->w,screen->h,80,0);
+									GFX_animateSurface(bmp,0-screen->w,0,0,0,screen->w,screen->h,80,0,255,0);
 							}
 
 							GFX_drawBackground(bmp,0,0,screen->w, screen->h,1.0f,CFG_getGameSwitcherScaling() > 0 ? 1:0);
@@ -1970,19 +1973,23 @@ int main (int argc, char *argv[]) {
 					}
 					else {
 						SDL_Rect preview_rect = {ox,oy,hw,hh};
-						if(!lastswitcherstate) {
+						if(lastScreen == SCREEN_GAME) {
 							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 							SDL_FillRect(tmpsur, &preview_rect, 0);
-							GFX_ZoomAndFadeSurface(tmpsur,screen->w/2,screen->h/2,0,0,screen->w,screen->h,150,screen,0,0,screen->w,screen->h,255,0,0);
+							GFX_animateSurfaceOpacityAndScale(tmpsur,screen->w/2,screen->h/2,screen->w*4,screen->h*4,screen->w,screen->h,255,0,150,1);
+						} else if(lastScreen == SCREEN_GAMELIST) { 
+							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
+							SDL_FillRect(tmpsur, &preview_rect, 0);
+							GFX_animateSurface(tmpsur,0,0-screen->h,0,0,screen->w,screen->h,150,255,255,0);
 						} else {
 							SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 							SDL_FillRect(tmpsur, &preview_rect, 0);
 							GFX_flip(screen);
 
 							if(gsanimdir==1) 
-								GFX_animateSurface(tmpsur,0+screen->w,0,0,0,screen->w,screen->h,80,0);
+								GFX_animateSurface(tmpsur,0+screen->w,0,0,0,screen->w,screen->h,80,0,255,0);
 							else
-								GFX_animateSurface(tmpsur,0-screen->w,0,0,0,screen->w,screen->h,80,0);
+								GFX_animateSurface(tmpsur,0-screen->w,0,0,0,screen->w,screen->h,80,0,255,0);
 						}
 						SDL_FillRect(screen, &preview_rect, 0);
 						
@@ -2001,12 +2008,11 @@ int main (int argc, char *argv[]) {
 				GFX_flipHidden();
 				switchetsur = GFX_captureRendererToSurface();
 				lastswitcherstate = 1;
-			
+				lastScreen = SCREEN_GAMESWITCHER;
 			}
 			else {
-			
-				if(lastswitcherstate) {
-					GFX_clearBackground();
+				if(lastScreen != SCREEN_GAMELIST) {
+					GFX_clearLayers(1);
 					if(folderbgbmp) {
 						GFX_drawBackground(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0);
 					}
@@ -2083,9 +2089,9 @@ int main (int argc, char *argv[]) {
 						SDL_FreeSurface(text); // Free after use
 					
 					}
-					if(lastswitcherstate==1) {
+					if(lastScreen==SCREEN_GAMESWITCHER) {
 						if(switchetsur) {
-							GFX_animateSurface(switchetsur,0,0,0,0+screen->h,screen->w,screen->h,100,1);
+							GFX_animateSurface(switchetsur,0,0,0,0-screen->h,screen->w,screen->h,150,255,255,1);
 							SDL_FreeSurface(switchetsur);
 							animationdirection=0;
 						}
@@ -2111,7 +2117,7 @@ int main (int argc, char *argv[]) {
 								0,0, max_width, SCALE1(PILL_SIZE)
 							});
 							if(animationdirection == 0)	{
-								GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),35,0);
+								GFX_animateSurface(pill,SCALE1(BUTTON_MARGIN),SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),35,255,255,0);
 							} 
 							SDL_FreeSurface(pill);
 						} 
@@ -2121,19 +2127,19 @@ int main (int argc, char *argv[]) {
 					// TODO: for some reason screen's dimensions end up being 0x0 in GFX_blitMessage...
 					GFX_blitMessage(font.large, "Empty folder", screen, &(SDL_Rect){0,0,screen->w,screen->h}); //, NULL);
 				}
-				
+				lastScreen = SCREEN_GAMELIST;
 			}
 			if(animationdirection > 0) {
 				GFX_flipHidden();
 				SDL_Surface *tmpNewScreen = GFX_captureRendererToSurface();
 				SDL_SetSurfaceBlendMode(tmpNewScreen,SDL_BLENDMODE_BLEND);
 				GFX_clear(screen);
-				GFX_clearAllLayers();
+				GFX_clearLayers(0);
 				if(animationdirection==1) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
 				if(animationdirection==2) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,tmpNewScreen,0,0,FIXED_WIDTH,FIXED_HEIGHT,0,255);
-				if(animationdirection==3) GFX_animateSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,0);
+				if(animationdirection==3) GFX_animateSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,150,255,255,0);
 				SDL_BlitSurface(tmpNewScreen,NULL,screen,&(SDL_Rect){0,0,FIXED_WIDTH,FIXED_HEIGHT});
-				GFX_clearAnimationLayer();
+				GFX_clearLayers(3);
 				
 				SDL_FreeSurface(tmpNewScreen);
 				animationdirection=0;

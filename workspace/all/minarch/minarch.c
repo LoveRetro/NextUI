@@ -3612,13 +3612,12 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	renderer.dst = screen->pixels;
 	// LOG_info("video_refresh_callback: %ix%i@%i %ix%i@%i\n",width,height,pitch,screen->w,screen->h,screen->pitch);
 	if(firstframe) {
-		GFX_clearAllLayers();
-		GFX_clearBackground();
+		GFX_clearLayers(0);
 		GFX_clear(screen);
 		SDL_Surface * test = createSurfaceFromData(data,width,height,pitch);
 		GFX_animateSurfaceOpacity(test,0,0,screen->w,screen->h,0,255,200,1);
 		SDL_FreeSurface(test);
-		GFX_clearAllLayers();
+		GFX_clearLayers(0);
 		firstframe=0;
 	} 
 
@@ -5343,8 +5342,7 @@ static void Menu_loop(void) {
 
 	LEDS_initLeds();
 	LEDS_updateLeds();
-	GFX_clearBackground();
-	GFX_clearAllLayers();
+	GFX_clearLayers(0);
 	while (show_menu) {
 
 		GFX_startFrame();
@@ -5816,8 +5814,7 @@ int main(int argc , char* argv[]) {
 	// force a vsync immediately before loop
 	// for better frame pacing?
 	GFX_clearAll();
-	GFX_clearBackground();
-	GFX_clearAllLayers();
+	GFX_clearLayers(0);
 	GFX_flip(screen);
 	
 	Special_init(); // after config
@@ -5859,8 +5856,7 @@ int main(int argc , char* argv[]) {
 		hdmimon();
 	}
 	if(!rgbaData) free(rgbaData);
-	GFX_clearAllLayers();
-	GFX_clearBackground();
+	GFX_clearLayers(0);
 	GFX_clear(screen);
 	SDL_Surface * test = createSurfaceFromData(renderer.src,renderer.src_w,renderer.src_h,renderer.src_p);
 	GFX_animateSurfaceOpacity(test,0,0,screen->w,screen->h,255,0,200,1);
