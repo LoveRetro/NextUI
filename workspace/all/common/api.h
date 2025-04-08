@@ -496,6 +496,17 @@ void PLAT_animateSurfaceOpacityAndScale(
 	int duration_ms,
 	int layer
 );
+void PLAT_animateSurfaceOpacity(SDL_Surface *inputSurface, int x, int y, int w, int h,
+	int start_opacity, int target_opacity, int duration_ms, int layer);
+void PLAT_animateSurfaceOpacityAndScale(
+	SDL_Surface *inputSurface,
+	int x, int y,
+	int start_w, int start_h,
+	int target_w, int target_h,
+	int start_opacity, int target_opacity,
+	int duration_ms,
+	int layer
+);
 void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
 void PLAT_present();
 void PLAT_vsync(int remaining);
