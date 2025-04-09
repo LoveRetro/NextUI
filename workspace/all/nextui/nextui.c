@@ -1734,11 +1734,12 @@ int main (int argc, char *argv[]) {
 						folderBgPath[sizeof(folderBgPath) - 1] = '\0';
 						SDL_FreeSurface(folderbgbmp);
 						folderbgbmp = loadFolderBackground(folderBgPath);
+						GFX_clearLayers(1);
 						if(folderbgbmp) {
 							GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
-						} else {
+						} else if(bgbmp) {
 							GFX_drawOnLayer(bgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
-						}
+						} 
 						
 					}
 					else {
