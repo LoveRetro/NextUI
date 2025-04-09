@@ -5286,11 +5286,29 @@ static char* getAlias(char* path, char* alias) {
 
 static void Menu_loop(void) {
 	menu.bitmap = SDL_CreateRGBSurfaceWithFormatFrom(renderer.src, renderer.true_w, renderer.true_h, 32, renderer.src_p, SDL_PIXELFORMAT_RGBA8888);
-	// LOG_info("Menu_loop:menu.bitmap %ix%i\n", menu.bitmap->w,menu.bitmap->h);
-	SDL_Rect dst = {0, 0, DEVICE_WIDTH, DEVICE_HEIGHT};
 	SDL_Surface* backing = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
-	SDL_BlitScaled(menu.bitmap,NULL,backing,&dst);
-	// Menu_scale(menu.bitmap, backing);
+	
+	float src_aspect = (float)menu.bitmap->w / menu.bitmap->h;
+	float dst_aspect = (float)DEVICE_WIDTH / DEVICE_HEIGHT;
+
+	int scaled_w = DEVICE_WIDTH;
+	int scaled_h = DEVICE_HEIGHT;
+
+	if (src_aspect > dst_aspect) {
+		scaled_w = DEVICE_WIDTH;
+		scaled_h = (int)(DEVICE_WIDTH / src_aspect);
+	} else {
+		scaled_h = DEVICE_HEIGHT;
+		scaled_w = (int)(DEVICE_HEIGHT * src_aspect);
+	}
+
+	SDL_Rect dst = {
+		screen_scaling!=SCALE_FULLSCREEN ? (DEVICE_WIDTH - scaled_w) / 2:0,
+		screen_scaling!=SCALE_FULLSCREEN ?(DEVICE_HEIGHT - scaled_h) / 2:0,
+		screen_scaling!=SCALE_FULLSCREEN ? scaled_w:screen->w,
+		screen_scaling!=SCALE_FULLSCREEN ? scaled_h:screen->h
+	};
+	SDL_BlitScaled(menu.bitmap, NULL, backing, &dst);
 	
 	int restore_w = screen->w;
 	int restore_h = screen->h;
