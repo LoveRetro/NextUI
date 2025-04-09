@@ -1879,7 +1879,7 @@ int main (int argc, char *argv[]) {
 					GFX_animateSurfaceOpacityAndScale(tmpsur,screen->w/2,screen->h/2,screen->w,screen->h,screen->w*4,screen->h*4,255,0,CFG_getMenuTransitions() ? 150:20,1);
 				else {
 					// update cpu surface
-					GFX_flip(screen);
+					GFX_flipHidden();
 					GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,1);
 				}
 				SDL_FreeSurface(tmpsur);
@@ -1972,7 +1972,7 @@ int main (int argc, char *argv[]) {
 							}
 							if(lastScreen == SCREEN_GAME) {
 								// need to flip once so streaming_texture1 is updated
-								GFX_flip(screen);
+								GFX_flipHidden();
 								GFX_animateSurfaceOpacityAndScale(bmp,screen->w/2,screen->h/2,screen->w*4,screen->h*4,aw,ah,0,255,CFG_getMenuTransitions() ? 150:20,0);
 							} else if(lastScreen == SCREEN_GAMELIST) { 
 								
@@ -2120,13 +2120,15 @@ int main (int argc, char *argv[]) {
 					}
 					if(lastScreen==SCREEN_GAMESWITCHER) {
 						if(switchetsur) {
+							// update cpu surface here first
+							GFX_flipHidden();
 							GFX_animateSurface(switchetsur,0,0,0,0-screen->h,screen->w,screen->h,CFG_getMenuTransitions() ? 100:20,255,255,1);
 							animationdirection=0;
 						}
 					}
 					if(lastScreen==SCREEN_OFF) {
 						// need to update streaming_layer1 once for correct GPU drawing
-						GFX_flip(screen);
+						GFX_flipHidden();
 						SDL_Surface * tmpSur =SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 						SDL_FillRect(tmpSur,NULL,SDL_MapRGBA(screen->format,0,0,0,255));
 						GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,3);
