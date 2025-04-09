@@ -1463,7 +1463,9 @@ int main (int argc, char *argv[]) {
 	SDL_Surface* convertedbg = SDL_ConvertSurfaceFormat(bgbmp, SDL_PIXELFORMAT_RGBA8888, 0);
 	if (convertedbg) {
 		SDL_FreeSurface(bgbmp); 
-		bgbmp = convertedbg;
+		SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, 32, SDL_PIXELFORMAT_RGB565);
+		GFX_blitScaleToFill(convertedbg, scaled);
+		bgbmp = scaled;
 		GFX_drawOnLayer(bgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
 	}
 
