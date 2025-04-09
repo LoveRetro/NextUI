@@ -844,7 +844,7 @@ void PLAT_scrollTextTexture(
     if (full_text_width > w + padding) {
         frame_counter++;
         if (frame_counter >= 1) {
-            text_offset += 1;
+            text_offset += 3;
             if (text_offset >= full_text_width / 2) {
                 text_offset = 0;
             }
