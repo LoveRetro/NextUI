@@ -2108,7 +2108,7 @@ int main (int argc, char *argv[]) {
 							int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width, SCALE1(BUTTON_PADDING * 2));
 							int max_width = MIN(available_width, text_width);
 							SDL_Color text_color = uintToColour(THEME_COLOR5_255);
-							SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
+							SDL_Surface* text = TTF_RenderUTF8_Blended(font.large,  entry_unique ? entry_unique : entry_name, text_color);
 
 							is_scrolling = GFX_resetScrollText(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
 							SDL_Surface *pill = SDL_CreateRGBSurfaceWithFormat(
@@ -2185,6 +2185,7 @@ int main (int argc, char *argv[]) {
 				char* entry_text = entry->name;
 				if (entry->unique) {
 					trimSortingMeta(&entry->unique);
+					entry_text = entry->unique;
 				}
 
 				int available_width = (had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_MARGIN)) - SCALE1(PADDING * 2);
