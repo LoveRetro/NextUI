@@ -1739,7 +1739,11 @@ int main (int argc, char *argv[]) {
 							GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
 						} else if(bgbmp) {
 							GFX_drawOnLayer(bgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
-						} 
+						} else {
+							SDL_Surface * tmpSur =SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
+							SDL_FillRect(tmpSur,NULL,SDL_MapRGBA(screen->format,0,0,0,255));
+							GFX_drawOnLayer(tmpSur,0, 0, screen->w, screen->h,1.0f,0,1);
+						}
 						
 					}
 					else {
