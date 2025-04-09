@@ -1994,13 +1994,13 @@ int main (int argc, char *argv[]) {
 								SDL_FreeSurface(tmpNewScreen);
 								
 							} else if(lastScreen == SCREEN_GAMESWITCHER) {
-								GFX_drawOnLayer(background,0,0,screen->w, screen->h,1.0f,0,0);
+								GFX_drawOnLayer(background,0,0,screen->w, screen->h,1.0f,0,1);
 								if(gsanimdir==1) 
-									GFX_animateSurface(bmp,ax+screen->w,ay,ax,ay,aw,ah,CFG_getMenuTransitions() ? 80:20,0,255,0);
+									GFX_animateSurface(bmp,ax+screen->w,ay,ax,ay,aw,ah,CFG_getMenuTransitions() ? 80:20,0,255,1);
 								else if(gsanimdir==2)
-									GFX_animateSurface(bmp,ax-screen->w,ay,ax,ay,aw,ah,CFG_getMenuTransitions() ? 80:20,0,255,0);
+									GFX_animateSurface(bmp,ax-screen->w,ay,ax,ay,aw,ah,CFG_getMenuTransitions() ? 80:20,0,255,1);
 								
-								GFX_drawOnLayer(bmp,ax,ay,aw,ah,1.0f,0,0);
+								GFX_drawOnLayer(bmp,ax,ay,aw,ah,1.0f,0,1);
 							}
 							SDL_FreeSurface(bmp);  // Free after rendering
 						}
