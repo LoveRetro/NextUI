@@ -447,7 +447,7 @@ static int switcher_selected = 0;
 static char slot_path[256];
 static char preview_path[256];
 static 	int animationdirection = 0;
-static 	int gsanimdir = 0;
+
 
 
 static int restore_depth = -1;
@@ -1487,6 +1487,7 @@ int main (int argc, char *argv[]) {
 		int is_online = PLAT_isOnline();
 		if (was_online!=is_online) dirty = 1;
 		was_online = is_online;
+		int gsanimdir = 0;
 		
 		if (show_version) {
 			if (PAD_justPressed(BTN_B) || PAD_tappedMenu(now)) {
