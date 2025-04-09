@@ -871,22 +871,22 @@ void PLAT_animateAndRevealSurfaces(
 		SDL_Rect revealSrc = { reveal_src_x, reveal_src_y, reveal_draw_w, reveal_draw_h };
 		SDL_Rect revealDst = { reveal_x + reveal_src_x, reveal_y + reveal_src_y, reveal_draw_w, reveal_draw_h };
 
-		SDL_SetRenderTarget(vid.renderer, (layer1 == 0) ? vid.target_layer2 : vid.target_layer4);
+		SDL_SetRenderTarget(vid.renderer, (layer1 == 0) ? vid.target_layer3 : vid.target_layer4);
 		SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_NONE);
 		SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
 		SDL_RenderClear(vid.renderer);
 		SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
-		SDL_SetRenderTarget(vid.renderer, (2 == 0) ? vid.target_layer2 : vid.target_layer4);
+		SDL_SetRenderTarget(vid.renderer, (2 == 0) ? vid.target_layer3 : vid.target_layer4);
 		SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_NONE);
 		SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
 		SDL_RenderClear(vid.renderer);
 		SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
 
-		SDL_SetRenderTarget(vid.renderer, (layer1 == 0) ? vid.target_layer2 : vid.target_layer4);
+		SDL_SetRenderTarget(vid.renderer, (layer1 == 0) ? vid.target_layer3 : vid.target_layer4);
 		SDL_Rect moveDst = { current_x, current_y, move_w, move_h };
 		SDL_RenderCopy(vid.renderer, moveTexture, NULL, &moveDst);
 
-		SDL_SetRenderTarget(vid.renderer, (layer2 == 0) ? vid.target_layer2 : vid.target_layer4);
+		SDL_SetRenderTarget(vid.renderer, (layer2 == 0) ? vid.target_layer3 : vid.target_layer4);
 
 		if (reveal_draw_w > 0 && reveal_draw_h > 0)
 			SDL_RenderCopy(vid.renderer, revealTexture, &revealSrc, &revealDst);
