@@ -1874,11 +1874,14 @@ int main (int argc, char *argv[]) {
 				SDL_Surface *tmpsur = GFX_captureRendererToSurface();
 				GFX_clearLayers(0);
 				GFX_clear(screen);
+			
 				if(lastScreen==SCREEN_GAMESWITCHER)
 					GFX_animateSurfaceOpacityAndScale(tmpsur,screen->w/2,screen->h/2,screen->w,screen->h,screen->w*4,screen->h*4,255,0,CFG_getMenuTransitions() ? 150:20,1);
-				else
+				else {
+					// update cpu surface
+					GFX_flip(screen);
 					GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,1);
-				
+				}
 				SDL_FreeSurface(tmpsur);
 			}
 			else if(show_switcher) {
@@ -1968,6 +1971,8 @@ int main (int argc, char *argv[]) {
 								ay = (screen->h - ah)/2;
 							}
 							if(lastScreen == SCREEN_GAME) {
+								// need to flip once so streaming_texture1 is updated
+								GFX_flip(screen);
 								GFX_animateSurfaceOpacityAndScale(bmp,screen->w/2,screen->h/2,screen->w*4,screen->h*4,aw,ah,0,255,CFG_getMenuTransitions() ? 150:20,0);
 							} else if(lastScreen == SCREEN_GAMELIST) { 
 								
@@ -1979,7 +1984,7 @@ int main (int argc, char *argv[]) {
 		
 								GFX_drawOnLayer(tmpOldScreen,0,0,screen->w, screen->h,1.0f,0,0);
 								GFX_animateSurface(tmpNewScreen,0,0-screen->h,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 100:20,255,255,1);
-								// GFX_drawOnLayer(background,0,0,screen->w, screen->h,1.0f,0,0);
+								SDL_FreeSurface(tmpNewScreen);
 								
 							} else if(lastScreen == SCREEN_GAMESWITCHER) {
 								GFX_drawOnLayer(background,0,0,screen->w, screen->h,1.0f,0,0);
@@ -2017,7 +2022,7 @@ int main (int argc, char *argv[]) {
 						GFX_blitMessage(font.large, "No Preview", screen, &preview_rect);
 					}
 
-					
+					SDL_FreeSurface(background);
 					Entry_free(selectedEntry);
 				}
 				else {
@@ -2026,7 +2031,10 @@ int main (int argc, char *argv[]) {
 					GFX_blitMessage(font.large, "No Recents", screen, &preview_rect);
 					GFX_blitButtonGroup((char*[]){ "B","BACK", NULL }, 1, screen, 1);
 				}
+				
 				GFX_flipHidden();
+
+				if(switchetsur) SDL_FreeSurface(switchetsur);
 				switchetsur = GFX_captureRendererToSurface();
 				lastScreen = SCREEN_GAMESWITCHER;
 			}
@@ -2113,11 +2121,12 @@ int main (int argc, char *argv[]) {
 					if(lastScreen==SCREEN_GAMESWITCHER) {
 						if(switchetsur) {
 							GFX_animateSurface(switchetsur,0,0,0,0-screen->h,screen->w,screen->h,CFG_getMenuTransitions() ? 100:20,255,255,1);
-							SDL_FreeSurface(switchetsur);
 							animationdirection=0;
 						}
 					}
 					if(lastScreen==SCREEN_OFF) {
+						// need to update streaming_layer1 once for correct GPU drawing
+						GFX_flip(screen);
 						SDL_Surface * tmpSur =SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 						SDL_FillRect(tmpSur,NULL,SDL_MapRGBA(screen->format,0,0,0,255));
 						GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,3);
@@ -2190,25 +2199,18 @@ int main (int argc, char *argv[]) {
 			
 			dirty = 0;
 			readytoscroll = 0;
+			
 		} else {
 
 			// honestly this whole thing is here only for the scrolling text, I set it now to run this at 30fps which is enough for scrolling text, should move this to seperate animation function eventually
 			Uint32 now = SDL_GetTicks();
-			// doing some chaching to alter the text only once but honestly dont think it saves much cpu but yeah
+			Uint32 frame_start = now;
 			static char cached_display_name[256] = "";
-			static SDL_Surface* cached_text_surface = NULL;
-			static int cached_max_width = 0;
-			static int cached_text_height = 0;
-			static SDL_Color text_color = {0}; // cached once
-
 			if (!show_switcher && !show_version && is_scrolling) {
-				Uint32 frame_start = now;
-
+				
 				int ow = GFX_blitHardwareGroup(screen, show_setting);
 				Entry* entry = top->entries->items[top->selected];
-
 				trimSortingMeta(&entry->name);
-
 				char* entry_text = entry->name;
 				if (entry->unique) {
 					trimSortingMeta(&entry->unique);
@@ -2218,68 +2220,32 @@ int main (int argc, char *argv[]) {
 				int available_width = (had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_MARGIN)) - SCALE1(PADDING * 2);
 				if (top->selected == top->start && !had_thumb) available_width -= ow;
 
-					text_color = uintToColour(THEME_COLOR5_255);
+				SDL_Color text_color = uintToColour(THEME_COLOR5_255);
 
-				if (strcmp(cached_display_name, entry_text) != 0 || cached_max_width != available_width) {
-					if (cached_text_surface) {
-						SDL_FreeSurface(cached_text_surface);
-						cached_text_surface = NULL;
-					}
+				int text_width = GFX_getTextWidth(font.large, entry_text, cached_display_name, available_width, SCALE1(BUTTON_PADDING * 2));
+				int max_width = MIN(available_width, text_width);
 
-					strncpy(cached_display_name, entry_text, sizeof(cached_display_name));
+				GFX_clearLayers(4);
+				GFX_scrollTextTexture(
+					font.large,
+					entry_text,
+					SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (remember_selection * PILL_SIZE) + 4),
+					max_width - SCALE1(BUTTON_PADDING * 2),
+					0,
+					0,
+					text_color,
+					1
+				);
 
-					int text_width = GFX_getTextWidth(font.large, entry_text, cached_display_name, available_width, SCALE1(BUTTON_PADDING * 2));
-					cached_max_width = MIN(available_width, text_width);
-
-					cached_text_surface = TTF_RenderUTF8_Blended(font.large, cached_display_name, text_color);
-					cached_text_height = cached_text_surface ? cached_text_surface->h : 0;
-				}
-
-				if (cached_text_surface && cached_max_width > 0) {
-					SDL_Rect clear_rect = {
-						SCALE1(BUTTON_MARGIN + BUTTON_PADDING),
-						SCALE1(PADDING + (remember_selection * PILL_SIZE) + 4),
-						cached_max_width - SCALE1((BUTTON_PADDING * 2) - 6),
-						cached_text_height
-					};
-
-					SDL_FillRect(screen, &clear_rect, THEME_COLOR1);
-					GFX_clearLayers(4);
-					GFX_scrollTextSurface(
-						font.large,
-						cached_display_name,
-						&cached_text_surface,
-						cached_max_width - SCALE1(BUTTON_PADDING * 2),
-						cached_text_height,
-						0,
-						text_color,
-						1
-					);
-					GFX_drawOnLayer(cached_text_surface,clear_rect.x, clear_rect.y, cached_max_width - SCALE1(BUTTON_PADDING * 2), cached_text_surface->h,1.0f,0,4);
-				}
-
-				GFX_flip(screen);
-
-				const int fps = 30; // 30fps is more then enough for scrolling text
+				
+			}
+			dirty = 0;
+			const int fps = 30; // 30fps is more then enough for scrolling text
 				const int frame_delay = 1000 / fps;
 				Uint32 frame_time = SDL_GetTicks() - frame_start;
 				if (frame_time < frame_delay) {
 					SDL_Delay(frame_delay - frame_time);
 				}
-			}
-
-			// Optional cleanup when not scrolling
-			if (!is_scrolling && cached_text_surface) {
-				SDL_FreeSurface(cached_text_surface);
-				cached_text_surface = NULL;
-				cached_display_name[0] = '\0';
-				cached_max_width = 0;
-				cached_text_height = 0;
-			}
-			else {
-				GFX_delay();
-			}
-			dirty = 0;
 		}
 		
 		// handle HDMI change

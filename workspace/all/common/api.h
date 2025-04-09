@@ -215,7 +215,10 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_animateAndFadeSurface PLAT_animateAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_revealSurface PLAT_revealSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateAndRevealSurfaces PLAT_animateAndRevealSurfaces
+#define GFX_resetScrollText PLAT_resetScrollText
+#define GFX_scrollTextTexture PLAT_scrollTextTexture
 #define GFX_flipHidden PLAT_flipHidden //(void)
+#define GFX_GPU_Flip PLAT_GPU_Flip//(void)
 
 #define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
 void GFX_setMode(int mode);
@@ -246,7 +249,7 @@ int GFX_getVsync(void);
 void GFX_setVsync(int vsync);
 
 int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
-int GFX_resetScrollText(TTF_Font* font, const char* in_name,int max_width);
+int PLAT_resetScrollText(TTF_Font* font, const char* in_name,int max_width);
 void GFX_scrollTextSurface(TTF_Font* font, const char* in_name, SDL_Surface** out_surface, int max_width, int height, int padding, SDL_Color color,float heightratio); // returns final width
 int GFX_getTextWidth(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
 int GFX_getTextHeight(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
@@ -521,13 +524,22 @@ void PLAT_animateAndRevealSurfaces(
 	int layer1,
 	int layer2
 );
-
+void PLAT_scrollTextTexture(
+    TTF_Font* font,
+    const char* in_name,
+    int x, int y,      // Position on target layer
+    int w, int h,      // Clipping width and height
+    int padding,
+    SDL_Color color,
+    float transparency
+);
 void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
 void PLAT_present();
 void PLAT_vsync(int remaining);
 scaler_t PLAT_getScaler(GFX_Renderer* renderer);
 void PLAT_blitRenderer(GFX_Renderer* renderer);
 void PLAT_flip(SDL_Surface* screen, int sync);
+void PLAT_GPU_Flip();
 int PLAT_supportsOverscan(void);
 
 SDL_Surface* PLAT_initOverlay(void);

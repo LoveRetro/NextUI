@@ -690,12 +690,7 @@ void PLAT_animateSurface(
 		SDL_RenderCopy(vid.renderer, tempTexture, &srcRect, &dstRect);
 
 		SDL_SetRenderTarget(vid.renderer, NULL);
-		PLAT_flip(NULL, 0);
-
-		Uint32 frame_time = SDL_GetTicks() - frame_start;
-		if (frame_time < frame_delay) {
-			SDL_Delay(frame_delay - frame_time);
-		}
+		PLAT_GPU_Flip();
 	}
 
 	SDL_DestroyTexture(tempTexture);
@@ -775,15 +770,102 @@ void PLAT_revealSurface(
 			SDL_RenderCopy(vid.renderer, tempTexture, &srcRect, &dstRect);
 
 		SDL_SetRenderTarget(vid.renderer, NULL);
-		PLAT_flip(NULL, 0);
+		PLAT_GPU_Flip();
 
-		Uint32 frame_time = SDL_GetTicks() - frame_start;
-		if (frame_time < frame_delay) {
-			SDL_Delay(frame_delay - frame_time);
-		}
 	}
 
 	SDL_DestroyTexture(tempTexture);
+}
+
+static int text_offset = 0;
+
+int PLAT_resetScrollText(TTF_Font* font, const char* in_name,int max_width) {
+	int text_width, text_height;
+	
+    TTF_SizeUTF8(font, in_name, &text_width, &text_height);
+
+	text_offset = 0;
+
+	if (text_width <= max_width) {
+		return 0;
+	} else {
+		return 1;
+	}
+}
+void PLAT_scrollTextTexture(
+    TTF_Font* font,
+    const char* in_name,
+    int x, int y,      // Position on target layer
+    int w, int h,      // Clipping width and height
+    int padding,
+    SDL_Color color,
+    float transparency
+) {
+   
+    static int frame_counter = 0;
+
+    if (transparency < 0.0f) transparency = 0.0f;
+    if (transparency > 1.0f) transparency = 1.0f;
+    color.a = (Uint8)(transparency * 255);
+
+    char scroll_text[1024];
+    snprintf(scroll_text, sizeof(scroll_text), "%s  %s", in_name, in_name);
+
+	SDL_Surface* tempSur = TTF_RenderUTF8_Blended(font, scroll_text, color);
+	SDL_Surface* text_surface = SDL_CreateRGBSurfaceWithFormat(0,
+		tempSur->w, tempSur->h, 32, SDL_PIXELFORMAT_RGBA8888);
+	
+	SDL_FillRect(text_surface, NULL, THEME_COLOR1);
+	SDL_BlitSurface(tempSur, NULL, text_surface, NULL);
+
+    SDL_Texture* full_text_texture = SDL_CreateTextureFromSurface(vid.renderer, text_surface);
+    int full_text_width = text_surface->w;
+	int full_text_height = text_surface->h;
+    SDL_FreeSurface(text_surface);
+    SDL_FreeSurface(tempSur);
+
+    if (!full_text_texture) {
+        return;
+    }
+
+    SDL_SetTextureBlendMode(full_text_texture, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureAlphaMod(full_text_texture, color.a);
+
+    SDL_SetRenderTarget(vid.renderer, vid.target_layer4);
+
+    SDL_Rect src_rect = { text_offset, 0, w, full_text_height };
+    SDL_Rect dst_rect = { x, y, w, full_text_height };
+
+    SDL_RenderCopy(vid.renderer, full_text_texture, &src_rect, &dst_rect);
+
+    SDL_SetRenderTarget(vid.renderer, NULL);
+    SDL_DestroyTexture(full_text_texture);
+
+    if (full_text_width > w + padding) {
+        frame_counter++;
+        if (frame_counter >= 1) {
+            text_offset += 1;
+            if (text_offset >= full_text_width / 2) {
+                text_offset = 0;
+            }
+            frame_counter = 0;
+        }
+    } else {
+        text_offset = 0;
+    }
+
+	PLAT_GPU_Flip();
+}
+
+// super fast without update_texture to draw screen
+void PLAT_GPU_Flip() {
+	SDL_RenderClear(vid.renderer);
+	SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
+	SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
+	SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
+	SDL_RenderCopy(vid.renderer, vid.target_layer3, NULL, NULL);
+	SDL_RenderCopy(vid.renderer, vid.target_layer4, NULL, NULL);
+	SDL_RenderPresent(vid.renderer);
 }
 
 void PLAT_animateAndRevealSurfaces(
@@ -892,12 +974,8 @@ void PLAT_animateAndRevealSurfaces(
 			SDL_RenderCopy(vid.renderer, revealTexture, &revealSrc, &revealDst);
 
 		SDL_SetRenderTarget(vid.renderer, NULL);
-		PLAT_flip(NULL, 0);
+		PLAT_GPU_Flip();
 
-		Uint32 frame_time = SDL_GetTicks() - frame_start;
-		if (frame_time < frame_delay) {
-			SDL_Delay(frame_delay - frame_time);
-		}
 	}
 
 	SDL_DestroyTexture(moveTexture);
@@ -954,12 +1032,8 @@ void PLAT_animateSurfaceOpacity(
 		SDL_RenderCopy(vid.renderer, tempTexture, NULL, &dstRect);
 
 		SDL_SetRenderTarget(vid.renderer, NULL);
-		PLAT_flip(NULL, 0); 
+		PLAT_flip(vid.screen,0);
 
-		Uint32 frame_time = SDL_GetTicks() - frame_start;
-		if (frame_time < frame_delay) {
-			SDL_Delay(frame_delay - frame_time);
-		}
 	}
 
 	SDL_DestroyTexture(tempTexture);
@@ -1026,12 +1100,8 @@ void PLAT_animateSurfaceOpacityAndScale(
 		SDL_RenderCopy(vid.renderer, tempTexture, NULL, &dstRect);
 
 		SDL_SetRenderTarget(vid.renderer, NULL);
-		PLAT_flip(NULL, 0);
+		PLAT_GPU_Flip();
 
-		Uint32 frame_time = SDL_GetTicks() - frame_start;
-		if (frame_time < frame_delay) {
-			SDL_Delay(frame_delay - frame_time);
-		}
 	}
 
 	SDL_DestroyTexture(tempTexture);
@@ -1139,13 +1209,8 @@ void PLAT_animateAndFadeSurface(
 		}
 
 		SDL_SetRenderTarget(vid.renderer, NULL);
-		PLAT_flip(NULL, 0);
+		PLAT_GPU_Flip();
 
-		// Frame timing control
-		Uint32 frame_time = SDL_GetTicks() - frame_start;
-		if (frame_time < frame_delay) {
-			SDL_Delay(frame_delay - frame_time);
-		}
 	}
 
 	SDL_DestroyTexture(moveTexture);

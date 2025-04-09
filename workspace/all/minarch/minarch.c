@@ -5917,7 +5917,7 @@ int main(int argc , char* argv[]) {
 		screen_scaling!=SCALE_FULLSCREEN ? scaled_h:screen->h
 	};
 	SDL_BlitScaled(screendata, NULL, tmpSur, &dst);
-
+	
 	GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,1);
 	GFX_clearLayers(0);
 	GFX_clear(screen);
