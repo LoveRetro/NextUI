@@ -3515,24 +3515,6 @@ static void screen_flip(SDL_Surface* screen) {
 	}
 }
 
-SDL_Surface* createSurfaceFromData(const void *data, int width, int height, int pitch) {
-    SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormatFrom(
-        (void*)data,   // Pointer to pixel data
-        width,         // Surface width
-        height,        // Surface height
-        16,            // 16 bits per pixel (RGB565)
-        pitch,         // Pitch (bytes per row)
-        SDL_PIXELFORMAT_RGB565  // Specify RGB565 format
-    );
-
-    if (!surface) {
-        printf("Failed to create surface: %s\n", SDL_GetError());
-        return NULL;
-    }
-
-    return surface;
-}
-
 
 static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch) {
 	// return;
@@ -3614,9 +3596,36 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	if(firstframe) {
 		GFX_clearLayers(0);
 		GFX_clear(screen);
-		SDL_Surface * tmpSur = createSurfaceFromData(data,width,height,pitch);
+		SDL_Surface * screendata = SDL_CreateRGBSurfaceWithFormatFrom(renderer.src, renderer.true_w, renderer.true_h, 32, renderer.src_p, SDL_PIXELFORMAT_RGBA8888);
+		// LOG_info("Menu_loop:menu.bitmap %ix%i\n", menu.bitmap->w,menu.bitmap->h);
+	
+		SDL_Surface* tmpSur = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
+		SDL_FillRect(tmpSur, NULL, SDL_MapRGBA(tmpSur->format, 0, 0, 0, 255)); 
+	
+		float src_aspect = (float)screendata->w / screendata->h;
+		float dst_aspect = (float)DEVICE_WIDTH / DEVICE_HEIGHT;
+	
+		int scaled_w = DEVICE_WIDTH;
+		int scaled_h = DEVICE_HEIGHT;
+	
+		if (src_aspect > dst_aspect) {
+			scaled_w = DEVICE_WIDTH;
+			scaled_h = (int)(DEVICE_WIDTH / src_aspect);
+		} else {
+			scaled_h = DEVICE_HEIGHT;
+			scaled_w = (int)(DEVICE_HEIGHT * src_aspect);
+		}
+	
+		SDL_Rect dst = {
+			screen_scaling!=SCALE_FULLSCREEN ? (DEVICE_WIDTH - scaled_w) / 2:0,
+			screen_scaling!=SCALE_FULLSCREEN ?(DEVICE_HEIGHT - scaled_h) / 2:0,
+			screen_scaling!=SCALE_FULLSCREEN ? scaled_w:screen->w,
+			screen_scaling!=SCALE_FULLSCREEN ? scaled_h:screen->h
+		};
+		SDL_BlitScaled(screendata, NULL, tmpSur, &dst);
 		GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,0,255,CFG_getMenuTransitions() ? 200:20,1);
 		SDL_FreeSurface(tmpSur);
+		SDL_FreeSurface(screendata);
 		GFX_clearLayers(0);
 		firstframe=0;
 	} 
@@ -5572,7 +5581,7 @@ static void Menu_loop(void) {
 				}
 				else {
 					SDL_Rect preview_rect = {ox,oy,hw,hh};
-					SDL_FillRect(screen, &preview_rect, 0);
+					SDL_FillRect(screen, &preview_rect, SDL_MapRGBA(screen->format,0,0,0,255));
 					if (menu.save_exists) GFX_blitMessage(font.large, "No Preview", screen, &preview_rect);
 					else GFX_blitMessage(font.large, "Empty Slot", screen, &preview_rect);
 				}
@@ -5857,15 +5866,48 @@ int main(int argc , char* argv[]) {
 		hdmimon();
 	}
 	
-
-	SDL_Surface * tmpSur = createSurfaceFromData(renderer.src,renderer.src_w,renderer.src_h,renderer.src_p);
-	GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,3);
-	GFX_clearLayers(0);
-	GFX_clear(screen);
-	if(rgbaData) free(rgbaData);
-	SDL_FreeSurface(tmpSur);
 	Menu_quit();
 	QuitSettings();
+	SDL_Surface * screendata = SDL_CreateRGBSurfaceWithFormatFrom(renderer.src, renderer.true_w, renderer.true_h, 32, renderer.src_p, SDL_PIXELFORMAT_RGBA8888);
+	// LOG_info("Menu_loop:menu.bitmap %ix%i\n", menu.bitmap->w,menu.bitmap->h);
+
+	SDL_Surface* tmpSur = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
+	SDL_FillRect(tmpSur, NULL, SDL_MapRGBA(tmpSur->format, 0, 0, 0, 255)); // Change alpha to 0 if transparency is needed
+
+    // Calculate aspect ratio-preserving size
+    float src_aspect = (float)screendata->w / screendata->h;
+    float dst_aspect = (float)DEVICE_WIDTH / DEVICE_HEIGHT;
+
+    int scaled_w = DEVICE_WIDTH;
+    int scaled_h = DEVICE_HEIGHT;
+
+    if (src_aspect > dst_aspect) {
+        // Source is wider relative to destination
+        scaled_w = DEVICE_WIDTH;
+        scaled_h = (int)(DEVICE_WIDTH / src_aspect);
+    } else {
+        // Source is taller relative to destination
+        scaled_h = DEVICE_HEIGHT;
+        scaled_w = (int)(DEVICE_HEIGHT * src_aspect);
+    }
+
+    // Center the image
+	SDL_Rect dst = {
+		screen_scaling!=SCALE_FULLSCREEN ? (DEVICE_WIDTH - scaled_w) / 2:0,
+		screen_scaling!=SCALE_FULLSCREEN ?(DEVICE_HEIGHT - scaled_h) / 2:0,
+		screen_scaling!=SCALE_FULLSCREEN ? scaled_w:screen->w,
+		screen_scaling!=SCALE_FULLSCREEN ? scaled_h:screen->h
+	};
+	SDL_BlitScaled(screendata, NULL, tmpSur, &dst);
+
+	GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,1);
+	GFX_clearLayers(0);
+	GFX_clear(screen);
+	LOG_info("ddone\n");
+	if(rgbaData) free(rgbaData);
+	SDL_FreeSurface(tmpSur);
+	SDL_FreeSurface(screendata);
+	
 	
 finish:
 
