@@ -2150,7 +2150,7 @@ int main (int argc, char *argv[]) {
 									SCALE1(BUTTON_MARGIN), SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),
 									SCALE1(BUTTON_MARGIN + BUTTON_PADDING),SCALE1(targetY+PADDING+4),max_width - SCALE1(BUTTON_PADDING*2),text->h,
 									selected_row == remember_selection ? "none" : selected_row > remember_selection ? "up":"down",
-									CFG_getMenuAnimations() ? 60:10,255,255,255,0,1
+									CFG_getMenuAnimations() ? 40:10,255,255,255,0,1
 								);
 							} 
 							SDL_FreeSurface(text);
