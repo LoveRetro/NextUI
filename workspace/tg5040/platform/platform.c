@@ -236,7 +236,8 @@ void PLAT_quitVideo(void) {
 	clearVideo();
 
 	SDL_FreeSurface(vid.screen);
-	SDL_FreeSurface(vid.buffer);
+	// this segfaults idk why?
+	// if (vid.buffer) SDL_FreeSurface(vid.buffer);
 	if (vid.target) SDL_DestroyTexture(vid.target);
 	if (vid.effect) SDL_DestroyTexture(vid.effect);
 	if (vid.overlay) SDL_DestroyTexture(vid.overlay);

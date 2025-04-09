@@ -5921,31 +5921,24 @@ int main(int argc , char* argv[]) {
 	GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,1);
 	GFX_clearLayers(0);
 	GFX_clear(screen);
-	LOG_info("ddone\n");
 	if(rgbaData) free(rgbaData);
 	SDL_FreeSurface(tmpSur);
 	SDL_FreeSurface(screendata);
-	
 	
 finish:
 
 	Game_close();
 	Core_unload();
-	
 	Core_quit();
 	Core_close();
-	
 	Config_quit();
-	
 	Special_quit();
-
 	MSG_quit();
 	PWR_quit();
 	VIB_quit();
 	SND_quit();
 	PAD_quit();
 	GFX_quit();
-	
 	buffer_dealloc();
 	
 	return EXIT_SUCCESS;
