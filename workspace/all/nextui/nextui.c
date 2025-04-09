@@ -2127,8 +2127,6 @@ int main (int argc, char *argv[]) {
 						}
 					}
 					if(lastScreen==SCREEN_OFF) {
-						// need to update streaming_layer1 once for correct GPU drawing
-						GFX_flipHidden();
 						SDL_Surface * tmpSur =SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 						SDL_FillRect(tmpSur,NULL,SDL_MapRGBA(screen->format,0,0,0,255));
 						GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,3);
