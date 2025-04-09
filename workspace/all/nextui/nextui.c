@@ -2243,13 +2243,6 @@ int main (int argc, char *argv[]) {
 						cached_text_height
 					};
 
-					SDL_Rect dest_rect = { clear_rect.x, clear_rect.y };
-					SDL_Rect src_text_rect = {
-						0, 0,
-						cached_max_width - SCALE1(BUTTON_PADDING * 2),
-						cached_text_height
-					};
-
 					SDL_FillRect(screen, &clear_rect, THEME_COLOR1);
 					GFX_clearLayers(4);
 					GFX_scrollTextSurface(
@@ -2263,7 +2256,6 @@ int main (int argc, char *argv[]) {
 						1
 					);
 					GFX_drawOnLayer(cached_text_surface,clear_rect.x, clear_rect.y, cached_max_width - SCALE1(BUTTON_PADDING * 2), cached_text_surface->h,1.0f,0,4);
-					// SDL_BlitSurface(cached_text_surface, &src_text_rect, screen, &dest_rect);
 				}
 
 				GFX_flip(screen);
