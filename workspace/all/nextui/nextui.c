@@ -1978,8 +1978,10 @@ int main (int argc, char *argv[]) {
 								GFX_drawOnLayer(background,0,0,screen->w, screen->h,1.0f,0,0);
 								if(gsanimdir==1) 
 									GFX_animateSurface(bmp,ax+screen->w,ay,ax,ay,aw,ah,CFG_getMenuTransitions() ? 80:20,0,255,0);
-								else
+								else if(gsanimdir==2)
 									GFX_animateSurface(bmp,ax-screen->w,ay,ax,ay,aw,ah,CFG_getMenuTransitions() ? 80:20,0,255,0);
+								
+								GFX_drawOnLayer(bmp,0,0,screen->w, screen->h,1.0f,0,0);
 							}
 							SDL_FreeSurface(bmp);  // Free after rendering
 						}
@@ -1993,14 +1995,16 @@ int main (int argc, char *argv[]) {
 						} else if(lastScreen == SCREEN_GAMELIST) { 
 							SDL_FillRect(tmpsur, &preview_rect, 0);
 							GFX_animateSurface(tmpsur,0,0-screen->h,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 100:20,255,255,0);
-						} else {
+						} else if(lastScreen == SCREEN_GAMESWITCHER) {
 							GFX_drawOnLayer(background,0,0,screen->w, screen->h,1.0f,0,0);
 							SDL_FillRect(tmpsur, &preview_rect, 0);
 	
 							if(gsanimdir==1) 
 								GFX_animateSurface(tmpsur,0+screen->w,0,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 80:20,0,255,0);
-							else
+							else if(gsanimdir==2)
 								GFX_animateSurface(tmpsur,0-screen->w,0,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 80:20,0,255,0);
+						
+							GFX_drawOnLayer(tmpsur,0,0,screen->w, screen->h,1.0f,0,0);
 						}
 						SDL_FreeSurface(tmpsur);
 						GFX_blitMessage(font.large, "No Preview", screen, &preview_rect);
