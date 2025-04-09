@@ -171,25 +171,25 @@ int main(int argc, char *argv[])
         auto displayMenu = new MenuList(MenuItemType::Fixed, "Display",
         {
             new MenuItem{Generic, "Brightness", "Display brightness (0 to 10)", 0, 10, []() -> std::any
-                { return GetBrightness(); }, [](const std::any &value)
-                { SetBrightness(std::any_cast<int>(value)); },
-                []() { SetBrightness(SETTINGS_DEFAULT_BRIGHTNESS);}},
-                new MenuItem{Generic, "Color temperature", "Color temperature (0 to 40)", 0, 40, []() -> std::any
-                { return GetColortemp(); }, [](const std::any &value)
-                { SetColortemp(std::any_cast<int>(value)); },
-                []() { SetColortemp(SETTINGS_DEFAULT_COLORTEMP);}},
-                new MenuItem{Generic, "Contrast", "Contrast enhancement (-4 to 5)", -4, 5, []() -> std::any
-                { return GetContrast(); }, [](const std::any &value)
-                { SetContrast(std::any_cast<int>(value)); },
-                []() { SetContrast(SETTINGS_DEFAULT_CONTRAST);}},
-                new MenuItem{Generic, "Saturation", "Saturation enhancement (-4 to 5)", -4, 5, []() -> std::any
-                { return GetSaturation(); }, [](const std::any &value)
-                { SetSaturation(std::any_cast<int>(value)); },
-                []() { SetSaturation(SETTINGS_DEFAULT_SATURATION);}},
-                new MenuItem{Generic, "Exposure", "Exposure enhancement (-5 to 5)", -5, 5, []() -> std::any
-                { return GetExposure(); }, [](const std::any &value)
-                { SetExposure(std::any_cast<int>(value)); },
-                []() { SetExposure(SETTINGS_DEFAULT_EXPOSURE);}},
+            { return GetBrightness(); }, [](const std::any &value)
+            { SetBrightness(std::any_cast<int>(value)); },
+            []() { SetBrightness(SETTINGS_DEFAULT_BRIGHTNESS);}},
+            new MenuItem{Generic, "Color temperature", "Color temperature (0 to 40)", 0, 40, []() -> std::any
+            { return GetColortemp(); }, [](const std::any &value)
+            { SetColortemp(std::any_cast<int>(value)); },
+            []() { SetColortemp(SETTINGS_DEFAULT_COLORTEMP);}},
+            new MenuItem{Generic, "Contrast", "Contrast enhancement (-4 to 5)", -4, 5, []() -> std::any
+            { return GetContrast(); }, [](const std::any &value)
+            { SetContrast(std::any_cast<int>(value)); },
+            []() { SetContrast(SETTINGS_DEFAULT_CONTRAST);}},
+            new MenuItem{Generic, "Saturation", "Saturation enhancement (-4 to 5)", -4, 5, []() -> std::any
+            { return GetSaturation(); }, [](const std::any &value)
+            { SetSaturation(std::any_cast<int>(value)); },
+            []() { SetSaturation(SETTINGS_DEFAULT_SATURATION);}},
+            new MenuItem{Generic, "Exposure", "Exposure enhancement (-5 to 5)", -5, 5, []() -> std::any
+            { return GetExposure(); }, [](const std::any &value)
+            { SetExposure(std::any_cast<int>(value)); },
+            []() { SetExposure(SETTINGS_DEFAULT_EXPOSURE);}},
 
                 new MenuItem{Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
         });
@@ -197,45 +197,86 @@ int main(int argc, char *argv[])
         auto systemMenu = new MenuList(MenuItemType::Fixed, "System",
         {
             new MenuItem{Generic, "Volume", "Speaker volume (0-20)", 0, 20, []() -> std::any
-                { return GetVolume(); }, [](const std::any &value)
-                { SetVolume(std::any_cast<int>(value)); },
-                []() { SetVolume(SETTINGS_DEFAULT_VOLUME);}},
-                new MenuItem{Generic, "Screen timeout", "Time before screen turns off (0-600s)", timeout_secs, timeout_labels, []() -> std::any
-                    { return CFG_getScreenTimeoutSecs(); }, [](const std::any &value)
-                    { CFG_setScreenTimeoutSecs(std::any_cast<uint32_t>(value)); },
-                    []() { CFG_setScreenTimeoutSecs(CFG_DEFAULT_SCREENTIMEOUTSECS);}},
-                    new MenuItem{Generic, "Suspend timeout", "Time before device goes to sleep (0-600s)", timeout_secs, timeout_labels, []() -> std::any
-                    { return CFG_getSuspendTimeoutSecs(); }, [](const std::any &value)
-                    { CFG_setSuspendTimeoutSecs(std::any_cast<uint32_t>(value)); },
-                    []() { CFG_setSuspendTimeoutSecs(CFG_DEFAULT_SUSPENDTIMEOUTSECS);}},
-                    new MenuItem{Generic, "Haptic feedback", "Enable or disable haptic feedback on certain actions in the OS", {false, true}, on_off, []() -> std::any
-                    { return CFG_getHaptics(); }, [](const std::any &value)
-                    { CFG_setHaptics(std::any_cast<bool>(value)); },
-                    []() { CFG_setHaptics(CFG_DEFAULT_HAPTICS);}},
-                    new MenuItem{Generic, "Show 24h time format", "Show clock in the 24hrs time format", {false, true}, on_off, []() -> std::any
-                    { return CFG_getClock24H(); },
-                    [](const std::any &value)
-                    { CFG_setClock24H(std::any_cast<bool>(value)); },
-                    []() { CFG_setClock24H(CFG_DEFAULT_CLOCK24H);}},
-                    new MenuItem{Generic, "Show clock", "Show clock in the status pill", {false, true}, on_off, []() -> std::any
-                    { return CFG_getShowClock(); },
-                    [](const std::any &value)
-                    { CFG_setShowClock(std::any_cast<bool>(value)); },
-                    []() { CFG_setShowClock(CFG_DEFAULT_SHOWCLOCK);}},
-                    new MenuItem{Generic, "Set time and date automatically", "Automatically adjust system time\nwith NTP (requires internet access)", {false, true}, on_off, []() -> std::any
-                    { return TIME_getNetworkTimeSync(); }, [](const std::any &value)
-                    { TIME_setNetworkTimeSync(std::any_cast<bool>(value)); },
-                    []() { TIME_setNetworkTimeSync(false);}}, // default from stock
-                    new MenuItem{Generic, "Time zone", "Your time zone", tz_values, tz_labels, []() -> std::any
-                    { return std::string(TIME_getCurrentTimezone()); }, [](const std::any &value)
-                    { TIME_setCurrentTimezone(std::any_cast<std::string>(value).c_str()); },
-                    []() { TIME_setCurrentTimezone("Asia/Shanghai");}}, // default from Stock
-                    new MenuItem{Generic, "Save format", "The save format to use.", {(int)SAVE_FORMAT_SAV, (int)SAVE_FORMAT_SRM}, {".sav", ".srm"}, []() -> std::any
-                    { return CFG_getSaveFormat(); }, [](const std::any &value)
-                    { CFG_setSaveFormat(std::any_cast<int>(value)); },
-                    []() { CFG_setSaveFormat(CFG_DEFAULT_SAVEFORMAT);}},
+            { return GetVolume(); }, [](const std::any &value)
+            { SetVolume(std::any_cast<int>(value)); },
+            []() { SetVolume(SETTINGS_DEFAULT_VOLUME);}},
+            new MenuItem{Generic, "Screen timeout", "Time before screen turns off (0-600s)", timeout_secs, timeout_labels, []() -> std::any
+            { return CFG_getScreenTimeoutSecs(); }, [](const std::any &value)
+            { CFG_setScreenTimeoutSecs(std::any_cast<uint32_t>(value)); },
+            []() { CFG_setScreenTimeoutSecs(CFG_DEFAULT_SCREENTIMEOUTSECS);}},
+            new MenuItem{Generic, "Suspend timeout", "Time before device goes to sleep (0-600s)", timeout_secs, timeout_labels, []() -> std::any
+            { return CFG_getSuspendTimeoutSecs(); }, [](const std::any &value)
+            { CFG_setSuspendTimeoutSecs(std::any_cast<uint32_t>(value)); },
+            []() { CFG_setSuspendTimeoutSecs(CFG_DEFAULT_SUSPENDTIMEOUTSECS);}},
+            new MenuItem{Generic, "Haptic feedback", "Enable or disable haptic feedback on certain actions in the OS", {false, true}, on_off, []() -> std::any
+            { return CFG_getHaptics(); }, [](const std::any &value)
+            { CFG_setHaptics(std::any_cast<bool>(value)); },
+            []() { CFG_setHaptics(CFG_DEFAULT_HAPTICS);}},
+            new MenuItem{Generic, "Show 24h time format", "Show clock in the 24hrs time format", {false, true}, on_off, []() -> std::any
+            { return CFG_getClock24H(); },
+            [](const std::any &value)
+            { CFG_setClock24H(std::any_cast<bool>(value)); },
+            []() { CFG_setClock24H(CFG_DEFAULT_CLOCK24H);}},
+            new MenuItem{Generic, "Show clock", "Show clock in the status pill", {false, true}, on_off, []() -> std::any
+            { return CFG_getShowClock(); },
+            [](const std::any &value)
+            { CFG_setShowClock(std::any_cast<bool>(value)); },
+            []() { CFG_setShowClock(CFG_DEFAULT_SHOWCLOCK);}},
+            new MenuItem{Generic, "Set time and date automatically", "Automatically adjust system time\nwith NTP (requires internet access)", {false, true}, on_off, []() -> std::any
+            { return TIME_getNetworkTimeSync(); }, [](const std::any &value)
+            { TIME_setNetworkTimeSync(std::any_cast<bool>(value)); },
+            []() { TIME_setNetworkTimeSync(false);}}, // default from stock
+            new MenuItem{Generic, "Time zone", "Your time zone", tz_values, tz_labels, []() -> std::any
+            { return std::string(TIME_getCurrentTimezone()); }, [](const std::any &value)
+            { TIME_setCurrentTimezone(std::any_cast<std::string>(value).c_str()); },
+            []() { TIME_setCurrentTimezone("Asia/Shanghai");}}, // default from Stock
+            new MenuItem{Generic, "Save format", "The save format to use.", {(int)SAVE_FORMAT_SAV, (int)SAVE_FORMAT_SRM}, {".sav", ".srm"}, []() -> std::any
+            { return CFG_getSaveFormat(); }, [](const std::any &value)
+            { CFG_setSaveFormat(std::any_cast<int>(value)); },
+            []() { CFG_setSaveFormat(CFG_DEFAULT_SAVEFORMAT);}},
 
-                    new MenuItem{Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
+            new MenuItem{Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
+        });
+
+        auto muteMenu = new MenuList(MenuItemType::Fixed, "Mute Switch",
+        {
+            new MenuItem{Generic, "Mute switch disables LED", "Mute will also disable LEDs", {false, true}, on_off, 
+            []() -> std::any { return CFG_getMuteLEDs(); },
+            [](const std::any &value) { CFG_setMuteLEDs(std::any_cast<bool>(value)); },
+            []() { CFG_setMuteLEDs(CFG_DEFAULT_MUTELEDS); }},
+
+            new MenuItem{Generic, "Brightness when muted", "Display brightness (0 to 10)", 
+            {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, 0,1,2,3,4,5,6,7,8,9,10}, 
+            {"Unchanged","0","1","2","3","4","5","6","7","8","9","10"},
+            []() -> std::any { return GetMutedBrightness(); }, [](const std::any &value)
+            { SetMutedBrightness(std::any_cast<int>(value)); },
+            []() { SetMutedBrightness(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+            new MenuItem{Generic, "Color temperature when muted", "Color temperature (0 to 40)", 
+            {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40}, 
+            {"Unchanged","0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40"},
+            []() -> std::any{ return GetMutedColortemp(); }, [](const std::any &value)
+            { SetMutedColortemp(std::any_cast<int>(value)); },
+            []() { SetMutedColortemp(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+            new MenuItem{Generic, "Contrast when muted", "Contrast enhancement (-4 to 5)", 
+            {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
+            {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+            []() -> std::any  { return GetMutedContrast(); }, [](const std::any &value)
+            { SetMutedContrast(std::any_cast<int>(value)); },
+            []() { SetMutedContrast(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+            new MenuItem{Generic, "Saturation when muted", "Saturation enhancement (-4 to 5)", 
+            {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
+            {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+            []() -> std::any{ return GetMutedSaturation(); }, [](const std::any &value)
+            { SetMutedSaturation(std::any_cast<int>(value)); },
+            []() { SetMutedSaturation(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+            new MenuItem{Generic, "Exposure when muted", "Exposure enhancement (-5 to 5)", 
+            {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -5,-4,-3,-2,-1,0,1,2,3,4,5}, 
+            {"Unchanged","-5","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+            []() -> std::any  { return GetMutedExposure(); }, [](const std::any &value)
+            { SetMutedExposure(std::any_cast<int>(value)); },
+            []() { SetMutedExposure(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+
+            new MenuItem{Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
         });
 
         ctx.menu = new MenuList(MenuItemType::List, "Main",
@@ -243,6 +284,7 @@ int main(int argc, char *argv[])
             new MenuItem{Generic, "Appearance", "UI customization", {}, {}, nullptr, nullptr, DeferToSubmenu, appearanceMenu},
             new MenuItem{Generic, "Display", "", {}, {}, nullptr, nullptr, DeferToSubmenu, displayMenu},
             new MenuItem{Generic, "System", "", {}, {}, nullptr, nullptr, DeferToSubmenu, systemMenu},
+            new MenuItem{Generic, "Mute switch", "Mute switch settings", {}, {}, nullptr, nullptr, DeferToSubmenu, muteMenu},
         });
 
         const bool showTitle = false;

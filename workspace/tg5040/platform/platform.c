@@ -1436,11 +1436,6 @@ void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
 	online = prefixMatch("up", status);
 }
 
-
-// moving these to LED functions so keeping them closer to eachother for overview for now
-// #define LED_PATH1 "/sys/class/led_anim/max_scale"
-// #define LED_PATH2 "/sys/class/led_anim/max_scale_lr"
-// #define LED_PATH3 "/sys/class/led_anim/max_scale_f1f2" // front facing
 void PLAT_enableBacklight(int enable) {
 	if (enable) {
 		if (is_brick) SetRawBrightness(8);
@@ -1704,7 +1699,7 @@ void PLAT_initDefaultLeds() {
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
 	if(is_brick) {
-	lights[0] = (LightSettings) {
+	lightsDefault[0] = (LightSettings) {
 		"FN 1 key",
 		"f1",
 		4,
@@ -1718,7 +1713,7 @@ void PLAT_initDefaultLeds() {
 		100,
 		0
 	};
-	lights[1] = (LightSettings) {
+	lightsDefault[1] = (LightSettings) {
 		"FN 2 key",
 		"f2",
 		4,
@@ -1732,7 +1727,7 @@ void PLAT_initDefaultLeds() {
 		100,
 		0
 	};
-	lights[2] = (LightSettings) {
+	lightsDefault[2] = (LightSettings) {
 		"Topbar",
 		"m",
 		4,
@@ -1746,7 +1741,7 @@ void PLAT_initDefaultLeds() {
 		100,
 		0
 	};
-	lights[3] = (LightSettings) {
+	lightsDefault[3] = (LightSettings) {
 		"L/R triggers",
 		"lr",
 		4,
@@ -1761,7 +1756,7 @@ void PLAT_initDefaultLeds() {
 		0
 	};
 } else {
-	lights[0] = (LightSettings) {
+	lightsDefault[0] = (LightSettings) {
 		"Joysticks",
 		"lr",
 		4,
@@ -1775,7 +1770,7 @@ void PLAT_initDefaultLeds() {
 		100,
 		0
 	};
-	lights[1] = (LightSettings) {
+	lightsDefault[1] = (LightSettings) {
 		"Logo",
 		"m",
 		4,
@@ -2161,6 +2156,7 @@ bool PLAT_getNetworkTimeSync(void) {
 	pclose(fp);
 	bool result = (output[0] == '1');
 	free(output);
+	return result;
 }
 
 void PLAT_setNetworkTimeSync(bool on) {
