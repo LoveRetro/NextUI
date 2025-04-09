@@ -213,6 +213,8 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_animateSurfaceOpacity PLAT_animateSurfaceOpacity //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateSurfaceOpacityAndScale PLAT_animateSurfaceOpacityAndScale //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateAndFadeSurface PLAT_animateAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_revealSurface PLAT_revealSurface //(SDL_Surface *inputSurface,int x, int y)
+#define GFX_animateAndRevealSurfaces PLAT_animateAndRevealSurfaces
 #define GFX_flipHidden PLAT_flipHidden //(void)
 
 #define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
@@ -492,6 +494,34 @@ void PLAT_animateSurfaceOpacityAndScale(
 	int duration_ms,
 	int layer
 );
+
+void PLAT_revealSurface(
+	SDL_Surface *inputSurface,
+	int x, int y,
+	int w, int h,
+	int duration_ms,
+	const char* direction,
+	int opacity,
+	int layer
+);
+
+void PLAT_animateAndRevealSurfaces(
+	SDL_Surface* inputMoveSurface,
+	SDL_Surface* inputRevealSurface,
+	int move_start_x, int move_start_y,
+	int move_target_x, int move_target_y,
+	int move_w, int move_h,
+	int reveal_x, int reveal_y,
+	int reveal_w, int reveal_h,
+	const char* reveal_direction,
+	int duration_ms,
+	int move_start_opacity,
+	int move_target_opacity,
+	int reveal_opacity,
+	int layer1,
+	int layer2
+);
+
 void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
 void PLAT_present();
 void PLAT_vsync(int remaining);
