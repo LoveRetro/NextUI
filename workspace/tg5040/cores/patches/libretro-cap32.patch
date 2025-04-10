@@ -1,5 +1,5 @@
 diff --git a/Makefile b/Makefile
-index 1aa1720..228fb6b 100644
+index 1aa1720..1dc4184 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -390,6 +390,24 @@ else ifeq ($(platform), miyoo)
@@ -27,3 +27,16 @@ index 1aa1720..228fb6b 100644
  # emscripten
  else ifeq ($(platform), emscripten)
  	TARGET := $(TARGET_NAME)_libretro_$(platform).bc
+diff --git a/libretro/libretro-core.h b/libretro/libretro-core.h
+index 25c83f7..539c33c 100644
+--- a/libretro/libretro-core.h
++++ b/libretro/libretro-core.h
+@@ -90,7 +90,7 @@ extern unsigned amstrad_devices[ PORTS_NUMBER ];
+ //#define NO_BORDER
+ 
+ //#define MOUSE_RELATIVE // test mouse relative movement
+-//#define LOWRES // use lowres mode 384x272 (320x240 with crop)
++#define LOWRES // use lowres mode 384x272 (320x240 with crop)
+ //#define M16BPP // force only 16bpps
+ //#define M8BPP // force only 8bpps
+ 
