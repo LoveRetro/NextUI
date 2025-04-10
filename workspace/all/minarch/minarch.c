@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -3202,7 +3203,7 @@ static const char* bitmap_font[] = {
 	}
 	
 	
-void drawRect(int x, int y, int w, int h, int c, uint16_t *data, int stride) {
+void drawRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
 	for (int _x=x; _x<x+w; _x++) {
 		data[_x + y * stride] = c;
 	}
@@ -3214,7 +3215,7 @@ void drawRect(int x, int y, int w, int h, int c, uint16_t *data, int stride) {
 	}
 }
 
-void fillRect(int x, int y, int w, int h, int c, uint16_t *data, int stride) {
+void fillRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
 	for (int _y=y; _y<y+h; _y++) {
 		for (int _x=x; _x<x+w; _x++) {
 			data[_x + _y * stride] = c;
@@ -3222,19 +3223,17 @@ void fillRect(int x, int y, int w, int h, int c, uint16_t *data, int stride) {
 	}
 }
 
-void drawGauge(int x, int y, float percent, int width, int height, uint16_t *data, int stride) {
-    int red   = (int) (percent * 255);   
-    int green = (int) ((1.0 - percent) * 255); 
-    int blue  = 0;                           
-    uint8_t alpha = 255;                   
-    
-    uint32_t color = (alpha << 24) | (red << 16) | (green << 8) | blue;
-    
-    fillRect(x, y, width, height, 0x00000000, data, stride);  
-    
+void drawGauge(int x, int y, float percent, int width, int height, uint32_t *data, int stride) {
+    int red   = (int) (percent * 255);
+    int green = (int) ((1.0 - percent) * 255);
+    int blue  = 0;
+    uint8_t alpha = 255;
+
+    uint32_t color = (red << 24) | (green << 16) | (blue << 8) | alpha;
+
+    fillRect(x, y, width, height, 0x000000FF, data, stride);
     fillRect(x, y, (int) (percent * width), height, color, data, stride);
-    
-    drawRect(x, y, width, height, 0xFFFFFFFF, data, stride);  
+    drawRect(x, y, width, height, 0xFFFFFFFF, data, stride);
 }
 
 
@@ -3585,7 +3584,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
 	
 		double buffer_fill = (double) (currentbuffersize - currentbufferfree) / (double) currentbuffersize;
-		drawGauge(x, y + 30, buffer_fill, width / 2, 10, (uint16_t*)data, pitch / 2);
+		drawGauge(x, y + 30, buffer_fill, width / 2, 10, (uint32_t*)data, pitch / 4);
 	}
 	
 
