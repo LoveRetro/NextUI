@@ -23,6 +23,8 @@
 #include <time.h>
 #include <pthread.h>
 #include <string.h>
+#include <GL/glew.h>   // GLEW handles modern OpenGL functions.
+#include <GL/gl.h>      // Standard OpenGL header (core functions)
 
 int is_brick = 0;
 volatile int useAutoCpu = 1;
@@ -55,7 +57,8 @@ static struct VID_Context {
 	SDL_Texture* effect;
 	SDL_Texture* overlay;
 	SDL_Surface* screen;
-	
+	SDL_GLContext gl_context;
+	GLuint texture;
 	GFX_Renderer* blit; // yeesh
 	
 	int width;
@@ -113,7 +116,11 @@ SDL_Surface* PLAT_initVideo(void) {
 	int w = FIXED_WIDTH;
 	int h = FIXED_HEIGHT;
 	int p = FIXED_PITCH;
-	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w,h, SDL_WINDOW_SHOWN);
+
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w,h, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN);
 	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
 	SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
 	// SDL_RendererInfo info;
@@ -123,6 +130,15 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengl");
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");
+
+	vid.gl_context = SDL_GL_CreateContext(vid.window);
+	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+
+
+    glGenTextures(1, &vid.texture);
+    glBindTexture(GL_TEXTURE_2D, vid.texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
@@ -855,8 +871,56 @@ void PLAT_GPU_Flip() {
 	SDL_RenderPresent(vid.renderer);
 }
 
+void PLAT_GL_Swap() {
+	void *pixels;
+	int texture_pitch;
+	if (SDL_LockTexture(vid.stream_layer1, NULL, &pixels, &texture_pitch) == 0) {
+		const uint8_t *src = (const uint8_t *)vid.blit->src; // data is the raw frame from Libretro
+		for (int y = 0; y < vid.blit->src_h; y++) {
+			memcpy((uint8_t *)pixels + y * texture_pitch,
+				src + y * vid.blit->src_p,
+				vid.blit->src_w * 4); // 4 bytes per pixel (RGBA8888)
+		}
+		SDL_UnlockTexture(vid.stream_layer1);
+	}
+
+		// Set up vertex data for a full-screen quad
+	float vertices[] = {
+		// Positions        // Texture coordinates
+		-1.0f,  1.0f,       0.0f, 1.0f,  // Top-left
+		-1.0f, -1.0f,       0.0f, 0.0f,  // Bottom-left
+		1.0f,  1.0f,       1.0f, 1.0f,  // Top-right
+		1.0f, -1.0f,       1.0f, 0.0f   // Bottom-right
+	};
+
+	// Setup the VAO, VBO
+	GLuint VAO, VBO;
+	glGenVertexArrays(1, &VAO);
+	glGenBuffers(1, &VBO);
+
+	glBindVertexArray(VAO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+	// Position attribute
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	// Texture coord attribute
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+
+	// Draw the quad with the texture
+	glClear(GL_COLOR_BUFFER_BIT);
+	glBindVertexArray(VAO);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	SDL_GL_SwapWindow(vid.window);
+}
+
 void PLAT_GPU_core_flip(const void *data,size_t pitch,int width,int height) {
 
+
+	
 	if (vid.width != width || vid.height != height) {
 		if (vid.stream_layer1) SDL_DestroyTexture(vid.stream_layer1);
 		vid.stream_layer1 = SDL_CreateTexture(
@@ -1302,6 +1366,8 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
         SDL_RenderPresent(vid.renderer);
         return;
     }
+
+
 
     SDL_UpdateTexture(vid.stream_layer1, NULL, vid.blit->src, vid.blit->src_p);
 

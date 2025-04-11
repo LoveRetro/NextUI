@@ -26,7 +26,9 @@ static int quit = 0;
 static int show_menu = 0;
 static int simple_mode = 0;
 static int was_threaded = 0;
+static int glrendering = 0;
 static int should_run_core = 1; // used by threaded video
+
 enum retro_pixel_format fmt;
 
 static pthread_t		core_pt;
@@ -2771,6 +2773,22 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		
 		break;
 	}
+	case RETRO_ENVIRONMENT_SET_HW_RENDER:
+	{
+
+		struct retro_hw_render_callback *hw = (struct retro_hw_render_callback *)data;
+		hw->context_type = RETRO_HW_CONTEXT_OPENGL;
+		hw->version_major = 3;
+		hw->version_minor = 2;
+		hw->depth = true;
+		hw->stencil = false;
+		hw->cache_context = false;
+		glrendering = 1;
+		LOG_info("GL context enabled\n");
+	
+		return true;
+		break;
+	}
 	
 	// unused
 	// case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK: {
@@ -3479,7 +3497,7 @@ static void screen_flip(SDL_Surface* screen) {
 		GFX_flip_fixed_rate(screen, core.fps);
 	}
 	else {
-		GFX_flip(screen);
+		PLAT_GL_Swap();
 	}
 }
 
