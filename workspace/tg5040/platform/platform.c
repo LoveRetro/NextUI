@@ -969,7 +969,7 @@ void PLAT_GL_Swap() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     // Load the texture data into OpenGL
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->true_w, vid.blit->true_h,0, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
 
     // Define vertices for a full-screen quad (mapping the texture to the full screen)
     // The texture coordinates range from 0 to 1 in both directions (no flipping)
