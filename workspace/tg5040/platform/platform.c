@@ -946,33 +946,28 @@ void PLAT_GL_Swap() {
     int win_w, win_h;
     SDL_GetWindowSize(vid.window, &win_w, &win_h);
     
-    // Set the OpenGL viewport to match the window size
-    glViewport(0, 0, FIXED_WIDTH, FIXED_HEIGHT);
+	glViewport(0, 0, win_w, win_h); 
 
-    // Set a red clear color
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // Red background
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // Ensure texture is valid
+
     if (vid.blit->src == NULL) {
         printf("Error: Texture data (vid.blit->src) is NULL\n");
         return;
     }
 
-    // Create and bind the texture
+
     GLuint gl_tex = 0;
     glGenTextures(1, &gl_tex);
-    glBindTexture(GL_TEXTURE_2D, gl_tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    // Load the texture data into OpenGL
+	glBindTexture(GL_TEXTURE_2D, gl_tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
 
-    // Define vertices for a full-screen quad (mapping the texture to the full screen)
-    // The texture coordinates range from 0 to 1 in both directions (no flipping)
+
     float vertices[] = {
         // Positions           // TexCoords
         -1.0f,  1.0f,   0.0f, 0.0f,  // Top-left corner
@@ -985,31 +980,27 @@ void PLAT_GL_Swap() {
     if (!VAO) {
         glGenVertexArrays(1, &VAO);
         glGenBuffers(1, &VBO);
-        glBindVertexArray(VAO);
+		glBindVertexArray(VAO);
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+		GLint posAttrib = glGetAttribLocation(g_shader_program, "aPos");
+		glEnableVertexAttribArray(posAttrib);
+		glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+		
+		GLint texAttrib = glGetAttribLocation(g_shader_program, "aTexCoord");
+		glEnableVertexAttribArray(texAttrib);
+		glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
     }
-
-    // Use the shader program
+	glBindVertexArray(VAO);
     glUseProgram(g_shader_program);
-
-    // Set texture uniform (use texture unit 0)
     GLint tex_location = glGetUniformLocation(g_shader_program, "uTex");
     glUniform1i(tex_location, 0);  // 0 corresponds to GL_TEXTURE0
-
-    // Bind the texture to the shader
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, gl_tex);
 
-    // Draw the quad (covering full screen)
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    // Swap buffers
     SDL_GL_SwapWindow(vid.window);
+	glDeleteTextures(1, &gl_tex);
 }
 
 
