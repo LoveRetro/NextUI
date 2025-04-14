@@ -23,11 +23,12 @@
 #include <time.h>
 #include <pthread.h>
 #include <string.h>
-#include <GL/glew.h>   // GLEW handles modern OpenGL functions.
-#include <GL/gl.h>      // Standard OpenGL header (core functions)
+#include <GLES3/gl3.h>      // Standard OpenGL header (core functions)
 
 int is_brick = 0;
 volatile int useAutoCpu = 1;
+GLuint g_shader_program = 0;
+
 ///////////////////////////////
 
 static SDL_Joystick *joystick;
@@ -76,6 +77,48 @@ static uint32_t SDL_transparentBlack = 0;
 static char* overlay_path = NULL;
 
 
+GLuint compile_shader(GLenum type, const char* source) {
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &source, NULL);
+    glCompileShader(shader);
+
+    GLint success;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        GLint logLength;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
+        char* log = (char*)malloc(logLength);
+        glGetShaderInfoLog(shader, logLength, &logLength, log);
+        printf("Shader compile error: %s\n", log);
+        free(log);
+    }
+
+    return shader;
+}
+
+GLuint link_program(GLuint vertex_shader, GLuint fragment_shader) {
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vertex_shader);
+    glAttachShader(program, fragment_shader);
+    glLinkProgram(program);
+
+    GLint success;
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        GLint logLength;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
+        char* log = (char*)malloc(logLength);
+        glGetProgramInfoLog(program, logLength, &logLength, log);
+        printf("Program link error: %s\n", log);
+        free(log);
+    }
+
+    return program;
+}
+
+
+
+
 SDL_Surface* PLAT_initVideo(void) {
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
@@ -117,9 +160,11 @@ SDL_Surface* PLAT_initVideo(void) {
 	int h = FIXED_HEIGHT;
 	int p = FIXED_PITCH;
 
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+	
 	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w,h, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN);
 	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
 	SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
@@ -133,12 +178,37 @@ SDL_Surface* PLAT_initVideo(void) {
 
 	vid.gl_context = SDL_GL_CreateContext(vid.window);
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+	glViewport(0, 0, w, h);
 
 
-    glGenTextures(1, &vid.texture);
-    glBindTexture(GL_TEXTURE_2D, vid.texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	const char* vertex_shader_src = 
+    "#version 100\n"
+    "attribute vec2 aPos;\n"        // Vertex position attribute
+    "attribute vec2 aTexCoord;\n"   // Texture coordinate attribute
+    "varying vec2 vTexCoord;\n"     // Varying variable to pass the texture coordinates
+    "void main() {\n"
+    "    vTexCoord = aTexCoord;\n"  // Pass the texture coordinates to the fragment shader
+    "    gl_Position = vec4(aPos, 0.0, 1.0);\n"  // Pass the position directly to the fragment shader
+    "}\n";
+
+
+
+
+	const char* fragment_shader_src = 
+    "#version 100\n"
+    "precision mediump float;\n"    // Precision for floats in fragment shader
+    "uniform sampler2D uTex;\n"     // Uniform for the texture
+    "varying vec2 vTexCoord;\n"     // The texture coordinates passed from the vertex shader
+    "void main() {\n"
+    "    gl_FragColor = texture2D(uTex, vTexCoord);\n"  // Sample the texture at the given coordinates
+    "}\n";
+
+
+
+	GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_shader_src);
+	GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, fragment_shader_src);
+	g_shader_program = link_program(vertex_shader, fragment_shader);
+
 
 	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
@@ -872,50 +942,80 @@ void PLAT_GPU_Flip() {
 }
 
 void PLAT_GL_Swap() {
-	void *pixels;
-	int texture_pitch;
-	if (SDL_LockTexture(vid.stream_layer1, NULL, &pixels, &texture_pitch) == 0) {
-		const uint8_t *src = (const uint8_t *)vid.blit->src; // data is the raw frame from Libretro
-		for (int y = 0; y < vid.blit->src_h; y++) {
-			memcpy((uint8_t *)pixels + y * texture_pitch,
-				src + y * vid.blit->src_p,
-				vid.blit->src_w * 4); // 4 bytes per pixel (RGBA8888)
-		}
-		SDL_UnlockTexture(vid.stream_layer1);
-	}
+    SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+    int win_w, win_h;
+    SDL_GetWindowSize(vid.window, &win_w, &win_h);
+    
+    // Set the OpenGL viewport to match the window size
+    glViewport(0, 0, FIXED_WIDTH, FIXED_HEIGHT);
 
-		// Set up vertex data for a full-screen quad
-	float vertices[] = {
-		// Positions        // Texture coordinates
-		-1.0f,  1.0f,       0.0f, 1.0f,  // Top-left
-		-1.0f, -1.0f,       0.0f, 0.0f,  // Bottom-left
-		1.0f,  1.0f,       1.0f, 1.0f,  // Top-right
-		1.0f, -1.0f,       1.0f, 0.0f   // Bottom-right
-	};
+    // Set a red clear color
+    glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // Red background
+    glClear(GL_COLOR_BUFFER_BIT);
 
-	// Setup the VAO, VBO
-	GLuint VAO, VBO;
-	glGenVertexArrays(1, &VAO);
-	glGenBuffers(1, &VBO);
+    // Ensure texture is valid
+    if (vid.blit->src == NULL) {
+        printf("Error: Texture data (vid.blit->src) is NULL\n");
+        return;
+    }
 
-	glBindVertexArray(VAO);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    // Create and bind the texture
+    GLuint gl_tex = 0;
+    glGenTextures(1, &gl_tex);
+    glBindTexture(GL_TEXTURE_2D, gl_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	// Position attribute
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
-	// Texture coord attribute
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-	glEnableVertexAttribArray(1);
+    // Load the texture data into OpenGL
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->true_w, vid.blit->true_h,0, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
 
-	// Draw the quad with the texture
-	glClear(GL_COLOR_BUFFER_BIT);
-	glBindVertexArray(VAO);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    // Define vertices for a full-screen quad (mapping the texture to the full screen)
+    // The texture coordinates range from 0 to 1 in both directions (no flipping)
+    float vertices[] = {
+        // Positions           // TexCoords
+        -1.0f,  1.0f,   0.0f, 0.0f,  // Top-left corner
+        -1.0f, -1.0f,   0.0f, 1.0f,  // Bottom-left corner
+         1.0f,  1.0f,   1.0f, 0.0f,  // Top-right corner
+         1.0f, -1.0f,   1.0f, 1.0f   // Bottom-right corner
+    };
 
-	SDL_GL_SwapWindow(vid.window);
+    static GLuint VAO = 0, VBO = 0;
+    if (!VAO) {
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+        glBindVertexArray(VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    }
+
+    // Use the shader program
+    glUseProgram(g_shader_program);
+
+    // Set texture uniform (use texture unit 0)
+    GLint tex_location = glGetUniformLocation(g_shader_program, "uTex");
+    glUniform1i(tex_location, 0);  // 0 corresponds to GL_TEXTURE0
+
+    // Bind the texture to the shader
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gl_tex);
+
+    // Draw the quad (covering full screen)
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    // Swap buffers
+    SDL_GL_SwapWindow(vid.window);
 }
+
+
+
+
+
 
 void PLAT_GPU_core_flip(const void *data,size_t pitch,int width,int height) {
 

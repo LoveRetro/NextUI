@@ -3542,78 +3542,12 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		GFX_clearAll();
 	}
 	
-	// debug
-	if (show_debug && !isnan(currentratio) && !isnan(currentfps) && !isnan(currentreqfps)  && !isnan(currentbufferms) &&
-	currentbuffersize >= 0  && currentbufferfree >= 0 && SDL_GetTicks() > 5000) {
-		int x = 2 + renderer.src_x;
-		int y = 2 + renderer.src_y;
-		char debug_text[250];
-		int scale = renderer.scale;
-		if (scale==-1) scale = 1; // nearest neighbor flag
 
-		sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,currentsampleratein,currentsamplerateout);
-		blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
-		
-		sprintf(debug_text, "%.03f/%i/%.0f/%i", currentratio,
-				currentbuffersize,currentbufferms, currentbufferfree);
-		blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
-					height);
-
-		sprintf(debug_text, "%i,%i %ix%i", renderer.dst_x,renderer.dst_y, renderer.src_w*scale,renderer.src_h*scale);
-		blitBitmapText(debug_text,-x,y,(uint32_t*)data,pitch / 4, width,height);
-	
-		sprintf(debug_text, "%ix%i", renderer.dst_w,renderer.dst_h);
-		blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
-
-		//want this to overwrite bottom right in case screen is too small this info more important tbh
-		PLAT_getCPUTemp();
-		sprintf(debug_text, "%.01f/%.01f/%.0f%%/%ihz/%ic", currentfps, currentreqfps,currentcpuse,currentcpuspeed,currentcputemp);
-		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
-	
-		double buffer_fill = (double) (currentbuffersize - currentbufferfree) / (double) currentbuffersize;
-		drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
-	}
 	
 
 	renderer.src = (void*)data;
 	renderer.dst = screen->pixels;
-	// LOG_info("video_refresh_callback: %ix%i@%i %ix%i@%i\n",width,height,pitch,screen->w,screen->h,screen->pitch);
-	if(firstframe) {
-		GFX_clearLayers(0);
-		GFX_clear(screen);
-		SDL_Surface * screendata = SDL_CreateRGBSurfaceWithFormatFrom(renderer.src, renderer.true_w, renderer.true_h, 32, renderer.src_p, SDL_PIXELFORMAT_RGBA8888);
-		// LOG_info("Menu_loop:menu.bitmap %ix%i\n", menu.bitmap->w,menu.bitmap->h);
-	
-		SDL_Surface* tmpSur = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
-		SDL_FillRect(tmpSur, NULL, SDL_MapRGBA(tmpSur->format, 0, 0, 0, 255)); 
-	
-		float src_aspect = (float)screendata->w / screendata->h;
-		float dst_aspect = (float)DEVICE_WIDTH / DEVICE_HEIGHT;
-	
-		int scaled_w = DEVICE_WIDTH;
-		int scaled_h = DEVICE_HEIGHT;
-	
-		if (src_aspect > dst_aspect) {
-			scaled_w = DEVICE_WIDTH;
-			scaled_h = (int)(DEVICE_WIDTH / src_aspect);
-		} else {
-			scaled_h = DEVICE_HEIGHT;
-			scaled_w = (int)(DEVICE_HEIGHT * src_aspect);
-		}
-	
-		SDL_Rect dst = {
-			screen_scaling!=SCALE_FULLSCREEN ? (DEVICE_WIDTH - scaled_w) / 2:0,
-			screen_scaling!=SCALE_FULLSCREEN ?(DEVICE_HEIGHT - scaled_h) / 2:0,
-			screen_scaling!=SCALE_FULLSCREEN ? scaled_w:screen->w,
-			screen_scaling!=SCALE_FULLSCREEN ? scaled_h:screen->h
-		};
-		SDL_BlitScaled(screendata, NULL, tmpSur, &dst);
-		GFX_animateSurfaceOpacity(tmpSur,0,0,screen->w,screen->h,0,255,CFG_getMenuTransitions() ? 200:20,1);
-		SDL_FreeSurface(tmpSur);
-		SDL_FreeSurface(screendata);
-		GFX_clearLayers(0);
-		firstframe=0;
-	} 
+
 
 	GFX_blitRenderer(&renderer);
 
@@ -3626,13 +3560,6 @@ static Uint32* rgbaData = NULL;
 static size_t rgbaDataSize = 0;
 
 static void video_refresh_callback(const void* data, unsigned width, unsigned height, size_t pitch) {
-    // not needed currently
-	// bool can_dupe = false;
-    // environment_callback(RETRO_ENVIRONMENT_GET_CAN_DUPE, &can_dupe);
-
-
-
-	
 	if (!rgbaData || rgbaDataSize != width * height) {
 		if (rgbaData) free(rgbaData);
 		rgbaDataSize = width * height;
@@ -3643,56 +3570,55 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 		}
 	}
 
-	if(!fast_forward && data) {
-		if(ambient_mode!=0) {
-			GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
-			LEDS_updateLeds();
+	// Ambient light sensing (optional, only if not fast forwarding and data exists)
+	if (!fast_forward && data && ambient_mode != 0) {
+		GFX_setAmbientColor(data, width, height, pitch, ambient_mode);
+		LEDS_updateLeds();
+	}
+
+	// Handle missing frame
+	if (!data) {
+		if (lastframe) {
+			data = lastframe;
+		} else {
+			return;
 		}
 	}
 
-    if (!data) {
-        if (lastframe) {
-            data = lastframe;
-        } else {
-            return; // No data to display
-        }
-    } else if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
-		// convert XRGB8888 to RGBA8888
+	// Convert pixel format to true RGBA8888
+	if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
 		const uint32_t* src = (const uint32_t*)data;
 		for (unsigned i = 0; i < width * height; ++i) {
 			uint32_t pixel = src[i];
 			uint8_t r = (pixel >> 16) & 0xFF;
 			uint8_t g = (pixel >> 8) & 0xFF;
 			uint8_t b = (pixel >> 0) & 0xFF;
-			uint8_t a = 0xFF;
-			rgbaData[i] = (r << 24) | (g << 16) | (b << 8) | a;
+			rgbaData[i] = (r << 0) | (g << 8) | (b << 16) | (0xFF << 24); // RGBA8888
 		}
 		data = rgbaData;
 	} else {
-		// if emulator doesnt support XRGB888 and uses RGB565
-		// convert RGB565 to RGBA8888
+		// Assume RGB565
 		const uint16_t* srcData = (const uint16_t*)data;
-		unsigned srcPitchInPixels = pitch / sizeof(uint16_t); 
-
+		unsigned srcPitchInPixels = pitch / sizeof(uint16_t);
 		for (unsigned y = 0; y < height; ++y) {
 			for (unsigned x = 0; x < width; ++x) {
 				uint16_t pixel = srcData[y * srcPitchInPixels + x];
-
-				uint8_t r = ((pixel >> 11) & 0x1F) << 3; 
-				uint8_t g = ((pixel >> 5) & 0x3F) << 2;   
-				uint8_t b = (pixel & 0x1F) << 3;          
-
-				rgbaData[y * width + x] = (r << 24) | (g << 16) | (b << 8) | 0xFF;  
+				uint8_t r = ((pixel >> 11) & 0x1F) << 3;
+				uint8_t g = ((pixel >> 5) & 0x3F) << 2;
+				uint8_t b = (pixel & 0x1F) << 3;
+				rgbaData[y * width + x] = (r << 0) | (g << 8) | (b << 16) | (0xFF << 24); // RGBA8888
 			}
 		}
 		data = rgbaData;
 	}
 
+	// Update pitch and store last frame
 	pitch = width * sizeof(Uint32);
 	lastframe = data;
-	
-     video_refresh_callback_main(data,width,height,pitch);
+
+	video_refresh_callback_main(data, width, height, pitch);
 }
+
 ///////////////////////////////
 
 // NOTE: sound must be disabled for fast forward to work...
