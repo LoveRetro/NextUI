@@ -211,6 +211,7 @@ static struct VID_Context {
 	SDL_Texture* target_layer4;
 	SDL_Texture* foreground;
 	SDL_Surface* screen;
+	SDL_GLContext gl_context;
 	
 	GFX_Renderer* blit; // yeesh
 	
