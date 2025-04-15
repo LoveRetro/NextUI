@@ -260,6 +260,10 @@ SDL_Surface *PLAT_initVideo(void)
 	int w = FIXED_WIDTH;
 	int h = FIXED_HEIGHT;
 	int p = FIXED_PITCH;
+
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+
 	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w, h, SDL_WINDOW_SHOWN);
 	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
 	SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
@@ -267,6 +271,43 @@ SDL_Surface *PLAT_initVideo(void)
 	// SDL_GetRendererInfo(vid.renderer, &info);
 	// LOG_info("Current render driver: %s\n", info.name);
 
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
+	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengl");
+	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");
+
+	vid.gl_context = SDL_GL_CreateContext(vid.window);
+	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+	glViewport(0, 0, w, h);
+
+
+	const char* vertex_shader_src = 
+    "#version 100\n"
+    "attribute vec2 aPos;\n"        // Vertex position attribute
+    "attribute vec2 aTexCoord;\n"   // Texture coordinate attribute
+    "varying vec2 vTexCoord;\n"     // Varying variable to pass the texture coordinates
+    "void main() {\n"
+    "    vTexCoord = aTexCoord;\n"  // Pass the texture coordinates to the fragment shader
+    "    gl_Position = vec4(aPos, 0.0, 1.0);\n"  // Pass the position directly to the fragment shader
+    "}\n";
+
+
+
+
+	const char* fragment_shader_src = 
+    "#version 100\n"
+    "precision mediump float;\n"    // Precision for floats in fragment shader
+    "uniform sampler2D uTex;\n"     // Uniform for the texture
+    "varying vec2 vTexCoord;\n"     // The texture coordinates passed from the vertex shader
+    "void main() {\n"
+    "    gl_FragColor = texture2D(uTex, vTexCoord);\n"  // Sample the texture at the given coordinates
+    "}\n";
+
+
+
+	GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_shader_src);
+	GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, fragment_shader_src);
+	g_shader_program = link_program(vertex_shader, fragment_shader);
+	
 	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	vid.target_layer2 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
