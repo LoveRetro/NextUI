@@ -59,6 +59,7 @@ static struct VID_Context {
 	SDL_Texture* effect;
 	SDL_Texture* overlay;
 	SDL_Surface* screen;
+	SDL_GLContext gl_context;
 	
 	GFX_Renderer* blit; // yeesh
 	
