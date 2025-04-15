@@ -307,7 +307,7 @@ SDL_Surface *PLAT_initVideo(void)
 	GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_shader_src);
 	GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, fragment_shader_src);
 	g_shader_program = link_program(vertex_shader, fragment_shader);
-	
+
 	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	vid.target_layer2 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
@@ -1312,16 +1312,27 @@ void PLAT_GL_Swap() {
         return;
     }
 
-    GLuint gl_tex = 0;
-    glGenTextures(1, &gl_tex);
-	glBindTexture(GL_TEXTURE_2D, gl_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    static GLuint gl_tex = 0;
+    if (!gl_tex) {
+		glGenTextures(1, &gl_tex);
+		glBindTexture(GL_TEXTURE_2D, gl_tex);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	}
 
 	// SDL and GL RGBA8888 are not the same thing different order of bytes so quickly need to shuffle them no biggie :D
-	uint8_t* glesPixelData = malloc(vid.blit->src_w * vid.blit->src_h * 4);
+	static uint8_t* glesPixelData = NULL;
+	static size_t glesPixelSize = 0;
+	size_t neededSize = vid.blit->src_w * vid.blit->src_h * 4;
+
+	if (!glesPixelData || glesPixelSize < neededSize) {
+		if (glesPixelData) free(glesPixelData);
+		glesPixelData = malloc(neededSize);
+		glesPixelSize = neededSize;
+	}
 	const uint32_t* src = (const uint32_t*)vid.blit->src;
 	
 	for (unsigned i = 0; i < vid.blit->src_w * vid.blit->src_h; ++i) {
@@ -1332,8 +1343,9 @@ void PLAT_GL_Swap() {
 		glesPixelData[i * 4 + 3] = pixel & 0xFF;         // A
 
 	}
+	glBindTexture(GL_TEXTURE_2D, gl_tex);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, glesPixelData);
 
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, glesPixelData);
 
     float vertices[] = {
         // Positions           // TexCoords
@@ -1349,7 +1361,12 @@ void PLAT_GL_Swap() {
         glGenBuffers(1, &VBO);
 		glBindVertexArray(VAO);
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+		// do this only once
+        static bool vertexDataUploaded = false;
+		if (!vertexDataUploaded) {
+			glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+			vertexDataUploaded = true;
+		}
 		GLint posAttrib = glGetAttribLocation(g_shader_program, "aPos");
 		glEnableVertexAttribArray(posAttrib);
 		glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
@@ -1360,16 +1377,19 @@ void PLAT_GL_Swap() {
     }
 	glBindVertexArray(VAO);
     glUseProgram(g_shader_program);
-    GLint tex_location = glGetUniformLocation(g_shader_program, "uTex");
+	// do this only once
+    static GLint tex_location = -1;
+	if (tex_location == -1) {
+		tex_location = glGetUniformLocation(g_shader_program, "uTex");
+	}
     glUniform1i(tex_location, 0);  // 0 corresponds to GL_TEXTURE0
     glActiveTexture(GL_TEXTURE0);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
     SDL_GL_SwapWindow(vid.window);
-	glDeleteTextures(1, &gl_tex);
-	free(glesPixelData);
 }
+
 
 ///////////////////////////////
 
