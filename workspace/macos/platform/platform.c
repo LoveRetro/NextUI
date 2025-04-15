@@ -21,6 +21,8 @@
 
 ///////////////////////////////////////
 
+GLuint g_shader_program = 0;
+
 // Legacy MinUI settings
 typedef struct SettingsV3 {
 	int version; // future proofing
