@@ -3428,7 +3428,8 @@ static void screen_flip(SDL_Surface* screen) {
 		GFX_flip_fixed_rate(screen, core.fps);
 	}
 	else {
-		GFX_flip(screen);
+		GFX_GL_Swap();
+		// GFX_flip(screen);
 	}
 }
 
