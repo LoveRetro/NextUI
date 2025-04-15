@@ -5186,25 +5186,12 @@ static void Menu_loop(void) {
 	menu.bitmap = SDL_CreateRGBSurfaceWithFormatFrom(renderer.src, renderer.true_w, renderer.true_h, 32, renderer.src_p, SDL_PIXELFORMAT_RGBA8888);
 	SDL_Surface* backing = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
 	
-	float src_aspect = (float)menu.bitmap->w / menu.bitmap->h;
-	float dst_aspect = (float)DEVICE_WIDTH / DEVICE_HEIGHT;
-
-	int scaled_w = DEVICE_WIDTH;
-	int scaled_h = DEVICE_HEIGHT;
-
-	if (src_aspect > dst_aspect) {
-		scaled_w = DEVICE_WIDTH;
-		scaled_h = (int)(DEVICE_WIDTH / src_aspect);
-	} else {
-		scaled_h = DEVICE_HEIGHT;
-		scaled_w = (int)(DEVICE_HEIGHT * src_aspect);
-	}
 
 	SDL_Rect dst = {
-		screen_scaling!=SCALE_FULLSCREEN ? (DEVICE_WIDTH - scaled_w) / 2:0,
-		screen_scaling!=SCALE_FULLSCREEN ?(DEVICE_HEIGHT - scaled_h) / 2:0,
-		screen_scaling!=SCALE_FULLSCREEN ? scaled_w:screen->w,
-		screen_scaling!=SCALE_FULLSCREEN ? scaled_h:screen->h
+		0,
+		0,
+		screen->w,
+		screen->h
 	};
 	SDL_BlitScaled(menu.bitmap, NULL, backing, &dst);
 	
@@ -5252,7 +5239,7 @@ static void Menu_loop(void) {
 	
 	int status = STATUS_CONT; // TODO: no longer used?
 	int show_setting = 0;
-	int dirty = 1;
+	int dirty = -1;
 	int ignore_menu = 0;
 	int menu_start = 0;
 	SDL_Surface* preview = SDL_CreateRGBSurface(SDL_SWSURFACE,DEVICE_WIDTH/2,DEVICE_HEIGHT/2,32,RGBA_MASK_8888); // TODO: retain until changed?
@@ -5371,8 +5358,8 @@ static void Menu_loop(void) {
 		}
 
 		PWR_update(&dirty, &show_setting, Menu_beforeSleep, Menu_afterSleep);
-		
-		if(dirty) {
+		// idk with opengl i need to do 2 draws before the menu appears, need to figure out why but for now this works
+		if(dirty || dirty==-1) {
 			GFX_clear(screen);
 			GFX_drawOnLayer(backing,0,0,DEVICE_WIDTH,DEVICE_HEIGHT,0.4f,1,1);
 
@@ -5503,7 +5490,10 @@ static void Menu_loop(void) {
 			}
 
 			GFX_flip(screen);
-			dirty = 0;
+			if(dirty==-1)
+				dirty=1;
+			else 
+				dirty=0;
 		} else {
 			// please dont flip cause it will cause current_fps dip and audio is weird first seconds
 			GFX_delay();
