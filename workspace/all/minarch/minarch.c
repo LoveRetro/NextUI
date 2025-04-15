@@ -33,7 +33,6 @@ static pthread_t		core_pt;
 static pthread_mutex_t	core_mx;
 static pthread_cond_t	core_rq; // not sure this is required
 
-static void* coreThread(void *arg);
 
 enum {
 	SCALE_NATIVE,
@@ -3565,8 +3564,6 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
     // environment_callback(RETRO_ENVIRONMENT_GET_CAN_DUPE, &can_dupe);
 
 
-
-	
 	if (!rgbaData || rgbaDataSize != width * height) {
 		if (rgbaData) free(rgbaData);
 		rgbaDataSize = width * height;
@@ -3603,7 +3600,6 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 		}
 		data = rgbaData;
 	} else {
-		// if emulator doesnt support XRGB888 and uses RGB565
 		// convert RGB565 to RGBA8888
 		const uint16_t* srcData = (const uint16_t*)data;
 		unsigned srcPitchInPixels = pitch / sizeof(uint16_t); 
@@ -5627,26 +5623,6 @@ static void limitFF(void) {
 	last_time = now;
 }
 
-static void* coreThread(void *arg) {
-	// force a vsync immediately before loop
-	// for better frame pacing?
-	GFX_clearAll();
-	screen_flip(screen);
-	
-	while (!quit) {
-		int run = 0;
-		pthread_mutex_lock(&core_mx);
-		run = should_run_core;
-		pthread_mutex_unlock(&core_mx);
-		
-		if (run) {
-			core.run();
-			limitFF();
-			trackFPS();
-		}
-	}
-	pthread_exit(NULL);
-}
 
 int main(int argc , char* argv[]) {
 	LOG_info("MinArch\n");
