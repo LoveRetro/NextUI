@@ -279,7 +279,6 @@ SDL_Surface *PLAT_initVideo(void)
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
 
-
 	const char* vertex_shader_src = 
     "#version 100\n"
     "attribute vec2 aPos;\n"        // Vertex position attribute
@@ -293,16 +292,68 @@ SDL_Surface *PLAT_initVideo(void)
 
 
 
+	// normal default shader
+	// const char* fragment_shader_src = 
+    // "#version 100\n"
+    // "precision mediump float;\n"    // Precision for floats in fragment shader
+    // "uniform sampler2D uTex;\n"     // Uniform for the texture
+    // "varying vec2 vTexCoord;\n"     // The texture coordinates passed from the vertex shader
+    // "void main() {\n"
+    // "    gl_FragColor = texture2D(uTex, vTexCoord);\n"  // Sample the texture at the given coordinates
+    // "}\n";
+
+	// smooth shader
+	// const char* fragment_shader_src = 
+	// "#version 100\n"
+	// "precision mediump float;\n"      // Precision for floats in fragment shader
+	// "uniform sampler2D uTex;\n"       // Uniform for the texture
+	// "uniform vec2 texelSize;\n"       // Uniform for texel size passed from the application
+	// "varying vec2 vTexCoord;\n"       // The texture coordinates passed from the vertex shader
+
+	// "void main() {\n"
+	// "    // Offsets for bilinear interpolation\n"
+	// "    vec2 offset = texelSize * 0.5;\n"
+
+	// "    // Sample the texture at the current coordinates and the surrounding coordinates for bilinear interpolation\n"
+	// "    vec4 color = texture2D(uTex, vTexCoord);\n"   // Get the color at the main texel\n"
+	// "    vec4 colorRight = texture2D(uTex, vTexCoord + vec2(offset.x, 0.0));  // Sample right texel\n"
+	// "    vec4 colorDown = texture2D(uTex, vTexCoord + vec2(0.0, offset.y));  // Sample bottom texel\n"
+	// "    vec4 colorDiagonal = texture2D(uTex, vTexCoord + offset);  // Sample bottom-right diagonal texel\n"
+
+	// "    // Apply a basic bilinear interpolation\n"
+	// "    gl_FragColor = mix(mix(color, colorRight, 0.5), mix(colorDown, colorDiagonal, 0.5), 0.5);\n"
+	// "}\n";
+
+	// smooth 4x upscaler shader example
 	const char* fragment_shader_src = 
-    "#version 100\n"
-    "precision mediump float;\n"    // Precision for floats in fragment shader
-    "uniform sampler2D uTex;\n"     // Uniform for the texture
-    "varying vec2 vTexCoord;\n"     // The texture coordinates passed from the vertex shader
-    "void main() {\n"
-    "    gl_FragColor = texture2D(uTex, vTexCoord);\n"  // Sample the texture at the given coordinates
-    "}\n";
+	"#version 100\n"
+	"precision mediump float;\n"      // Precision for floats in fragment shader
+	"uniform sampler2D uTex;\n"       // Uniform for the texture
+	"uniform vec2 texelSize;\n"       // Uniform for texel size passed from the application
+	"varying vec2 vTexCoord;\n"       // The texture coordinates passed from the vertex shader
 
+	"void main() {\n"
+	"    // Upscale by 4 times (sampling at larger texel steps)\n"
+	"    vec2 upscaledCoord = vTexCoord * 4.0;\n" // Scale texel coordinates by 4 times\n"
+		
+	"    // Offsets for bilinear interpolation\n"
+	"    vec2 offset = texelSize * 0.5;\n"
+		
+	"    // Sample the texture at the current coordinates and the surrounding coordinates for bilinear interpolation\n"
+	"    vec4 color = texture2D(uTex, upscaledCoord);\n"   // Get the color at the main texel\n"
+	"    vec4 colorRight = texture2D(uTex, upscaledCoord + vec2(offset.x, 0.0));  // Sample right texel\n"
+	"    vec4 colorDown = texture2D(uTex, upscaledCoord + vec2(0.0, offset.y));  // Sample bottom texel\n"
+	"    vec4 colorDiagonal = texture2D(uTex, upscaledCoord + offset);  // Sample bottom-right diagonal texel\n"
+		
+	"    // Apply a stronger bilinear interpolation with more weight on the neighbors\n"
+	"    float weight = 0.75;\n"
+	"    vec4 upscaledColor = mix(mix(color, colorRight, weight), mix(colorDown, colorDiagonal, weight), weight);\n"
+		
+	"    // Downscale the texture to the final resolution\n"
+	"    vec2 downscaledCoord = vTexCoord;\n" // Restore texel coordinates to original resolution
+	"    gl_FragColor = texture2D(uTex, downscaledCoord);  // Sample the downscaled texture\n"
 
+	"}\n";
 
 	GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_shader_src);
 	GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, fragment_shader_src);

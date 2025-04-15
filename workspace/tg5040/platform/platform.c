@@ -192,14 +192,73 @@ SDL_Surface* PLAT_initVideo(void) {
 
 
 
+	// normal default shader
+	// const char* fragment_shader_src = 
+    // "#version 100\n"
+    // "precision mediump float;\n"    // Precision for floats in fragment shader
+    // "uniform sampler2D uTex;\n"     // Uniform for the texture
+    // "varying vec2 vTexCoord;\n"     // The texture coordinates passed from the vertex shader
+    // "void main() {\n"
+    // "    gl_FragColor = texture2D(uTex, vTexCoord);\n"  // Sample the texture at the given coordinates
+    // "}\n";
+
+	// smooth shader
+	// const char* fragment_shader_src = 
+	// "#version 100\n"
+	// "precision mediump float;\n"      // Precision for floats in fragment shader
+	// "uniform sampler2D uTex;\n"       // Uniform for the texture
+	// "uniform vec2 texelSize;\n"       // Uniform for texel size passed from the application
+	// "varying vec2 vTexCoord;\n"       // The texture coordinates passed from the vertex shader
+
+	// "void main() {\n"
+	// "    // Offsets for bilinear interpolation\n"
+	// "    vec2 offset = texelSize * 0.5;\n"
+
+	// "    // Sample the texture at the current coordinates and the surrounding coordinates for bilinear interpolation\n"
+	// "    vec4 color = texture2D(uTex, vTexCoord);\n"   // Get the color at the main texel\n"
+	// "    vec4 colorRight = texture2D(uTex, vTexCoord + vec2(offset.x, 0.0));  // Sample right texel\n"
+	// "    vec4 colorDown = texture2D(uTex, vTexCoord + vec2(0.0, offset.y));  // Sample bottom texel\n"
+	// "    vec4 colorDiagonal = texture2D(uTex, vTexCoord + offset);  // Sample bottom-right diagonal texel\n"
+
+	// "    // Apply a basic bilinear interpolation\n"
+	// "    gl_FragColor = mix(mix(color, colorRight, 0.5), mix(colorDown, colorDiagonal, 0.5), 0.5);\n"
+	// "}\n";
+
+	// smooth 4x upscaler shader example
 	const char* fragment_shader_src = 
-    "#version 100\n"
-    "precision mediump float;\n"    // Precision for floats in fragment shader
-    "uniform sampler2D uTex;\n"     // Uniform for the texture
-    "varying vec2 vTexCoord;\n"     // The texture coordinates passed from the vertex shader
-    "void main() {\n"
-    "    gl_FragColor = texture2D(uTex, vTexCoord);\n"  // Sample the texture at the given coordinates
-    "}\n";
+	"#version 100\n"
+	"precision mediump float;\n"      // Precision for floats in fragment shader
+	"uniform sampler2D uTex;\n"       // Uniform for the texture
+	"uniform vec2 texelSize;\n"       // Uniform for texel size passed from the application
+	"varying vec2 vTexCoord;\n"       // The texture coordinates passed from the vertex shader
+
+	"void main() {\n"
+	"    // Upscale by 4 times (sampling at larger texel steps)\n"
+	"    vec2 upscaledCoord = vTexCoord * 4.0;\n" // Scale texel coordinates by 4 times\n"
+		
+	"    // Offsets for bilinear interpolation\n"
+	"    vec2 offset = texelSize * 0.5;\n"
+		
+	"    // Sample the texture at the current coordinates and the surrounding coordinates for bilinear interpolation\n"
+	"    vec4 color = texture2D(uTex, upscaledCoord);\n"   // Get the color at the main texel\n"
+	"    vec4 colorRight = texture2D(uTex, upscaledCoord + vec2(offset.x, 0.0));  // Sample right texel\n"
+	"    vec4 colorDown = texture2D(uTex, upscaledCoord + vec2(0.0, offset.y));  // Sample bottom texel\n"
+	"    vec4 colorDiagonal = texture2D(uTex, upscaledCoord + offset);  // Sample bottom-right diagonal texel\n"
+		
+	"    // Apply a stronger bilinear interpolation with more weight on the neighbors\n"
+	"    float weight = 0.75;\n"
+	"    vec4 upscaledColor = mix(mix(color, colorRight, weight), mix(colorDown, colorDiagonal, weight), weight);\n"
+		
+	"    // Downscale the texture to the final resolution\n"
+	"    vec2 downscaledCoord = vTexCoord;\n" // Restore texel coordinates to original resolution
+	"    gl_FragColor = texture2D(uTex, downscaledCoord);  // Sample the downscaled texture\n"
+
+	"}\n";
+
+	
+
+	
+
 
 
 
@@ -1451,24 +1510,22 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
     vid.blit = NULL;
 }
 
-
 void PLAT_GL_Swap() {
-
-	int x = vid.blit->src_x;
+    int x = vid.blit->src_x;
     int y = vid.blit->src_y;
     int w = vid.blit->src_w;
     int h = vid.blit->src_h;
 
-	SDL_Rect* src_rect = &(SDL_Rect){x, y, w, h};
+    SDL_Rect* src_rect = &(SDL_Rect){x, y, w, h};
     SDL_Rect* dst_rect = &(SDL_Rect){0, 0, device_width, device_height};
-	
-	if (vid.blit->aspect == 0) { // native or cropped
+
+    if (vid.blit->aspect == 0) { // native or cropped
         w = vid.blit->src_w * vid.blit->scale;
         h = vid.blit->src_h * vid.blit->scale;
         x = (device_width - w) / 2;
         y = (device_height - h) / 2;
-        dst_rect->x = x +screenx;
-        dst_rect->y = y +screeny;
+        dst_rect->x = x + screenx;
+        dst_rect->y = y + screeny;
         dst_rect->w = w;
         dst_rect->h = h;
     } else if (vid.blit->aspect > 0) { // aspect scaling mode
@@ -1491,8 +1548,8 @@ void PLAT_GL_Swap() {
         }
         x = (device_width - w) / 2;
         y = (device_height - h) / 2;
-        dst_rect->x = x +screenx;
-        dst_rect->y = y +screeny;
+        dst_rect->x = x + screenx;
+        dst_rect->y = y + screeny;
         dst_rect->w = w;
         dst_rect->h = h;
     } else { // full screen mode
@@ -1513,11 +1570,10 @@ void PLAT_GL_Swap() {
     int win_w, win_h;
     SDL_GetWindowSize(vid.window, &win_w, &win_h);
     
-	glViewport(0, 0, dst_rect->w, dst_rect->h); 
+    glViewport(0, 0, dst_rect->w, dst_rect->h);
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Black background 
     glClear(GL_COLOR_BUFFER_BIT);
-
 
     if (vid.blit->src == NULL) {
         printf("Error: Texture data (vid.blit->src) is NULL\n");
@@ -1526,39 +1582,38 @@ void PLAT_GL_Swap() {
 
     static GLuint gl_tex = 0;
     if (!gl_tex) {
-		glGenTextures(1, &gl_tex);
-		glBindTexture(GL_TEXTURE_2D, gl_tex);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	}
+        glGenTextures(1, &gl_tex);
+        glBindTexture(GL_TEXTURE_2D, gl_tex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    }
 
-	// SDL and GL RGBA8888 are not the same thing different order of bytes so quickly need to shuffle them no biggie :D
-	static uint8_t* glesPixelData = NULL;
-	static size_t glesPixelSize = 0;
-	size_t neededSize = vid.blit->src_w * vid.blit->src_h * 4;
+    // Handle pixel data transfer
+    static uint8_t* glesPixelData = NULL;
+    static size_t glesPixelSize = 0;
+    size_t neededSize = vid.blit->src_w * vid.blit->src_h * 4;
 
-	if (!glesPixelData || glesPixelSize < neededSize) {
-		if (glesPixelData) free(glesPixelData);
-		glesPixelData = malloc(neededSize);
-		glesPixelSize = neededSize;
-	}
-	const uint32_t* src = (const uint32_t*)vid.blit->src;
-	
-	for (unsigned i = 0; i < vid.blit->src_w * vid.blit->src_h; ++i) {
-		uint32_t pixel = src[i];
-		glesPixelData[i * 4 + 0] = (pixel >> 24) & 0xFF; // R
-		glesPixelData[i * 4 + 1] = (pixel >> 16) & 0xFF; // G
-		glesPixelData[i * 4 + 2] = (pixel >> 8)  & 0xFF; // B
-		glesPixelData[i * 4 + 3] = pixel & 0xFF;         // A
+    if (!glesPixelData || glesPixelSize < neededSize) {
+        if (glesPixelData) free(glesPixelData);
+        glesPixelData = malloc(neededSize);
+        glesPixelSize = neededSize;
+    }
+    const uint32_t* src = (const uint32_t*)vid.blit->src;
+    
+    for (unsigned i = 0; i < vid.blit->src_w * vid.blit->src_h; ++i) {
+        uint32_t pixel = src[i];
+        glesPixelData[i * 4 + 0] = (pixel >> 24) & 0xFF; // R
+        glesPixelData[i * 4 + 1] = (pixel >> 16) & 0xFF; // G
+        glesPixelData[i * 4 + 2] = (pixel >> 8)  & 0xFF; // B
+        glesPixelData[i * 4 + 3] = pixel & 0xFF;         // A
+    }
+    glBindTexture(GL_TEXTURE_2D, gl_tex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, glesPixelData);
 
-	}
-	glBindTexture(GL_TEXTURE_2D, gl_tex);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, glesPixelData);
-
-
+    // Set up vertices
     float vertices[] = {
         // Positions           // TexCoords
         -1.0f,  1.0f,   0.0f, 0.0f,  // Top-left corner
@@ -1571,29 +1626,38 @@ void PLAT_GL_Swap() {
     if (!VAO) {
         glGenVertexArrays(1, &VAO);
         glGenBuffers(1, &VBO);
-		glBindVertexArray(VAO);
+        glBindVertexArray(VAO);
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
-		// do this only once
+        // Do this only once
         static bool vertexDataUploaded = false;
-		if (!vertexDataUploaded) {
-			glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-			vertexDataUploaded = true;
-		}
-		GLint posAttrib = glGetAttribLocation(g_shader_program, "aPos");
-		glEnableVertexAttribArray(posAttrib);
-		glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-		
-		GLint texAttrib = glGetAttribLocation(g_shader_program, "aTexCoord");
-		glEnableVertexAttribArray(texAttrib);
-		glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+        if (!vertexDataUploaded) {
+            glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+            vertexDataUploaded = true;
+        }
+        GLint posAttrib = glGetAttribLocation(g_shader_program, "aPos");
+        glEnableVertexAttribArray(posAttrib);
+        glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        
+        GLint texAttrib = glGetAttribLocation(g_shader_program, "aTexCoord");
+        glEnableVertexAttribArray(texAttrib);
+        glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
     }
-	glBindVertexArray(VAO);
+    glBindVertexArray(VAO);
     glUseProgram(g_shader_program);
-	// do this only once
+
+    // Get uniform location for texel size and pass it
+    static GLint texel_size_location = -1;
+    if (texel_size_location == -1) {
+        texel_size_location = glGetUniformLocation(g_shader_program, "texelSize");
+    }
+    GLfloat texelSize[2] = {1.0f / vid.blit->src_w, 1.0f / vid.blit->src_h};
+    glUniform2fv(texel_size_location, 1, texelSize);
+
+    // Pass texture uniform
     static GLint tex_location = -1;
-	if (tex_location == -1) {
-		tex_location = glGetUniformLocation(g_shader_program, "uTex");
-	}
+    if (tex_location == -1) {
+        tex_location = glGetUniformLocation(g_shader_program, "uTex");
+    }
     glUniform1i(tex_location, 0);  // 0 corresponds to GL_TEXTURE0
     glActiveTexture(GL_TEXTURE0);
 
