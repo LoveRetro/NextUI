@@ -36,7 +36,7 @@ GLuint g_shader_pass1 = 0;
 GLuint g_shader_pass2 = 0;
 GLuint g_shader_overlay = 0;
 float shaderUpscaleRatio = 2; // this should be set from the settings screen would give options from 1.0 to 4.0 (so also 2.5) anything higher is useless, even this simple blur shader cant really go higher then 2 really gpu can't handle larger but maybe some super light shader you could try 3 or 4
-
+int nrofshaders = 2; // choose between 1 or 2 pipelines, 2 pipelines = more cpu usage, but more shader options and shader upscaling stuff
 ///////////////////////////////
 
 static SDL_Joystick *joystick;
@@ -1614,8 +1614,6 @@ void runShaderPass(GLuint texture, GLuint shader_program, GLuint* fbo, GLuint* t
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
-
-
 void PLAT_GL_Swap() {
     // set a rect based on aspect ratio settings and stuff
     SDL_Rect dst_rect = {0, 0, device_width, device_height};
@@ -1688,14 +1686,27 @@ void PLAT_GL_Swap() {
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);  // Bind the FBO for rendering
-	runShaderPass(src_texture, g_shader_color, &fbo, &convert_texture, 0, 0, vid.blit->src_w, vid.blit->src_h, texelSizeUpscale, GL_NEAREST, 0); // Color conversion into intermediate texture
 
-	// Step 2: Continue with the normal passes, using the intermediate texture
-	// here we set how much we want to upscale based on shaderUpscaleRatio which should come from a setting in the game menu
-	const int up_w = dst_rect.w * shaderUpscaleRatio;
-    const int up_h = dst_rect.h * shaderUpscaleRatio;
-	runShaderPass(convert_texture, g_shader_pass1, &fbo, &dst_texture, 0, 0, up_w, up_h, texelSizeUpscale, GL_LINEAR, 0); 
 
+	int up_w = 0;
+	int up_h = 0;
+
+	if(nrofshaders>1) {
+		
+		// src_texture to convert_texture for color converson and then first pipeline shader pass convert_texture to dst_texture
+		runShaderPass(src_texture, g_shader_color, &fbo, &convert_texture, 0, 0, vid.blit->src_w, vid.blit->src_h, texelSizeUpscale, GL_NEAREST, 0); // Color conversion into intermediate texture
+		// Step 2: Continue with the normal passes, using the intermediate texture
+		// here we set how much we want to upscale based on shaderUpscaleRatio which should come from a setting in the game menu
+		up_w = dst_rect.w * shaderUpscaleRatio;
+		up_h = dst_rect.h * shaderUpscaleRatio;
+		runShaderPass(convert_texture, g_shader_pass1, &fbo, &dst_texture, 0, 0, up_w, up_h, texelSizeUpscale, GL_LINEAR, 0); 
+	} else {
+		// src_texture directly to dst_texture in color conversion pass only
+		up_w = vid.blit->src_w;
+		up_h = vid.blit->src_h;
+		runShaderPass(src_texture, g_shader_color, &fbo, &dst_texture, 0, 0, vid.blit->src_w, vid.blit->src_h, texelSizeUpscale, GL_NEAREST, 0); // Color conversion into intermediate texture
+
+	}
 
     // bind to the screen, set viewport size based on aspect ratio setting
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1703,8 +1714,8 @@ void PLAT_GL_Swap() {
     glClear(GL_COLOR_BUFFER_BIT);
 
     GLfloat texelSizeFinal[2] = {1.0f / up_w, 1.0f / up_h};
-    // run the second pass with the second compiled shader program and output to screen
-    runShaderPass(dst_texture, g_shader_pass2, NULL, NULL, dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h, texelSizeFinal, GL_NEAREST,0);
+    // run the second shader pipeline pass and output to screen
+    runShaderPass(dst_texture, g_shader_pass2, NULL, NULL, dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h, texelSizeFinal, GL_LINEAR,0);
 
     // Overlay pass using another runShaderPass
 	if (overlay_tex) {
@@ -1715,7 +1726,6 @@ void PLAT_GL_Swap() {
     // Swap the OpenGL buffers to display the final result
     SDL_GL_SwapWindow(vid.window);
 }
-
 ///////////////////////////////
 
 // TODO: 
