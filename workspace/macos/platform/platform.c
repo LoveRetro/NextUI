@@ -17,7 +17,7 @@
 #include "utils.h"
 
 #include "scaler.h"
-
+#include <GLES3/gl3.h>  
 
 ///////////////////////////////////////
 
@@ -1193,6 +1193,138 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
     
     SDL_RenderPresent(vid.renderer);
     vid.blit = NULL;
+}
+
+
+void PLAT_GL_Swap() {
+
+	int x = vid.blit->src_x;
+    int y = vid.blit->src_y;
+    int w = vid.blit->src_w;
+    int h = vid.blit->src_h;
+
+	SDL_Rect* src_rect = &(SDL_Rect){x, y, w, h};
+    SDL_Rect* dst_rect = &(SDL_Rect){0, 0, device_width, device_height};
+	
+	if (vid.blit->aspect == 0) { // native or cropped
+        w = vid.blit->src_w * vid.blit->scale;
+        h = vid.blit->src_h * vid.blit->scale;
+        x = (device_width - w) / 2;
+        y = (device_height - h) / 2;
+        dst_rect->x = x +screenx;
+        dst_rect->y = y +screeny;
+        dst_rect->w = w;
+        dst_rect->h = h;
+    } else if (vid.blit->aspect > 0) { // aspect scaling mode
+        if (should_rotate) {
+            h = device_width; // Scale height to the screen width
+            w = h * vid.blit->aspect;
+            if (w > device_height) {
+                double ratio = 1 / vid.blit->aspect;
+                w = device_height;
+                h = w * ratio;
+            }
+        } else {
+            h = device_height;
+            w = h * vid.blit->aspect;
+            if (w > device_width) {
+                double ratio = 1 / vid.blit->aspect;
+                w = device_width;
+                h = w * ratio;
+            }
+        }
+        x = (device_width - w) / 2;
+        y = (device_height - h) / 2;
+        dst_rect->x = x +screenx;
+        dst_rect->y = y +screeny;
+        dst_rect->w = w;
+        dst_rect->h = h;
+    } else { // full screen mode
+        if (should_rotate) {
+            dst_rect->w = device_height;
+            dst_rect->h = device_width;
+            dst_rect->x = (device_width - dst_rect->w) / 2;
+            dst_rect->y = (device_height - dst_rect->h) / 2;
+        } else {
+            dst_rect->x = screenx;
+            dst_rect->y = screeny;
+            dst_rect->w = device_width;
+            dst_rect->h = device_height;
+        }
+    }
+
+    SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+    int win_w, win_h;
+    SDL_GetWindowSize(vid.window, &win_w, &win_h);
+    
+	glViewport(0, 0, dst_rect->w, dst_rect->h); 
+
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Black background 
+    glClear(GL_COLOR_BUFFER_BIT);
+
+
+    if (vid.blit->src == NULL) {
+        printf("Error: Texture data (vid.blit->src) is NULL\n");
+        return;
+    }
+
+    GLuint gl_tex = 0;
+    glGenTextures(1, &gl_tex);
+	glBindTexture(GL_TEXTURE_2D, gl_tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	// SDL and GL RGBA8888 are not the same thing different order of bytes so quickly need to shuffle them no biggie :D
+	uint8_t* glesPixelData = malloc(vid.blit->src_w * vid.blit->src_h * 4);
+	const uint32_t* src = (const uint32_t*)vid.blit->src;
+	
+	for (unsigned i = 0; i < vid.blit->src_w * vid.blit->src_h; ++i) {
+		uint32_t pixel = src[i];
+		glesPixelData[i * 4 + 0] = (pixel >> 24) & 0xFF; // R
+		glesPixelData[i * 4 + 1] = (pixel >> 16) & 0xFF; // G
+		glesPixelData[i * 4 + 2] = (pixel >> 8)  & 0xFF; // B
+		glesPixelData[i * 4 + 3] = pixel & 0xFF;         // A
+
+	}
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, glesPixelData);
+
+    float vertices[] = {
+        // Positions           // TexCoords
+        -1.0f,  1.0f,   0.0f, 0.0f,  // Top-left corner
+        -1.0f, -1.0f,   0.0f, 1.0f,  // Bottom-left corner
+         1.0f,  1.0f,   1.0f, 0.0f,  // Top-right corner
+         1.0f, -1.0f,   1.0f, 1.0f   // Bottom-right corner
+    };
+
+    static GLuint VAO = 0, VBO = 0;
+    if (!VAO) {
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+		glBindVertexArray(VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+		GLint posAttrib = glGetAttribLocation(g_shader_program, "aPos");
+		glEnableVertexAttribArray(posAttrib);
+		glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+		
+		GLint texAttrib = glGetAttribLocation(g_shader_program, "aTexCoord");
+		glEnableVertexAttribArray(texAttrib);
+		glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    }
+	glBindVertexArray(VAO);
+    glUseProgram(g_shader_program);
+    GLint tex_location = glGetUniformLocation(g_shader_program, "uTex");
+    glUniform1i(tex_location, 0);  // 0 corresponds to GL_TEXTURE0
+    glActiveTexture(GL_TEXTURE0);
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    SDL_GL_SwapWindow(vid.window);
+	glDeleteTextures(1, &gl_tex);
+	free(glesPixelData);
 }
 
 ///////////////////////////////
