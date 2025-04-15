@@ -739,27 +739,6 @@ void PLAT_GPU_Flip() {
 	SDL_RenderPresent(vid.renderer);
 }
 
-void PLAT_GPU_core_flip(const void *data,size_t pitch,int width,int height) {
-
-	if (vid.width != width || vid.height != height) {
-		if (vid.stream_layer1) SDL_DestroyTexture(vid.stream_layer1);
-		vid.stream_layer1 = SDL_CreateTexture(
-			vid.renderer,
-			SDL_PIXELFORMAT_RGBA8888,
-			SDL_TEXTUREACCESS_STREAMING,
-			width,
-			height
-		);
-		vid.width = width;
-		vid.height = height;
-	}
-
-	
-	SDL_RenderClear(vid.renderer);
-	SDL_UpdateTexture(vid.stream_layer1, NULL, data, (int)pitch);
-	SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
-	SDL_RenderPresent(vid.renderer);
-}
 
 void PLAT_animateAndRevealSurfaces(
 	SDL_Surface* inputMoveSurface,
