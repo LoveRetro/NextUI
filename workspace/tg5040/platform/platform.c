@@ -29,6 +29,7 @@
 
 int is_brick = 0;
 volatile int useAutoCpu = 1;
+GLuint g_shader_program = 0;
 ///////////////////////////////
 
 static SDL_Joystick *joystick;
