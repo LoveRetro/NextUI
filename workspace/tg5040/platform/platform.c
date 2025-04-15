@@ -34,7 +34,7 @@ volatile int useAutoCpu = 1;
 GLuint g_shader_pass1 = 0;
 GLuint g_shader_pass2 = 0;
 GLuint g_shader_overlay = 0;
-float shaderUpscaleRatio = 1; // this should be set from the settings screen would give options from 1.0 to 4.0 (so also 2.5) anything higher is useless, even this simple blur shader cant really go higher then 2 really gpu can't handle larger but maybe some super light shader you could try 3 or 4
+float shaderUpscaleRatio = 2; // this should be set from the settings screen would give options from 1.0 to 4.0 (so also 2.5) anything higher is useless, even this simple blur shader cant really go higher then 2 really gpu can't handle larger but maybe some super light shader you could try 3 or 4
 
 ///////////////////////////////
 
