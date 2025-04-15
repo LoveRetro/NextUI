@@ -375,7 +375,7 @@ void PLAT_quitVideo(void) {
 
 	if (vid.target) SDL_DestroyTexture(vid.target);
 	if (vid.effect) SDL_DestroyTexture(vid.effect);
-	// if (vid.overlay) SDL_DestroyTexture(vid.overlay);
+	if (vid.overlay) SDL_DestroyTexture(vid.overlay);
 	if (vid.target_layer3) SDL_DestroyTexture(vid.target_layer3);
 	if (vid.target_layer1) SDL_DestroyTexture(vid.target_layer1);
 	if (vid.target_layer2) SDL_DestroyTexture(vid.target_layer2);
@@ -598,10 +598,10 @@ void PLAT_setOffsetY(int y) {
     screeny = y - 64;  
 }
 void PLAT_setOverlay(int select, const char* tag) {
-    // if (vid.overlay) {
-    //     SDL_DestroyTexture(vid.overlay);
-    //     vid.overlay = NULL;
-    // }
+    if (vid.overlay) {
+        SDL_DestroyTexture(vid.overlay);
+        vid.overlay = NULL;
+    }
 
     // Array of overlay filenames
     static const char* overlay_files[] = {
