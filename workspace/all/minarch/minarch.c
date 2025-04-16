@@ -4548,7 +4548,7 @@ static int OptionShaders_openMenu(MenuList* list, int i) {
 		int k = 0;
 		for (int j=0; config.shaders.options[j].name; j++) {
 				
-			MenuItem* item = &OptionControls_menu.items[k++];
+			MenuItem* item = &ShaderOptions_menu.items[k++];
 			item->id = j;
 			item->name = config.shaders.options[j].name;
 			item->desc = NULL;
