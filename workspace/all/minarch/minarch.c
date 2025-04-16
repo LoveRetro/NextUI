@@ -18,6 +18,7 @@
 #include "api.h"
 #include "utils.h"
 #include "scaler.h"
+#include <dirent.h>
 
 ///////////////////////////////////////
 
@@ -1007,8 +1008,15 @@ static char* offset_labels[] = {
 	NULL,
 };
 static char* nrofshaders_labels[] = {
+	"No",
+	"Yes",
+	NULL
+};
+static char* shupscale_labels[] = {
 	"1",
 	"2",
+	"3",
+	"4",
 	NULL
 };
 
@@ -1050,7 +1058,11 @@ enum {
 	SYNC_SRC_CORE
 };
 enum {
-	SH_NROFSHADERS
+	SH_NROFSHADERS,
+	SH_UPSCALE,
+	SH_SHADER1,
+	SH_SHADER2,
+	SH_NONE
 };
 
 #define LOCAL_BUTTON_COUNT 16 // depends on device
@@ -1358,18 +1370,51 @@ static struct Config {
 		},
 	},
 	.shaders = { // (OptionList)
-		.count = 1,
+		.count = 4,
 		.options = (Option[]){
 			[SH_NROFSHADERS] = {
 				.key	= "minarch_nrofshaders", 
-				.name	= "Pipelines",
-				.desc	= "Nr of shader pipelines", // will call getScreenScalingDesc()
+				.name	= "Use Extra Shader",
+				.desc	= "Turn extra shader on or off", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
 				.values = nrofshaders_labels,
 				.labels = nrofshaders_labels,
 			},
+			
+			[SH_SHADER1] = {
+				.key	= "minarch_shader1", 
+				.name	= "Extra Shader",
+				.desc	= "This shader is optional", // will call getScreenScalingDesc()
+				.default_value = 1,
+				.value = 1,
+				.count = 2,
+				.values = NULL,
+				.labels = NULL,
+			},
+			[SH_UPSCALE] = {
+				.key	= "minarch_shader_upscale", 
+				.name	= "Upscale Extra Shader",
+				.desc	= "This will upscale shader x times", // will call getScreenScalingDesc()
+				.default_value = 1,
+				.value = 1,
+				.count = 4,
+				.values = shupscale_labels,
+				.labels = shupscale_labels,
+			},
+			[SH_SHADER2] = {
+				.key	= "minarch_shader2", 
+				.name	= "Output Shader",
+				.desc	= "This is the final output shader", // will call getScreenScalingDesc()
+				.default_value = 1,
+				.value = 1,
+				.count = 2,
+				.values = NULL,
+				.labels = NULL,
+
+			},
+			{NULL}
 		},
 	},
 	.controls = default_button_mapping,
@@ -1510,12 +1555,55 @@ static void Config_syncFrontend(char* key, int value) {
 	option->value = value;
 }
 
+char** list_files_in_folder(const char* folderPath, int* fileCount) {
+    DIR* dir = opendir(folderPath);
+    if (!dir) {
+        perror("opendir");
+        return NULL;
+    }
+
+    struct dirent* entry;
+    struct stat fileStat;
+    char** fileList = NULL;
+    *fileCount = 0;
+
+    while ((entry = readdir(dir)) != NULL) {
+        char fullPath[1024];
+        snprintf(fullPath, sizeof(fullPath), "%s/%s", folderPath, entry->d_name);
+
+        if (stat(fullPath, &fileStat) == 0 && S_ISREG(fileStat.st_mode)) {
+            fileList = realloc(fileList, sizeof(char*) * (*fileCount + 1));
+            fileList[*fileCount] = strdup(entry->d_name);
+            (*fileCount)++;
+        }
+    }
+
+    closedir(dir);
+    return fileList;
+}
+
 static void Config_syncShaders(char* key, int value) {
 	int i = -1;
+
 	if (exactMatch(key,config.shaders.options[SH_NROFSHADERS].key)) {
 		GFX_setShaders(value+1);
 		i = SH_NROFSHADERS;
 	}
+	if (exactMatch(key,config.shaders.options[SH_UPSCALE].key)) {
+		GFX_setShaderUpscale(value+1);
+		i = SH_UPSCALE;
+	}
+	if (exactMatch(key,config.shaders.options[SH_SHADER1].key)) {
+		if(config.shaders.options[SH_SHADER1].values)
+			GFX_setShader1(config.shaders.options[SH_SHADER1].values[value]);
+		i = SH_SHADER1;
+	}
+	if (exactMatch(key,config.shaders.options[SH_SHADER2].key)) {
+		if(config.shaders.options[SH_SHADER2].values)
+			GFX_setShader2(config.shaders.options[SH_SHADER2].values[value]);
+		i = SH_SHADER2;
+	}
+	
 	if (i==-1) return;
 	Option* option = &config.shaders.options[i];
 	option->value = value;
@@ -1596,6 +1684,16 @@ static void Config_init(void) {
 		button->local = local_id;
 	};
 	
+	// populate shader options
+	int filecount;
+	char** filelist = list_files_in_folder(SHADERS_FOLDER, &filecount);
+	config.shaders.options[SH_SHADER1].values = filelist;
+	config.shaders.options[SH_SHADER2].values = filelist;
+	config.shaders.options[SH_SHADER1].labels = filelist;
+	config.shaders.options[SH_SHADER2].labels = filelist;
+	config.shaders.options[SH_SHADER1].count = filecount;
+	config.shaders.options[SH_SHADER2].count = filecount;
+		
 	config.initialized = 1;
 }
 static void Config_quit(void) {
@@ -1631,7 +1729,7 @@ static void Config_readOptionsString(char* cfg) {
 	}
 	for (int i=0; config.shaders.options[i].key; i++) {
 		Option* option = &config.shaders.options[i];
-		LOG_info("%s %i\n",option->key);
+		// LOG_info("%s %i\n",option->key);
 		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
 		OptionList_setOptionValue(&config.shaders, option->key, value);
 		Config_syncShaders(option->key, option->value);
@@ -1803,7 +1901,7 @@ static void Config_write(int override) {
 	}
 	for (int i=0; config.shaders.options[i].key; i++) {
 		Option* option = &config.shaders.options[i];
-		fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
+		fprintf(file, "%s = %s\n", option->key,  option->values[option->value]);
 	}
 	
 	if (has_custom_controllers) fprintf(file, "%s = %i\n", "minarch_gamepad_type", gamepad_type);
@@ -1943,7 +2041,7 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 	// LOG_info("count: %i\n", count);
 	
 	// TODO: add frontend options to this? so the can use the same override method? eg. minarch_*
-	
+
 	config.core.count = count;
 	config.core.categories = NULL; // There is no categories in v1 definition
 	if (count) {
@@ -3236,8 +3334,6 @@ static uint32_t sec_start = 0;
 #endif	
 
 static void selectScaler(int src_w, int src_h, int src_p) {
-	LOG_info("selectScaler\n");
-	
 	int src_x,src_y,dst_x,dst_y,dst_w,dst_h,dst_p,scale;
 	double aspect;
 	
@@ -3449,7 +3545,6 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 	renderer.dst_p = dst_p;
 	renderer.scale = scale;
 	renderer.aspect = (scaling==SCALE_NATIVE||scaling==SCALE_CROPPED)?0:(scaling==SCALE_FULLSCREEN?-1:core.aspect_ratio);
-	LOG_info("aspect: %f\n", renderer.aspect);
 	renderer.blit = GFX_getScaler(&renderer);
 		
 	// LOG_info("coreAR:%0.3f fixedAR:%0.3f srcAR: %0.3f\nname:%s\nfit:%i scale:%i\nsrc_x:%i src_y:%i src_w:%i src_h:%i src_p:%i\ndst_x:%i dst_y:%i dst_w:%i dst_h:%i dst_p:%i\naspect_w:%i aspect_h:%i\n",
@@ -3521,6 +3616,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	if (renderer.dst_p==0 || width!=renderer.true_w || height!=renderer.true_h) {
 		selectScaler(width, height, pitch);
 		GFX_clearAll();
+		GFX_resetShaders();
 	}
 	
 	// debug
@@ -4116,7 +4212,6 @@ static int OptionEmulator_optionChanged(MenuList* list, int i) {
 }
 
 static int OptionEmulator_openMenu(MenuList* list, int i);
-static int OptionShaders_openMenu(MenuList* list, int i);
 static int OptionEmulator_optionDetail(MenuList* list, int i);
 
 static MenuList OptionEmulator_menu = {
@@ -4557,20 +4652,27 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 }
 
 
+
+
+
 static int OptionShaders_optionChanged(MenuList* list, int i) {
 	MenuItem* item = &list->items[i];
-	LOG_info("Shaders menu item changed %i\n",item->value);
+	int filecount;
+	char** filelist = list_files_in_folder(SHADERS_FOLDER, &filecount);
+	if(i == SH_NROFSHADERS) {
+		GFX_setShaders(item->value+1);
+	}
+	if(i == SH_UPSCALE) {
+		GFX_setShaderUpscale(item->value+1);
+	}
+	if(i == SH_SHADER1) {
+		GFX_setShader1(filelist[item->value]);
+	}
+	if(i == SH_SHADER2) {
+		GFX_setShader2(filelist[item->value]);
+	}
 	config.shaders.options[i].value = item->value;
-	GFX_setShaders(item->value + 1);
 	return MENU_CALLBACK_NOP;
-}
-
-static int OptionShaders_optionDetail(MenuList* list, int i) {
-	MenuItem* item = &list->items[i];
-	struct Cheat *cheat = &cheatcodes.cheats[i];
-	if (cheat->info) 
-		return Menu_message((char*)cheat->info, (char*[]){ "B","BACK", NULL });
-	else return MENU_CALLBACK_NOP;
 }
 
 static MenuList ShaderOptions_menu = {
@@ -4583,23 +4685,31 @@ static int OptionShaders_openMenu(MenuList* list, int i) {
 	LOG_info("OptionShaders_openMenu\n");
 
 	if (ShaderOptions_menu.items==NULL) {
-		int k = 0;
 		ShaderOptions_menu.items = calloc(config.shaders.count + 1, sizeof(MenuItem));
-		for (int j=0; j<config.shaders.count; j++) {
-			MenuItem* item = &ShaderOptions_menu.items[k++];
-			item->id = j;
-			item->name = config.shaders.options[j].name;
-			item->desc = config.shaders.options[j].desc;
-			item->value = config.shaders.options[j].value;
-			item->values = config.shaders.options[j].values;
-		}
-	} else {
-		// update values
-		for (int j=0; j<config.shaders.count; j++) {
-			MenuItem* item = &ShaderOptions_menu.items[j];
-			item->value = config.shaders.options[j].value;
+		int filecount;
+		char** filelist = list_files_in_folder(SHADERS_FOLDER, &filecount);
+		filelist = realloc(filelist, sizeof(char*) * (filecount + 1));
+		filelist[filecount] = NULL;
+		for (int i=0; i<config.shaders.count; i++) {
+			MenuItem* item = &ShaderOptions_menu.items[i];
+			item->id = i;
+			item->name = config.shaders.options[i].name;
+			item->desc = config.shaders.options[i].desc;
+			item->value = config.shaders.options[i].value;
+			if(strcmp(config.shaders.options[i].key, "minarch_shader1") == 0 || strcmp(config.shaders.options[i].key, "minarch_shader2") == 0) {
+				item->values = filelist;
+				config.shaders.options[i].values = filelist;
+			}	else {
+				item->values = config.shaders.options[i].values;
+			}
 		}
 	}
+	// } else {
+	// 	// update values
+	// 	for (int j=0; j<config.shaders.count; j++) {
+	// 		MenuItem* item = &ShaderOptions_menu.items[j];
+	// 	}
+	// }
 	
 	if (ShaderOptions_menu.items[0].name) {
 		Menu_options(&ShaderOptions_menu);
@@ -4712,6 +4822,7 @@ static int Menu_options(MenuList* list) {
 					else {
 						int j;
 						for (j=0; item->values[j]; j++);
+						LOG_info("values size: %i\n",j);
 						item->value = j - 1;
 					}
 				
