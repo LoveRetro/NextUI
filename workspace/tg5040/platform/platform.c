@@ -224,8 +224,8 @@ SDL_Surface* PLAT_initVideo(void) {
 	// shaders for converting color format and overlays
 	GLuint color_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "system/colorfix.glsl");
 	g_shader_color = link_program(vertex_shader, color_shader);
-	GLuint fragment_shader3 = load_shader_from_file(GL_FRAGMENT_SHADER, "system/overlay.glsl");
-	g_shader_overlay = link_program(vertex_shader, fragment_shader3);
+	GLuint overlay_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "system/overlay.glsl");
+	g_shader_overlay = link_program(vertex_shader, overlay_shader);
 
 	// these are 2 shader pipelines basically here is were we allow custom shaders :D use together with shaderUpscaleRatio
 	shaderUpscaleRatio = 2; // this should be set from the settings screen would give options from 1.0 to 4.0 (so also 2.5) anything higher is useless, even a simple blur shader cant really go higher then 2 really gpu can't handle larger but maybe some super light shader you could try 3 or 4
