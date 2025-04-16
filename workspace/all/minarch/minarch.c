@@ -4535,8 +4535,7 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 }
 
 static MenuList ShaderOptions_menu = {
-	.type = MENU_INPUT,
-	.desc = "Press A to set and X to clear.",
+	.type = MENU_FIXED,
 	.on_confirm = NULL,
 	.on_change = NULL,
 	.items = NULL
@@ -4548,7 +4547,7 @@ static int OptionShaders_openMenu(MenuList* list, int i) {
 		int k = 0;
 		for (int j=0; config.shaders.options[j].name; j++) {
 				
-			MenuItem* item = &ShaderOptions_menu.items[k++];
+			MenuItem* item = &ShaderOptions_menu.items[j++];
 			item->id = j;
 			item->name = config.shaders.options[j].name;
 			item->desc = NULL;
@@ -4557,7 +4556,13 @@ static int OptionShaders_openMenu(MenuList* list, int i) {
 		}
 	}
 
-	Menu_options(&ShaderOptions_menu);
+	if (ShaderOptions_menu.items[0].name) {
+		Menu_options(&ShaderOptions_menu);
+	}
+	else {
+		Menu_message("No shaders available", (char*[]){ "B","BACK", NULL });
+	}
+
 	return MENU_CALLBACK_NOP;
 }
 
