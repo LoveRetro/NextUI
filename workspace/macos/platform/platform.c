@@ -17,7 +17,7 @@
 #include "utils.h"
 
 #include "scaler.h"
-#include <GLES3/gl3.h>  
+#include "opengl.h"
 
 ///////////////////////////////////////
 
@@ -312,11 +312,14 @@ GLuint load_shader_from_file(GLenum type, const char* filename) {
 
 
 SDL_Surface* PLAT_initVideo(void) {
-	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
-	// LOG_info("DEVICE: %s is_brick: %i\n", device, is_brick);
-	
-	SDL_InitSubSystem(SDL_INIT_VIDEO);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	//SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+
+	if(SDL_InitSubSystem(SDL_INIT_VIDEO) < 0)
+		LOG_info("Error intializing SDL: %s\n", SDL_GetError());
 	SDL_ShowCursor(0);
 	
 	// SDL_version compiled;
@@ -352,23 +355,24 @@ SDL_Surface* PLAT_initVideo(void) {
 	int h = FIXED_HEIGHT;
 	int p = FIXED_PITCH;
 
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-	
-	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w,h, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN);
-	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
-	SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
-	// SDL_RendererInfo info;
-	// SDL_GetRendererInfo(vid.renderer, &info);
-	// LOG_info("Current render driver: %s\n", info.name);
+	if(!vid.window)
+		LOG_info("Error creating SDL window: %s\n", SDL_GetError());
 	
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengl");
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");
 
+	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
+	SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
+	
+	SDL_RendererInfo info;
+	SDL_GetRendererInfo(vid.renderer, &info);
+	LOG_info("Current render driver: %s\n", info.name);
+
 	vid.gl_context = SDL_GL_CreateContext(vid.window);
+	if(!vid.gl_context)
+		LOG_info("Error creating GL context: %s\n", SDL_GetError());
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
 

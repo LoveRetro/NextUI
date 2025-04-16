@@ -25,7 +25,7 @@
 #include <pthread.h>
 #include <string.h>
 
-#include <GLES3/gl3.h>   // coolest header ever to include :D
+#include "opengl.h"
 
 int is_brick = 0;
 volatile int useAutoCpu = 1;
