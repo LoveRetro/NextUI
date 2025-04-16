@@ -17,7 +17,7 @@
 #include "utils.h"
 
 #include "scaler.h"
-#include <GLES3/gl3.h>  
+#include "opengl.h"
 
 ///////////////////////////////////////
 
@@ -312,10 +312,6 @@ GLuint load_shader_from_file(GLenum type, const char* filename) {
 
 
 SDL_Surface* PLAT_initVideo(void) {
-	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
-	// LOG_info("DEVICE: %s is_brick: %i\n", device, is_brick);
-	
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
 	
