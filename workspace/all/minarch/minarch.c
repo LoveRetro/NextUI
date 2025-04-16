@@ -1364,9 +1364,9 @@ static struct Config {
 				.key	= "minarch_nrofshaders", 
 				.name	= "Pipelines",
 				.desc	= "Nr of shader pipelines", // will call getScreenScalingDesc()
-				.default_value = 2,
-				.value = 2,
-				.count = 3,
+				.default_value = 1,
+				.value = 1,
+				.count = 2,
 				.values = nrofshaders_labels,
 				.labels = nrofshaders_labels,
 			},
@@ -1505,12 +1505,19 @@ static void Config_syncFrontend(char* key, int value) {
 		max_ff_speed = value;
 		i = FE_OPT_MAXFF;
 	}
-	else if (exactMatch(key,config.frontend.options[SH_NROFSHADERS].key)) {
-		GFX_setShaders(value);
+	if (i==-1) return;
+	Option* option = &config.frontend.options[i];
+	option->value = value;
+}
+
+static void Config_syncShaders(char* key, int value) {
+	int i = -1;
+	if (exactMatch(key,config.shaders.options[SH_NROFSHADERS].key)) {
+		GFX_setShaders(value+1);
 		i = SH_NROFSHADERS;
 	}
 	if (i==-1) return;
-	Option* option = &config.frontend.options[i];
+	Option* option = &config.shaders.options[i];
 	option->value = value;
 }
 static void OptionList_setOptionValue(OptionList* list, const char* key, const char* value);
@@ -1621,6 +1628,13 @@ static void Config_readOptionsString(char* cfg) {
 		// LOG_info("%s\n",option->key);
 		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
 		OptionList_setOptionValue(&config.core, option->key, value);
+	}
+	for (int i=0; config.shaders.options[i].key; i++) {
+		Option* option = &config.shaders.options[i];
+		LOG_info("%s %i\n",option->key);
+		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
+		OptionList_setOptionValue(&config.shaders, option->key, value);
+		Config_syncShaders(option->key, option->value);
 	}
 }
 static void Config_readControlsString(char* cfg) {
@@ -1787,6 +1801,10 @@ static void Config_write(int override) {
 		Option* option = &config.core.options[i];
 		fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
 	}
+	for (int i=0; config.shaders.options[i].key; i++) {
+		Option* option = &config.shaders.options[i];
+		fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
+	}
 	
 	if (has_custom_controllers) fprintf(file, "%s = %i\n", "minarch_gamepad_type", gamepad_type);
 	
@@ -1829,6 +1847,10 @@ static void Config_restore(void) {
 	}
 	for (int i=0; config.core.options[i].key; i++) {
 		Option* option = &config.core.options[i];
+		option->value = option->default_value;
+	}
+	for (int i=0; config.shaders.options[i].key; i++) {
+		Option* option = &config.shaders.options[i];
 		option->value = option->default_value;
 	}
 	config.core.changed = 1; // let the core know
@@ -4534,10 +4556,27 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 	return MENU_CALLBACK_NOP;
 }
 
+
+static int OptionShaders_optionChanged(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	LOG_info("Shaders menu item changed %i\n",item->value);
+	config.shaders.options[i].value = item->value;
+	GFX_setShaders(item->value + 1);
+	return MENU_CALLBACK_NOP;
+}
+
+static int OptionShaders_optionDetail(MenuList* list, int i) {
+	MenuItem* item = &list->items[i];
+	struct Cheat *cheat = &cheatcodes.cheats[i];
+	if (cheat->info) 
+		return Menu_message((char*)cheat->info, (char*[]){ "B","BACK", NULL });
+	else return MENU_CALLBACK_NOP;
+}
+
 static MenuList ShaderOptions_menu = {
 	.type = MENU_FIXED,
 	.on_confirm = NULL,
-	.on_change = NULL,
+	.on_change = OptionShaders_optionChanged,
 	.items = NULL
 };
 static int OptionShaders_openMenu(MenuList* list, int i) {
@@ -4545,17 +4584,23 @@ static int OptionShaders_openMenu(MenuList* list, int i) {
 
 	if (ShaderOptions_menu.items==NULL) {
 		int k = 0;
-		for (int j=0; config.shaders.options[j].name; j++) {
-				
-			MenuItem* item = &ShaderOptions_menu.items[j++];
+		ShaderOptions_menu.items = calloc(config.shaders.count + 1, sizeof(MenuItem));
+		for (int j=0; j<config.shaders.count; j++) {
+			MenuItem* item = &ShaderOptions_menu.items[k++];
 			item->id = j;
 			item->name = config.shaders.options[j].name;
-			item->desc = NULL;
-			item->value = j + 1;
+			item->desc = config.shaders.options[j].desc;
+			item->value = config.shaders.options[j].value;
 			item->values = config.shaders.options[j].values;
 		}
+	} else {
+		// update values
+		for (int j=0; j<config.shaders.count; j++) {
+			MenuItem* item = &ShaderOptions_menu.items[j];
+			item->value = config.shaders.options[j].value;
+		}
 	}
-
+	
 	if (ShaderOptions_menu.items[0].name) {
 		Menu_options(&ShaderOptions_menu);
 	}

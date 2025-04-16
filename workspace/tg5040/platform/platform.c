@@ -271,6 +271,7 @@ SDL_Surface* PLAT_initVideo(void) {
 }
 
 void PLAT_setShaders(int nr) {
+	LOG_info("set nr of shaders to %i\n",nr);
 	nrofshaders = nr;
 }
 
