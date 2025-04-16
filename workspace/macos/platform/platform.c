@@ -387,7 +387,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	
 	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "nextui.glsl"); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
 	g_shader_pass1 = link_program(vertex_shader, fragment_shader1);
-	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // final output shader here it either upscales or downscales automaticly to screen size again
+	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // final output shader here it either upscales or downscales automaticly to screen size again, i'd use this maybe for like adjusting final output image, add scanlines, sharpen that kinda stuff
 	g_shader_pass2 = link_program(vertex_shader, fragment_shader2);
 
 
