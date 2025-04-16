@@ -263,6 +263,7 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
 
 #define GFX_getScaler PLAT_getScaler		// scaler_t:(GFX_Renderer* renderer)
 #define GFX_blitRenderer PLAT_blitRenderer	// void:(GFX_Renderer* renderer)
+#define GFX_setShaders PLAT_setShaders	// void:(GFX_Renderer* renderer)
 
 scaler_t GFX_getAAScaler(GFX_Renderer* renderer);
 void GFX_freeAAScaler(void);
@@ -547,6 +548,7 @@ void PLAT_blitRenderer(GFX_Renderer* renderer);
 void PLAT_flip(SDL_Surface* screen, int sync);
 void PLAT_GL_Swap();
 void PLAT_GPU_Flip();
+void PLAT_setShaders(int nr);
 int PLAT_supportsOverscan(void);
 
 SDL_Surface* PLAT_initOverlay(void);

@@ -1006,6 +1006,11 @@ static char* offset_labels[] = {
 	"64",
 	NULL,
 };
+static char* nrofshaders_labels[] = {
+	"1",
+	"2",
+	NULL
+};
 
 ///////////////////////////////
 
@@ -1043,6 +1048,9 @@ enum {
 	SYNC_SRC_AUTO,
 	SYNC_SRC_SCREEN,
 	SYNC_SRC_CORE
+};
+enum {
+	SH_NROFSHADERS
 };
 
 #define LOCAL_BUTTON_COUNT 16 // depends on device
@@ -1201,6 +1209,7 @@ static struct Config {
 	char* device_tag;
 	OptionList frontend;
 	OptionList core;
+	OptionList shaders;
 	ButtonMapping* controls;
 	ButtonMapping* shortcuts;
 	int loaded;
@@ -1348,6 +1357,21 @@ static struct Config {
 			{NULL},
 		},
 	},
+	.shaders = { // (OptionList)
+		.count = 1,
+		.options = (Option[]){
+			[SH_NROFSHADERS] = {
+				.key	= "minarch_nrofshaders", 
+				.name	= "Pipelines",
+				.desc	= "Nr of shader pipelines", // will call getScreenScalingDesc()
+				.default_value = 2,
+				.value = 2,
+				.count = 3,
+				.values = nrofshaders_labels,
+				.labels = nrofshaders_labels,
+			},
+		},
+	},
 	.controls = default_button_mapping,
 	.shortcuts = (ButtonMapping[]){
 		[SHORTCUT_SAVE_STATE]			= {"Save State",		-1, BTN_ID_NONE, 0},
@@ -1480,6 +1504,10 @@ static void Config_syncFrontend(char* key, int value) {
 	else if (exactMatch(key,config.frontend.options[FE_OPT_MAXFF].key)) {
 		max_ff_speed = value;
 		i = FE_OPT_MAXFF;
+	}
+	else if (exactMatch(key,config.frontend.options[SH_NROFSHADERS].key)) {
+		GFX_setShaders(value);
+		i = SH_NROFSHADERS;
 	}
 	if (i==-1) return;
 	Option* option = &config.frontend.options[i];
@@ -4066,6 +4094,7 @@ static int OptionEmulator_optionChanged(MenuList* list, int i) {
 }
 
 static int OptionEmulator_openMenu(MenuList* list, int i);
+static int OptionShaders_openMenu(MenuList* list, int i);
 static int OptionEmulator_optionDetail(MenuList* list, int i);
 
 static MenuList OptionEmulator_menu = {
@@ -4249,6 +4278,7 @@ static MenuList OptionControls_menu = {
 	.on_change = OptionControls_unbind,
 	.items = NULL
 };
+
 static int OptionControls_openMenu(MenuList* list, int i) {
 	LOG_info("OptionControls_openMenu\n");
 
@@ -4504,12 +4534,40 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 	return MENU_CALLBACK_NOP;
 }
 
+static MenuList ShaderOptions_menu = {
+	.type = MENU_INPUT,
+	.desc = "Press A to set and X to clear.",
+	.on_confirm = NULL,
+	.on_change = NULL,
+	.items = NULL
+};
+static int OptionShaders_openMenu(MenuList* list, int i) {
+	LOG_info("OptionShaders_openMenu\n");
+
+	if (ShaderOptions_menu.items==NULL) {
+		int k = 0;
+		for (int j=0; config.shaders.options[j].name; j++) {
+				
+			MenuItem* item = &OptionControls_menu.items[k++];
+			item->id = j;
+			item->name = config.shaders.options[j].name;
+			item->desc = NULL;
+			item->value = j + 1;
+			item->values = config.shaders.options[j].values;
+		}
+	}
+
+	Menu_options(&ShaderOptions_menu);
+	return MENU_CALLBACK_NOP;
+}
+
 
 static MenuList options_menu = {
 	.type = MENU_LIST,
 	.items = (MenuItem[]) {
 		{"Frontend", "NextUI (" BUILD_DATE " " BUILD_HASH ")",.on_confirm=OptionFrontend_openMenu},
 		{"Emulator",.on_confirm=OptionEmulator_openMenu},
+		{"Shaders",.on_confirm=OptionShaders_openMenu},
 		// TODO: this should be hidden with no cheats available
 		{"Cheats",.on_confirm=OptionCheats_openMenu},
 		{"Controls",.on_confirm=OptionControls_openMenu},

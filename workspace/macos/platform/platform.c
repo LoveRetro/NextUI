@@ -424,6 +424,10 @@ SDL_Surface* PLAT_initVideo(void) {
 	return vid.screen;
 }
 
+void PLAT_setShaders(int nr) {
+	nrofshaders = nr;
+}
+
 static void clearVideo(void) {
 	for (int i=0; i<3; i++) {
 		SDL_RenderClear(vid.renderer);

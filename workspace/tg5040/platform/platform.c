@@ -270,6 +270,9 @@ SDL_Surface* PLAT_initVideo(void) {
 	return vid.screen;
 }
 
+void PLAT_setShaders(int nr) {
+	nrofshaders = nr;
+}
 
 uint32_t PLAT_get_dominant_color() {
     if (!vid.screen) {
