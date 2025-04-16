@@ -365,6 +365,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");
 
 	vid.gl_context = SDL_GL_CreateContext(vid.window);
+	LOG_info("%s\n", SDL_GetError());
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
 
