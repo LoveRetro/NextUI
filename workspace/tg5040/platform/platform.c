@@ -82,27 +82,9 @@ static int device_pitch;
 static uint32_t SDL_transparentBlack = 0;
 
 #define OVERLAYS_FOLDER SDCARD_PATH "/Overlays"
+#define SHADERS_FOLDER SDCARD_PATH "/Shaders"
 static char* overlay_path = NULL;
 
-// Frysee will hate these function names :D
-GLuint compile_shader(GLenum type, const char* source) {
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, NULL);
-    glCompileShader(shader);
-
-    GLint success;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        GLint logLength;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
-        char* log = (char*)malloc(logLength);
-        glGetShaderInfoLog(shader, logLength, &logLength, log);
-        printf("Shader compile error: %s\n", log);
-        free(log);
-    }
-
-    return shader;
-}
 
 GLuint link_program(GLuint vertex_shader, GLuint fragment_shader) {
     GLuint program = glCreateProgram();
@@ -123,6 +105,57 @@ GLuint link_program(GLuint vertex_shader, GLuint fragment_shader) {
 
     return program;
 }
+
+char* load_shader_source(const char* filename) {
+	char filepath[256];
+	snprintf(filepath, sizeof(filepath), "%s/%s", SHADERS_FOLDER,filename);
+    FILE* file = fopen(filepath, "rb");
+    if (!file) {
+        fprintf(stderr, "Failed to open shader file: %s\n", filepath);
+        return NULL;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long length = ftell(file);
+    rewind(file);
+
+    char* source = (char*)malloc(length + 1);
+    if (!source) {
+        fprintf(stderr, "Memory allocation failed\n");
+        fclose(file);
+        return NULL;
+    }
+
+    fread(source, 1, length, file);
+    source[length] = '\0';
+    fclose(file);
+    return source;
+}
+
+GLuint load_shader_from_file(GLenum type, const char* filename) {
+    char* source = load_shader_source(filename);
+    if (!source) return 0;
+
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, (const char**)&source, NULL);
+    glCompileShader(shader);
+    free(source);
+
+    // Check compilation status
+    GLint compiled;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+    if (!compiled) {
+        char log[512];
+        glGetShaderInfoLog(shader, sizeof(log), NULL, log);
+        fprintf(stderr, "Shader compilation failed:\n%s\n", log);
+        glDeleteShader(shader);
+        return 0;
+    }
+
+    return shader;
+}
+
+
 
 SDL_Surface* PLAT_initVideo(void) {
 	char* device = getenv("DEVICE");
@@ -185,87 +218,21 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
 
-
-
-	// this should not be touched as this is just the vertex shader we need for normal screen drawing, no need for 3d stuff :D
-	const char* vertex_shader_src = 
-    "#version 100\n"
-    "attribute vec2 aPos;\n"        // Vertex position attribute
-    "attribute vec2 aTexCoord;\n"   // Texture coordinate attribute
-    "varying vec2 vTexCoord;\n"     // Varying variable to pass the texture coordinates
-    "void main() {\n"
-    "    vTexCoord = aTexCoord;\n"  // Pass the texture coordinates to the fragment shader
-    "    gl_Position = vec4(aPos, 0.0, 1.0);\n"  // Pass the position directly to the fragment shader
-    "}\n";
-
-	// convert colors with a shader instead of cpu
-	const char* colorshader_src = 
-    "#version 100\n"
-    "precision mediump float;\n"
-    "uniform sampler2D uTex;\n"
-    "varying vec2 vTexCoord;\n"
-    "void main() {\n"
-    "    vec2 flippedCoord = vTexCoord;\n"
-    "    vec4 pixel = texture2D(uTex, flippedCoord);\n"
-    "    gl_FragColor = vec4(pixel.a, pixel.b, pixel.g, pixel.r);\n"
-    "}\n";
-
-
-
-	// I give it 2 pipelines for now shader1 and shader2, its just for effects so maybe like shader1 smoothing, shader2 scanlines idk. Upscaling can be done with the shaderUpscaleRatio var above
-	// So these need to load their source code from .glsl files instead of being set like this
-	const char* shader1_src = 
-	"#version 100\n"
-	"precision mediump float;\n"
-	"uniform sampler2D uTex;\n"
-	"uniform vec2 texelSize;\n"
-	"varying vec2 vTexCoord;\n"
-	
-	"void main() {\n"
-	"    vec2 offset = texelSize * 0.4;\n"
-	
-	"    vec4 color       = texture2D(uTex, vTexCoord);\n"
-	"    vec4 colorRight  = texture2D(uTex, vTexCoord + vec2(offset.x, 0.0));\n"
-	"    vec4 colorDown   = texture2D(uTex, vTexCoord + vec2(0.0, offset.y));\n"
-	"    vec4 colorDiag   = texture2D(uTex, vTexCoord + offset);\n"
-	
-	"    float weight = 0.5;\n"
-	"    vec4 smoothColor = mix(mix(color, colorRight, weight), mix(colorDown, colorDiag, weight), weight);\n"
-	
-	"    gl_FragColor = smoothColor;\n"
-	"}\n";
-
-	// normal default shader
-	const char* shader2_src = 
-    "#version 100\n"
-    "precision mediump float;\n"    // Precision for floats in fragment shader
-    "uniform sampler2D uTex;\n"     // Uniform for the texture
-    "varying vec2 vTexCoord;\n"     // The texture coordinates passed from the vertex shader
-    "void main() {\n"
-    "   gl_FragColor = texture2D(uTex, vec2(vTexCoord.x, 1.0 - vTexCoord.y));\n"  // Sample the texture at the given coordinates
-    "}\n";
-
-	const char* overlay_shader_src = 
-   "#version 100\n"
-    "precision mediump float;\n"    // Precision for floats in fragment shader
-    "uniform sampler2D uTex;\n"     // Uniform for the texture
-    "varying vec2 vTexCoord;\n"     // The texture coordinates passed from the vertex shader
-    "void main() {\n"
-    "   gl_FragColor = texture2D(uTex, vec2(vTexCoord.x, 1.0 - vTexCoord.y));\n"  // Sample the texture at the given coordinates
-    "}\n";
-
-
-	GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_shader_src);
-
-	// well yeah so now compile the shaders and create shader programs :D
-	GLuint color_shader = compile_shader(GL_FRAGMENT_SHADER, colorshader_src);
+	// default system shaders needed to yeah just work :D
+	// vector shader always used basically just a sqaure on the screen to draw on
+	GLuint vertex_shader = load_shader_from_file(GL_VERTEX_SHADER, "system/vertex.glsl");
+	// shaders for converting color format and overlays
+	GLuint color_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "system/colorfix.glsl");
 	g_shader_color = link_program(vertex_shader, color_shader);
-	GLuint fragment_shader1 = compile_shader(GL_FRAGMENT_SHADER, shader1_src);
-	g_shader_pass1 = link_program(vertex_shader, fragment_shader1);
-	GLuint fragment_shader2 = compile_shader(GL_FRAGMENT_SHADER, shader2_src);
-	g_shader_pass2 = link_program(vertex_shader, fragment_shader2);
-	GLuint fragment_shader3 = compile_shader(GL_FRAGMENT_SHADER, overlay_shader_src);
+	GLuint fragment_shader3 = load_shader_from_file(GL_FRAGMENT_SHADER, "system/overlay.glsl");
 	g_shader_overlay = link_program(vertex_shader, fragment_shader3);
+
+	// these are 2 shader pipelines basically here is were we allow custom shaders :D use together with shaderUpscaleRatio
+	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "nextui.glsl"); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
+	g_shader_pass1 = link_program(vertex_shader, fragment_shader1);
+	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // final output shader here it either upscales or downscales automaticly to screen size again
+	g_shader_pass2 = link_program(vertex_shader, fragment_shader2);
+
 
 
 	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
