@@ -1838,7 +1838,8 @@ void PLAT_GL_Swap() {
 		overlayload=0;
 		overlayUpdated = 0;
 	}
-
+	static int overlay_w = 0;
+	static int overlay_h = 0;
     if (!overlay_tex && !overlayload && overlay_path) {
         SDL_Surface* tmp = IMG_Load(overlay_path);
         if (tmp) {
@@ -1850,6 +1851,8 @@ void PLAT_GL_Swap() {
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba->w, rgba->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
+			overlay_w = rgba->w;
+			overlay_h = rgba->h;
             SDL_FreeSurface(tmp);
             SDL_FreeSurface(rgba);
             LOG_info("overlay loaded");
@@ -1935,8 +1938,8 @@ void PLAT_GL_Swap() {
 
     if (overlay_tex) {
         runShaderPass(overlay_tex, g_shader_overlay, NULL, NULL,
-                      0, 0, dst_rect.w, dst_rect.h,
-                      dst_rect.w, dst_rect.h, texelSizeFinal, GL_NEAREST, 1);
+                      0, 0, device_width, device_height,
+					  overlay_w, overlay_h, texelSizeFinal, GL_NEAREST, 1);
     }
 
     SDL_GL_SwapWindow(vid.window);
