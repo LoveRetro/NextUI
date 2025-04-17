@@ -1019,6 +1019,11 @@ static char* shupscale_labels[] = {
 	"4",
 	NULL
 };
+static char* shfilter_labels[] = {
+	"NEAREST",
+	"LINEAR",
+	NULL
+};
 
 ///////////////////////////////
 
@@ -1059,9 +1064,11 @@ enum {
 };
 enum {
 	SH_NROFSHADERS,
-	SH_UPSCALE,
 	SH_SHADER1,
+	SH_SHADER1_FILTER,
+	SH_UPSCALE,
 	SH_SHADER2,
+	SH_SHADER2_FILTER,
 	SH_NONE
 };
 
@@ -1370,7 +1377,7 @@ static struct Config {
 		},
 	},
 	.shaders = { // (OptionList)
-		.count = 4,
+		.count = 6,
 		.options = (Option[]){
 			[SH_NROFSHADERS] = {
 				.key	= "minarch_nrofshaders", 
@@ -1393,6 +1400,16 @@ static struct Config {
 				.values = NULL,
 				.labels = NULL,
 			},
+			[SH_SHADER1_FILTER] = {
+				.key	= "minarch_shader1_filter", 
+				.name	= "Extra Shader Filter",
+				.desc	= "NEAREST or LINEAR", // will call getScreenScalingDesc()
+				.default_value = 0,
+				.value = 0,
+				.count = 2,
+				.values = shfilter_labels,
+				.labels = shfilter_labels,
+			},
 			[SH_UPSCALE] = {
 				.key	= "minarch_shader_upscale", 
 				.name	= "Upscale Extra Shader",
@@ -1413,6 +1430,16 @@ static struct Config {
 				.values = NULL,
 				.labels = NULL,
 
+			},
+			[SH_SHADER2_FILTER] = {
+				.key	= "minarch_shader2_filter", 
+				.name	= "Output Shader Filter",
+				.desc	= "NEAREST or LINEAR", // will call getScreenScalingDesc()
+				.default_value = 0,
+				.value = 0,
+				.count = 2,
+				.values = shfilter_labels,
+				.labels = shfilter_labels,
 			},
 			{NULL}
 		},
@@ -1593,15 +1620,22 @@ static void Config_syncShaders(char* key, int value) {
 		GFX_setShaderUpscale(value+1);
 		i = SH_UPSCALE;
 	}
+	
 	if (exactMatch(key,config.shaders.options[SH_SHADER1].key)) {
-		if(config.shaders.options[SH_SHADER1].values)
-			GFX_setShader1(config.shaders.options[SH_SHADER1].values[value]);
+		GFX_setShader1(config.shaders.options[SH_SHADER1].values[value]);
 		i = SH_SHADER1;
 	}
+	if (exactMatch(key,config.shaders.options[SH_SHADER1_FILTER].key)) {
+		GFX_setShader1Filter(value);
+		i = SH_SHADER1_FILTER;
+	}
 	if (exactMatch(key,config.shaders.options[SH_SHADER2].key)) {
-		if(config.shaders.options[SH_SHADER2].values)
-			GFX_setShader2(config.shaders.options[SH_SHADER2].values[value]);
+		GFX_setShader2(config.shaders.options[SH_SHADER2].values[value]);
 		i = SH_SHADER2;
+	}
+	if (exactMatch(key,config.shaders.options[SH_SHADER2_FILTER].key)) {
+		GFX_setShader2Filter(value);
+		i = SH_SHADER2_FILTER;
 	}
 	
 	if (i==-1) return;
@@ -4670,6 +4704,12 @@ static int OptionShaders_optionChanged(MenuList* list, int i) {
 	}
 	if(i == SH_SHADER2) {
 		GFX_setShader2(filelist[item->value]);
+	}
+	if(i == SH_SHADER1_FILTER) {
+		GFX_setShader1Filter(item->value);
+	}
+	if(i == SH_SHADER2_FILTER) {
+		GFX_setShader2Filter(item->value);
 	}
 	config.shaders.options[i].value = item->value;
 	return MENU_CALLBACK_NOP;

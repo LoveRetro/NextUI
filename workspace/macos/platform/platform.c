@@ -389,7 +389,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	shaderUpscaleRatio = 2; // this should be set from the settings screen would give options from 1.0 to 4.0 (so also 2.5) anything higher is useless, even a simple blur shader cant really go higher then 2 really gpu can't handle larger but maybe some super light shader you could try 3 or 4
 	nrofshaders = 2; // setting this to 2 uses g_shader_pass1 and then followed by g_shader_pass2, otherwise it will directly go to g_shader_pass2 only, but yeah we can expand the amount of pipelines, but every pipeline does take cpu so yeah..
 	
-	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "nextui.glsl"); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
+	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
 	g_shader_pass1 = link_program(vertex_shader, fragment_shader1);
 	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // final output shader here it either upscales or downscales automaticly to screen size again, i'd use this maybe for like adjusting final output image, add scanlines, sharpen that kinda stuff
 	g_shader_pass2 = link_program(vertex_shader, fragment_shader2);

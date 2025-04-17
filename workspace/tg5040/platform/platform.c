@@ -232,7 +232,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	shaderUpscaleRatio = 2; // this should be set from the settings screen would give options from 1.0 to 4.0 (so also 2.5) anything higher is useless, even a simple blur shader cant really go higher then 2 really gpu can't handle larger but maybe some super light shader you could try 3 or 4
 	nrofshaders = 2; // setting this to 2 uses g_shader_pass1 and then followed by g_shader_pass2, otherwise it will directly go to g_shader_pass2 only, but yeah we can expand the amount of pipelines, but every pipeline does take cpu so yeah..
 	
-	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "nextui.glsl"); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
+	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
 	g_shader_pass1 = link_program(vertex_shader, fragment_shader1);
 	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // final output shader here it either upscales or downscales automaticly to screen size again, i'd use this maybe for like adjusting final output image, add scanlines, sharpen that kinda stuff
 	g_shader_pass2 = link_program(vertex_shader, fragment_shader2);
@@ -273,6 +273,26 @@ SDL_Surface* PLAT_initVideo(void) {
 int shadersupdated = 0;
 
 void PLAT_resetShaders() {
+	shadersupdated = 1;
+}
+static int shaderfilter1 = GL_NEAREST;
+static int shaderfilter2 = GL_NEAREST;
+void PLAT_setShader1Filter(int value) {
+	LOG_info("set shader 1 filter: %i\n",value);
+	if(value==1) 
+		shaderfilter1 = GL_LINEAR;
+	else
+		shaderfilter1 = GL_NEAREST;
+	LOG_info("set shader 1 filter result: %u\n",shaderfilter1);
+	shadersupdated = 1;
+}
+void PLAT_setShader2Filter(int value) {
+	LOG_info("set shader 2 filter: %i\n",value);
+	if(value==1) 
+		shaderfilter2 = GL_LINEAR;
+	else
+		shaderfilter2 = GL_NEAREST;
+	LOG_info("set shader 2 filter result: %u\n",shaderfilter2);
 	shadersupdated = 1;
 }
 void PLAT_setShaders(int nr) {
@@ -1696,8 +1716,6 @@ void PLAT_GL_Swap() {
     static GLuint fbo = 0;
     static GLuint dst_texture = 0;
 
-    GLfloat texelSizeUpscale[2] = {1.0f / vid.blit->src_w, 1.0f / vid.blit->src_h};
-
     static GLuint convert_texture = 0;
     if (!convert_texture) {
         glGenTextures(1, &convert_texture);
@@ -1711,23 +1729,26 @@ void PLAT_GL_Swap() {
 
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
-    int up_w = dst_rect.w * shaderUpscaleRatio;
-    int up_h = dst_rect.h * shaderUpscaleRatio;
+
+	GLfloat texelSizeSource[2] = {1.0f / vid.blit->src_w, 1.0f / vid.blit->src_h};
+
+	int up_w = vid.blit->src_w;
+	int up_h = vid.blit->src_h;
 
     if (nrofshaders > 1) {
-        runShaderPass(src_texture, g_shader_color, &fbo, &convert_texture, 0, 0, vid.blit->src_w, vid.blit->src_h, texelSizeUpscale, GL_NEAREST, 0);
-        runShaderPass(convert_texture, g_shader_pass1, &fbo, &dst_texture, 0, 0, up_w, up_h, texelSizeUpscale, GL_LINEAR, 0);
+		up_w = vid.blit->src_w * shaderUpscaleRatio;
+		up_h = vid.blit->src_h * shaderUpscaleRatio;
+        runShaderPass(src_texture, g_shader_color, &fbo, &convert_texture, 0, 0, vid.blit->src_w, vid.blit->src_h, texelSizeSource, GL_NEAREST, 0);
+		runShaderPass(convert_texture, g_shader_pass1, &fbo, &dst_texture, 0, 0, up_w, up_h, texelSizeSource, shaderfilter1, 0);
     } else {
-        up_w = vid.blit->src_w;
-        up_h = vid.blit->src_h;
-        runShaderPass(src_texture, g_shader_color, &fbo, &dst_texture, 0, 0, up_w, up_h, texelSizeUpscale, GL_NEAREST, 0);
+        runShaderPass(src_texture, g_shader_color, &fbo, &dst_texture, 0, 0, up_w, up_h, texelSizeSource, GL_NEAREST, 0);
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClear(GL_COLOR_BUFFER_BIT);
 
     GLfloat texelSizeFinal[2] = {1.0f / up_w, 1.0f / up_h};
-    runShaderPass(dst_texture, g_shader_pass2, NULL, NULL, dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h, texelSizeFinal, GL_LINEAR, 0);
+    runShaderPass(dst_texture, g_shader_pass2, NULL, NULL, dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h, texelSizeFinal, shaderfilter2, 0);
 
     if (overlay_tex) {
         runShaderPass(overlay_tex, g_shader_overlay, NULL, NULL, 0, 0, device_width, device_height, texelSizeFinal, GL_NEAREST, 1);
