@@ -31,6 +31,7 @@ int is_brick = 0;
 volatile int useAutoCpu = 1;
 
 // shader stuff
+GLuint g_shader_default = 0;
 GLuint g_shader_color = 0;
 GLuint g_shader_pass1 = 0;
 GLuint g_shader_pass2 = 0;
@@ -332,6 +333,10 @@ SDL_Surface* PLAT_initVideo(void) {
 	// default system shaders needed to yeah just work :D
 	// vector shader always used basically just a sqaure on the screen to draw on
 
+
+	GLuint default_vertex = load_shader_from_file(GL_VERTEX_SHADER, "system/default.glsl");
+	GLuint default_fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "system/default.glsl");
+	g_shader_default = link_program(default_vertex, default_fragment);
 
 	GLuint color_vshader = load_shader_from_file(GL_VERTEX_SHADER, "system/colorfix.glsl");
 	GLuint color_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "system/colorfix.glsl");
@@ -1863,6 +1868,7 @@ void PLAT_GL_Swap() {
     static GLuint src_texture = 0;
     static GLuint fbo = 0;
     static GLuint dst_texture = 0;
+    static GLuint final_texture = 0;
     static GLuint convert_texture = 0;
 
     static int src_w_last = 0, src_h_last = 0;
@@ -1931,10 +1937,16 @@ void PLAT_GL_Swap() {
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+	// first scale back down and then apply last shader
     GLfloat texelSizeFinal[2] = {1.0f / up_w, 1.0f / up_h};
-    runShaderPass(dst_texture, g_shader_pass2, NULL, NULL,
+    runShaderPass(dst_texture, g_shader_default, &fbo, &final_texture,
                   dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h,
                   up_w, up_h, texelSizeFinal, shaderfilter2, 0);
+
+	GLfloat texelSizeOutput[2] = {1.0f / dst_rect.w, 1.0f / dst_rect.h};
+    runShaderPass(final_texture, g_shader_pass2, NULL, NULL,
+                  dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h,
+                  dst_rect.w, dst_rect.h, texelSizeOutput, GL_NEAREST, 0);
 
     if (overlay_tex) {
         runShaderPass(overlay_tex, g_shader_overlay, NULL, NULL,

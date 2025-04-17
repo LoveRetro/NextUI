@@ -1017,6 +1017,10 @@ static char* shupscale_labels[] = {
 	"2",
 	"3",
 	"4",
+	"5",
+	"6",
+	"7",
+	"8",
 	NULL
 };
 static char* shfilter_labels[] = {
@@ -1416,7 +1420,7 @@ static struct Config {
 				.desc	= "This will upscale shader x times", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
-				.count = 4,
+				.count = 8,
 				.values = shupscale_labels,
 				.labels = shupscale_labels,
 			},
