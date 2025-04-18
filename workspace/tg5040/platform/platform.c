@@ -148,13 +148,6 @@ char* load_shader_source(const char* filename) {
 GLuint load_shader_from_file(GLenum type, const char* filename, const char* path) {
 	char filepath[256];
 	snprintf(filepath, sizeof(filepath), "%s/%s", path,filename);
-	LOG_info("SOurce file %s\n",filepath);
-	LOG_info("SOurce file %s\n",filepath);
-	LOG_info("SOurce file %s\n",filepath);
-	LOG_info("SOurce file %s\n",filepath);
-	LOG_info("SOurce file %s\n",filepath);
-	LOG_info("SOurce file %s\n",filepath);
-	LOG_info("SOurce file %s\n",filepath);
     char* source = load_shader_source(filepath);
     if (!source) return 0;
 
