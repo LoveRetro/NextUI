@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-int prefixMatch(char* pre, char* str);
-int suffixMatch(char* suf, char* str);
+int prefixMatch(char* pre, const char* str);
+int suffixMatch(char* suf,const char* str);
 int exactMatch(char* str1, char* str2);
 int containsString(char* haystack, char* needle);
 int hide(char* file_name);
@@ -44,5 +44,6 @@ int getInt(char* path);
 uint64_t getMicroseconds(void);
 
 int clamp(int x, int lower, int upper);
+double clampd(double x, double lower, double upper);
 
 #endif

@@ -26,7 +26,7 @@ SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../
 CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(ARCH) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -O3 -Ofast -std=gnu99
-LDFLAGS	 += -lmsettings -lsamplerate -lzip
+LDFLAGS	 += -lmsettings -lzip -lsamplerate
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 # CFLAGS  += -fsanitize=address -fno-common
 # LDFLAGS += -lasan
@@ -39,8 +39,12 @@ PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 
 all: libretro-common $(PREFIX)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
-	cp /usr/lib/aarch64-linux-gnu/libsamplerate.so build/$(PLATFORM)
-	cp /usr/local/lib/libzip.so build/$(PLATFORM)
+	cp /usr/lib/aarch64-linux-gnu/libsamplerate.so.0 build/$(PLATFORM)
+	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
+	cp /usr/local/lib/libzip.so.5 build/$(PLATFORM)
+	cp /lib/aarch64-linux-gnu/libbz2.so.1.0 build/$(PLATFORM)
+	cp /lib/aarch64-linux-gnu/liblzma.so.5 build/$(PLATFORM)
+	cp /usr/lib/aarch64-linux-gnu/libzstd.so.1 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 clean:
 	rm -f $(PRODUCT)

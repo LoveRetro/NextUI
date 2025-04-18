@@ -12,10 +12,10 @@
 
 ///////////////////////////////////////
 
-int prefixMatch(char* pre, char* str) {
+int prefixMatch(char* pre, const char* str) {
 	return (strncasecmp(pre,str,strlen(pre))==0);
 }
-int suffixMatch(char* suf, char* str) {
+int suffixMatch(char* suf, const char* str) {
 	int len = strlen(suf);
 	int offset = strlen(str)-len;
 	return (offset>=0 && strncasecmp(suf, str+offset, len)==0);
@@ -493,6 +493,11 @@ uint64_t getMicroseconds(void) {
 })
 
 int clamp(int x, int lower, int upper)
+{
+    return min(upper, max(x, lower));
+}
+
+double clampd(double x, double lower, double upper)
 {
     return min(upper, max(x, lower));
 }
