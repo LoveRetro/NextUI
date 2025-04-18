@@ -56,6 +56,7 @@ void LOG_note(int level, const char* fmt, ...);
 #endif
 
 #define SHADERS_FOLDER SDCARD_PATH "/Shaders"
+#define SYSSHADERS_FOLDER SYSTEM_PATH "/shaders"
 
 ///////////////////////////////
 

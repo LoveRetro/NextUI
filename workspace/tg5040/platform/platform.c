@@ -121,7 +121,7 @@ GLuint link_program(GLuint vertex_shader, GLuint fragment_shader) {
 
 char* load_shader_source(const char* filename) {
 	char filepath[256];
-	snprintf(filepath, sizeof(filepath), "%s/%s", SHADERS_FOLDER,filename);
+	snprintf(filepath, sizeof(filepath), "%s", filename);
     FILE* file = fopen(filepath, "rb");
     if (!file) {
         fprintf(stderr, "Failed to open shader file: %s\n", filepath);
@@ -145,8 +145,17 @@ char* load_shader_source(const char* filename) {
     return source;
 }
 
-GLuint load_shader_from_file(GLenum type, const char* filename) {
-    char* source = load_shader_source(filename);
+GLuint load_shader_from_file(GLenum type, const char* filename, const char* path) {
+	char filepath[256];
+	snprintf(filepath, sizeof(filepath), "%s/%s", path,filename);
+	LOG_info("SOurce file %s\n",filepath);
+	LOG_info("SOurce file %s\n",filepath);
+	LOG_info("SOurce file %s\n",filepath);
+	LOG_info("SOurce file %s\n",filepath);
+	LOG_info("SOurce file %s\n",filepath);
+	LOG_info("SOurce file %s\n",filepath);
+	LOG_info("SOurce file %s\n",filepath);
+    char* source = load_shader_source(filepath);
     if (!source) return 0;
 
     const char* define = NULL;
@@ -341,30 +350,30 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.gl_context = SDL_GL_CreateContext(vid.window);
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
-
 	
-	GLuint default_vertex = load_shader_from_file(GL_VERTEX_SHADER, "system/default.glsl");
-	GLuint default_fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "system/default.glsl");
+
+	GLuint default_vertex = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl",SYSSHADERS_FOLDER);
+	GLuint default_fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl",SYSSHADERS_FOLDER);
 	g_shader_default = link_program(default_vertex, default_fragment);
 
-	GLuint color_vshader = load_shader_from_file(GL_VERTEX_SHADER, "system/colorfix.glsl");
-	GLuint color_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "system/colorfix.glsl");
+	GLuint color_vshader = load_shader_from_file(GL_VERTEX_SHADER, "colorfix.glsl",SYSSHADERS_FOLDER);
+	GLuint color_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "colorfix.glsl",SYSSHADERS_FOLDER);
 	g_shader_color = link_program(color_vshader, color_shader);
 
-	GLuint overlay_vshader = load_shader_from_file(GL_VERTEX_SHADER, "system/overlay.glsl");
-	GLuint overlay_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "system/overlay.glsl");
+	GLuint overlay_vshader = load_shader_from_file(GL_VERTEX_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
+	GLuint overlay_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
 	g_shader_overlay = link_program(overlay_vshader, overlay_shader);
 
-	GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
-	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); 
+	GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl",SHADERS_FOLDER);
+	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl",SHADERS_FOLDER); 
 	shaders[0]->shader_p = link_program(vertex_shader1, fragment_shader1);
 
-	GLuint vertex_shader2 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
-	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); 
+	GLuint vertex_shader2 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl",SHADERS_FOLDER);
+	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl",SHADERS_FOLDER); 
 	shaders[1]->shader_p =  link_program(vertex_shader2, fragment_shader2);
 
-	GLuint vertex_shader3 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
-	GLuint fragment_shader3 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); 
+	GLuint vertex_shader3 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl",SHADERS_FOLDER);
+	GLuint fragment_shader3 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl",SHADERS_FOLDER); 
 	shaders[2]->shader_p =  link_program(vertex_shader3, fragment_shader3);
 
 
@@ -419,8 +428,8 @@ void PLAT_updateShader(int i, const char *filename, int *scale, int *filter) {
     if (filename != NULL) {
         SDL_GL_MakeCurrent(vid.window, vid.gl_context);
         
-        GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, filename);
-        GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, filename);
+        GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, filename,SHADERS_FOLDER);
+        GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, filename,SHADERS_FOLDER);
         
         // Link the shader program
         shader->shader_p = link_program(vertex_shader1, fragment_shader1);
@@ -1670,20 +1679,42 @@ void runShaderPass(GLuint texture, GLuint shader_program, GLuint* fbo, GLuint* t
                    int x, int y, int width, int height, int input_tex_w, int input_tex_h, GLfloat texelSize[2],
                    GLenum filter, int layer, int screen_w, int screen_h) {
 
-    static GLuint static_VAO = 0, static_VBO = 0;
-    static GLuint last_program = 0;
-    static GLuint last_texture = 0;
-    static GLfloat last_texelSize[2] = {-1.0f, -1.0f};
-
-    typedef struct {
-        GLint texelSize;
-        GLint Texture;
-    } UniformCache;
-
-    static UniformCache cached;
+	static GLuint static_VAO = 0, static_VBO = 0;
+	static GLuint last_program = 0;
+	static GLfloat last_texelSize[2] = {-1.0f, -1.0f};
 
 	glUseProgram(shader_program);
+	if (static_VAO == 0 || shader_program != last_program) {
+		if (static_VAO) glDeleteVertexArrays(1, &static_VAO);
+		if (static_VBO) glDeleteBuffers(1, &static_VBO);
 
+		glGenVertexArrays(1, &static_VAO);
+		glGenBuffers(1, &static_VBO);
+		glBindVertexArray(static_VAO);
+		glBindBuffer(GL_ARRAY_BUFFER, static_VBO);
+
+		float vertices[] = {
+			//   x,     y,    u,    v,    z,    w
+			-1.0f,  1.0f,  0.0f, 1.0f, 0.0f, 1.0f,  // top-left
+			-1.0f, -1.0f,  0.0f, 0.0f, 0.0f, 1.0f,  // bottom-left
+			 1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 1.0f,  // top-right
+			 1.0f, -1.0f,  1.0f, 0.0f, 0.0f, 1.0f   // bottom-right
+		};
+
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+		GLint posAttrib = glGetAttribLocation(shader_program, "VertexCoord");
+		if (posAttrib >= 0) {
+			glEnableVertexAttribArray(posAttrib);
+			glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+		}
+		GLint texAttrib = glGetAttribLocation(shader_program, "TexCoord");
+		if (texAttrib >= 0) {
+			glEnableVertexAttribArray(texAttrib);
+			glVertexAttribPointer(texAttrib, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
+		}
+		last_program = shader_program;
+	}
+	
 	GLint u_FrameDirection = glGetUniformLocation(shader_program, "FrameDirection");
 	GLint u_FrameCount = glGetUniformLocation(shader_program, "FrameCount");
 	GLint u_OutputSize = glGetUniformLocation(shader_program, "OutputSize");
@@ -1697,67 +1728,26 @@ void runShaderPass(GLuint texture, GLuint shader_program, GLuint* fbo, GLuint* t
 	if (u_TextureSize >= 0) glUniform2f(u_TextureSize, width, height); 
 	if (u_InputSize >= 0) glUniform2f(u_InputSize, input_tex_w, input_tex_h); 
 
-    if (static_VAO == 0 || shadersupdated) {
-        if (static_VAO) glDeleteVertexArrays(1, &static_VAO);
-        if (static_VBO) glDeleteBuffers(1, &static_VBO);
-
-        glGenVertexArrays(1, &static_VAO);
-        glGenBuffers(1, &static_VBO);
-        glBindVertexArray(static_VAO);
-        glBindBuffer(GL_ARRAY_BUFFER, static_VBO);
-
-		float vertices[] = {
-			//   x,     y,    u,    v,    z,    w
-			-1.0f,  1.0f,  0.0f, 1.0f, 0.0f, 1.0f,  // top-left
-			-1.0f, -1.0f,  0.0f, 0.0f, 0.0f, 1.0f,  // bottom-left
-			 1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 1.0f,  // top-right
-			 1.0f, -1.0f,  1.0f, 0.0f, 0.0f, 1.0f   // bottom-right
+	GLint u_MVP = glGetUniformLocation(shader_program, "MVPMatrix");
+	if (u_MVP >= 0) {
+		float identity[16] = {
+			1,0,0,0,
+			0,1,0,0,
+			0,0,1,0,
+			0,0,0,1
 		};
-		
+		glUniformMatrix4fv(u_MVP, 1, GL_FALSE, identity);
+	}
 
-
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    }
-
-    if (shader_program != last_program || shadersupdated) {
-        glBindVertexArray(static_VAO);
-        glBindBuffer(GL_ARRAY_BUFFER, static_VBO);
-
-		GLint posAttrib = glGetAttribLocation(shader_program, "VertexCoord");
-		if (posAttrib >= 0) {
-			glEnableVertexAttribArray(posAttrib);
-			glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-		}
-		GLint texAttrib = glGetAttribLocation(shader_program, "TexCoord");
-		if (texAttrib >= 0) {
-			glEnableVertexAttribArray(texAttrib);
-			glVertexAttribPointer(texAttrib, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
-		}
-		
-        cached.texelSize = glGetUniformLocation(shader_program, "texelSize");
-        cached.Texture = glGetUniformLocation(shader_program, "Texture");
-        last_program = shader_program;
-    }
-
-    static int last_w = 0, last_h = 0;
     if (fbo && tex) {
         if (*fbo == 0) glGenFramebuffers(1, fbo);
         if (*tex == 0) glGenTextures(1, tex);
-
 		glBindTexture(GL_TEXTURE_2D, *tex);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		
-        if (width != last_w || height != last_h) {
-			
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-            last_w = width;
-            last_h = height;
-        }
-      
-
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glBindFramebuffer(GL_FRAMEBUFFER, *fbo);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *tex, 0);
 
@@ -1770,16 +1760,6 @@ void runShaderPass(GLuint texture, GLuint shader_program, GLuint* fbo, GLuint* t
 
 	glBindVertexArray(static_VAO);
 	
-	GLint u_MVP = glGetUniformLocation(shader_program, "MVPMatrix");
-	if (u_MVP >= 0) {
-		float identity[16] = {
-			1,0,0,0,
-			0,1,0,0,
-			0,0,1,0,
-			0,0,0,1
-		};
-		glUniformMatrix4fv(u_MVP, 1, GL_FALSE, identity);
-	}
 	if(layer==1) {
 		glActiveTexture(GL_TEXTURE1);
 		glEnable(GL_BLEND);
@@ -1790,34 +1770,25 @@ void runShaderPass(GLuint texture, GLuint shader_program, GLuint* fbo, GLuint* t
 	}
 
 	glBindTexture(GL_TEXTURE_2D, texture);
-	if (cached.Texture >= 0) {
-		glUniform1i(cached.Texture, 0);  // Always sample from unit 0
-	}
-	
-
-    if (texture != last_texture || shadersupdated) {
-        glBindTexture(GL_TEXTURE_2D, texture);
-        last_texture = texture;
-    }
-
     glViewport(x, y, width, height);
 
-    if (cached.texelSize >= 0 && (shadersupdated || texelSize[0] != last_texelSize[0] || texelSize[1] != last_texelSize[1])) {
-        glUniform2fv(cached.texelSize, 1, texelSize);
+
+	GLint texLocation = glGetUniformLocation(shader_program, "Texture");
+    if (texLocation >= 0) {
+        glUniform1i(texLocation, layer);  
+    }
+
+    GLint texelSizeLocation = glGetUniformLocation(shader_program, "texelSize");
+	if (texelSizeLocation >= 0 && (shadersupdated || texelSize[0] != last_texelSize[0] || texelSize[1] != last_texelSize[1])) {
+        glUniform2fv(texelSizeLocation, 1, texelSize);
         last_texelSize[0] = texelSize[0];
         last_texelSize[1] = texelSize[1];
     }
-
-    if (cached.Texture >= 0) {
-        glUniform1i(cached.Texture, layer);
-    }
-
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
 void PLAT_GL_Swap() {
     glClear(GL_COLOR_BUFFER_BIT);
-
     SDL_Rect dst_rect = {0, 0, device_width, device_height};
     setRectToAspectRatio(&dst_rect);
 
@@ -1945,7 +1916,6 @@ void PLAT_GL_Swap() {
                       0, 0, device_width, device_height,
 					  overlay_w, overlay_h, texelSizeOutput, GL_NEAREST, 1,dst_rect.w,dst_rect.h);
     }
-	
     SDL_GL_SwapWindow(vid.window);
     shadersupdated = 0;
     frame_count++;
