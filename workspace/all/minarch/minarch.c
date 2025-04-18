@@ -1008,8 +1008,9 @@ static char* offset_labels[] = {
 	NULL,
 };
 static char* nrofshaders_labels[] = {
-	"No",
-	"Yes",
+	"1",
+	"2",
+	"3",
 	NULL
 };
 static char* shupscale_labels[] = {
@@ -1021,6 +1022,7 @@ static char* shupscale_labels[] = {
 	"6",
 	"7",
 	"8",
+	"screen",
 	NULL
 };
 static char* shfilter_labels[] = {
@@ -1070,9 +1072,13 @@ enum {
 	SH_NROFSHADERS,
 	SH_SHADER1,
 	SH_SHADER1_FILTER,
-	SH_UPSCALE,
+	SH_UPSCALE1,
 	SH_SHADER2,
 	SH_SHADER2_FILTER,
+	SH_UPSCALE2,
+	SH_SHADER3,
+	SH_SHADER3_FILTER,
+	SH_UPSCALE3,
 	SH_NONE
 };
 
@@ -1381,23 +1387,23 @@ static struct Config {
 		},
 	},
 	.shaders = { // (OptionList)
-		.count = 6,
+		.count = 10,
 		.options = (Option[]){
 			[SH_NROFSHADERS] = {
 				.key	= "minarch_nrofshaders", 
-				.name	= "Use Extra Shader",
-				.desc	= "Turn extra shader on or off", // will call getScreenScalingDesc()
+				.name	= "Number OF Shaders",
+				.desc	= "Number of shaders 1 to 3", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
-				.count = 2,
+				.count = 3,
 				.values = nrofshaders_labels,
 				.labels = nrofshaders_labels,
 			},
 			
 			[SH_SHADER1] = {
 				.key	= "minarch_shader1", 
-				.name	= "Extra Shader",
-				.desc	= "This shader is optional", // will call getScreenScalingDesc()
+				.name	= "Shader 1",
+				.desc	= "Shader 1 program to run", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1406,28 +1412,28 @@ static struct Config {
 			},
 			[SH_SHADER1_FILTER] = {
 				.key	= "minarch_shader1_filter", 
-				.name	= "Extra Shader Filter",
-				.desc	= "NEAREST or LINEAR", // will call getScreenScalingDesc()
+				.name	= "Shader 1 Filter",
+				.desc	= "Method of upscaling, NEAREST or LINEAR", // will call getScreenScalingDesc()
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
 				.values = shfilter_labels,
 				.labels = shfilter_labels,
 			},
-			[SH_UPSCALE] = {
-				.key	= "minarch_shader_upscale", 
-				.name	= "Upscale Extra Shader",
-				.desc	= "This will upscale shader x times", // will call getScreenScalingDesc()
+			[SH_UPSCALE1] = {
+				.key	= "minarch_shader1_upscale", 
+				.name	= "Shader 1 Scale",
+				.desc	= "This will scale images x times, screen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
-				.count = 8,
+				.count = 9,
 				.values = shupscale_labels,
 				.labels = shupscale_labels,
 			},
 			[SH_SHADER2] = {
 				.key	= "minarch_shader2", 
-				.name	= "Output Shader",
-				.desc	= "This is the final output shader", // will call getScreenScalingDesc()
+				.name	= "Shader 2",
+				.desc	= "Shader 2 program to run", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1437,13 +1443,54 @@ static struct Config {
 			},
 			[SH_SHADER2_FILTER] = {
 				.key	= "minarch_shader2_filter", 
-				.name	= "Output Shader Filter",
-				.desc	= "NEAREST or LINEAR", // will call getScreenScalingDesc()
+				.name	= "Shader 2 Filter",
+				.desc	= "Method of upscaling, NEAREST or LINEAR", // will call getScreenScalingDesc()
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
 				.values = shfilter_labels,
 				.labels = shfilter_labels,
+			},
+			[SH_UPSCALE2] = {
+				.key	= "minarch_shader2_upscale", 
+				.name	= "Shader 2 Scale",
+				.desc	= "This will scale images x times, screen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.default_value = 1,
+				.value = 1,
+				.count = 9,
+				.values = shupscale_labels,
+				.labels = shupscale_labels,
+			},
+			[SH_SHADER3] = {
+				.key	= "minarch_shader3", 
+				.name	= "Shader 3",
+				.desc	= "Shader 3 program to run", // will call getScreenScalingDesc()
+				.default_value = 1,
+				.value = 1,
+				.count = 2,
+				.values = NULL,
+				.labels = NULL,
+
+			},
+			[SH_SHADER3_FILTER] = {
+				.key	= "minarch_shader3_filter", 
+				.name	= "Shader 3 Filter",
+				.desc	= "Method of upscaling, NEAREST or LINEAR", // will call getScreenScalingDesc()
+				.default_value = 0,
+				.value = 0,
+				.count = 2,
+				.values = shfilter_labels,
+				.labels = shfilter_labels,
+			},
+			[SH_UPSCALE3] = {
+				.key	= "minarch_shader3_upscale", 
+				.name	= "Shader 3 Scale",
+				.desc	= "This will scale images x times, screen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.default_value = 1,
+				.value = 1,
+				.count = 9,
+				.values = shupscale_labels,
+				.labels = shupscale_labels,
 			},
 			{NULL}
 		},
@@ -1620,11 +1667,6 @@ static void Config_syncShaders(char* key, int value) {
 		GFX_setShaders(value+1);
 		i = SH_NROFSHADERS;
 	}
-	if (exactMatch(key,config.shaders.options[SH_UPSCALE].key)) {
-		GFX_setShaderUpscale(value+1);
-		i = SH_UPSCALE;
-	}
-	
 	if (exactMatch(key,config.shaders.options[SH_SHADER1].key)) {
 		GFX_setShader1(config.shaders.options[SH_SHADER1].values[value]);
 		i = SH_SHADER1;
@@ -1633,6 +1675,10 @@ static void Config_syncShaders(char* key, int value) {
 		GFX_setShader1Filter(value);
 		i = SH_SHADER1_FILTER;
 	}
+	if (exactMatch(key,config.shaders.options[SH_UPSCALE1].key)) {
+		GFX_setShaderUpscale1(value+1);
+		i = SH_UPSCALE1;
+	}
 	if (exactMatch(key,config.shaders.options[SH_SHADER2].key)) {
 		GFX_setShader2(config.shaders.options[SH_SHADER2].values[value]);
 		i = SH_SHADER2;
@@ -1640,6 +1686,22 @@ static void Config_syncShaders(char* key, int value) {
 	if (exactMatch(key,config.shaders.options[SH_SHADER2_FILTER].key)) {
 		GFX_setShader2Filter(value);
 		i = SH_SHADER2_FILTER;
+	}
+	if (exactMatch(key,config.shaders.options[SH_UPSCALE2].key)) {
+		GFX_setShaderUpscale2(value+1);
+		i = SH_UPSCALE2;
+	}
+	if (exactMatch(key,config.shaders.options[SH_SHADER3].key)) {
+		GFX_setShader3(config.shaders.options[SH_SHADER3].values[value]);
+		i = SH_SHADER3;
+	}
+	if (exactMatch(key,config.shaders.options[SH_SHADER3_FILTER].key)) {
+		GFX_setShader3Filter(value);
+		i = SH_SHADER3_FILTER;
+	}
+	if (exactMatch(key,config.shaders.options[SH_UPSCALE3].key)) {
+		GFX_setShaderUpscale3(value+1);
+		i = SH_UPSCALE3;
 	}
 	
 	if (i==-1) return;
@@ -1727,10 +1789,13 @@ static void Config_init(void) {
 	char** filelist = list_files_in_folder(SHADERS_FOLDER, &filecount);
 	config.shaders.options[SH_SHADER1].values = filelist;
 	config.shaders.options[SH_SHADER2].values = filelist;
+	config.shaders.options[SH_SHADER3].values = filelist;
 	config.shaders.options[SH_SHADER1].labels = filelist;
 	config.shaders.options[SH_SHADER2].labels = filelist;
+	config.shaders.options[SH_SHADER3].labels = filelist;
 	config.shaders.options[SH_SHADER1].count = filecount;
 	config.shaders.options[SH_SHADER2].count = filecount;
+	config.shaders.options[SH_SHADER3].count = filecount;
 		
 	config.initialized = 1;
 }
@@ -4700,8 +4765,14 @@ static int OptionShaders_optionChanged(MenuList* list, int i) {
 	if(i == SH_NROFSHADERS) {
 		GFX_setShaders(item->value+1);
 	}
-	if(i == SH_UPSCALE) {
-		GFX_setShaderUpscale(item->value+1);
+	if(i == SH_UPSCALE1) {
+		GFX_setShaderUpscale1(item->value+1);
+	}
+	if(i == SH_UPSCALE2) {
+		GFX_setShaderUpscale2(item->value+1);
+	}
+	if(i == SH_UPSCALE3) {
+		GFX_setShaderUpscale3(item->value+1);
 	}
 	if(i == SH_SHADER1) {
 		GFX_setShader1(filelist[item->value]);
@@ -4709,11 +4780,17 @@ static int OptionShaders_optionChanged(MenuList* list, int i) {
 	if(i == SH_SHADER2) {
 		GFX_setShader2(filelist[item->value]);
 	}
+	if(i == SH_SHADER3) {
+		GFX_setShader3(filelist[item->value]);
+	}
 	if(i == SH_SHADER1_FILTER) {
 		GFX_setShader1Filter(item->value);
 	}
 	if(i == SH_SHADER2_FILTER) {
 		GFX_setShader2Filter(item->value);
+	}
+	if(i == SH_SHADER3_FILTER) {
+		GFX_setShader3Filter(item->value);
 	}
 	config.shaders.options[i].value = item->value;
 	return MENU_CALLBACK_NOP;
@@ -4735,12 +4812,13 @@ static int OptionShaders_openMenu(MenuList* list, int i) {
 		filelist = realloc(filelist, sizeof(char*) * (filecount + 1));
 		filelist[filecount] = NULL;
 		for (int i=0; i<config.shaders.count; i++) {
+			LOG_info("hi\n");
 			MenuItem* item = &ShaderOptions_menu.items[i];
 			item->id = i;
 			item->name = config.shaders.options[i].name;
 			item->desc = config.shaders.options[i].desc;
 			item->value = config.shaders.options[i].value;
-			if(strcmp(config.shaders.options[i].key, "minarch_shader1") == 0 || strcmp(config.shaders.options[i].key, "minarch_shader2") == 0) {
+			if(strcmp(config.shaders.options[i].key, "minarch_shader1") == 0 || strcmp(config.shaders.options[i].key, "minarch_shader2") == 0 || strcmp(config.shaders.options[i].key, "minarch_shader3") == 0) {
 				item->values = filelist;
 				config.shaders.options[i].values = filelist;
 			}	else {

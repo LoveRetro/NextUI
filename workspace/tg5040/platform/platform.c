@@ -35,9 +35,13 @@ GLuint g_shader_default = 0;
 GLuint g_shader_color = 0;
 GLuint g_shader_pass1 = 0;
 GLuint g_shader_pass2 = 0;
+GLuint g_shader_pass3 = 0;
 GLuint g_shader_overlay = 0;
-float shaderUpscaleRatio = 2; // this should be set from the settings screen would give options from 1.0 to 4.0 (so also 2.5) anything higher is useless, even this simple blur shader cant really go higher then 2 really gpu can't handle larger but maybe some super light shader you could try 3 or 4
-int nrofshaders = 2; // choose between 1 or 2 pipelines, 2 pipelines = more cpu usage, but more shader options and shader upscaling stuff
+GLuint g_shader_passes [3] = {0};
+float shaderUpscaleRatios[3] = {1};
+int shaderfilters[3] = {GL_NEAREST};
+
+int nrofshaders = 3; // choose between 1 and 3 pipelines, > pipelines = more cpu usage, but more shader options and shader upscaling stuff
 ///////////////////////////////
 
 static SDL_Joystick *joystick;
@@ -346,17 +350,17 @@ SDL_Surface* PLAT_initVideo(void) {
 	GLuint overlay_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "system/overlay.glsl");
 	g_shader_overlay = link_program(overlay_vshader, overlay_shader);
 
-	// these are 2 shader pipelines basically here is were we allow custom shaders :D use together with shaderUpscaleRatio
-	shaderUpscaleRatio = 2; // this should be set from the settings screen would give options from 1.0 to 4.0 (so also 2.5) anything higher is useless, even a simple blur shader cant really go higher then 2 really gpu can't handle larger but maybe some super light shader you could try 3 or 4
-	nrofshaders = 2; // setting this to 2 uses g_shader_pass1 and then followed by g_shader_pass2, otherwise it will directly go to g_shader_pass2 only, but yeah we can expand the amount of pipelines, but every pipeline does take cpu so yeah..
-	
 	GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
 	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
-	g_shader_pass1 = link_program(vertex_shader1, fragment_shader1);
+	g_shader_passes[0] = link_program(vertex_shader1, fragment_shader1);
 	
 	GLuint vertex_shader2 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
 	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // final output shader here it either upscales or downscales automaticly to screen size again, i'd use this maybe for like adjusting final output image, add scanlines, sharpen that kinda stuff
-	g_shader_pass2 = link_program(vertex_shader2, fragment_shader2);
+	g_shader_passes[1] = link_program(vertex_shader2, fragment_shader2);
+
+	GLuint vertex_shader3 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
+	GLuint fragment_shader3 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // final output shader here it either upscales or downscales automaticly to screen size again, i'd use this maybe for like adjusting final output image, add scanlines, sharpen that kinda stuff
+	g_shader_passes[2] = link_program(vertex_shader3, fragment_shader3);
 
 
 
@@ -396,33 +400,51 @@ int shadersupdated = 0;
 void PLAT_resetShaders() {
 	shadersupdated = 1;
 }
-static int shaderfilter1 = GL_NEAREST;
-static int shaderfilter2 = GL_NEAREST;
+
 void PLAT_setShader1Filter(int value) {
 	LOG_info("set shader 1 filter: %i\n",value);
 	if(value==1) 
-		shaderfilter1 = GL_LINEAR;
+		shaderfilters[0] = GL_LINEAR;
 	else
-		shaderfilter1 = GL_NEAREST;
-	LOG_info("set shader 1 filter result: %u\n",shaderfilter1);
+	shaderfilters[0] = GL_NEAREST;
+	LOG_info("set shader 1 filter result: %u\n",shaderfilters[0]);
 	shadersupdated = 1;
 }
 void PLAT_setShader2Filter(int value) {
 	LOG_info("set shader 2 filter: %i\n",value);
 	if(value==1) 
-		shaderfilter2 = GL_LINEAR;
+	shaderfilters[1] = GL_LINEAR;
 	else
-		shaderfilter2 = GL_NEAREST;
-	LOG_info("set shader 2 filter result: %u\n",shaderfilter2);
+	shaderfilters[1] = GL_NEAREST;
+	LOG_info("set shader 2 filter result: %u\n",shaderfilters[1]);
+	shadersupdated = 1;
+}
+void PLAT_setShader3Filter(int value) {
+	LOG_info("set shader 3 filter: %i\n",value);
+	if(value==1) 
+	shaderfilters[2] = GL_LINEAR;
+	else
+	shaderfilters[2] = GL_NEAREST;
+	LOG_info("set shader 3 filter result: %u\n",shaderfilters[2]);
 	shadersupdated = 1;
 }
 void PLAT_setShaders(int nr) {
 	LOG_info("set nr of shaders to %i\n",nr);
 	nrofshaders = nr;
 }
-void PLAT_setShaderUpscale(int nr) {
-	LOG_info("set shaderupscale to %i\n",nr);
-	shaderUpscaleRatio = nr;
+void PLAT_setShaderUpscale1(int nr) {
+	LOG_info("set shaderupscale 1 to %i\n",nr);
+	shaderUpscaleRatios[0] = nr;
+	shadersupdated = 1;
+}
+void PLAT_setShaderUpscale2(int nr) {
+	LOG_info("set shaderupscale 2 to %i\n",nr);
+	shaderUpscaleRatios[1] = nr;
+	shadersupdated = 1;
+}
+void PLAT_setShaderUpscale3(int nr) {
+	LOG_info("set shaderupscale 3 to %i\n",nr);
+	shaderUpscaleRatios[2] = nr;
 	shadersupdated = 1;
 }
 
@@ -431,16 +453,16 @@ void PLAT_setShader1(const char* filename) {
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, filename);
 	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, filename); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
-	g_shader_pass1 = link_program(vertex_shader1, fragment_shader1);
-	if (g_shader_pass1 == 0) {
-		LOG_error("Shader linking failed for %s\n", filename);
+	g_shader_passes[0] = link_program(vertex_shader1, fragment_shader1);
+	if (g_shader_passes[0] == 0) {
+		LOG_error("Shader linking 1 failed for %s\n", filename);
 	}
 	GLint success = 0;
-	glGetProgramiv(g_shader_pass1, GL_LINK_STATUS, &success);
+	glGetProgramiv(g_shader_passes[0] , GL_LINK_STATUS, &success);
 	if (!success) {
 		char infoLog[512];
-		glGetProgramInfoLog(g_shader_pass1, 512, NULL, infoLog);
-		LOG_error("Shader Program Linking Failed: %s\n", infoLog);
+		glGetProgramInfoLog(g_shader_passes[0], 512, NULL, infoLog);
+		LOG_error("Shader Program 1 Linking Failed: %s\n", infoLog);
 	}
 	LOG_info("sahder set now to %s\n",filename);
 	shadersupdated = 1;
@@ -449,18 +471,36 @@ void PLAT_setShader2(const char* filename) {
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	GLuint vertex_shader2 = load_shader_from_file(GL_VERTEX_SHADER, filename);
 	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, filename); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
-	g_shader_pass2 = link_program(vertex_shader2, fragment_shader2);
-	if (g_shader_pass2 == 0) {
-		LOG_error("Shader linking failed for %s\n", filename);
+	g_shader_passes[1] = link_program(vertex_shader2, fragment_shader2);
+	if (g_shader_passes[1] == 0) {
+		LOG_error("Shader linking 2 failed for %s\n", filename);
 	}
 	GLint success = 0;
-	glGetProgramiv(g_shader_pass2, GL_LINK_STATUS, &success);
+	glGetProgramiv(g_shader_passes[1], GL_LINK_STATUS, &success);
 	if (!success) {
 		char infoLog[512];
-		glGetProgramInfoLog(g_shader_pass2, 512, NULL, infoLog);
-		LOG_error("Shader Program Linking Failed: %s\n", infoLog);
+		glGetProgramInfoLog(g_shader_passes[1], 512, NULL, infoLog);
+		LOG_error("Shader Program 2 Linking Failed: %s\n", infoLog);
 	}
 	LOG_info("shader 2 set now to %s\n",filename);
+	shadersupdated = 1;
+}
+void PLAT_setShader3(const char* filename) {
+	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+	GLuint vertex_shader2 = load_shader_from_file(GL_VERTEX_SHADER, filename);
+	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, filename); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
+	g_shader_passes[2] = link_program(vertex_shader2, fragment_shader2);
+	if (g_shader_passes[2] == 0) {
+		LOG_error("Shader linking 3 failed for %s\n", filename);
+	}
+	GLint success = 0;
+	glGetProgramiv(g_shader_passes[2], GL_LINK_STATUS, &success);
+	if (!success) {
+		char infoLog[512];
+		glGetProgramInfoLog(g_shader_passes[2], 512, NULL, infoLog);
+		LOG_error("Shader Program 3 Linking Failed: %s\n", infoLog);
+	}
+	LOG_info("shader 3 set now to %s\n",filename);
 	shadersupdated = 1;
 }
 
@@ -1866,15 +1906,12 @@ void PLAT_GL_Swap() {
     }
 
     static GLuint src_texture = 0;
+    static GLuint initial_texture = 0;
     static GLuint fbo = 0;
-    static GLuint dst_texture = 0;
-    static GLuint final_texture = 0;
-    static GLuint convert_texture = 0;
+    static GLuint pass_textures[3] = {0};
 
     static int src_w_last = 0, src_h_last = 0;
-    static int convert_w_last = 0, convert_h_last = 0;
-    static int dst_w_last = 0, dst_h_last = 0;
-
+ 
     if (!src_texture) glGenTextures(1, &src_texture);
     glBindTexture(GL_TEXTURE_2D, src_texture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -1890,63 +1927,62 @@ void PLAT_GL_Swap() {
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
 
     if (!fbo) glGenFramebuffers(1, &fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
+ 
     GLfloat texelSizeSource[2] = {1.0f / vid.blit->src_w, 1.0f / vid.blit->src_h};
 
-    int up_w = vid.blit->src_w * ((nrofshaders > 1) ? shaderUpscaleRatio : 1);
-    int up_h = vid.blit->src_h * ((nrofshaders > 1) ? shaderUpscaleRatio : 1);
+	if (!initial_texture) glGenTextures(1, &initial_texture);
+	runShaderPass(src_texture, g_shader_color, &fbo, &initial_texture, 0, 0,
+		vid.blit->src_w, vid.blit->src_h, vid.blit->src_w, vid.blit->src_h,
+				  texelSizeSource, GL_NEAREST, 0);
 
-    if (nrofshaders > 1) {
-        if (!convert_texture) glGenTextures(1, &convert_texture);
-        glBindTexture(GL_TEXTURE_2D, convert_texture);
-        if (vid.blit->src_w != convert_w_last || vid.blit->src_h != convert_h_last) {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-            convert_w_last = vid.blit->src_w;
-            convert_h_last = vid.blit->src_h;
-        }
+	static int last_w=0;
+	static int last_h=0;
+	static int texture_initialized[3] = {0};
+	for(int i=0;i<nrofshaders;i++) {
+		if (!pass_textures[i]) glGenTextures(1, &pass_textures[i]);
+        glBindTexture(GL_TEXTURE_2D, pass_textures[i]);
+		
+		int src_w = i == 0 ? vid.blit->src_w:last_w;
+    	int src_h = i == 0 ? vid.blit->src_h:last_h;
+		int dst_w = vid.blit->src_w * shaderUpscaleRatios[i];
+    	int dst_h = vid.blit->src_h * shaderUpscaleRatios[i];
+		if(shaderUpscaleRatios[i] == 9) {
+			dst_w = device_width;
+			dst_h = device_height;
+		}
+		if (!texture_initialized[i] || dst_w != last_w || dst_h != last_h) {
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, dst_w, dst_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+			texture_initialized[i] = 1;
+		}
+		last_w = dst_w;
+		last_h = dst_h;
 
-        runShaderPass(src_texture, g_shader_color, &fbo, &convert_texture, 0, 0,
-                      vid.blit->src_w, vid.blit->src_h, vid.blit->src_w, vid.blit->src_h,
-                      texelSizeSource, GL_NEAREST, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pass_textures[i], 0);
 
-        if (!dst_texture) glGenTextures(1, &dst_texture);
-        glBindTexture(GL_TEXTURE_2D, dst_texture);
-        if (up_w != dst_w_last || up_h != dst_h_last) {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, up_w, up_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-            dst_w_last = up_w;
-            dst_h_last = up_h;
-        }
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+			printf("Framebuffer not complete in pass %d!\n", i);
+		}
+		// LOG_info("shader pass: %i\n",i);
+		// LOG_info("src_w: %i\n",src_w);
+		// LOG_info("dst_w: %i\n",dst_w);
+		// LOG_info("src_h: %i\n",src_h);
+		// LOG_info("dst_h: %i\n",dst_h);
 
-        runShaderPass(convert_texture, g_shader_pass1, &fbo, &dst_texture, 0, 0,
-                      up_w, up_h, vid.blit->src_w, vid.blit->src_h,
-                      texelSizeSource, shaderfilter1, 0);
-    } else {
-        if (!dst_texture) glGenTextures(1, &dst_texture);
-        glBindTexture(GL_TEXTURE_2D, dst_texture);
-        if (up_w != dst_w_last || up_h != dst_h_last) {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, up_w, up_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-            dst_w_last = up_w;
-            dst_h_last = up_h;
-        }
+		GLfloat texelPass[2] = {1.0f / src_w, 1.0f / src_h};
+        runShaderPass(i==0?initial_texture:pass_textures[i-1], g_shader_passes[i], &fbo, &pass_textures[i], 0, 0,
+			 dst_w, dst_h,src_w, src_h,
+			texelPass, shaderfilters[i], 0);
+	}
 
-        runShaderPass(src_texture, g_shader_color, &fbo, &dst_texture, 0, 0,
-                      up_w, up_h, vid.blit->src_w, vid.blit->src_h,
-                      texelSizeSource, GL_NEAREST, 0);
-    }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	// first scale back down and then apply last shader
-    GLfloat texelSizeFinal[2] = {1.0f / up_w, 1.0f / up_h};
-    runShaderPass(dst_texture, g_shader_default, &fbo, &final_texture,
-                  0, 0, dst_rect.w, dst_rect.h,
-                  up_w, up_h, texelSizeFinal, shaderfilter2, 0);
-
-	GLfloat texelSizeOutput[2] = {1.0f / dst_rect.w, 1.0f / dst_rect.h};
-    runShaderPass(final_texture, g_shader_pass2, NULL, NULL,
+	// LOG_info("downscaling from: %i\n",last_w);
+	GLfloat texelSizeOutput[2] = {1.0f / last_w, 1.0f / last_h};
+    runShaderPass(pass_textures[nrofshaders-1], g_shader_default, NULL, NULL,
                   dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h,
-                  dst_rect.w, dst_rect.h, texelSizeOutput, GL_NEAREST, 0);
+                  last_w, last_h, texelSizeOutput, GL_NEAREST, 0);
 
     if (overlay_tex) {
         runShaderPass(overlay_tex, g_shader_overlay, NULL, NULL,
