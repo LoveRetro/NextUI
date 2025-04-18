@@ -1940,7 +1940,7 @@ void PLAT_GL_Swap() {
 	// first scale back down and then apply last shader
     GLfloat texelSizeFinal[2] = {1.0f / up_w, 1.0f / up_h};
     runShaderPass(dst_texture, g_shader_default, &fbo, &final_texture,
-                  dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h,
+                  0, 0, dst_rect.w, dst_rect.h,
                   up_w, up_h, texelSizeFinal, shaderfilter2, 0);
 
 	GLfloat texelSizeOutput[2] = {1.0f / dst_rect.w, 1.0f / dst_rect.h};
@@ -1948,12 +1948,12 @@ void PLAT_GL_Swap() {
                   dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h,
                   dst_rect.w, dst_rect.h, texelSizeOutput, GL_NEAREST, 0);
 
-    if (overlay_tex) {
-        runShaderPass(overlay_tex, g_shader_overlay, NULL, NULL,
-                      0, 0, device_width, device_height,
-					  overlay_w, overlay_h, texelSizeFinal, GL_NEAREST, 1);
-    }
-
+    // if (overlay_tex) {
+    //     runShaderPass(overlay_tex, g_shader_overlay, NULL, NULL,
+    //                   0, 0, device_width, device_height,
+	// 				  overlay_w, overlay_h, texelSizeOutput, GL_NEAREST, 1);
+    // }
+	
     SDL_GL_SwapWindow(vid.window);
     shadersupdated = 0;
     frame_count++;
