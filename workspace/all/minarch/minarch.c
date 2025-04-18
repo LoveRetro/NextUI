@@ -1391,7 +1391,7 @@ static struct Config {
 		.options = (Option[]){
 			[SH_NROFSHADERS] = {
 				.key	= "minarch_nrofshaders", 
-				.name	= "Number OF Shaders",
+				.name	= "Number of Shaders",
 				.desc	= "Number of shaders 1 to 3", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
