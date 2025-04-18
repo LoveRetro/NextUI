@@ -1938,6 +1938,10 @@ void PLAT_GL_Swap() {
 	static int last_w=0;
 	static int last_h=0;
 	static int texture_initialized[3] = {0};
+	if(shadersupdated) {
+		last_w = 0;
+		last_h = 0;
+	}
 	for(int i=0;i<nrofshaders;i++) {
 		if (!pass_textures[i]) glGenTextures(1, &pass_textures[i]);
         glBindTexture(GL_TEXTURE_2D, pass_textures[i]);
@@ -1947,8 +1951,8 @@ void PLAT_GL_Swap() {
 		int dst_w = vid.blit->src_w * shaderUpscaleRatios[i];
     	int dst_h = vid.blit->src_h * shaderUpscaleRatios[i];
 		if(shaderUpscaleRatios[i] == 9) {
-			dst_w = device_width;
-			dst_h = device_height;
+			dst_w = dst_rect.w;
+			dst_h = dst_rect.h;
 		}
 		if (!texture_initialized[i] || dst_w != last_w || dst_h != last_h) {
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, dst_w, dst_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
