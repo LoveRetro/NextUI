@@ -22,12 +22,23 @@
 ///////////////////////////////////////
 
 // shader stuff
+typedef struct Shader {
+	GLuint shader_p;
+	int scale;
+	int filter;
+} Shader;
+
+GLuint g_shader_default = 0;
 GLuint g_shader_color = 0;
-GLuint g_shader_pass1 = 0;
-GLuint g_shader_pass2 = 0;
 GLuint g_shader_overlay = 0;
-float shaderUpscaleRatio = 2; // this should be set from the settings screen would give options from 1.0 to 4.0 (so also 2.5) anything higher is useless, even this simple blur shader cant really go higher then 2 really gpu can't handle larger but maybe some super light shader you could try 3 or 4
-int nrofshaders = 2; // choose between 1 or 2 pipelines, 2 pipelines = more cpu usage, but more shader options and shader upscaling stuff
+
+Shader* shaders[3] = {
+    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR }, 
+    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR }, 
+    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR }
+};
+
+int nrofshaders = 3; // choose between 1 and 3 pipelines, > pipelines = more cpu usage, but more shader options and shader upscaling stuff
 
 // Legacy MinUI settings
 typedef struct SettingsV3 {
@@ -240,6 +251,7 @@ static uint32_t SDL_transparentBlack = 0;
 #define SHADERS_FOLDER SDCARD_PATH "/Shaders"
 
 static char* overlay_path = NULL;
+
 GLuint link_program(GLuint vertex_shader, GLuint fragment_shader) {
     GLuint program = glCreateProgram();
     glAttachShader(program, vertex_shader);
@@ -256,7 +268,7 @@ GLuint link_program(GLuint vertex_shader, GLuint fragment_shader) {
         printf("Program link error: %s\n", log);
         free(log);
     }
-
+	LOG_info("program linked\n");
     return program;
 }
 
@@ -290,12 +302,124 @@ GLuint load_shader_from_file(GLenum type, const char* filename) {
     char* source = load_shader_source(filename);
     if (!source) return 0;
 
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, (const char**)&source, NULL);
-    glCompileShader(shader);
-    free(source);
+    const char* define = NULL;
+    const char* default_precision = NULL;
+    if (type == GL_VERTEX_SHADER) {
+        define = "#define VERTEX\n";
+    } else if (type == GL_FRAGMENT_SHADER) {
+        define = "#define FRAGMENT\n";
+        default_precision =
+            "#ifdef GL_ES\n"
+            "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
+            "precision highp float;\n"
+            "#else\n"
+            "precision mediump float;\n"
+            "#endif\n"
+            "#endif\n";
+    } else {
+        fprintf(stderr, "Unsupported shader type\n");
+        free(source);
+        return 0;
+    }
 
-    // Check compilation status
+    const char* version_start = strstr(source, "#version");
+    const char* version_end = version_start ? strchr(version_start, '\n') : NULL;
+
+    const char* replacement_version = "#version 300 es\n";
+    const char* fallback_version = "#version 100\n";
+
+    char* combined = NULL;
+    size_t define_len = strlen(define);
+    size_t precision_len = default_precision ? strlen(default_precision) : 0;
+    size_t source_len = strlen(source);
+    size_t combined_len = 0;
+
+    // Helper: check if the version is one of the desktop ones to upgrade
+    int should_replace_with_300es = 0;
+    if (version_start && version_end) {
+        char version_str[32] = {0};
+        size_t len = version_end - version_start;
+        if (len < sizeof(version_str)) {
+            strncpy(version_str, version_start, len);
+            version_str[len] = '\0';
+
+            // Check for desktop GLSL versions that should be replaced
+            if (
+                strstr(version_str, "#version 110") ||
+                strstr(version_str, "#version 120") ||
+                strstr(version_str, "#version 130") ||
+                strstr(version_str, "#version 140") ||
+                strstr(version_str, "#version 150") ||
+                strstr(version_str, "#version 330") ||
+                strstr(version_str, "#version 400") ||
+                strstr(version_str, "#version 410") ||
+                strstr(version_str, "#version 420") ||
+                strstr(version_str, "#version 430") ||
+                strstr(version_str, "#version 440") ||
+                strstr(version_str, "#version 450")
+            ) {
+                should_replace_with_300es = 1;
+            }
+        }
+    }
+
+    if (version_start && version_end && should_replace_with_300es) {
+        // Replace old desktop version with 300 es
+        size_t header_len = version_end - source + 1;
+        size_t version_len = strlen(replacement_version);
+        combined_len = version_len + define_len + precision_len + (source_len - header_len) + 1;
+        combined = (char*)malloc(combined_len);
+        if (!combined) {
+            fprintf(stderr, "Out of memory\n");
+            free(source);
+            return 0;
+        }
+
+        strcpy(combined, replacement_version);
+        strcat(combined, define);
+        if (default_precision) strcat(combined, default_precision);
+        strcat(combined, source + header_len);
+    } else if (version_start && version_end) {
+        // Keep existing version, insert define after it
+        size_t header_len = version_end - source + 1;
+        combined_len = header_len + define_len + precision_len + (source_len - header_len) + 1;
+        combined = (char*)malloc(combined_len);
+        if (!combined) {
+            fprintf(stderr, "Out of memory\n");
+            free(source);
+            return 0;
+        }
+
+        memcpy(combined, source, header_len);
+        memcpy(combined + header_len, define, define_len);
+        if (default_precision)
+            memcpy(combined + header_len + define_len, default_precision, precision_len);
+        strcpy(combined + header_len + define_len + precision_len, source + header_len);
+    } else {
+        // No version — use fallback
+        size_t version_len = strlen(fallback_version);
+        combined_len = version_len + define_len + precision_len + source_len + 1;
+        combined = (char*)malloc(combined_len);
+        if (!combined) {
+            fprintf(stderr, "Out of memory\n");
+            free(source);
+            return 0;
+        }
+
+        strcpy(combined, fallback_version);
+        strcat(combined, define);
+        if (default_precision) strcat(combined, default_precision);
+        strcat(combined, source);
+    }
+
+    GLuint shader = glCreateShader(type);
+    const char* combined_ptr = combined;
+    glShaderSource(shader, 1, &combined_ptr, NULL);
+    glCompileShader(shader);
+
+    free(source);
+    free(combined);
+
     GLint compiled;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
     if (!compiled) {
@@ -308,6 +432,7 @@ GLuint load_shader_from_file(GLenum type, const char* filename) {
 
     return shader;
 }
+
 
 
 
@@ -371,28 +496,33 @@ SDL_Surface* PLAT_initVideo(void) {
 	LOG_info("Current render driver: %s\n", info.name);
 
 	vid.gl_context = SDL_GL_CreateContext(vid.window);
-	if(!vid.gl_context)
-		LOG_info("Error creating GL context: %s\n", SDL_GetError());
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
 
-	// default system shaders needed to yeah just work :D
-	// vector shader always used basically just a sqaure on the screen to draw on
-	GLuint vertex_shader = load_shader_from_file(GL_VERTEX_SHADER, "system/vertex.glsl");
-	// shaders for converting color format and overlays
-	GLuint color_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "system/colorfix.glsl");
-	g_shader_color = link_program(vertex_shader, color_shader);
-	GLuint overlay_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "system/overlay.glsl");
-	g_shader_overlay = link_program(vertex_shader, overlay_shader);
-
-	// these are 2 shader pipelines basically here is were we allow custom shaders :D use together with shaderUpscaleRatio
-	shaderUpscaleRatio = 2; // this should be set from the settings screen would give options from 1.0 to 4.0 (so also 2.5) anything higher is useless, even a simple blur shader cant really go higher then 2 really gpu can't handle larger but maybe some super light shader you could try 3 or 4
-	nrofshaders = 2; // setting this to 2 uses g_shader_pass1 and then followed by g_shader_pass2, otherwise it will directly go to g_shader_pass2 only, but yeah we can expand the amount of pipelines, but every pipeline does take cpu so yeah..
 	
-	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
-	g_shader_pass1 = link_program(vertex_shader, fragment_shader1);
-	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // final output shader here it either upscales or downscales automaticly to screen size again, i'd use this maybe for like adjusting final output image, add scanlines, sharpen that kinda stuff
-	g_shader_pass2 = link_program(vertex_shader, fragment_shader2);
+	GLuint default_vertex = load_shader_from_file(GL_VERTEX_SHADER, "system/default.glsl");
+	GLuint default_fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "system/default.glsl");
+	g_shader_default = link_program(default_vertex, default_fragment);
+
+	GLuint color_vshader = load_shader_from_file(GL_VERTEX_SHADER, "system/colorfix.glsl");
+	GLuint color_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "system/colorfix.glsl");
+	g_shader_color = link_program(color_vshader, color_shader);
+
+	GLuint overlay_vshader = load_shader_from_file(GL_VERTEX_SHADER, "system/overlay.glsl");
+	GLuint overlay_shader = load_shader_from_file(GL_FRAGMENT_SHADER, "system/overlay.glsl");
+	g_shader_overlay = link_program(overlay_vshader, overlay_shader);
+
+	GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
+	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); 
+	shaders[0]->shader_p = link_program(vertex_shader1, fragment_shader1);
+
+	GLuint vertex_shader2 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
+	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); 
+	shaders[1]->shader_p =  link_program(vertex_shader2, fragment_shader2);
+
+	GLuint vertex_shader3 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
+	GLuint fragment_shader3 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); 
+	shaders[2]->shader_p =  link_program(vertex_shader3, fragment_shader3);
 
 
 
@@ -427,10 +557,61 @@ SDL_Surface* PLAT_initVideo(void) {
 	
 	return vid.screen;
 }
+int shadersupdated = 0;
 
+void PLAT_resetShaders() {
+	shadersupdated = 1;
+}
+
+void PLAT_updateShader(int i, const char *filename, int *scale, int *filter) {
+    // Check if the shader index is valid
+    if (i < 0 || i >= 3) {
+        LOG_error("Invalid shader index %d\n", i);
+        return;
+    }
+
+    Shader* shader = shaders[i];
+
+    // Only update shader_p if filename is not NULL
+    if (filename != NULL) {
+        SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+        
+        GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, filename);
+        GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, filename);
+        
+        // Link the shader program
+        shader->shader_p = link_program(vertex_shader1, fragment_shader1);
+        
+        if (shader->shader_p == 0) {
+            LOG_error("Shader linking failed for %s\n", filename);
+        }
+
+        GLint success = 0;
+        glGetProgramiv(shader->shader_p, GL_LINK_STATUS, &success);
+        if (!success) {
+            char infoLog[512];
+            glGetProgramInfoLog(shader->shader_p, 512, NULL, infoLog);
+            LOG_error("Shader Program Linking Failed: %s\n", infoLog);
+        }
+        
+        LOG_info("Shader set now to %s\n", filename);
+    }
+
+    // Only update scale if it's not NULL
+    if (scale != NULL) {
+        shader->scale = *scale +1;
+    }
+
+    // Only update filter if it's not NULL
+    if (filter != NULL) {
+        shader->filter = (*filter == 1) ? GL_LINEAR : GL_NEAREST;
+    }
+}
 void PLAT_setShaders(int nr) {
+	LOG_info("set nr of shaders to %i\n",nr);
 	nrofshaders = nr;
 }
+
 
 static void clearVideo(void) {
 	for (int i=0; i<3; i++) {
@@ -1387,116 +1568,159 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
     vid.blit = NULL;
 }
 
+static int frame_count = 0;
 void runShaderPass(GLuint texture, GLuint shader_program, GLuint* fbo, GLuint* tex,
-	int x, int y, int width, int height, GLfloat texelSize[2],
-	GLenum filter, int layer) {
+                   int x, int y, int width, int height, int input_tex_w, int input_tex_h, GLfloat texelSize[2],
+                   GLenum filter, int layer) {
 
-	static GLuint static_VAO = 0, static_VBO = 0;
-	if (static_VAO == 0) {
-		glGenVertexArrays(1, &static_VAO);
-		glGenBuffers(1, &static_VBO);
-		glBindVertexArray(static_VAO);
-		glBindBuffer(GL_ARRAY_BUFFER, static_VBO);
+    static GLuint static_VAO = 0, static_VBO = 0;
+    static GLuint last_program = 0;
+    static GLuint last_texture = 0;
+    static GLfloat last_texelSize[2] = {-1.0f, -1.0f};
 
-		float vertices[] = {
-			-1.0f,  1.0f,   0.0f, 1.0f, // Top-left
-			-1.0f, -1.0f,   0.0f, 0.0f, // Bottom-left
-			1.0f,  1.0f,   1.0f, 1.0f, // Top-right
-			1.0f, -1.0f,   1.0f, 0.0f  // Bottom-right
-		};
+    typedef struct {
+        GLint texelSize;
+        GLint Texture;
+    } UniformCache;
 
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-		GLint posAttrib = glGetAttribLocation(shader_program, "aPos");
-		glEnableVertexAttribArray(posAttrib);
-		glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-
-		GLint texAttrib = glGetAttribLocation(shader_program, "aTexCoord");
-		glEnableVertexAttribArray(texAttrib);
-		glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-	}
-
-	typedef struct {
-		GLint texelSize;
-		GLint uTex;
-	} UniformCache;
-
-	static GLuint last_program = 0;
-	static UniformCache cached;
-
-	if (shader_program != last_program) {
-		cached.texelSize = glGetUniformLocation(shader_program, "texelSize");
-		cached.uTex = glGetUniformLocation(shader_program, "uTex");
-		last_program = shader_program;
-	}
-
-	static int last_w = 0, last_h = 0;
-	if (fbo != NULL && tex != NULL) {
-		if (*fbo == 0) glGenFramebuffers(1, fbo);
-		if (*tex == 0) {
-			glGenTextures(1, tex);
-		}
-
-		glBindTexture(GL_TEXTURE_2D, *tex);
-		if (width != last_w || height != last_h) {
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-			last_w = width;
-			last_h = height;
-		}
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-		glBindFramebuffer(GL_FRAMEBUFFER, *fbo);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *tex, 0);
-
-		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-			printf("Framebuffer not complete!\n");
-		}
-	} else {
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	}
+    static UniformCache cached;
 
 	glUseProgram(shader_program);
-	glBindVertexArray(static_VAO);
 
-	// Handle blending based on the layer
-	if (layer == 0) {
-		glDisable(GL_BLEND);
-		glActiveTexture(GL_TEXTURE0);
-	} else {
+	GLint u_FrameDirection = glGetUniformLocation(shader_program, "FrameDirection");
+	GLint u_FrameCount = glGetUniformLocation(shader_program, "FrameCount");
+	GLint u_OutputSize = glGetUniformLocation(shader_program, "OutputSize");
+	GLint u_TextureSize = glGetUniformLocation(shader_program, "TextureSize");
+	GLint u_InputSize = glGetUniformLocation(shader_program, "InputSize");
+
+
+	if (u_FrameDirection >= 0) glUniform1i(u_FrameDirection, 1);
+	if (u_FrameCount >= 0) glUniform1i(u_FrameCount, frame_count);
+	if (u_OutputSize >= 0) glUniform2f(u_OutputSize, width, height);
+	if (u_TextureSize >= 0) glUniform2f(u_TextureSize, input_tex_w, input_tex_h); 
+	if (u_InputSize >= 0) glUniform2f(u_InputSize, input_tex_w, input_tex_h); 
+
+    if (static_VAO == 0 || shadersupdated) {
+        if (static_VAO) glDeleteVertexArrays(1, &static_VAO);
+        if (static_VBO) glDeleteBuffers(1, &static_VBO);
+
+        glGenVertexArrays(1, &static_VAO);
+        glGenBuffers(1, &static_VBO);
+        glBindVertexArray(static_VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, static_VBO);
+
+		float vertices[] = {
+			//   x,     y,    u,    v,    z,    w
+			-1.0f,  1.0f,  0.0f, 1.0f, 0.0f, 1.0f,  // top-left
+			-1.0f, -1.0f,  0.0f, 0.0f, 0.0f, 1.0f,  // bottom-left
+			 1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 1.0f,  // top-right
+			 1.0f, -1.0f,  1.0f, 0.0f, 0.0f, 1.0f   // bottom-right
+		};
+		
+
+
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    }
+
+    if (shader_program != last_program || shadersupdated) {
+        glBindVertexArray(static_VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, static_VBO);
+
+		GLint posAttrib = glGetAttribLocation(shader_program, "VertexCoord");
+		if (posAttrib >= 0) {
+			glEnableVertexAttribArray(posAttrib);
+			glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+		}
+		GLint texAttrib = glGetAttribLocation(shader_program, "TexCoord");
+		if (texAttrib >= 0) {
+			glEnableVertexAttribArray(texAttrib);
+			glVertexAttribPointer(texAttrib, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
+		}
+		
+        cached.texelSize = glGetUniformLocation(shader_program, "texelSize");
+        cached.Texture = glGetUniformLocation(shader_program, "Texture");
+        last_program = shader_program;
+    }
+
+    static int last_w = 0, last_h = 0;
+    if (fbo && tex) {
+        if (*fbo == 0) glGenFramebuffers(1, fbo);
+        if (*tex == 0) glGenTextures(1, tex);
+
+		glBindTexture(GL_TEXTURE_2D, *tex);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		
+        if (width != last_w || height != last_h) {
+			
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+            last_w = width;
+            last_h = height;
+        }
+      
+
+        glBindFramebuffer(GL_FRAMEBUFFER, *fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *tex, 0);
+
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            printf("Framebuffer not complete!\n");
+        }
+    } else {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+	glBindVertexArray(static_VAO);
+	
+	GLint u_MVP = glGetUniformLocation(shader_program, "MVPMatrix");
+	if (u_MVP >= 0) {
+		float identity[16] = {
+			1,0,0,0,
+			0,1,0,0,
+			0,0,1,0,
+			0,0,0,1
+		};
+		glUniformMatrix4fv(u_MVP, 1, GL_FALSE, identity);
+	}
+	if(layer==1) {
+		glActiveTexture(GL_TEXTURE1);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		glActiveTexture(GL_TEXTURE1);
+	} else {
+		glActiveTexture(GL_TEXTURE0);
+		glDisable(GL_BLEND);
 	}
 
-	static GLuint last_texture = 0; // Keep track of the last texture
-	if (texture != last_texture) {
-		glBindTexture(GL_TEXTURE_2D, texture);
-		last_texture = texture;
+	glBindTexture(GL_TEXTURE_2D, texture);
+	if (cached.Texture >= 0) {
+		glUniform1i(cached.Texture, 0);  // Always sample from unit 0
 	}
+	
 
-	glViewport(x, y, width, height);
+    if (texture != last_texture || shadersupdated) {
+        glBindTexture(GL_TEXTURE_2D, texture);
+        last_texture = texture;
+    }
 
-	static GLfloat last_texelSize[2] = {-1.0f, -1.0f};
-	if (cached.texelSize >= 0 &&
-		(texelSize[0] != last_texelSize[0] || texelSize[1] != last_texelSize[1])) {
-		glUniform2fv(cached.texelSize, 1, texelSize);
-		last_texelSize[0] = texelSize[0];
-		last_texelSize[1] = texelSize[1];
-	}
+    glViewport(x, y, width, height);
 
-	// Set texture unit for the shader
-	if (cached.uTex >= 0) {
-		glUniform1i(cached.uTex, layer);
-	}
+    if (cached.texelSize >= 0 && (shadersupdated || texelSize[0] != last_texelSize[0] || texelSize[1] != last_texelSize[1])) {
+        glUniform2fv(cached.texelSize, 1, texelSize);
+        last_texelSize[0] = texelSize[0];
+        last_texelSize[1] = texelSize[1];
+    }
 
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    if (cached.Texture >= 0) {
+        glUniform1i(cached.Texture, layer);
+    }
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
 void PLAT_GL_Swap() {
-    // set a rect based on aspect ratio settings and stuff
+    glClear(GL_COLOR_BUFFER_BIT);
+
     SDL_Rect dst_rect = {0, 0, device_width, device_height};
     setRectToAspectRatio(&dst_rect);
 
@@ -1504,109 +1728,132 @@ void PLAT_GL_Swap() {
         printf("Error: Texture data (vid.blit->src) is NULL\n");
         return;
     }
-    // make sure to use the context where i compiled the shaders on
+
     SDL_GL_MakeCurrent(vid.window, vid.gl_context);
-   
-	// get overlay, overlayload is to try this only once
-	static GLuint overlay_tex = 0;
-	static int overlayload = 0;
+
+    static GLuint overlay_tex = 0;
+    static int overlayload = 0;
+	if(overlayUpdated) {
+		overlay_tex=0;
+		overlayload=0;
+		overlayUpdated = 0;
+	}
+	static int overlay_w = 0;
+	static int overlay_h = 0;
     if (!overlay_tex && !overlayload && overlay_path) {
-		SDL_Surface* tmp = IMG_Load(overlay_path);
-		if(tmp) {
-			SDL_Surface* rgba = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA32, 0);
-			glGenTextures(1, &overlay_tex);
-			glBindTexture(GL_TEXTURE_2D, overlay_tex);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba->w, rgba->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-			
-			glBindTexture(GL_TEXTURE_2D, overlay_tex);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, rgba->w, rgba->h, GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
-			SDL_FreeSurface(tmp);
-			SDL_FreeSurface(rgba);
-		} else {
-			overlayload = 1;
-		}
-		LOG_info("overlay loaded");
+        SDL_Surface* tmp = IMG_Load(overlay_path);
+        if (tmp) {
+            SDL_Surface* rgba = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA32, 0);
+            glGenTextures(1, &overlay_tex);
+            glBindTexture(GL_TEXTURE_2D, overlay_tex);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba->w, rgba->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
+			overlay_w = rgba->w;
+			overlay_h = rgba->h;
+            SDL_FreeSurface(tmp);
+            SDL_FreeSurface(rgba);
+            LOG_info("overlay loaded");
+        } 
+		overlayload = 1;
     }
 
-    // make an GL texture if its not there already and feed it the libretro core pixel data with adjusted RGBA8888 from above
-	static GLuint src_texture = 0;
-    if (!src_texture) {
-        glGenTextures(1, &src_texture);
-        glBindTexture(GL_TEXTURE_2D, src_texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    static GLuint src_texture = 0;
+    static GLuint initial_texture = 0;
+    static GLuint fbo = 0;
+    static GLuint pass_textures[3] = {0};
+
+    static int src_w_last = 0, src_h_last = 0;
+ 
+    if (!src_texture) glGenTextures(1, &src_texture);
+    glBindTexture(GL_TEXTURE_2D, src_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    if (vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        src_w_last = vid.blit->src_w;
+        src_h_last = vid.blit->src_h;
     }
-	glBindTexture(GL_TEXTURE_2D, src_texture);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
 
-    // place holders for the frame buffer and destination texture
-    // runshaderpass initializes these in case they don't exists yet
-    static GLuint fbo = 0;
-    static GLuint dst_texture = 0;
-    
+    if (!fbo) glGenFramebuffers(1, &fbo);
  
-    GLfloat texelSizeUpscale[2] = {1.0f / vid.blit->src_w, 1.0f / vid.blit->src_h};
-    
-	// first lets convert colors to correct opengl format with a shader :D
-	static GLuint convert_texture = 0;
-	if (!convert_texture) {
-		glGenTextures(1, &convert_texture);
-		glBindTexture(GL_TEXTURE_2D, convert_texture);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    GLfloat texelSizeSource[2] = {1.0f / vid.blit->src_w, 1.0f / vid.blit->src_h};
+
+	if (!initial_texture) glGenTextures(1, &initial_texture);
+	runShaderPass(src_texture, g_shader_color, &fbo, &initial_texture, 0, 0,
+		vid.blit->src_w, vid.blit->src_h, vid.blit->src_w, vid.blit->src_h,
+				  texelSizeSource, GL_NEAREST, 0);
+
+	static int last_w=0;
+	static int last_h=0;
+	static int texture_initialized[3] = {0};
+	if(shadersupdated) {
+		last_w = 0;
+		last_h = 0;
 	}
-
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo);  // Bind the FBO for rendering
-
-
-	int up_w = 0;
-	int up_h = 0;
-
-	if(nrofshaders>1) {
+	for(int i=0;i<nrofshaders;i++) {
+		if (!pass_textures[i]) glGenTextures(1, &pass_textures[i]);
+        glBindTexture(GL_TEXTURE_2D, pass_textures[i]);
 		
-		// src_texture to convert_texture for color converson and then first pipeline shader pass convert_texture to dst_texture
-		runShaderPass(src_texture, g_shader_color, &fbo, &convert_texture, 0, 0, vid.blit->src_w, vid.blit->src_h, texelSizeUpscale, GL_NEAREST, 0); // Color conversion into intermediate texture
-		// Step 2: Continue with the normal passes, using the intermediate texture
-		// here we set how much we want to upscale based on shaderUpscaleRatio which should come from a setting in the game menu
-		up_w = dst_rect.w * shaderUpscaleRatio;
-		up_h = dst_rect.h * shaderUpscaleRatio;
-		runShaderPass(convert_texture, g_shader_pass1, &fbo, &dst_texture, 0, 0, up_w, up_h, texelSizeUpscale, GL_LINEAR, 0); 
-	} else {
-		// src_texture directly to dst_texture in color conversion pass only
-		up_w = vid.blit->src_w;
-		up_h = vid.blit->src_h;
-		runShaderPass(src_texture, g_shader_color, &fbo, &dst_texture, 0, 0, vid.blit->src_w, vid.blit->src_h, texelSizeUpscale, GL_NEAREST, 0); // Color conversion into intermediate texture
+		int src_w = i == 0 ? vid.blit->src_w:last_w;
+    	int src_h = i == 0 ? vid.blit->src_h:last_h;
+		int dst_w = vid.blit->src_w * shaders[i]->scale;
+    	int dst_h = vid.blit->src_h * shaders[i]->scale;
+		if(shaders[i]->scale == 9) {
+			dst_w = dst_rect.w;
+			dst_h = dst_rect.h;
+		}
+		if (!texture_initialized[i] || dst_w != last_w || dst_h != last_h) {
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, dst_w, dst_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+			texture_initialized[i] = 1;
+		}
+		last_w = dst_w;
+		last_h = dst_h;
 
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pass_textures[i], 0);
+
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+			printf("Framebuffer not complete in pass %d!\n", i);
+		}
+		// LOG_info("shader pass: %i\n",i);
+		// LOG_info("src_w: %i\n",src_w);
+		// LOG_info("dst_w: %i\n",dst_w);
+		// LOG_info("src_h: %i\n",src_h);
+		// LOG_info("dst_h: %i\n",dst_h);
+
+		GLfloat texelPass[2] = {1.0f / src_w, 1.0f / src_h};
+        runShaderPass(i==0?initial_texture:pass_textures[i-1], shaders[i]->shader_p, &fbo, &pass_textures[i], 0, 0,
+			 dst_w, dst_h,src_w, src_h,
+			texelPass, shaders[i]->filter , 0);
 	}
 
-    // bind to the screen, set viewport size based on aspect ratio setting
+
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    // glClearColor(0.0, 0.0, 0.0, 1.0);
-    glClear(GL_COLOR_BUFFER_BIT);
 
-    GLfloat texelSizeFinal[2] = {1.0f / up_w, 1.0f / up_h};
-    // run the second shader pipeline pass and output to screen
-    runShaderPass(dst_texture, g_shader_pass2, NULL, NULL, dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h, texelSizeFinal, GL_LINEAR,0);
+	// LOG_info("downscaling from: %i\n",last_w);
+	GLfloat texelSizeOutput[2] = {1.0f / last_w, 1.0f / last_h};
+    runShaderPass(pass_textures[nrofshaders-1], g_shader_default, NULL, NULL,
+                  dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h,
+                  last_w, last_h, texelSizeOutput, GL_NEAREST, 0);
 
-    // Overlay pass using another runShaderPass
-	if (overlay_tex) {
-		// Run another shader pass to render the overlay
-		runShaderPass(overlay_tex, g_shader_overlay, NULL, NULL, 0,0, device_width, device_height, texelSizeFinal, GL_NEAREST,1);
-	}
-
-    // Swap the OpenGL buffers to display the final result
+    if (overlay_tex) {
+        runShaderPass(overlay_tex, g_shader_overlay, NULL, NULL,
+                      0, 0, device_width, device_height,
+					  overlay_w, overlay_h, texelSizeOutput, GL_NEAREST, 1);
+    }
+	
     SDL_GL_SwapWindow(vid.window);
+    shadersupdated = 0;
+    frame_count++;
 }
+
 ///////////////////////////////
 
 // TODO: 

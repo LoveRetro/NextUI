@@ -1668,39 +1668,39 @@ static void Config_syncShaders(char* key, int value) {
 		i = SH_NROFSHADERS;
 	}
 	if (exactMatch(key,config.shaders.options[SH_SHADER1].key)) {
-		GFX_setShader1(config.shaders.options[SH_SHADER1].values[value]);
+		GFX_updateShader(0,config.shaders.options[SH_SHADER1].values[value],NULL,NULL);
 		i = SH_SHADER1;
 	}
 	if (exactMatch(key,config.shaders.options[SH_SHADER1_FILTER].key)) {
-		GFX_setShader1Filter(value);
+		GFX_updateShader(0,NULL,NULL,&value);
 		i = SH_SHADER1_FILTER;
 	}
 	if (exactMatch(key,config.shaders.options[SH_UPSCALE1].key)) {
-		GFX_setShaderUpscale1(value+1);
+		GFX_updateShader(0,NULL,&value,NULL);
 		i = SH_UPSCALE1;
 	}
 	if (exactMatch(key,config.shaders.options[SH_SHADER2].key)) {
-		GFX_setShader2(config.shaders.options[SH_SHADER2].values[value]);
+		GFX_updateShader(1,config.shaders.options[SH_SHADER2].values[value],NULL,NULL);
 		i = SH_SHADER2;
 	}
 	if (exactMatch(key,config.shaders.options[SH_SHADER2_FILTER].key)) {
-		GFX_setShader2Filter(value);
+		GFX_updateShader(1,NULL,NULL,&value);
 		i = SH_SHADER2_FILTER;
 	}
 	if (exactMatch(key,config.shaders.options[SH_UPSCALE2].key)) {
-		GFX_setShaderUpscale2(value+1);
+		GFX_updateShader(1,NULL,&value,NULL);
 		i = SH_UPSCALE2;
 	}
 	if (exactMatch(key,config.shaders.options[SH_SHADER3].key)) {
-		GFX_setShader3(config.shaders.options[SH_SHADER3].values[value]);
+		GFX_updateShader(2,config.shaders.options[SH_SHADER2].values[value],NULL,NULL);
 		i = SH_SHADER3;
 	}
 	if (exactMatch(key,config.shaders.options[SH_SHADER3_FILTER].key)) {
-		GFX_setShader3Filter(value);
+		GFX_updateShader(2,NULL,NULL,&value);
 		i = SH_SHADER3_FILTER;
 	}
 	if (exactMatch(key,config.shaders.options[SH_UPSCALE3].key)) {
-		GFX_setShaderUpscale3(value+1);
+		GFX_updateShader(2,NULL,&value,NULL);
 		i = SH_UPSCALE3;
 	}
 	
@@ -4766,31 +4766,31 @@ static int OptionShaders_optionChanged(MenuList* list, int i) {
 		GFX_setShaders(item->value+1);
 	}
 	if(i == SH_UPSCALE1) {
-		GFX_setShaderUpscale1(item->value+1);
+		GFX_updateShader(0,NULL,&item->value,NULL);
 	}
 	if(i == SH_UPSCALE2) {
-		GFX_setShaderUpscale2(item->value+1);
+		GFX_updateShader(1,NULL,&item->value,NULL);
 	}
 	if(i == SH_UPSCALE3) {
-		GFX_setShaderUpscale3(item->value+1);
+		GFX_updateShader(2,NULL,&item->value,NULL);
 	}
 	if(i == SH_SHADER1) {
-		GFX_setShader1(filelist[item->value]);
+		GFX_updateShader(0,filelist[item->value],NULL,NULL);
 	}
 	if(i == SH_SHADER2) {
-		GFX_setShader2(filelist[item->value]);
+		GFX_updateShader(1,filelist[item->value],NULL,NULL);
 	}
 	if(i == SH_SHADER3) {
-		GFX_setShader3(filelist[item->value]);
+		GFX_updateShader(2,filelist[item->value],NULL,NULL);
 	}
 	if(i == SH_SHADER1_FILTER) {
-		GFX_setShader1Filter(item->value);
+		GFX_updateShader(0,NULL,NULL,&item->value);
 	}
 	if(i == SH_SHADER2_FILTER) {
-		GFX_setShader2Filter(item->value);
+		GFX_updateShader(1,NULL,NULL,&item->value);
 	}
 	if(i == SH_SHADER3_FILTER) {
-		GFX_setShader3Filter(item->value);
+		GFX_updateShader(2,NULL,NULL,&item->value);
 	}
 	config.shaders.options[i].value = item->value;
 	return MENU_CALLBACK_NOP;

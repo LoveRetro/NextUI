@@ -30,16 +30,24 @@
 int is_brick = 0;
 volatile int useAutoCpu = 1;
 
+
 // shader stuff
+
+typedef struct Shader {
+	GLuint shader_p;
+	int scale;
+	int filter;
+} Shader;
+
 GLuint g_shader_default = 0;
 GLuint g_shader_color = 0;
-GLuint g_shader_pass1 = 0;
-GLuint g_shader_pass2 = 0;
-GLuint g_shader_pass3 = 0;
 GLuint g_shader_overlay = 0;
-GLuint g_shader_passes [3] = {0};
-float shaderUpscaleRatios[3] = {1};
-int shaderfilters[3] = {GL_NEAREST};
+
+Shader* shaders[3] = {
+    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR }, 
+    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR }, 
+    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR }
+};
 
 int nrofshaders = 3; // choose between 1 and 3 pipelines, > pipelines = more cpu usage, but more shader options and shader upscaling stuff
 ///////////////////////////////
@@ -334,10 +342,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
 
-	// default system shaders needed to yeah just work :D
-	// vector shader always used basically just a sqaure on the screen to draw on
-
-
+	
 	GLuint default_vertex = load_shader_from_file(GL_VERTEX_SHADER, "system/default.glsl");
 	GLuint default_fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "system/default.glsl");
 	g_shader_default = link_program(default_vertex, default_fragment);
@@ -351,16 +356,16 @@ SDL_Surface* PLAT_initVideo(void) {
 	g_shader_overlay = link_program(overlay_vshader, overlay_shader);
 
 	GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
-	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
-	g_shader_passes[0] = link_program(vertex_shader1, fragment_shader1);
-	
+	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); 
+	shaders[0]->shader_p = link_program(vertex_shader1, fragment_shader1);
+
 	GLuint vertex_shader2 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
-	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // final output shader here it either upscales or downscales automaticly to screen size again, i'd use this maybe for like adjusting final output image, add scanlines, sharpen that kinda stuff
-	g_shader_passes[1] = link_program(vertex_shader2, fragment_shader2);
+	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); 
+	shaders[1]->shader_p =  link_program(vertex_shader2, fragment_shader2);
 
 	GLuint vertex_shader3 = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl");
-	GLuint fragment_shader3 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); // final output shader here it either upscales or downscales automaticly to screen size again, i'd use this maybe for like adjusting final output image, add scanlines, sharpen that kinda stuff
-	g_shader_passes[2] = link_program(vertex_shader3, fragment_shader3);
+	GLuint fragment_shader3 = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl"); 
+	shaders[2]->shader_p =  link_program(vertex_shader3, fragment_shader3);
 
 
 
@@ -401,108 +406,55 @@ void PLAT_resetShaders() {
 	shadersupdated = 1;
 }
 
-void PLAT_setShader1Filter(int value) {
-	LOG_info("set shader 1 filter: %i\n",value);
-	if(value==1) 
-		shaderfilters[0] = GL_LINEAR;
-	else
-	shaderfilters[0] = GL_NEAREST;
-	LOG_info("set shader 1 filter result: %u\n",shaderfilters[0]);
-	shadersupdated = 1;
-}
-void PLAT_setShader2Filter(int value) {
-	LOG_info("set shader 2 filter: %i\n",value);
-	if(value==1) 
-	shaderfilters[1] = GL_LINEAR;
-	else
-	shaderfilters[1] = GL_NEAREST;
-	LOG_info("set shader 2 filter result: %u\n",shaderfilters[1]);
-	shadersupdated = 1;
-}
-void PLAT_setShader3Filter(int value) {
-	LOG_info("set shader 3 filter: %i\n",value);
-	if(value==1) 
-	shaderfilters[2] = GL_LINEAR;
-	else
-	shaderfilters[2] = GL_NEAREST;
-	LOG_info("set shader 3 filter result: %u\n",shaderfilters[2]);
-	shadersupdated = 1;
+void PLAT_updateShader(int i, const char *filename, int *scale, int *filter) {
+    // Check if the shader index is valid
+    if (i < 0 || i >= 3) {
+        LOG_error("Invalid shader index %d\n", i);
+        return;
+    }
+
+    Shader* shader = shaders[i];
+
+    // Only update shader_p if filename is not NULL
+    if (filename != NULL) {
+        SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+        
+        GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, filename);
+        GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, filename);
+        
+        // Link the shader program
+        shader->shader_p = link_program(vertex_shader1, fragment_shader1);
+        
+        if (shader->shader_p == 0) {
+            LOG_error("Shader linking failed for %s\n", filename);
+        }
+
+        GLint success = 0;
+        glGetProgramiv(shader->shader_p, GL_LINK_STATUS, &success);
+        if (!success) {
+            char infoLog[512];
+            glGetProgramInfoLog(shader->shader_p, 512, NULL, infoLog);
+            LOG_error("Shader Program Linking Failed: %s\n", infoLog);
+        }
+        
+        LOG_info("Shader set now to %s\n", filename);
+    }
+
+    // Only update scale if it's not NULL
+    if (scale != NULL) {
+        shader->scale = *scale +1;
+    }
+
+    // Only update filter if it's not NULL
+    if (filter != NULL) {
+        shader->filter = (*filter == 1) ? GL_LINEAR : GL_NEAREST;
+    }
 }
 void PLAT_setShaders(int nr) {
 	LOG_info("set nr of shaders to %i\n",nr);
 	nrofshaders = nr;
 }
-void PLAT_setShaderUpscale1(int nr) {
-	LOG_info("set shaderupscale 1 to %i\n",nr);
-	shaderUpscaleRatios[0] = nr;
-	shadersupdated = 1;
-}
-void PLAT_setShaderUpscale2(int nr) {
-	LOG_info("set shaderupscale 2 to %i\n",nr);
-	shaderUpscaleRatios[1] = nr;
-	shadersupdated = 1;
-}
-void PLAT_setShaderUpscale3(int nr) {
-	LOG_info("set shaderupscale 3 to %i\n",nr);
-	shaderUpscaleRatios[2] = nr;
-	shadersupdated = 1;
-}
 
-
-void PLAT_setShader1(const char* filename) {
-	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
-	GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, filename);
-	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, filename); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
-	g_shader_passes[0] = link_program(vertex_shader1, fragment_shader1);
-	if (g_shader_passes[0] == 0) {
-		LOG_error("Shader linking 1 failed for %s\n", filename);
-	}
-	GLint success = 0;
-	glGetProgramiv(g_shader_passes[0] , GL_LINK_STATUS, &success);
-	if (!success) {
-		char infoLog[512];
-		glGetProgramInfoLog(g_shader_passes[0], 512, NULL, infoLog);
-		LOG_error("Shader Program 1 Linking Failed: %s\n", infoLog);
-	}
-	LOG_info("sahder set now to %s\n",filename);
-	shadersupdated = 1;
-}
-void PLAT_setShader2(const char* filename) {
-	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
-	GLuint vertex_shader2 = load_shader_from_file(GL_VERTEX_SHADER, filename);
-	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, filename); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
-	g_shader_passes[1] = link_program(vertex_shader2, fragment_shader2);
-	if (g_shader_passes[1] == 0) {
-		LOG_error("Shader linking 2 failed for %s\n", filename);
-	}
-	GLint success = 0;
-	glGetProgramiv(g_shader_passes[1], GL_LINK_STATUS, &success);
-	if (!success) {
-		char infoLog[512];
-		glGetProgramInfoLog(g_shader_passes[1], 512, NULL, infoLog);
-		LOG_error("Shader Program 2 Linking Failed: %s\n", infoLog);
-	}
-	LOG_info("shader 2 set now to %s\n",filename);
-	shadersupdated = 1;
-}
-void PLAT_setShader3(const char* filename) {
-	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
-	GLuint vertex_shader2 = load_shader_from_file(GL_VERTEX_SHADER, filename);
-	GLuint fragment_shader2 = load_shader_from_file(GL_FRAGMENT_SHADER, filename); // first pipeline do things like blurring and stuff it also uses shaderUpscaleRatio to upscale for example to antialias by downscaling again in next step
-	g_shader_passes[2] = link_program(vertex_shader2, fragment_shader2);
-	if (g_shader_passes[2] == 0) {
-		LOG_error("Shader linking 3 failed for %s\n", filename);
-	}
-	GLint success = 0;
-	glGetProgramiv(g_shader_passes[2], GL_LINK_STATUS, &success);
-	if (!success) {
-		char infoLog[512];
-		glGetProgramInfoLog(g_shader_passes[2], 512, NULL, infoLog);
-		LOG_error("Shader Program 3 Linking Failed: %s\n", infoLog);
-	}
-	LOG_info("shader 3 set now to %s\n",filename);
-	shadersupdated = 1;
-}
 
 uint32_t PLAT_get_dominant_color() {
     if (!vid.screen) {
@@ -1948,9 +1900,9 @@ void PLAT_GL_Swap() {
 		
 		int src_w = i == 0 ? vid.blit->src_w:last_w;
     	int src_h = i == 0 ? vid.blit->src_h:last_h;
-		int dst_w = vid.blit->src_w * shaderUpscaleRatios[i];
-    	int dst_h = vid.blit->src_h * shaderUpscaleRatios[i];
-		if(shaderUpscaleRatios[i] == 9) {
+		int dst_w = vid.blit->src_w * shaders[i]->scale;
+    	int dst_h = vid.blit->src_h * shaders[i]->scale;
+		if(shaders[i]->scale == 9) {
 			dst_w = dst_rect.w;
 			dst_h = dst_rect.h;
 		}
@@ -1974,9 +1926,9 @@ void PLAT_GL_Swap() {
 		// LOG_info("dst_h: %i\n",dst_h);
 
 		GLfloat texelPass[2] = {1.0f / src_w, 1.0f / src_h};
-        runShaderPass(i==0?initial_texture:pass_textures[i-1], g_shader_passes[i], &fbo, &pass_textures[i], 0, 0,
+        runShaderPass(i==0?initial_texture:pass_textures[i-1], shaders[i]->shader_p, &fbo, &pass_textures[i], 0, 0,
 			 dst_w, dst_h,src_w, src_h,
-			texelPass, shaderfilters[i], 0);
+			texelPass, shaders[i]->filter , 0);
 	}
 
 

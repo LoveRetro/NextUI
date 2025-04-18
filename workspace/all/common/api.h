@@ -267,16 +267,8 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
 #define GFX_getScaler PLAT_getScaler		// scaler_t:(GFX_Renderer* renderer)
 #define GFX_blitRenderer PLAT_blitRenderer	// void:(GFX_Renderer* renderer)
 #define GFX_setShaders PLAT_setShaders	// void:(GFX_Renderer* renderer)
-#define GFX_setShader1 PLAT_setShader1	// void:(GFX_Renderer* renderer)
-#define GFX_setShader2 PLAT_setShader2	// void:(GFX_Renderer* renderer)
-#define GFX_setShader3 PLAT_setShader3	// void:(GFX_Renderer* renderer)
-#define GFX_setShaderUpscale1 PLAT_setShaderUpscale1	// void:(GFX_Renderer* renderer)
-#define GFX_setShaderUpscale2 PLAT_setShaderUpscale2	// void:(GFX_Renderer* renderer)
-#define GFX_setShaderUpscale3 PLAT_setShaderUpscale3	// void:(GFX_Renderer* renderer)
 #define GFX_resetShaders PLAT_resetShaders	// void:(GFX_Renderer* renderer)
-#define GFX_setShader1Filter PLAT_setShader1Filter	// void:(GFX_Renderer* renderer)
-#define GFX_setShader2Filter PLAT_setShader2Filter	// void:(GFX_Renderer* renderer)
-#define GFX_setShader3Filter PLAT_setShader3Filter	// void:(GFX_Renderer* renderer)
+#define GFX_updateShader PLAT_updateShader	// void:(GFX_Renderer* renderer)
 
 scaler_t GFX_getAAScaler(GFX_Renderer* renderer);
 void GFX_freeAAScaler(void);
@@ -572,6 +564,7 @@ void PLAT_setShaderUpscale3(int nr);
 void PLAT_setShader1(const char* filename);
 void PLAT_setShader2(const char* filename);
 void PLAT_setShader3(const char* filename);
+void PLAT_updateShader(int i, const char *filename, int *scale, int *filter);
 int PLAT_supportsOverscan(void);
 
 SDL_Surface* PLAT_initOverlay(void);
