@@ -1668,7 +1668,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 static int frame_count = 0;
 void runShaderPass(GLuint texture, GLuint shader_program, GLuint* fbo, GLuint* tex,
                    int x, int y, int width, int height, int input_tex_w, int input_tex_h, GLfloat texelSize[2],
-                   GLenum filter, int layer) {
+                   GLenum filter, int layer, int screen_w, int screen_h) {
 
     static GLuint static_VAO = 0, static_VBO = 0;
     static GLuint last_program = 0;
@@ -1693,8 +1693,8 @@ void runShaderPass(GLuint texture, GLuint shader_program, GLuint* fbo, GLuint* t
 
 	if (u_FrameDirection >= 0) glUniform1i(u_FrameDirection, 1);
 	if (u_FrameCount >= 0) glUniform1i(u_FrameCount, frame_count);
-	if (u_OutputSize >= 0) glUniform2f(u_OutputSize, width, height);
-	if (u_TextureSize >= 0) glUniform2f(u_TextureSize, input_tex_w, input_tex_h); 
+	if (u_OutputSize >= 0) glUniform2f(u_OutputSize, screen_w, screen_h);
+	if (u_TextureSize >= 0) glUniform2f(u_TextureSize, width, height); 
 	if (u_InputSize >= 0) glUniform2f(u_InputSize, input_tex_w, input_tex_h); 
 
     if (static_VAO == 0 || shadersupdated) {
@@ -1885,7 +1885,7 @@ void PLAT_GL_Swap() {
 	if (!initial_texture) glGenTextures(1, &initial_texture);
 	runShaderPass(src_texture, g_shader_color, &fbo, &initial_texture, 0, 0,
 		vid.blit->src_w, vid.blit->src_h, vid.blit->src_w, vid.blit->src_h,
-				  texelSizeSource, GL_NEAREST, 0);
+				  texelSizeSource, GL_NEAREST, 0,dst_rect.w,dst_rect.h);
 
 	static int last_w=0;
 	static int last_h=0;
@@ -1928,7 +1928,7 @@ void PLAT_GL_Swap() {
 		GLfloat texelPass[2] = {1.0f / src_w, 1.0f / src_h};
         runShaderPass(i==0?initial_texture:pass_textures[i-1], shaders[i]->shader_p, &fbo, &pass_textures[i], 0, 0,
 			 dst_w, dst_h,src_w, src_h,
-			texelPass, shaders[i]->filter , 0);
+			texelPass, shaders[i]->filter , 0,dst_rect.w,dst_rect.h);
 	}
 
 
@@ -1938,12 +1938,12 @@ void PLAT_GL_Swap() {
 	GLfloat texelSizeOutput[2] = {1.0f / last_w, 1.0f / last_h};
     runShaderPass(pass_textures[nrofshaders-1], g_shader_default, NULL, NULL,
                   dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h,
-                  last_w, last_h, texelSizeOutput, GL_NEAREST, 0);
+                  last_w, last_h, texelSizeOutput, GL_NEAREST, 0,dst_rect.w,dst_rect.h);
 
     if (overlay_tex) {
         runShaderPass(overlay_tex, g_shader_overlay, NULL, NULL,
                       0, 0, device_width, device_height,
-					  overlay_w, overlay_h, texelSizeOutput, GL_NEAREST, 1);
+					  overlay_w, overlay_h, texelSizeOutput, GL_NEAREST, 1,dst_rect.w,dst_rect.h);
     }
 	
     SDL_GL_SwapWindow(vid.window);
