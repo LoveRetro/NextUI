@@ -6431,7 +6431,7 @@ int main(int argc , char* argv[]) {
 	int has_pending_opt_change = 0;
 
 	initShaders();
-
+	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
 	while (!quit) {
 		GFX_startFrame();
 	
