@@ -42,6 +42,7 @@ typedef struct Shader {
 	int srctype;
 	int scaletype;
 	int filter;
+	char *filename;
 } Shader;
 
 GLuint g_shader_default = 0;
@@ -49,9 +50,9 @@ GLuint g_shader_color = 0;
 GLuint g_shader_overlay = 0;
 
 Shader* shaders[3] = {
-    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR, .scaletype = 1, .srctype = 0 }, 
-    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR, .scaletype = 1, .srctype = 0 }, 
-    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR, .scaletype = 1, .srctype = 0 }
+    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR, .scaletype = 1, .srctype = 0, .filename ="stock.glsl" }, 
+    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR, .scaletype = 1, .srctype = 0, .filename ="stock.glsl" }, 
+    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR, .scaletype = 1, .srctype = 0, .filename ="stock.glsl" }
 };
 
 static int nrofshaders = 0; // choose between 1 and 3 pipelines, > pipelines = more cpu usage, but more shader options and shader upscaling stuff
@@ -104,14 +105,46 @@ static uint32_t SDL_transparentBlack = 0;
 static char* overlay_path = NULL;
 
 
-GLuint link_program(GLuint vertex_shader, GLuint fragment_shader) {
+GLuint link_program(GLuint vertex_shader, GLuint fragment_shader, const char* cache_key) {
+    char cache_path[512];
+    snprintf(cache_path, sizeof(cache_path), "/mnt/SDCARD/.shadercache/%s.bin", cache_key);
+
     GLuint program = glCreateProgram();
+    GLint success;
+
+    // Try to load cached binary first
+    FILE *f = fopen(cache_path, "rb");
+    if (f) {
+        GLint binaryFormat;
+        fread(&binaryFormat, sizeof(GLint), 1, f);
+        fseek(f, 0, SEEK_END);
+        size_t length = ftell(f) - sizeof(GLint);
+        fseek(f, sizeof(GLint), SEEK_SET);
+        void *binary = malloc(length);
+        fread(binary, 1, length, f);
+        fclose(f);
+
+        glProgramBinary(program, binaryFormat, binary, length);
+        free(binary);
+
+        glGetProgramiv(program, GL_LINK_STATUS, &success);
+        if (success) {
+            LOG_info("Loaded shader program from cache: %s\n", cache_key);
+            return program;
+        } else {
+            LOG_info("Cache load failed, falling back to compile.\n");
+            glDeleteProgram(program);
+            program = glCreateProgram();
+        }
+    }
+
+    // Compile and link if cache failed
     glAttachShader(program, vertex_shader);
     glAttachShader(program, fragment_shader);
+    glProgramParameteri(program, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
     glLinkProgram(program);
-
-    GLint success;
     glGetProgramiv(program, GL_LINK_STATUS, &success);
+
     if (!success) {
         GLint logLength;
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
@@ -119,8 +152,26 @@ GLuint link_program(GLuint vertex_shader, GLuint fragment_shader) {
         glGetProgramInfoLog(program, logLength, &logLength, log);
         printf("Program link error: %s\n", log);
         free(log);
+        return program;
     }
-	LOG_info("program linked\n");
+
+    GLint binaryLength;
+    GLenum binaryFormat;
+    glGetProgramiv(program, GL_PROGRAM_BINARY_LENGTH, &binaryLength);
+    void* binary = malloc(binaryLength);
+    glGetProgramBinary(program, binaryLength, NULL, &binaryFormat, binary);
+
+    mkdir("/mnt/SDCARD/.shadercache", 0755); 
+    f = fopen(cache_path, "wb");
+    if (f) {
+        fwrite(&binaryFormat, sizeof(GLenum), 1, f);
+        fwrite(binary, 1, binaryLength, f);
+        fclose(f);
+        LOG_info("Saved shader program to cache: %s\n", cache_key);
+    }
+    free(binary);
+
+    LOG_info("Program linked and cached\n");
     return program;
 }
 
@@ -354,15 +405,15 @@ SDL_Surface* PLAT_initVideo(void) {
 
 	vertex = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl",SYSSHADERS_FOLDER);
 	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl",SYSSHADERS_FOLDER);
-	g_shader_default = link_program(vertex, fragment);
+	g_shader_default = link_program(vertex, fragment,"default.glsl");
 
 	vertex = load_shader_from_file(GL_VERTEX_SHADER, "colorfix.glsl",SYSSHADERS_FOLDER);
 	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "colorfix.glsl",SYSSHADERS_FOLDER);
-	g_shader_color = link_program(vertex, fragment);
+	g_shader_color = link_program(vertex, fragment,"colorfix.glsl");
 
 	vertex = load_shader_from_file(GL_VERTEX_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
 	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
-	g_shader_overlay = link_program(vertex, fragment);
+	g_shader_overlay = link_program(vertex, fragment,"overlay.glsl");
 
 	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
@@ -446,13 +497,19 @@ char* PLAT_findFileInDir(const char *directory, const char *filename) {
 }
 
 
-
+void PLAT_reloadShaders() {
+	for (int i=0; i<nrofshaders; i++) {
+		Shader* shader = shaders[i];
+		LOG_info("shader filename: %s\n",shader->filename);
+		PLAT_updateShader(i, shader->filename,NULL,NULL,NULL,NULL);
+	}
+}
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *srctype) {
     // Check if the shader index is valid
     if (i < 0 || i >= nrofshaders) {
         return;
     }
-
+	LOG_info("update shader\n");
     Shader* shader = shaders[i];
 
     // Only update shader_p if filename is not NULL
@@ -467,7 +524,7 @@ void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int
 			LOG_info("Deleting previous shader %i\n",shader->shader_p);
 			glDeleteProgram(shader->shader_p);
 		}
-        shader->shader_p = link_program(vertex_shader1, fragment_shader1);
+        shader->shader_p = link_program(vertex_shader1, fragment_shader1,filename);
         
         if (shader->shader_p == 0) {
             LOG_error("Shader linking failed for %s\n", filename);
@@ -482,6 +539,7 @@ void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int
         } else {
 			LOG_info("Shader Program Linking Success %s shader ID is %i\n", filename,shader->shader_p);
 		}
+		shader->filename = strdup(filename);
     }
     // Only update scale if it's not NULL
     if (scale != NULL) {

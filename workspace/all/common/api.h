@@ -280,6 +280,7 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
 #define GFX_resetShaders PLAT_resetShaders	// void:(GFX_Renderer* renderer)
 #define GFX_clearShaders PLAT_clearShaders	// void:(GFX_Renderer* renderer)
 #define GFX_updateShader PLAT_updateShader	// void:(GFX_Renderer* renderer)
+#define GFX_reloadShaders PLAT_reloadShaders	// void:(GFX_Renderer* renderer)
 
 scaler_t GFX_getAAScaler(GFX_Renderer* renderer);
 void GFX_freeAAScaler(void);
@@ -580,6 +581,7 @@ void PLAT_setShader1(const char* filename);
 void PLAT_setShader2(const char* filename);
 void PLAT_setShader3(const char* filename);
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *inputtype);
+void PLAT_reloadShaders();
 int PLAT_supportsOverscan(void);
 
 SDL_Surface* PLAT_initOverlay(void);

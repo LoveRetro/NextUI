@@ -5113,6 +5113,8 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 static int OptionShaders_optionChanged(MenuList* list, int i) {
 		MenuItem* item = &list->items[i];
 		Config_syncShaders(item->key, item->value);
+		if(i==SH_NROFSHADERS)
+			initShaders();
 		return MENU_CALLBACK_NOP;
 }
 
@@ -6429,7 +6431,7 @@ int main(int argc , char* argv[]) {
 	chooseSyncRef();
 	
 	int has_pending_opt_change = 0;
-
+	LOG_info("Starting shaders %ims\n\n",SDL_GetTicks());
 	initShaders();
 	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
 	while (!quit) {
