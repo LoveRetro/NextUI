@@ -6365,7 +6365,13 @@ int main(int argc , char* argv[]) {
 	
 	LOG_info("rom_path: %s\n", rom_path);
 	
+
+	
 	screen = GFX_init(MODE_MENU);
+
+	// initialize default shaders
+	GFX_initShaders();
+
 	PAD_init();
 	DEVICE_WIDTH = screen->w;
 	DEVICE_HEIGHT = screen->h;
@@ -6432,7 +6438,11 @@ int main(int argc , char* argv[]) {
 	
 	int has_pending_opt_change = 0;
 	LOG_info("Starting shaders %ims\n\n",SDL_GetTicks());
+
+
+	// then initialize custom  shaders from settings
 	initShaders();
+
 	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
 	while (!quit) {
 		GFX_startFrame();

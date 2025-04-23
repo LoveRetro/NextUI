@@ -338,6 +338,33 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
     return shader;
 }
 
+void PLAT_initShaders() {
+	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+	glViewport(0, 0, device_width, device_height);
+	
+	GLuint vertex;
+	GLuint fragment;
+
+	vertex = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl",SYSSHADERS_FOLDER);
+	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl",SYSSHADERS_FOLDER);
+	g_shader_default = link_program(vertex, fragment,"default.glsl");
+
+	vertex = load_shader_from_file(GL_VERTEX_SHADER, "colorfix.glsl", SYSSHADERS_FOLDER);
+	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "colorfix.glsl",SYSSHADERS_FOLDER);
+	g_shader_color = link_program(vertex, fragment,"colorfix.glsl");
+
+	vertex = load_shader_from_file(GL_VERTEX_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
+	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
+	g_shader_overlay = link_program(vertex, fragment,"overlay.glsl");
+	
+	LOG_info("default shaders loaded, %i\n\n",g_shader_default);
+	// for (int i=0; i<nrofshaders; i++) {
+	// 	Shader* shader = shaders[i];
+	// 	LOG_info("shader filename: %s\n",shader->filename);
+	// 	PLAT_updateShader(i, shader->filename,NULL,NULL,NULL,NULL);
+	// }
+}
+
 
 SDL_Surface* PLAT_initVideo(void) {
 	char* device = getenv("DEVICE");
@@ -399,21 +426,6 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.gl_context = SDL_GL_CreateContext(vid.window);
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
-	
-	GLuint vertex;
-	GLuint fragment;
-
-	vertex = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl",SYSSHADERS_FOLDER);
-	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl",SYSSHADERS_FOLDER);
-	g_shader_default = link_program(vertex, fragment,"default.glsl");
-
-	vertex = load_shader_from_file(GL_VERTEX_SHADER, "colorfix.glsl",SYSSHADERS_FOLDER);
-	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "colorfix.glsl",SYSSHADERS_FOLDER);
-	g_shader_color = link_program(vertex, fragment,"colorfix.glsl");
-
-	vertex = load_shader_from_file(GL_VERTEX_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
-	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
-	g_shader_overlay = link_program(vertex, fragment,"overlay.glsl");
 
 	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
@@ -496,20 +508,11 @@ char* PLAT_findFileInDir(const char *directory, const char *filename) {
     return NULL;
 }
 
-
-void PLAT_reloadShaders() {
-	for (int i=0; i<nrofshaders; i++) {
-		Shader* shader = shaders[i];
-		LOG_info("shader filename: %s\n",shader->filename);
-		PLAT_updateShader(i, shader->filename,NULL,NULL,NULL,NULL);
-	}
-}
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *srctype) {
     // Check if the shader index is valid
     if (i < 0 || i >= nrofshaders) {
         return;
     }
-	LOG_info("update shader\n");
     Shader* shader = shaders[i];
 
     // Only update shader_p if filename is not NULL
