@@ -27,7 +27,9 @@
 
 #include "opengl.h"
 #include <arm_neon.h>
+#include <libgen.h>  
 
+#include <dirent.h>
 int is_brick = 0;
 volatile int useAutoCpu = 1;
 static int finalScaleFilter=GL_LINEAR;
@@ -398,13 +400,56 @@ int shadersupdated = 0;
 void PLAT_resetShaders() {
 	shadersupdated = 1;
 }
+char* PLAT_findFileInDir(const char *directory, const char *filename) {
+    char *filename_copy = strdup(filename);
+    if (!filename_copy) {
+        perror("strdup");
+        return NULL;
+    }
+
+    // Strip extension from filename
+    char *dot_pos = strrchr(filename_copy, '.');
+    if (dot_pos) {
+        *dot_pos = '\0';
+    }
+
+    DIR *dir = opendir(directory);
+    if (!dir) {
+        perror("opendir");
+        free(filename_copy);
+        return NULL;
+    }
+
+    struct dirent *entry;
+    char *full_path = NULL;
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strstr(entry->d_name, filename_copy) == entry->d_name) {
+            full_path = (char *)malloc(strlen(directory) + strlen(entry->d_name) + 2); // +1 for slash, +1 for '\0'
+            if (!full_path) {
+                perror("malloc");
+                closedir(dir);
+                free(filename_copy);
+                return NULL;
+            }
+
+            snprintf(full_path, strlen(directory) + strlen(entry->d_name) + 2, "%s/%s", directory, entry->d_name);
+            closedir(dir);
+            free(filename_copy);
+            return full_path;
+        }
+    }
+
+    closedir(dir);
+    free(filename_copy);
+    return NULL;
+}
 
 
 
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *srctype) {
     // Check if the shader index is valid
-    if (i < 0 || i >= 3) {
-        LOG_error("Invalid shader index %d\n", i);
+    if (i < 0 || i >= nrofshaders) {
         return;
     }
 

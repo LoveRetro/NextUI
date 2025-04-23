@@ -455,6 +455,7 @@ enum {
 
 FILE *PLAT_OpenSettings(const char *filename);
 FILE *PLAT_WriteSettings(const char *filename);
+char* PLAT_findFileInDir(const char *directory, const char *filename);
 void PLAT_initInput(void);
 void PLAT_quitInput(void);
 void PLAT_pollInput(void);
