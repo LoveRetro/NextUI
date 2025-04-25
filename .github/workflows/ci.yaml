@@ -1,0 +1,46 @@
+---
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - tg5040
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3.6.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.10.0
+
+      - name: Clone the union repository
+        run: git clone https://github.com/LoveRetro/${{ matrix.toolchain }}-toolchain toolchain
+      
+      - name: Build the toolchain
+        run: |
+          docker build -t ${{ matrix.toolchain }}-toolchain .
+          touch .build
+        working-directory: toolchain
+
+      - name: Build minui
+        run: |
+          docker run -d -v "$(pwd)":/root/workspace/minui --name toolchain ${{ matrix.toolchain }}-toolchain tail -f /dev/null
+          docker exec -it toolchain /bin/bash -c "cd /root/workspace/minui && make"
+
+          docker exec --env PLATFORM=${{ matrix.toolchain }} toolchain bash -c "source /root/.bashrc && make -C /root/workspace/minui setup"
+          docker exec --env PLATFORM=${{ matrix.toolchain }} toolchain bash -c "source /root/.bashrc && make -C /root/workspace/minui tg5040"
+          docker container rm -f toolchain
+          ls -lah
