@@ -1114,6 +1114,11 @@ enum {
 	SYNC_SRC_SCREEN,
 	SYNC_SRC_CORE
 };
+
+enum {
+	INTERNAL_SAVESTATES,
+};
+
 enum {
 	SH_NROFSHADERS,
 	SH_SHADER1,
@@ -1290,6 +1295,7 @@ static struct Config {
 	char* device_tag;
 	OptionList frontend;
 	OptionList core;
+	OptionList internal;
 	OptionList shaders;
 	ButtonMapping* controls;
 	ButtonMapping* shortcuts;
@@ -1448,6 +1454,23 @@ static struct Config {
 		.count = 0,
 		.options = (Option[]){
 			{NULL},
+		},
+	},
+	.internal = {
+		// (OptionList)
+		.count = 1,
+		.options = (Option[]){
+			[INTERNAL_SAVESTATES] = {
+				.key = "minarch_savestates",
+				.name = "Savestates",
+				.desc = "Enable savestates", // will call getScreenScalingDesc()
+				.default_value = 1,
+				.value = 1,
+				.count = 2,
+				.values = onoff_labels,
+				.labels = onoff_labels,
+			},
+			{NULL}
 		},
 	},
 	.shaders = { // (OptionList)
@@ -2070,6 +2093,11 @@ static void Config_readOptionsString(char* cfg) {
 		Option* option = &config.shaders.options[i];
 		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
 		OptionList_setOptionValue(&config.shaders, option->key, value);
+	}
+	for (int i=0; config.internal.options[i].key; i++) {
+		Option* option = &config.internal.options[i];
+		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
+		OptionList_setOptionValue(&config.internal, option->key, value);
 	}
 }
 static void Config_readControlsString(char* cfg) {
@@ -6459,18 +6487,14 @@ int main(int argc , char* argv[]) {
 	if (!game.is_open) goto finish;
 	
 	simple_mode = exists(SIMPLE_MODE_PATH);
-	char savestates_path[MAX_PATH];
-	getEmuPath((char *)core.tag, savestates_path);
-	char *tmp = strrchr(savestates_path, '/');
-	strcpy(tmp, "/disable_savestates");
-
-	disable_savestates = exists(savestates_path);
 
 	// restore options
 	Config_load(); // before init?
 	Config_init();
 	Config_readOptions(); // cores with boot logo option (eg. gb) need to load options early
 	setOverclock(overclock);
+
+	disable_savestates = config.internal.options[INTERNAL_SAVESTATES].value == 0;
 
 	Core_init();
 
