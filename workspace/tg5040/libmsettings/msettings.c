@@ -340,6 +340,9 @@ int GetHDMI(void) {
 	return 0;
 }
 int GetMute(void) {
+	if (settings == NULL) {
+		return 0;
+	}
 	return settings->mute;
 }
 int GetContrast(void)
