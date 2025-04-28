@@ -16,7 +16,7 @@ exec >>"$LOGS_PATH/$EMU_TAG.txt"
 exec 2>&1
 
 get_doom_version() {
-    DOOM_VERSION="DOOM1"
+    DOOM_VERSION=""
     if [ -f "$ROM" ]; then
         # get the directory of the file
         ROM_DIR=$(dirname "$ROM")
