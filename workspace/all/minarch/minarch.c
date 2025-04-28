@@ -29,6 +29,7 @@ static int quit = 0;
 static int newScreenshot = 0;
 static int show_menu = 0;
 static int simple_mode = 0;
+static int disable_savestates = 0;
 static int was_threaded = 0;
 static int should_run_core = 1; // used by threaded video
 enum retro_pixel_format fmt;
@@ -4465,6 +4466,13 @@ enum {
 	STATUS_RESET= 31,
 };
 
+char TEXT_CONTINUE[] = "Continue";
+char TEXT_SAVE[] = "Save";
+char TEXT_LOAD[] = "Load";
+char TEXT_OPTS[] = "Options";
+char TEXT_QUIT[] = "Quit";
+char TEXT_RESET[] = "Reset";
+
 // TODO: I don't love how overloaded this has become
 static struct {
 	SDL_Surface* bitmap;
@@ -4489,11 +4497,11 @@ static struct {
 	.preview_exists = 0,
 	
 	.items = {
-		[ITEM_CONT] = "Continue",
-		[ITEM_SAVE] = "Save",
-		[ITEM_LOAD] = "Load",
-		[ITEM_OPTS] = "Options",
-		[ITEM_QUIT] = "Quit",
+		[ITEM_CONT] = TEXT_CONTINUE,
+		[ITEM_SAVE] = TEXT_SAVE,
+		[ITEM_LOAD] = TEXT_LOAD,
+		[ITEM_OPTS] = TEXT_OPTS,
+		[ITEM_QUIT] = TEXT_QUIT,
 	}
 };
 
@@ -4510,7 +4518,11 @@ void Menu_init(void) {
 
 	sprintf(menu.slot_path, "%s/%s.txt", menu.minui_dir, game.name);
 	
-	if (simple_mode) menu.items[ITEM_OPTS] = "Reset";
+	if (simple_mode) menu.items[ITEM_OPTS] = TEXT_RESET;
+	if (disable_savestates) {
+		menu.items[ITEM_SAVE] = NULL;
+		menu.items[ITEM_LOAD] = NULL;
+	}
 	
 	if (game.m3u_path[0]) {
 		char* tmp;
@@ -6001,6 +6013,22 @@ static void Menu_loop(void) {
 	LEDS_initLeds();
 	LEDS_updateLeds();
 
+	int menu_item_count = MENU_ITEM_COUNT;
+	if (disable_savestates) {
+		menu_item_count -= 2;
+	}
+	char *menu_items[menu_item_count];
+	int j = 0;
+	for (int i = 0; i < MENU_ITEM_COUNT; i++)
+	{
+		if (menu.items[i] == NULL) {
+			continue;
+		}
+
+		menu_items[j] = menu.items[i];
+		j++;
+	}
+
 	//set vid.blit to null for menu drawing no need for blitrender drawing
 	GFX_clearShaders();
 	while (show_menu) {
@@ -6012,35 +6040,37 @@ static void Menu_loop(void) {
 		
 		if (PAD_justPressed(BTN_UP)) {
 			selected -= 1;
-			if (selected<0) selected += MENU_ITEM_COUNT;
+			if (selected<0) selected += menu_item_count;
 			dirty = 1;
 		}
 		else if (PAD_justPressed(BTN_DOWN)) {
 			selected += 1;
-			if (selected>=MENU_ITEM_COUNT) selected -= MENU_ITEM_COUNT;
+			if (selected>=menu_item_count) selected -= menu_item_count;
 			dirty = 1;
 		}
 		else if (PAD_justPressed(BTN_LEFT)) {
-			if (menu.total_discs>1 && selected==ITEM_CONT) {
+			char *item_text = menu_items[selected];
+			if (menu.total_discs>1 && item_text == TEXT_CONTINUE) {
 				menu.disc -= 1;
 				if (menu.disc<0) menu.disc += menu.total_discs;
 				dirty = 1;
 				sprintf(disc_name, "Disc %i", menu.disc+1);
 			}
-			else if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
+			else if (item_text == TEXT_SAVE || item_text == TEXT_LOAD) {
 				menu.slot -= 1;
 				if (menu.slot<0) menu.slot += MENU_SLOT_COUNT;
 				dirty = 1;
 			}
 		}
 		else if (PAD_justPressed(BTN_RIGHT)) {
-			if (menu.total_discs>1 && selected==ITEM_CONT) {
+			char *item_text = menu_items[selected];
+			if (menu.total_discs>1 && item_text == TEXT_CONTINUE) {
 				menu.disc += 1;
 				if (menu.disc==menu.total_discs) menu.disc -= menu.total_discs;
 				dirty = 1;
 				sprintf(disc_name, "Disc %i", menu.disc+1);
 			}
-			else if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
+			else if (item_text == TEXT_SAVE || item_text == TEXT_LOAD) {
 				menu.slot += 1;
 				if (menu.slot>=MENU_SLOT_COUNT) menu.slot -= MENU_SLOT_COUNT;
 				dirty = 1;
@@ -6056,8 +6086,8 @@ static void Menu_loop(void) {
 			show_menu = 0;
 		}
 		else if (PAD_justPressed(BTN_A)) {
-			switch(selected) {
-				case ITEM_CONT:
+			char *item_text = menu_items[selected];
+			if (item_text == TEXT_CONTINUE) {
 				if (menu.total_discs && rom_disc!=menu.disc) {
 						status = STATUS_DISC;
 						char* disc_path = menu.disc_paths[menu.disc];
@@ -6067,48 +6097,42 @@ static void Menu_loop(void) {
 						status = STATUS_CONT;
 					}
 					show_menu = 0;
-				break;
-				
-				case ITEM_SAVE: {
-					Menu_saveState();
-					status = STATUS_SAVE;
+			} else if (item_text == TEXT_SAVE) {
+				Menu_saveState();
+				status = STATUS_SAVE;
+				show_menu = 0;
+			} else if (item_text == TEXT_LOAD) {
+				Menu_loadState();
+				status = STATUS_LOAD;
+				show_menu = 0;
+			} else if (item_text == TEXT_OPTS) {
+				if (simple_mode) {
+					core.reset();
+					status = STATUS_RESET;
 					show_menu = 0;
 				}
-				break;
-				case ITEM_LOAD: {
-					Menu_loadState();
-					status = STATUS_LOAD;
-					show_menu = 0;
-				}
-				break;
-				case ITEM_OPTS: {
-					if (simple_mode) {
-						core.reset();
-						status = STATUS_RESET;
-						show_menu = 0;
+				else {
+					int old_scaling = screen_scaling;
+					Menu_options(&options_menu);
+					if (screen_scaling!=old_scaling) {
+						selectScaler(renderer.true_w,renderer.true_h,renderer.src_p);
+					
+						restore_w = screen->w;
+						restore_h = screen->h;
+						restore_p = screen->pitch;
+						screen = GFX_resize(DEVICE_WIDTH,DEVICE_HEIGHT,DEVICE_PITCH);
+						SDL_Rect dst = {0, 0, DEVICE_WIDTH, DEVICE_HEIGHT};
+						SDL_BlitScaled(menu.bitmap,NULL,backing,&dst);
 					}
-					else {
-						int old_scaling = screen_scaling;
-						Menu_options(&options_menu);
-						if (screen_scaling!=old_scaling) {
-							selectScaler(renderer.true_w,renderer.true_h,renderer.src_p);
-						
-							restore_w = screen->w;
-							restore_h = screen->h;
-							restore_p = screen->pitch;
-							screen = GFX_resize(DEVICE_WIDTH,DEVICE_HEIGHT,DEVICE_PITCH);
-							SDL_Rect dst = {0, 0, DEVICE_WIDTH, DEVICE_HEIGHT};
-							SDL_BlitScaled(menu.bitmap,NULL,backing,&dst);
-						}
-						dirty = 1;
-					}
+					dirty = 1;
 				}
-				break;
-				case ITEM_QUIT:
-					status = STATUS_QUIT;
-					show_menu = 0;
-					quit = 1; // TODO: tmp?
-				break;
+			}
+			else if (item_text == TEXT_QUIT) {
+				status = STATUS_QUIT;
+				show_menu = 0;
+				quit = 1; // TODO: tmp?
+			} else {
+				LOG_info("Unknown item: %s\n", item_text);
 			}
 			if (!show_menu) break;
 		}
@@ -6152,9 +6176,9 @@ static void Menu_loop(void) {
 			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, 1, screen, 1);
 			
 			// list
-			oy = (((DEVICE_HEIGHT / FIXED_SCALE) - PADDING * 2) - (MENU_ITEM_COUNT * PILL_SIZE)) / 2;
-			for (int i=0; i<MENU_ITEM_COUNT; i++) {
-				char* item = menu.items[i];
+			oy = (((DEVICE_HEIGHT / FIXED_SCALE) - PADDING * 2) - (menu_item_count * PILL_SIZE)) / 2;
+			for (int i=0; i<menu_item_count; i++) {
+				char *item = menu_items[i];
 				SDL_Color text_color = COLOR_WHITE;
 				
 				if (i==selected) {
@@ -6199,7 +6223,8 @@ static void Menu_loop(void) {
 			}
 			
 			// slot preview
-			if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
+			char *item_text = menu_items[selected];
+			if (item_text == TEXT_SAVE || item_text == TEXT_LOAD) {
 				#define WINDOW_RADIUS 4 // TODO: this logic belongs in blitRect?
 				#define PAGINATION_HEIGHT 6
 				// unscaled
@@ -6434,7 +6459,13 @@ int main(int argc , char* argv[]) {
 	if (!game.is_open) goto finish;
 	
 	simple_mode = exists(SIMPLE_MODE_PATH);
-	
+	char savestates_path[MAX_PATH];
+	getEmuPath((char *)core.tag, savestates_path);
+	char *tmp = strrchr(savestates_path, '/');
+	strcpy(tmp, "/disable_savestates");
+
+	disable_savestates = exists(savestates_path);
+
 	// restore options
 	Config_load(); // before init?
 	Config_init();

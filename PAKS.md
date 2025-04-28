@@ -49,6 +49,8 @@ This will open the requested rom using the "picodrive\_libretro.so" core include
 
 There's no need to edit anything below the line of hash marks. The rest is boilerplate that will extract the pak's tag from its folder name, create corresponding bios and save folders, set the `HOME` envar to "/.userdata/[platform]/", launch the game, and log any output from minarch and the core to "/.userdata/[platform]/logs/[TAG].txt".
 
+Some libretro cores do not support savestates. To disable savestates from appearing in the UI, create a `disable_savestates` file in the emulator's pak folder.
+
 That's it! Feel free to experiement with cores from the stock firmware, other compatible devices, or building your own.
 
 Oh, if you're creating a pak for Anbernic's RG*XX line you'll need to change the last part of the last line from ` &> "$LOGS_PATH/$EMU_TAG.txt"` to ` > "$LOGS_PATH/$EMU_TAG.txt" 2>&1` because its default shell is whack.
