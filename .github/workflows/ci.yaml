@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     strategy:
       fail-fast: false
       matrix:
@@ -20,11 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.2.2
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3.6.0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.10.0
 
       - name: Clone the union repository
         run: git clone https://github.com/LoveRetro/${{ matrix.toolchain }}-toolchain toolchain
