@@ -130,7 +130,7 @@ clean:
 setup: name
 	# ----------------------------------------------------
 	# make sure we're running in an input device
-	tty -s 
+	tty -s || echo "No tty detected"
 	
 	# ready fresh build
 	rm -rf ./build
