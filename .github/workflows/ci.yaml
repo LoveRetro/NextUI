@@ -20,23 +20,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.2.2
 
+      - name: Setup
+        run: make setup
+        
+      - name: Build ${{ matrix.toolchain }}
+        run: make ${{ matrix.toolchain }}
 
+      - name: Special
+        run: make special
 
-      - name: Clone the union repository
-        run: git clone https://github.com/LoveRetro/${{ matrix.toolchain }}-toolchain toolchain
-      
-      - name: Build the toolchain
-        run: |
-          docker build -t ${{ matrix.toolchain }}-toolchain .
-          touch .build
-        working-directory: toolchain
-
-      - name: Build minui
-        run: |
-          docker run -d -v "$(pwd)":/root/workspace/minui --name toolchain ${{ matrix.toolchain }}-toolchain tail -f /dev/null
-          docker exec -it toolchain /bin/bash -c "cd /root/workspace/minui && make"
-
-          docker exec --env PLATFORM=${{ matrix.toolchain }} toolchain bash -c "source /root/.bashrc && make -C /root/workspace/minui setup"
-          docker exec --env PLATFORM=${{ matrix.toolchain }} toolchain bash -c "source /root/.bashrc && make -C /root/workspace/minui tg5040"
-          docker container rm -f toolchain
-          ls -lah
+      - name: Package
+        run: make package
