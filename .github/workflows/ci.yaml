@@ -99,9 +99,6 @@ jobs:
       - name: Package
         run: make package
 
-      - name: List Generated Files
-        run: ls -l releases
-
       - name: Upload All
         uses: actions/upload-artifact@v4.6.2
         with:
