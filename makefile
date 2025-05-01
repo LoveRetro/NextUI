@@ -51,6 +51,12 @@ build-cores:
 	make build-cores -f makefile.toolchain PLATFORM=$(PLATFORM) COMPILE_CORES=true
 	# ----------------------------------------------------
 
+build-core:
+ifndef CORE
+	$(error CORE is not set)
+endif
+	make build-core -f makefile.toolchain PLATFORM=$(PLATFORM) COMPILE_CORES=true CORE=$(CORE)
+
 system:
 	make -f ./workspace/$(PLATFORM)/platform/makefile.copy PLATFORM=$(PLATFORM)
 	

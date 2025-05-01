@@ -48,6 +48,12 @@ endif
 cores:
 	cd ./$(PLATFORM)/cores && make
 
+core:
+ifndef CORE
+	$(error CORE is not set)
+endif
+	cd ./$(PLATFORM)/cores && make $(CORE)
+
 clean:
 	cd ./$(PLATFORM)/wifimanager && make clean
 	cd ./$(PLATFORM)/libmsettings && make clean
