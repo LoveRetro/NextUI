@@ -44,7 +44,7 @@ name:
 
 build:
 	# ----------------------------------------------------
-	make build -f makefile.toolchain PLATFORM=$(PLATFORM)
+	make build -f makefile.toolchain PLATFORM=$(PLATFORM) COMPILE_CORES=$(COMPILE_CORES)
 	# ----------------------------------------------------
 
 system:

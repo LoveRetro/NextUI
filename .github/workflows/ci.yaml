@@ -26,6 +26,8 @@ jobs:
 
       - name: Build ${{ matrix.toolchain }}
         run: make ${{ matrix.toolchain }}
+        env:
+          COMPILE_CORES: true
 
       - name: Special
         run: make special
