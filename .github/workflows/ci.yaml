@@ -58,32 +58,8 @@ jobs:
           name: core-${{ matrix.toolchain }}-${{ matrix.core }}.zip
           path: workspace/${{ env.PLATFORM }}/cores/output/
 
-  combine-core-output:
-    needs: build-core
-    runs-on: ubuntu-24.04-arm
-    env:
-      PLATFORM: ${{ matrix.toolchain }}
-    strategy:
-      fail-fast: false
-      matrix:
-        toolchain:
-          - tg5040
-    steps:
-    - name: Download All Artifacts
-      uses: actions/download-artifact@v4.3.0
-      with:
-        path: cores
-        pattern: core-${{ matrix.toolchain }}-*
-        merge-multiple: true
-    - run: ls -R cores
-    - name: Upload Cores
-      uses: actions/upload-artifact@v4.6.2
-      with:
-        name: cores.zip
-        path: cores
-
   build:
-    needs: combine-core-output
+    needs: build-core
     runs-on: ubuntu-24.04-arm
     env:
       PLATFORM: ${{ matrix.toolchain }}
@@ -105,8 +81,12 @@ jobs:
       - name: Setup
         run: make setup
 
-      - name: Build cores
-        run: make build-cores
+      - name: Download Cores
+        uses: actions/download-artifact@v4.3.0
+        with:
+          path: workspace/${{ env.PLATFORM }}/cores/output/
+          pattern: core-${{ matrix.toolchain }}-*
+          merge-multiple: true
 
       - name: Build
         run: make ${{ matrix.toolchain }}
