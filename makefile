@@ -19,15 +19,14 @@ endif
 
 BUILD_HASH:=$(shell git rev-parse --short HEAD)
 BUILD_BRANCH:=$(shell git rev-parse --abbrev-ref HEAD)
-RELEASE_TIME:=$(shell TZ=GMT date +%Y%m%d)
+RELEASE_TIME:=$(shell TZ=GMT date +%Y%m%d%H%M%S)
 ifeq ($(BUILD_BRANCH),main)
   RELEASE_BETA :=
 else
   RELEASE_BETA := -$(BUILD_BRANCH)
 endif
-RELEASE_BASE=NextUI-$(RELEASE_TIME)$(RELEASE_BETA)
-RELEASE_DOT:=$(shell find -E ./releases/. -regex ".*/${RELEASE_BASE}-[0-9]+-base\.zip" | wc -l | sed 's/ //g')
-RELEASE_NAME=$(RELEASE_BASE)-$(RELEASE_DOT)
+RELEASE_FILENAME = NextUI
+RELEASE_VERSION ?= $(RELEASE_TIME)$(RELEASE_BETA)
 
 ###########################################################
 
@@ -41,7 +40,7 @@ shell:
 	make -f makefile.toolchain PLATFORM=$(PLATFORM)
 
 name: 
-	@echo $(RELEASE_NAME)
+	@echo $(RELEASE_FILENAME)-$(RELEASE_VERSION)
 
 build:
 	# ----------------------------------------------------
@@ -167,6 +166,9 @@ special:
 #endif
 
 tidy:
+	rm -f releases/$(RELEASE_FILENAME)-base.zip 
+	rm -f releases/$(RELEASE_FILENAME)-extras.zip
+	rm -f releases/$(RELEASE_FILENAME)-all.zip
 	# ----------------------------------------------------
 	# copy update from merged platform to old pre-merge platform bin so old cards update properly
 #ifneq (,$(findstring rg35xxplus, $(PLATFORMS)))
@@ -183,7 +185,7 @@ package: tidy
 	cp ./workspace/readmes/EXTRAS-out.txt ./build/EXTRAS/README.txt
 	rm -rf ./workspace/readmes
 	
-	cd ./build/SYSTEM && echo "$(RELEASE_NAME)\n$(BUILD_HASH)" > version.txt
+	cd ./build/SYSTEM && echo "$(RELEASE_VERSION)\n$(BUILD_HASH)" > version.txt
 	# ./commits.sh > ./build/SYSTEM/commits.txt
 	cd ./build && find . -type f -name '.DS_Store' -delete
 	mkdir -p ./build/PAYLOAD
@@ -195,13 +197,13 @@ package: tidy
 	mv ./build/PAYLOAD/MinUI.zip ./build/BASE
 	
 	# TODO: can I just add everything in BASE to zip?
-	# cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves miyoo miyoo354 trimui rg35xx rg35xxplus gkdpixel miyoo355 magicx em_ui.sh MinUI.zip README.txt
-	cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves Shaders trimui em_ui.sh MinUI.zip README.txt
-	cd ./build/EXTRAS && zip -r ../../releases/$(RELEASE_NAME)-extras.zip Bios Emus Roms Saves Shaders Tools README.txt
-	echo "$(RELEASE_NAME)" > ./build/latest.txt
+	# cd ./build/BASE && zip -r ../../releases/$(RELEASE_FILENAME)-base.zip Bios Roms Saves miyoo miyoo354 trimui rg35xx rg35xxplus gkdpixel miyoo355 magicx em_ui.sh MinUI.zip README.txt
+	cd ./build/BASE && zip -r ../../releases/$(RELEASE_FILENAME)-base.zip Bios Roms Saves Shaders trimui em_ui.sh MinUI.zip README.txt
+	cd ./build/EXTRAS && zip -r ../../releases/$(RELEASE_FILENAME)-extras.zip Bios Emus Roms Saves Shaders Tools README.txt
+	echo "$(RELEASE_VERSION)" > ./build/latest.txt
 
 	# compound zip (brew install libzip needed) 
-	cd ./releases && zipmerge $(RELEASE_NAME)-all.zip $(RELEASE_NAME)-base.zip  && zipmerge $(RELEASE_NAME)-all.zip $(RELEASE_NAME)-extras.zip
+	cd ./releases && zipmerge $(RELEASE_FILENAME)-all.zip $(RELEASE_FILENAME)-base.zip  && zipmerge $(RELEASE_FILENAME)-all.zip $(RELEASE_FILENAME)-extras.zip
 	
 ###########################################################
 
