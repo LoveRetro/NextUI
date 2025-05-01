@@ -17,8 +17,8 @@ on:
 
 permissions:
   attestations: write
-  id-token: write
   contents: write
+  id-token: write
 
 jobs:
   prepare:
