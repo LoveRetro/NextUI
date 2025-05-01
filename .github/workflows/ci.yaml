@@ -23,7 +23,7 @@ jobs:
 
       - name: Setup
         run: make setup
-        
+
       - name: Build ${{ matrix.toolchain }}
         run: make ${{ matrix.toolchain }}
 
