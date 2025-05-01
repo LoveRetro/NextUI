@@ -9,16 +9,88 @@ on:
   pull_request: {}
 
 jobs:
-  build:
+  core-matrix:
     runs-on: ubuntu-24.04-arm
+    env:
+      PLATFORM: ${{ matrix.toolchain }}
+    outputs:
+      cores: ${{ steps.cores.outputs.cores }}
     strategy:
       fail-fast: false
       matrix:
         toolchain:
           - tg5040
 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Generate cores matrix
+        id: cores
+        run: |
+          CORES="$(make cores-json)"
+          echo "cores=$(jq -cn --argjson cores "$CORES" '{cores: $cores}')" >> $GITHUB_OUTPUT
+
+  build-core:
+    needs: core-matrix
+    runs-on: ubuntu-24.04-arm
     env:
       PLATFORM: ${{ matrix.toolchain }}
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - tg5040
+        core: ${{ needs.core-matrix.outputs.cores }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup
+        run: make setup
+
+      - name: Build ${{ matrix.core }} core
+        run: make build-core CORE=${{ matrix.core }}
+
+      - name: Upload core
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: core-${{ matrix.toolchain }}-${{ matrix.core }}.zip
+          path: workspace/${{ env.PLATFORM }}/cores/output/
+
+  combine-core-output:
+    needs: build-core
+    runs-on: ubuntu-24.04-arm
+    env:
+      PLATFORM: ${{ matrix.toolchain }}
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - tg5040
+    steps:
+    - name: Download All Artifacts
+      uses: actions/download-artifact@v4.3.0
+      with:
+        path: cores
+        pattern: core-${{ matrix.toolchain }}-*
+        merge-multiple: true
+    - run: ls -R cores
+    - name: Upload Cores
+      uses: actions/upload-artifact@v4.6.2
+      with:
+        name: cores.zip
+        path: cores
+
+  build:
+    runs-on: ubuntu-24.04-arm
+    env:
+      PLATFORM: ${{ matrix.toolchain }}
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - tg5040
 
     steps:
       - name: Checkout
@@ -32,10 +104,10 @@ jobs:
       - name: Setup
         run: make setup
 
-      - name: Build cores for ${{ matrix.toolchain }}
+      - name: Build cores
         run: make build-cores
 
-      - name: Build ${{ matrix.toolchain }}
+      - name: Build
         run: make ${{ matrix.toolchain }}
 
       - name: Special

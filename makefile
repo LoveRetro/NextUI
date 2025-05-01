@@ -51,6 +51,9 @@ build-cores:
 	make build-cores -f makefile.toolchain PLATFORM=$(PLATFORM) COMPILE_CORES=true
 	# ----------------------------------------------------
 
+cores-json:
+	@cat workspace/tg5040/cores/makefile | grep ^CORES | cut -d' ' -f2 | jq  --raw-input .  | jq --slurp -cM .
+
 build-core:
 ifndef CORE
 	$(error CORE is not set)
