@@ -32,3 +32,24 @@ jobs:
 
       - name: Package
         run: make package
+
+      - name: List Generated Files
+        run: ls -l releases
+
+      - name: Upload All
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: NextUI-all-${{ matrix.toolchain }}.zip
+          path: releases/NextUI-all.zip
+
+      - name: Upload Base
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: NextUI-base-${{ matrix.toolchain }}.zip
+          path: releases/NextUI-base.zip
+
+      - name: Upload Extras
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: NextUI-extras-${{ matrix.toolchain }}.zip
+          path: releases/NextUI-extras.zip
