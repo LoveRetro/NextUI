@@ -64,6 +64,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     env:
       PLATFORM: ${{ matrix.toolchain }}
+      RELEASE_FILENAME: NextUI-${{ matrix.toolchain }}
     strategy:
       fail-fast: false
       matrix:
@@ -104,17 +105,25 @@ jobs:
       - name: Upload All
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: NextUI-all-${{ matrix.toolchain }}.zip
-          path: releases/NextUI-all.zip
+          name: ${{ env.RELEASE_FILENAME }}-all.zip
+          path: releases/${{ env.RELEASE_FILENAME }}-all.zip
 
       - name: Upload Base
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: NextUI-base-${{ matrix.toolchain }}.zip
-          path: releases/NextUI-base.zip
+          name: ${{ env.RELEASE_FILENAME }}-base.zip
+          path: releases/${{ env.RELEASE_FILENAME }}-base.zip
 
       - name: Upload Extras
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: NextUI-extras-${{ matrix.toolchain }}.zip
-          path: releases/NextUI-extras.zip
+          name: ${{ env.RELEASE_FILENAME }}-extras.zip
+          path: releases/${{ env.RELEASE_FILENAME }}-extras.zip
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v2.3.0
+        with:
+          subject-path: |
+            releases/${{ env.RELEASE_FILENAME }}-all.zip
+            releases/${{ env.RELEASE_FILENAME }}-base.zip
+            releases/${{ env.RELEASE_FILENAME }}-extras.zip

@@ -25,7 +25,7 @@ ifeq ($(BUILD_BRANCH),main)
 else
   RELEASE_BETA := -$(BUILD_BRANCH)
 endif
-RELEASE_FILENAME = NextUI
+RELEASE_FILENAME ?= NextUI
 RELEASE_VERSION ?= $(RELEASE_TIME)$(RELEASE_BETA)
 
 ###########################################################
