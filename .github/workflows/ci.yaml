@@ -24,6 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.2.2
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zipmerge
+
       - name: Setup
         run: make setup
 
