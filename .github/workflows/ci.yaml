@@ -17,6 +17,9 @@ jobs:
         toolchain:
           - tg5040
 
+    env:
+      PLATFORM: ${{ matrix.toolchain }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
@@ -24,10 +27,11 @@ jobs:
       - name: Setup
         run: make setup
 
+      - name: Build cores for ${{ matrix.toolchain }}
+        run: make build-cores
+
       - name: Build ${{ matrix.toolchain }}
         run: make ${{ matrix.toolchain }}
-        env:
-          COMPILE_CORES: true
 
       - name: Special
         run: make special

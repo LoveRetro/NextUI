@@ -47,6 +47,10 @@ build:
 	make build -f makefile.toolchain PLATFORM=$(PLATFORM) COMPILE_CORES=$(COMPILE_CORES)
 	# ----------------------------------------------------
 
+build-cores:
+	make build-cores -f makefile.toolchain PLATFORM=$(PLATFORM) COMPILE_CORES=true
+	# ----------------------------------------------------
+
 system:
 	make -f ./workspace/$(PLATFORM)/platform/makefile.copy PLATFORM=$(PLATFORM)
 	

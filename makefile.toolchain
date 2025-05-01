@@ -27,3 +27,6 @@ clean:
 
 build: $(INIT_IF_NECESSARY)
 	docker run --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) $(PLATFORM)-toolchain /bin/bash -c '. ~/.bashrc && cd /root/workspace && make'
+
+build-cores: $(INIT_IF_NECESSARY)
+	docker run --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) $(PLATFORM)-toolchain /bin/bash -c '. ~/.bashrc && cd /root/workspace && make cores'

@@ -41,9 +41,12 @@ all:
 # pull the repo's manually and there are actually updates to any core 
 # worth including in new NextUI releases.
 ifdef COMPILE_CORES
-	cd ./$(PLATFORM)/cores && make
+	$(MAKE) cores
 endif
 	cd ./$(PLATFORM) && make
+
+cores:
+	cd ./$(PLATFORM)/cores && make
 
 clean:
 	cd ./$(PLATFORM)/wifimanager && make clean
