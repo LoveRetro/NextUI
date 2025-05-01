@@ -83,6 +83,7 @@ jobs:
         path: cores
 
   build:
+    needs: combine-core-output
     runs-on: ubuntu-24.04-arm
     env:
       PLATFORM: ${{ matrix.toolchain }}
