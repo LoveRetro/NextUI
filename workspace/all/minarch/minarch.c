@@ -3934,9 +3934,9 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 		dst_w = DEVICE_WIDTH;
 		dst_h = DEVICE_HEIGHT;
 	}
-	
+	// dont need this anymore with OpenGL
 	// if (screen->w!=dst_w || screen->h!=dst_w || screen->pitch!=dst_p) {
-		screen = GFX_resize(dst_w,dst_h,dst_p);
+		// screen = GFX_resize(dst_w,dst_h,dst_p);
 	// }
 }
 static int firstframe = 1;
