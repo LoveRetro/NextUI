@@ -603,15 +603,15 @@ static void SRAM_getPath(char* filename) {
 	char work_name[MAX_PATH];
 
 	if (CFG_getSaveFormat() == SAVE_FORMAT_SRM) {
-			strcpy(work_name, game.name);
-			formatSavePath(work_name, filename, ".srm");
+		strcpy(work_name, game.name);
+		formatSavePath(work_name, filename, ".srm");
 	}
 	else if (CFG_getSaveFormat() == SAVE_FORMAT_GEN) {
-			strcpy(work_name, game.name);
-			formatSavePath(work_name, filename, ".sav");
+		strcpy(work_name, game.name);
+		formatSavePath(work_name, filename, ".sav");
 	}
 	else {
-			sprintf(filename, "%s/%s.sav", core.saves_dir, game.name);
+		sprintf(filename, "%s/%s.sav", core.saves_dir, game.name);
 	}
 
 	LOG_info("SRAM_getPath %s\n", filename);
