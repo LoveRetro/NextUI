@@ -16,6 +16,7 @@
 // libretro-common
 #include "libretro.h"
 #include "streams/rzip_stream.h"
+#include "streams/file_stream.h"
 
 #include "defines.h"
 #include "api.h"
@@ -638,15 +639,16 @@ static void SRAM_read(void) {
 	}
 	// uncompressed
 	else {
-		FILE *sram_file = fopen(filename, "r");
-		if (!sram_file) return;
-	
-		if (!sram || !fread(sram, 1, sram_size, sram_file))
-			LOG_error("Error reading SRAM data\n");
-	
-		fclose(sram_file);
+		RFILE* sram_file = filestream_open(filename, RETRO_VFS_FILE_ACCESS_READ, 0);
+		if(!sram_file) return;
+
+		if (!sram || filestream_read(sram_file, sram, sram_size) < 0)
+			LOG_error("filestream: Error reading SRAM data\n");
+		
+		filestream_close(sram_file);
 	}
 }
+
 static void SRAM_write(void) {
 	size_t sram_size = core.get_memory_size(RETRO_MEMORY_SAVE_RAM);
 	if (!sram_size) return;
@@ -663,16 +665,8 @@ static void SRAM_write(void) {
 			LOG_error("rzipstream: Error writing SRAM data to file\n");
 	}
 	else {
-		FILE *sram_file = fopen(filename, "w");
-		if (!sram_file) {
-			LOG_error("Error opening SRAM file: %s\n", strerror(errno));
-			return;
-		}
-
-		if (!sram || sram_size != fwrite(sram, 1, sram_size, sram_file))
-			LOG_error("Error writing SRAM data to file\n");
-	
-		fclose(sram_file);
+		if(!filestream_write_file(filename, sram, sram_size))
+			LOG_error("filestream: Error writing SRAM data to file\n");
 	}
 
 	sync();
