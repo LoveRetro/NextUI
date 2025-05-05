@@ -13,7 +13,10 @@
 #include <zip.h> 
 #include <pthread.h>
 
+// libretro-common
 #include "libretro.h"
+#include "streams/rzip_stream.h"
+
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
@@ -620,17 +623,29 @@ static void SRAM_read(void) {
 	char filename[MAX_PATH];
 	SRAM_getPath(filename);
 	printf("sav path (read): %s\n", filename);
-	
-	FILE *sram_file = fopen(filename, "r");
-	if (!sram_file) return;
 
 	void* sram = core.get_memory_data(RETRO_MEMORY_SAVE_RAM);
 
-	if (!sram || !fread(sram, 1, sram_size, sram_file)) {
-		LOG_error("Error reading SRAM data\n");
-	}
+	// srm, potentially compressed
+	if (CFG_getSaveFormat() == SAVE_FORMAT_SRM) {
+		rzipstream_t* sram_file = rzipstream_open(filename, RETRO_VFS_FILE_ACCESS_READ);
+		if(!sram_file) return;
 
-	fclose(sram_file);
+		if (!sram || rzipstream_read(sram_file, sram, sram_size) < 0)
+			LOG_error("rzipstream: Error reading SRAM data\n");
+		
+		rzipstream_close(sram_file);
+	}
+	// uncompressed
+	else {
+		FILE *sram_file = fopen(filename, "r");
+		if (!sram_file) return;
+	
+		if (!sram || !fread(sram, 1, sram_size, sram_file))
+			LOG_error("Error reading SRAM data\n");
+	
+		fclose(sram_file);
+	}
 }
 static void SRAM_write(void) {
 	size_t sram_size = core.get_memory_size(RETRO_MEMORY_SAVE_RAM);
@@ -639,20 +654,26 @@ static void SRAM_write(void) {
 	char filename[MAX_PATH];
 	SRAM_getPath(filename);
 	printf("sav path (write): %s\n", filename);
-		
-	FILE *sram_file = fopen(filename, "w");
-	if (!sram_file) {
-		LOG_error("Error opening SRAM file: %s\n", strerror(errno));
-		return;
-	}
-
+	
 	void *sram = core.get_memory_data(RETRO_MEMORY_SAVE_RAM);
 
-	if (!sram || sram_size != fwrite(sram, 1, sram_size, sram_file)) {
-		LOG_error("Error writing SRAM data to file\n");
+	// srm, compressed
+	if (CFG_getSaveFormat() == SAVE_FORMAT_SRM) {
+		if(!rzipstream_write_file(filename, sram, sram_size))
+			LOG_error("rzipstream: Error writing SRAM data to file\n");
 	}
+	else {
+		FILE *sram_file = fopen(filename, "w");
+		if (!sram_file) {
+			LOG_error("Error opening SRAM file: %s\n", strerror(errno));
+			return;
+		}
 
-	fclose(sram_file);
+		if (!sram || sram_size != fwrite(sram, 1, sram_size, sram_file))
+			LOG_error("Error writing SRAM data to file\n");
+	
+		fclose(sram_file);
+	}
 
 	sync();
 }
