@@ -744,7 +744,10 @@ static void State_getPath(char* filename) {
 			tmp[0] = '\0';
 		}
 
-		sprintf(filename, "%s/%s.state.%i", core.states_dir, work_name, state_slot);
+		if(state_slot == AUTO_RESUME_SLOT)
+			sprintf(filename, "%s/%s.state.auto", core.states_dir, work_name);
+		else 
+			sprintf(filename, "%s/%s.state.%i", core.states_dir, work_name, state_slot);
 	}
 	else {
 		sprintf(filename, "%s/%s.st%i", core.states_dir, game.name, state_slot);
