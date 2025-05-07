@@ -735,9 +735,6 @@ SDL_Surface* PLAT_resizeVideo(int w, int h, int p) {
 void PLAT_setVideoScaleClip(int x, int y, int width, int height) {
 	// buh
 }
-void PLAT_setNearestNeighbor(int enabled) {
-	// always enabled?
-}
 
 void PLAT_setSharpness(int sharpness) {
 	if(sharpness==1) {
@@ -1059,86 +1056,6 @@ void PLAT_animateSurface(
 
 		SDL_SetRenderTarget(vid.renderer, NULL);
 		PLAT_GPU_Flip();
-	}
-
-	SDL_DestroyTexture(tempTexture);
-}
-
-void PLAT_revealSurface(
-	SDL_Surface *inputSurface,
-	int x, int y,
-	int w, int h,
-	int duration_ms,
-	const char* direction,
-	int opacity,
-	int layer
-) {
-	if (!inputSurface || !vid.target_layer2 || !vid.renderer) return;
-
-	SDL_Surface* formatted = SDL_CreateRGBSurfaceWithFormat(0, inputSurface->w, inputSurface->h, 32, SDL_PIXELFORMAT_RGBA8888);
-	if (!formatted) {
-		printf("Failed to create formatted surface: %s\n", SDL_GetError());
-		return;
-	}
-	SDL_FillRect(formatted, NULL, SDL_MapRGBA(formatted->format, 0, 0, 0, 0));
-	SDL_SetSurfaceBlendMode(inputSurface, SDL_BLENDMODE_BLEND);
-	SDL_BlitSurface(inputSurface,&(SDL_Rect){0,0,w,h}, formatted, &(SDL_Rect){0,0,w,h});
-
-	SDL_Texture* tempTexture = SDL_CreateTextureFromSurface(vid.renderer, formatted);
-	SDL_FreeSurface(formatted);
-
-	if (!tempTexture) {
-		printf("Failed to create texture: %s\n", SDL_GetError());
-		return;
-	}
-
-	SDL_SetTextureBlendMode(tempTexture, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureAlphaMod(tempTexture, opacity);
-
-	const int fps = 60;
-	const int frame_delay = 1000 / fps;
-	const int total_frames = duration_ms / frame_delay;
-
-	for (int frame = 0; frame <= total_frames; ++frame) {
-		float t = (float)frame / total_frames;
-		if (t > 1.0f) t = 1.0f;
-
-		int reveal_w = w;
-		int reveal_h = h;
-		int src_x = 0;
-		int src_y = 0;
-
-		if (strcmp(direction, "left") == 0) {
-			reveal_w = (int)(w * t + 0.5f);
-		}
-		else if (strcmp(direction, "right") == 0) {
-			reveal_w = (int)(w * t + 0.5f);
-			src_x = w - reveal_w;
-		}
-		else if (strcmp(direction, "up") == 0) {
-			reveal_h = (int)(h * t + 0.5f);
-		}
-		else if (strcmp(direction, "down") == 0) {
-			reveal_h = (int)(h * t + 0.5f);
-			src_y = h - reveal_h;
-		}
-
-		SDL_Rect srcRect = { src_x, src_y, reveal_w, reveal_h };
-		SDL_Rect dstRect = { x + src_x, y + src_y, reveal_w, reveal_h };
-
-		SDL_SetRenderTarget(vid.renderer, (layer == 0) ? vid.target_layer2 : vid.target_layer4);
-
-		SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_NONE);
-		SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
-		SDL_RenderClear(vid.renderer);
-		SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
-
-		if (reveal_w > 0 && reveal_h > 0)
-			SDL_RenderCopy(vid.renderer, tempTexture, &srcRect, &dstRect);
-
-		SDL_SetRenderTarget(vid.renderer, NULL);
-		PLAT_GPU_Flip();
-
 	}
 
 	SDL_DestroyTexture(tempTexture);
@@ -2159,30 +2076,6 @@ void PLAT_pixelFlipper(uint8_t* pixels, int width, int height) {
             rowBottom[x] = temp;
         }
     }
-}
-
-unsigned char* PLAT_pixelscaler(const unsigned char* src, int sw, int sh, int scale, int* outW, int* outH) {
-    int dw = sw / scale;
-    int dh = sh / scale;
-    *outW = dw;
-    *outH = dh;
-
-    unsigned char* dst = malloc(dw * dh * 4); 
-
-    for (int y = 0; y < dh; ++y) {
-        for (int x = 0; x < dw; x += 4) { 
-            int sx = x * scale;
-            int sy = y * scale;
-
-            unsigned char* srcPixel = (unsigned char*)(src + (sy * sw + sx) * 4);
-            uint8x16_t srcPixels = vld1q_u8(srcPixel);
-
-            unsigned char* dstPixel = dst + (y * dw + x) * 4;
-
-            vst1q_u8(dstPixel, srcPixels); 
-        }
-    }
-    return dst;
 }
 
 unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight) {
