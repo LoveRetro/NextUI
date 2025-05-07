@@ -15,6 +15,22 @@ permissions:
   id-token: write
 
 jobs:
+  prepare:
+    runs-on: ubuntu-24.04-arm
+    outputs:
+      next-tag: ${{ steps.next-tag.outputs.version }}
+      release-name: ${{ steps.release-name.outputs.RELEASE_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Generate Release Name
+        id: release-name
+        run: |
+          echo "RELEASE_NAME=$(make name)" >> "$GITHUB_OUTPUT"
+
   core-matrix:
     runs-on: ubuntu-24.04-arm
     env:
@@ -65,11 +81,13 @@ jobs:
           path: workspace/${{ env.PLATFORM }}/cores/output/
 
   build:
-    needs: build-core
+    needs:
+      - prepare
+      - build-core
     runs-on: ubuntu-24.04-arm
     env:
       PLATFORM: ${{ matrix.toolchain }}
-      RELEASE_FILENAME: NextUI-${{ matrix.toolchain }}
+      RELEASE_NAME: ${{ needs.prepare.outputs.release-name }}
     strategy:
       fail-fast: true
       matrix:
@@ -107,25 +125,25 @@ jobs:
       - name: Upload All
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: ${{ env.RELEASE_FILENAME }}-all.zip
-          path: releases/${{ env.RELEASE_FILENAME }}-all.zip
+          name: ${{ env.RELEASE_NAME }}-all.zip
+          path: releases/${{ env.RELEASE_NAME }}-all.zip
 
       - name: Upload Base
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: ${{ env.RELEASE_FILENAME }}-base.zip
-          path: releases/${{ env.RELEASE_FILENAME }}-base.zip
+          name: ${{ env.RELEASE_NAME }}-base.zip
+          path: releases/${{ env.RELEASE_NAME }}-base.zip
 
       - name: Upload Extras
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: ${{ env.RELEASE_FILENAME }}-extras.zip
-          path: releases/${{ env.RELEASE_FILENAME }}-extras.zip
+          name: ${{ env.RELEASE_NAME }}-extras.zip
+          path: releases/${{ env.RELEASE_NAME }}-extras.zip
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2.3.0
         with:
           subject-path: |
-            releases/${{ env.RELEASE_FILENAME }}-all.zip
-            releases/${{ env.RELEASE_FILENAME }}-base.zip
-            releases/${{ env.RELEASE_FILENAME }}-extras.zip
+            releases/${{ env.RELEASE_NAME }}-all.zip
+            releases/${{ env.RELEASE_NAME }}-base.zip
+            releases/${{ env.RELEASE_NAME }}-extras.zip
