@@ -4,8 +4,6 @@
 #include <linux/fb.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -23,16 +21,11 @@
 #include "scaler.h"
 #include <time.h>
 #include <pthread.h>
-#include <string.h>
 
 #include "opengl.h"
-#include <arm_neon.h>
-#include <libgen.h>  
 
 #include <dirent.h>
 
-int is_brick = 0;
-volatile int useAutoCpu = 1;
 static int finalScaleFilter=GL_LINEAR;
 static int reloadShaderTextures = 1;
 
@@ -73,6 +66,7 @@ Shader* shaders[MAXSHADERS] = {
 static int nrofshaders = 0; // choose between 1 and 3 pipelines, > pipelines = more cpu usage, but more shader options and shader upscaling stuff
 ///////////////////////////////
 
+int is_brick = 0;
 static SDL_Joystick *joystick;
 void PLAT_initInput(void) {
 	char* device = getenv("DEVICE");
@@ -2325,6 +2319,7 @@ static pthread_mutex_t currentcpuinfo;
 // a roling average for the display values of about 2 frames, otherwise they are unreadable jumping too fast up and down and stuff to read
 #define ROLLING_WINDOW 120  
 
+volatile int useAutoCpu = 1;
 void *PLAT_cpu_monitor(void *arg) {
     struct timespec start_time, curr_time;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
