@@ -289,6 +289,10 @@ void QuitSettings(void){
 	free(msettings);
 	msettings = NULL;
 }
+int InitializedSettings(void)
+{
+	return msettings != NULL;
+}
 
 int GetBrightness(void) { return 0; }
 int GetColortemp(void) { return 0; }
