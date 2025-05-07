@@ -25,11 +25,17 @@ jobs:
     runs-on: ubuntu-24.04-arm
     outputs:
       next-tag: ${{ steps.next-tag.outputs.version }}
+      release-name: ${{ steps.release-name.outputs.RELEASE_NAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
+
+      - name: Generate Release Name
+        id: release-name
+        run: |
+          echo "RELEASE_NAME=$(make name)" >> "$GITHUB_OUTPUT"
 
       - name: Get Latest Tag
         id: latest-tag
@@ -99,7 +105,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     env:
       PLATFORM: ${{ matrix.toolchain }}
-      RELEASE_FILENAME: NextUI-${{ matrix.toolchain }}
+      RELEASE_NAME: ${{ needs.prepare.outputs.release-name }}
       RELEASE_VERSION: ${{ needs.prepare.outputs.next-tag }}
     strategy:
       fail-fast: true
@@ -132,6 +138,10 @@ jobs:
       - name: Special
         run: make special
 
+      # note: when multiple platforms are built
+      # the package step will need to be revamped to
+      # merge the release files from each platform into
+      # a single release
       - name: Package
         run: make package
 
@@ -145,9 +155,9 @@ jobs:
         uses: actions/attest-build-provenance@v2.3.0
         with:
           subject-path: |
-            releases/${{ env.RELEASE_FILENAME }}-all.zip
-            releases/${{ env.RELEASE_FILENAME }}-base.zip
-            releases/${{ env.RELEASE_FILENAME }}-extras.zip
+            releases/${{ env.RELEASE_NAME }}-all.zip
+            releases/${{ env.RELEASE_NAME }}-base.zip
+            releases/${{ env.RELEASE_NAME }}-extras.zip
 
   release:
     needs:
