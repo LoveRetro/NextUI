@@ -472,6 +472,7 @@ SDL_Surface* PLAT_initVideo(void) {
 void PLAT_resetShaders() {
 
 }
+
 char* PLAT_findFileInDir(const char *directory, const char *filename) {
     char *filename_copy = strdup(filename);
     if (!filename_copy) {
@@ -577,7 +578,7 @@ void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int
 	shader->updated = 1;
 
 }
-static int lastSharpnessFilter = 0;
+
 void PLAT_setShaders(int nr) {
 	LOG_info("set nr of shaders to %i\n",nr);
 	nrofshaders = nr;
