@@ -43,7 +43,7 @@ picodrive_HASH = b0be121
 pokemini_REPO = https://github.com/libretro/PokeMini
 pokemini_MAKEFILE = Makefile.libretro
 # Our patchfile doesn't work on latest Pokemon mini commits, pinning to last working hash for now
-pokemini_HASH = f534d9c
+pokemini_HASH = 78656d4
 
 prboom_REPO = https://github.com/libretro/libretro-prboom
 
