@@ -40,7 +40,7 @@ picodrive_MAKEFILE = Makefile.libretro
 # https://github.com/LoveRetro/NextUI/issues/68
 picodrive_HASH = b0be121
 
-pokemini_REPO = https://github.com/libretro/PokeMini
+pokemini_REPO = https://github.com/libretro/PokeMini/commit/f534d9cb5b7252ae2435640e69bac67592c139bc
 pokemini_MAKEFILE = Makefile.libretro
 
 prboom_REPO = https://github.com/libretro/libretro-prboom
