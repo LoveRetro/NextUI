@@ -19,6 +19,7 @@ all: readmes
 	cd show && make
 
 early: $(REQUIRES_EVTEST) $(REQUIRES_JSTEST) $(REQUIRES_UNZIP60) $(REQUIRES_FILEMGR)
+	set -e
 	mkdir -p other
 	cd $(REQUIRES_FILEMGR) && make -j
 	cd $(REQUIRES_EVTEST) && $(CROSS_COMPILE)gcc -o evtest evtest.c
