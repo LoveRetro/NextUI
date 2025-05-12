@@ -20,7 +20,7 @@ endif
 # this logic was broken out from picoarch's all-in-one makefile
 
 PATCH = git apply
-PROCS = -j4
+PROCS = -j
 
 ###############################
 
