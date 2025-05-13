@@ -71,8 +71,30 @@ jobs:
       - name: Setup
         run: make setup
 
+      - name: Compute core hash
+        id: cache-key
+        run: |
+          CORE_DIR="cores/${{ matrix.core }}"
+          HASH=$(find "$CORE_DIR" -type f -exec sha256sum {} + | sort | sha256sum | cut -d' ' -f1)
+          echo "core_hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Restore core build cache
+        id: cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: workspace/${{ env.PLATFORM }}/cores/output/
+          key: core-${{ matrix.toolchain }}-${{ matrix.core }}-${{ steps.cache-key.outputs.core_hash }}
+
       - name: Build ${{ matrix.core }} core
+        if: steps.cache-restore.outputs.cache-hit != 'true'
         run: make build-core CORE=${{ matrix.core }}
+
+      - name: Save core to cache
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: workspace/${{ env.PLATFORM }}/cores/output/
+          key: core-${{ matrix.toolchain }}-${{ matrix.core }}-${{ steps.cache-key.outputs.core_hash }}
 
       - name: Upload core
         uses: actions/upload-artifact@v4.6.2
