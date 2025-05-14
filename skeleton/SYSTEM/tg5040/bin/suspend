@@ -8,7 +8,36 @@ bluetoothd_running=
 
 asound_state_dir=/tmp/asound-suspend
 
-before() {
+restore() {
+	>&2 echo "Resumed from suspend."
+
+	>&2 echo "Restoring mixer state..."
+	alsactl --file "$asound_state_dir/asound.state.post" store || true
+	alsactl --file "$asound_state_dir/asound.state.pre" restore || true
+
+	>&2 echo "Unblocking wireless..."
+	echo 1 >/sys/class/rfkill/rfkill0/state || true
+
+	if [ -n "$wpa_running" ]; then
+		>&2 echo "Starting wpa_supplicant..."
+		wpa_supplicant -B -iwlan0 -Dnl80211 -c/etc/wifi/wpa_supplicant.conf -I/etc/wifi/wpa_supplicant_overlay.conf -O/etc/wifi/sockets || true
+		udhcpc -i wlan0 &
+	fi
+
+	if [ -n "$hciattach_running" ]; then
+		>&2 echo "Starting hciattach..."
+		/etc/init.d/hciattach start || true
+	fi
+	if [ -n "$bluetoothd_running" ]; then
+		>&2 echo "Starting bluetoothd..."
+		/etc/bluetooth/bluetoothd start || true
+		/usr/bin/bluetoothctl power on || true
+	fi
+}
+
+main() {
+	trap "restore &" EXIT INT TERM HUP QUIT
+
 	>&2 echo "Preparing for suspend..."
 
 	>&2 echo "Saving mixer state..."
@@ -36,39 +65,9 @@ before() {
 
 	>&2 echo "Blocking wireless..."
 	echo 0 >/sys/class/rfkill/rfkill0/state || true
+
+	>&2 echo "Suspending..."
+	echo mem >/sys/power/state || true
 }
 
-after() {
-	>&2 echo "Resumed from suspend."
-
-	>&2 echo "Restoring mixer state..."
-	alsactl --file "$asound_state_dir/asound.state.post" store || true
-	alsactl --file "$asound_state_dir/asound.state.pre" restore || true
-
-	>&2 echo "Unblocking wireless..."
-	echo 1 >/sys/class/rfkill/rfkill0/state || true
-
-	if [ -n "$wpa_running" ]; then
-		>&2 echo "Starting wpa_supplicant..."
-		wpa_supplicant -B -iwlan0 -Dnl80211 -c/etc/wifi/wpa_supplicant.conf -I/etc/wifi/wpa_supplicant_overlay.conf -O/etc/wifi/sockets || true
-		udhcpc -i wlan0 &
-	fi
-
-	if [ -n "$hciattach_running" ]; then
-		>&2 echo "Starting hciattach..."
-		/etc/init.d/hciattach start || true
-	fi
-	if [ -n "$bluetoothd_running" ]; then
-		>&2 echo "Starting bluetoothd..."
-		/etc/bluetooth/bluetoothd start || true
-		/usr/bin/bluetoothctl power on || true
-	fi
-}
-
-before
-
->&2 echo "Suspending..."
-echo mem >/sys/power/state || true
-
-# Resume services in background to reduce UI latency
-after &
+main "$@"
