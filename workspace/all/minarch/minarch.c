@@ -5464,8 +5464,12 @@ static MenuList ShaderOptions_menu = {
 };
 
 static int OptionShaders_openMenu(MenuList* list, int i) {
-	int filecount;
-	char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount,NULL);
+	LOG_info("OptionShaders_openMenu\n");
+
+	
+		int filecount;
+		char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount,NULL);
+
 
 	// Check if folder read failed or no files found
 	if (!filelist || filecount == 0) {
