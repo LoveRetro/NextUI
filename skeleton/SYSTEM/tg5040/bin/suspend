@@ -2,16 +2,16 @@
 set -eu
 exec 0<&-
 
-wpa_running=
-hciattach_running=
-bluetoothd_running=
-resume_ran=
+wpa_running=0
+hciattach_running=0
+bluetoothd_running=0
+resume_ran=0
 
 asound_state_dir=/tmp/asound-suspend
 
 resume() {
-    if [ -n "$resume_ran" ]; then
-        return
+	if [ "$resume_ran" -eq 1 ]; then
+		return
     fi
     resume_ran=1
 	>&2 echo "Resuming from suspend..."
@@ -23,17 +23,17 @@ resume() {
 	>&2 echo "Unblocking wireless..."
 	echo 1 >/sys/class/rfkill/rfkill0/state || true
 
-	if [ -n "$wpa_running" ]; then
+	if [ "$wpa_running" -eq 1 ]; then
 		>&2 echo "Starting wpa_supplicant..."
 		wpa_supplicant -B -iwlan0 -Dnl80211 -c/etc/wifi/wpa_supplicant.conf -I/etc/wifi/wpa_supplicant_overlay.conf -O/etc/wifi/sockets || true
 		udhcpc -i wlan0 &
 	fi
 
-	if [ -n "$hciattach_running" ]; then
+	if [ "$hciattach_running" -eq 1 ]; then
 		>&2 echo "Starting hciattach..."
 		/etc/init.d/hciattach start || true
 	fi
-	if [ -n "$bluetoothd_running" ]; then
+	if [ "$bluetoothd_running" -eq 1 ]; then
 		>&2 echo "Starting bluetoothd..."
 		/etc/bluetooth/bluetoothd start || true
 		/usr/bin/bluetoothctl power on || true
@@ -72,7 +72,7 @@ main() {
 	echo 0 >/sys/class/rfkill/rfkill0/state
 
 	>&2 echo "Suspending..."
-	echo mem >/sys/power/state
+	echo mem >/sys/power/state || true
 
 	resume &
 	exit 0
