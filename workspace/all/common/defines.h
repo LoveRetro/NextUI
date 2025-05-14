@@ -78,7 +78,7 @@
 #define MAX_LIGHTS 0
 #endif
 #ifndef MAXSHADERS
-#define MAXSHADERS 4
+#define MAXSHADERS 3
 #endif
 enum
 {
