@@ -6,15 +6,9 @@ wpa_running=0
 hciattach_running=0
 bluetoothd_running=0
 
-lock_file=/tmp/resume.lock
-
 asound_state_dir=/tmp/asound-suspend
 
 resume() {
-    if [ ! -f "$lock_file" ]; then
-        return
-    fi
-    rm -f "$lock_file"
     >&2 echo "Resuming from suspend..."
 
     >&2 echo "Restoring mixer state..."
@@ -43,8 +37,6 @@ resume() {
 
 main() {
     trap "resume" EXIT INT TERM HUP QUIT
-
-    touch "$lock_file"
 
     >&2 echo "Preparing for suspend..."
 
@@ -77,8 +69,8 @@ main() {
     >&2 echo "Suspending..."
     echo mem >/sys/power/state || true
 
-    resume &
     trap - EXIT INT TERM HUP QUIT
+    resume & # Resume services in background to reduce UI latency
     exit 0
 }
 
