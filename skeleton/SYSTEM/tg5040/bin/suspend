@@ -42,29 +42,29 @@ main() {
 
 	>&2 echo "Saving mixer state..."
 	mkdir -p "$asound_state_dir"
-	alsactl --file "$asound_state_dir/asound.state.pre" store || true
+	alsactl --file "$asound_state_dir/asound.state.pre" store
 
 	if pgrep wpa_supplicant; then
 		wpa_running=1
 		>&2 echo "Stopping wpa_supplicant..."
-		killall -9 wpa_supplicant || true
+		killall -9 wpa_supplicant
 	fi
-	ifconfig wlan0 down || true
+	ifconfig wlan0 down
 
 	if pgrep hciattach; then
 		hciattach_running=1
 		>&2 echo "Stopping hciattach..."
-		/etc/init.d/hciattach stop || true
+		/etc/init.d/hciattach stop
 	fi
 	if pgrep bluetoothd; then
 		bluetoothd_running=1
 		>&2 echo "Stopping bluetoothd..."
-		/etc/bluetooth/bluetoothd stop || true
-		killall -15 bluealsa || true
+		/etc/bluetooth/bluetoothd stop
+		killall -15 bluealsa
 	fi
 
 	>&2 echo "Blocking wireless..."
-	echo 0 >/sys/class/rfkill/rfkill0/state || true
+	echo 0 >/sys/class/rfkill/rfkill0/state
 
 	>&2 echo "Suspending..."
 	echo mem >/sys/power/state
@@ -72,4 +72,4 @@ main() {
 	resume &
 }
 
-main "$@"
+main
