@@ -67,7 +67,7 @@ main() {
 	echo 0 >/sys/class/rfkill/rfkill0/state || true
 
 	>&2 echo "Suspending..."
-	echo mem >/sys/power/state || true
+	echo mem >/sys/power/state
 }
 
 main "$@"
