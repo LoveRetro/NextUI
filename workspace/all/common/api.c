@@ -1594,6 +1594,43 @@ void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_
 	}
 }
 
+static void GFX_blitBatteryAtPosition(SDL_Surface* dst, int x, int y) {
+	SDL_Rect battery_rect = asset_rects[ASSET_BATTERY];
+	
+	if (pwr.is_charging) {
+		GFX_blitAssetColor(ASSET_BATTERY, NULL, dst, &(SDL_Rect){x, y}, THEME_COLOR6);
+		GFX_blitAssetColor(ASSET_BATTERY_BOLT, NULL, dst, &(SDL_Rect){x+SCALE1(3), y+SCALE1(2)}, THEME_COLOR6);
+	}
+	else {
+		int percent = pwr.charge;
+		GFX_blitAssetColor(percent<=10?ASSET_BATTERY_LOW:ASSET_BATTERY, NULL, dst, &(SDL_Rect){x, y}, THEME_COLOR6);
+		
+		if(CFG_getShowBatteryPercent()) {
+			char percentage[16];
+			sprintf(percentage, "%i", pwr.charge);
+			SDL_Surface *text = TTF_RenderUTF8_Blended(font.micro, percentage, uintToColour(THEME_COLOR6_255));
+			SDL_Rect target = {
+				x + (battery_rect.w - text->w) / 2 + FIXED_SCALE, 
+				y + (battery_rect.h - text->h) / 2 - 1
+			};
+			SDL_BlitSurface(text, NULL, dst, &target);
+			SDL_FreeSurface(text);
+		}
+		else {
+			SDL_Rect fill_rect = asset_rects[ASSET_BATTERY_FILL];
+			SDL_Rect clip = fill_rect;
+			clip.w *= percent;
+			clip.w /= 100;
+			if (clip.w > 0) {
+				clip.x = fill_rect.w - clip.w;
+				clip.y = 0;
+				GFX_blitAssetColor(percent<=20?ASSET_BATTERY_FILL_LOW:ASSET_BATTERY_FILL, &clip, dst, 
+					&(SDL_Rect){x+SCALE1(3)+clip.x, y+SCALE1(2)}, THEME_COLOR6);
+			}
+		}
+	}
+}
+
 int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 	int ox;
 	int oy;
@@ -1658,58 +1695,84 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 	}
 	else {
 		int show_wifi = PLAT_isOnline(); // NOOOOO! not every frame!
-		
-		int ww = SCALE1(PILL_SIZE-3);
-		ow = SCALE1(PILL_SIZE);
-		if (show_wifi) ow += ww;
-		
-		// NOOOOO! not every frame!
 		bool show_clock = CFG_getShowClock();
-		int clockWidth = 0;
-		SDL_Surface *clock;
-		if (show_clock) {
-			char timeString[12];
-			time_t t = time(NULL);
-			struct tm tm = *localtime(&t);
-			if(CFG_getClock24H())
-				strftime(timeString, 12, "%R", &tm);
-			else 
-				strftime(timeString, 12, "%I:%M", &tm);
-			// why does this need to copy strings around?
-			char display_name[6];
-			clockWidth = GFX_getTextWidth(font.small, timeString, display_name, SCALE1(PILL_SIZE), SCALE1(2 * BUTTON_MARGIN));
-			clock = TTF_RenderUTF8_Blended(font.small, display_name, uintToColour(THEME_COLOR6_255));
-			ow += clockWidth;
-		}
-
-		ox = dst->w - SCALE1(PADDING) - ow;
-		oy = SCALE1(PADDING);
-		GFX_blitPillColor(ASSET_WHITE_PILL, dst, &(SDL_Rect){
-			ox,
-			oy,
-			ow,
-			SCALE1(PILL_SIZE)
-		}, THEME_COLOR2, RGB_WHITE);
-		if (show_wifi) {
-			SDL_Rect rect = asset_rects[ASSET_WIFI];
-			int x = ox;
-			int y = oy;
-			x += (SCALE1(PILL_SIZE) - rect.w) / 2;
-			y += (SCALE1(PILL_SIZE) - rect.h) / 2;
+		SDL_Rect battery_rect = asset_rects[ASSET_BATTERY];
+		
+		if (!show_wifi && !show_clock) {
+			ow = SCALE1(PILL_SIZE);
+			ox = dst->w - SCALE1(PADDING) - ow;
+			oy = SCALE1(PADDING);
 			
-			GFX_blitAssetColor(ASSET_WIFI, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR6);
-			ox += ww;
+			GFX_blitPillColor(ASSET_WHITE_PILL, dst, &(SDL_Rect){
+				ox,
+				oy,
+				ow,
+				SCALE1(PILL_SIZE)
+			}, THEME_COLOR2, RGB_WHITE);
+			
+			int battery_x = ox + (SCALE1(PILL_SIZE) - (battery_rect.w + FIXED_SCALE)) / 2;
+			int battery_y = oy + (SCALE1(PILL_SIZE) - battery_rect.h) / 2;
+			
+			GFX_blitBatteryAtPosition(dst, battery_x, battery_y);
 		}
-		ox += GFX_blitBattery(dst, &(SDL_Rect){ox,oy});
-		if(show_clock) {			
-			int x = ox;
-			int y = oy;
-			x += clock->w / 2;
-			y += (SCALE1(PILL_SIZE) - clock->h) / 2;
-
-			SDL_BlitSurface(clock, NULL, dst, &(SDL_Rect){x,y});
-			SDL_FreeSurface(clock);
-			ox += clockWidth;
+		else {
+			ow = SCALE1(BUTTON_MARGIN);
+			
+			if (show_wifi) {
+				SDL_Rect wifi_rect = asset_rects[ASSET_WIFI];
+				ow += wifi_rect.w + SCALE1(BUTTON_MARGIN);
+			}
+			
+			ow += battery_rect.w + SCALE1(BUTTON_MARGIN);
+			
+			SDL_Surface *clock = NULL;
+			if (show_clock) {
+				int clock_width = 0;
+				char timeString[12];
+				time_t t = time(NULL);
+				struct tm tm = *localtime(&t);
+				if(CFG_getClock24H())
+					strftime(timeString, 12, "%R", &tm);
+				else 
+					strftime(timeString, 12, "%-I:%M %p", &tm);
+				char display_name[12];
+				clock_width = GFX_getTextWidth(font.small, timeString, display_name, SCALE1(PILL_SIZE), 0);
+				clock = TTF_RenderUTF8_Blended(font.small, display_name, uintToColour(THEME_COLOR6_255));
+				ow += clock_width + SCALE1(BUTTON_MARGIN);
+			}
+			
+			ox = dst->w - SCALE1(PADDING) - ow;
+			oy = SCALE1(PADDING);
+			GFX_blitPillColor(ASSET_WHITE_PILL, dst, &(SDL_Rect){
+				ox,
+				oy,
+				ow,
+				SCALE1(PILL_SIZE)
+			}, THEME_COLOR2, RGB_WHITE);
+			
+			ox += SCALE1(BUTTON_MARGIN);
+			
+			if (show_wifi) {
+				SDL_Rect wifi_rect = asset_rects[ASSET_WIFI];
+				int x = ox;
+				int y = oy + (SCALE1(PILL_SIZE) - wifi_rect.h) / 2;
+				
+				GFX_blitAssetColor(ASSET_WIFI, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR6);
+				ox += wifi_rect.w + SCALE1(BUTTON_MARGIN);
+			}
+			
+			int battery_x = ox;
+			int battery_y = oy + (SCALE1(PILL_SIZE) - battery_rect.h) / 2;
+			
+			GFX_blitBatteryAtPosition(dst, battery_x, battery_y);
+			ox += battery_rect.w + SCALE1(BUTTON_MARGIN);
+			
+			if(show_clock && clock) {			
+				int x = ox;
+				int y = oy + (SCALE1(PILL_SIZE) - clock->h) / 2;
+				SDL_BlitSurface(clock, NULL, dst, &(SDL_Rect){x,y});
+				SDL_FreeSurface(clock);
+			}
 		}
 	}
 	
