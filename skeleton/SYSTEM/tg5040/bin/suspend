@@ -8,8 +8,8 @@ bluetoothd_running=
 
 asound_state_dir=/tmp/asound-suspend
 
-restore() {
-	>&2 echo "Resumed from suspend."
+resume() {
+	>&2 echo "Resuming from suspend..."
 
 	>&2 echo "Restoring mixer state..."
 	alsactl --file "$asound_state_dir/asound.state.post" store || true
@@ -36,7 +36,7 @@ restore() {
 }
 
 main() {
-	trap "restore &" EXIT INT TERM HUP QUIT
+	trap "resume" INT TERM HUP QUIT
 
 	>&2 echo "Preparing for suspend..."
 
@@ -68,6 +68,8 @@ main() {
 
 	>&2 echo "Suspending..."
 	echo mem >/sys/power/state
+
+	resume &
 }
 
 main "$@"
