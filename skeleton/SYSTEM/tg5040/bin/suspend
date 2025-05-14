@@ -5,10 +5,15 @@ exec 0<&-
 wpa_running=
 hciattach_running=
 bluetoothd_running=
+resume_ran=
 
 asound_state_dir=/tmp/asound-suspend
 
 resume() {
+    if [ -n "$resume_ran" ]; then
+        return
+    fi
+    resume_ran=1
 	>&2 echo "Resuming from suspend..."
 
 	>&2 echo "Restoring mixer state..."
@@ -70,6 +75,7 @@ main() {
 	echo mem >/sys/power/state
 
 	resume &
+	exit 0
 }
 
 main
