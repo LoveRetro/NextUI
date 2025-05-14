@@ -61,6 +61,7 @@ Shader* shaders[MAXSHADERS] = {
     &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR, .scaletype = 1, .srctype = 0, .filename ="stock.glsl", .texture = 0, .updated = 1 },
     &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR, .scaletype = 1, .srctype = 0, .filename ="stock.glsl", .texture = 0, .updated = 1 },
     &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR, .scaletype = 1, .srctype = 0, .filename ="stock.glsl", .texture = 0, .updated = 1 },
+    &(Shader){ .shader_p = 0, .scale = 1, .filter = GL_LINEAR, .scaletype = 1, .srctype = 0, .filename ="stock.glsl", .texture = 0, .updated = 1 },
 };
 
 static int nrofshaders = 0; // choose between 1 and 3 pipelines, > pipelines = more cpu usage, but more shader options and shader upscaling stuff
@@ -364,6 +365,19 @@ void PLAT_initShaders() {
 	vertex = load_shader_from_file(GL_VERTEX_SHADER, "noshader.glsl",SYSSHADERS_FOLDER);
 	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "noshader.glsl",SYSSHADERS_FOLDER);
 	g_noshader = link_program(vertex, fragment,"noshader.glsl");
+
+	vertex = load_shader_from_file(GL_VERTEX_SHADER, "pixellate.glsl",SYSSHADERS_FOLDER);
+	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "pixellate.glsl",SYSSHADERS_FOLDER);
+
+	 shaders[3]->shader_p = link_program(vertex, fragment,"sys_pixellate.glsl");
+        
+		 shaders[3]->u_FrameDirection = glGetUniformLocation(  shaders[3]->shader_p, "FrameDirection");
+		 shaders[3]->u_FrameCount = glGetUniformLocation(  shaders[3]->shader_p, "FrameCount");
+		 shaders[3]->u_OutputSize = glGetUniformLocation(  shaders[3]->shader_p, "OutputSize");
+		 shaders[3]->u_TextureSize = glGetUniformLocation(  shaders[3]->shader_p, "TextureSize");
+		 shaders[3]->u_InputSize = glGetUniformLocation(  shaders[3]->shader_p, "InputSize");
+		 shaders[3]->texLocation = glGetUniformLocation( shaders[3]->shader_p, "Texture");
+		 shaders[3]->texelSizeLocation = glGetUniformLocation( shaders[3]->shader_p, "texelSize");
 	
 	LOG_info("default shaders loaded, %i\n\n",g_shader_default);
 }
@@ -738,11 +752,13 @@ void PLAT_setVideoScaleClip(int x, int y, int width, int height) {
 
 void PLAT_setSharpness(int sharpness) {
 	if(sharpness==1) {
-		LOG_info("finalScaleFilter set to GL_LINEAR\n");
 		finalScaleFilter=GL_LINEAR;
+	} else if(sharpness==2) {
+		LOG_info("Sharpness setting: PIXEL PERFECT\n");
+
+		finalScaleFilter = GL_NEAREST;
 	}
 	else {
-		LOG_info("finalScaleFilter set to GL_NEAREST\n");
 		finalScaleFilter = GL_NEAREST;
 	}
 	reloadShaderTextures = 1;
@@ -1936,11 +1952,27 @@ void PLAT_GL_Swap() {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
     }
 
-    if (nrofshaders < 1) {
-        runShaderPass(src_texture, g_shader_default, NULL, dst_rect.x, dst_rect.y,
-            dst_rect.w, dst_rect.h,
-            &(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_h, .texw = vid.blit->src_w, .texh = vid.blit->src_h},
-            0, GL_NONE);
+
+	static GLuint pixellate_texture = 0;
+    if (shaders[3]->shader_p) {
+		shaders[3]->srcw = vid.blit->src_w;
+		shaders[3]->srch = vid.blit->src_h;
+		shaders[3]->texw = vid.blit->src_w;
+		shaders[3]->texh = vid.blit->src_h;
+	     runShaderPass(
+                 src_texture,shaders[3]->shader_p,
+                &pixellate_texture,
+                0, 0, dst_rect.w, dst_rect.h,
+               shaders[3],
+                0,
+               finalScaleFilter
+            );
+	
+	} else if (nrofshaders < 1) {
+		runShaderPass(src_texture, g_shader_default, NULL, dst_rect.x, dst_rect.y,
+		dst_rect.w, dst_rect.h,
+		&(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_h, .texw = vid.blit->src_w, .texh = vid.blit->src_h},
+		0, GL_NONE);
     }
 
     last_w = vid.blit->src_w;
@@ -2021,7 +2053,16 @@ void PLAT_GL_Swap() {
             &(Shader){.srcw = last_w, .srch = last_h, .texw = last_w, .texh = last_h},
             0, GL_NONE
         );
-    }
+    } else {
+			runShaderPass(
+            pixellate_texture,
+            g_shader_default,
+            NULL,
+            dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h,
+            &(Shader){.srcw = last_w, .srch = last_h, .texw = last_w, .texh = last_h},
+            0, GL_NONE
+        );
+	}
 
     if (effect_tex) {
         runShaderPass(

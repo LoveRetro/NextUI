@@ -972,6 +972,7 @@ static char* overlay_labels[] = {
 static char* sharpness_labels[] = {
 	"NEAREST",
 	"LINEAR",
+	"PIXEL PERFECT",
 	NULL
 };
 static char* tearing_labels[] = {
@@ -1460,8 +1461,7 @@ static struct Config {
 				.desc	= "LINEAR smooths lines, but works better when final image is at higher resolution, so either core that outputs higher resolution or upscaling with shaders",
 				.default_value = 1,
 				.value = 1,
-				// .count = 3,
-				.count = 2,
+				.count = 3,
 				.values = sharpness_labels,
 				.labels = sharpness_labels,
 			},
