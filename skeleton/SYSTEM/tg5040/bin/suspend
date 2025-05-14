@@ -5,15 +5,16 @@ exec 0<&-
 wpa_running=0
 hciattach_running=0
 bluetoothd_running=0
-resume_ran=0
+
+lock_file=/tmp/resume.lock
 
 asound_state_dir=/tmp/asound-suspend
 
 resume() {
-	if [ "$resume_ran" -eq 1 ]; then
-		return
+    if [ ! -f "$lock_file" ]; then
+        return
     fi
-    resume_ran=1
+    rm -f "$lock_file"
 	>&2 echo "Resuming from suspend..."
 
 	>&2 echo "Restoring mixer state..."
@@ -42,6 +43,8 @@ resume() {
 
 main() {
 	trap "resume" EXIT INT TERM HUP QUIT
+
+    touch "$lock_file"
 
 	>&2 echo "Preparing for suspend..."
 
