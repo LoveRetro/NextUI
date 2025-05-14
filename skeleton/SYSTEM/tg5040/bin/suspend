@@ -78,6 +78,7 @@ main() {
 	echo mem >/sys/power/state || true
 
 	resume &
+	trap - EXIT INT TERM HUP QUIT
 	exit 0
 }
 
