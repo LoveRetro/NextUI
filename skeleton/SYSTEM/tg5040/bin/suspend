@@ -41,7 +41,7 @@ resume() {
 }
 
 main() {
-	trap "resume" INT TERM HUP QUIT
+	trap "resume" EXIT INT TERM HUP QUIT
 
 	>&2 echo "Preparing for suspend..."
 
