@@ -6,14 +6,9 @@ wpa_running=0
 hciattach_running=0
 bluetoothd_running=0
 
-asound_state_dir=/tmp/asound-suspend
-
+# shellcheck disable=SC2317
 resume() {
     >&2 echo "Resuming from suspend..."
-
-    >&2 echo "Restoring mixer state..."
-    alsactl --file "$asound_state_dir/asound.state.post" store || true
-    alsactl --file "$asound_state_dir/asound.state.pre" restore || true
 
     >&2 echo "Unblocking wireless..."
     echo 1 >/sys/class/rfkill/rfkill0/state || true
@@ -40,10 +35,6 @@ main() {
 
     >&2 echo "Preparing for suspend..."
 
-    >&2 echo "Saving mixer state..."
-    mkdir -p "$asound_state_dir"
-    alsactl --file "$asound_state_dir/asound.state.pre" store
-
     if pgrep wpa_supplicant; then
         wpa_running=1
         >&2 echo "Stopping wpa_supplicant..."
@@ -67,10 +58,8 @@ main() {
     echo 0 >/sys/class/rfkill/rfkill0/state
 
     >&2 echo "Suspending..."
-    echo mem >/sys/power/state || true
+    echo mem >/sys/power/state
 
-    trap - EXIT INT TERM HUP QUIT
-    resume & # Resume services in background to reduce UI latency
     exit 0
 }
 
