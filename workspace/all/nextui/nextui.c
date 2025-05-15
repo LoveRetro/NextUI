@@ -1361,12 +1361,24 @@ static int remember_selection = 0;
 
 SDL_Surface* loadFolderBackground(char* rompath, int type)
 {
+	char emutag[255];
+	getEmuName(rompath,emutag);
+	LOG_info("romath ais: %s\n",emutag);
 	char imagePath[MAX_PATH];
 	if(type == ENTRY_DIR)
-		snprintf(imagePath, sizeof(imagePath), "%s/.media/bg.png", rompath);
+		snprintf(imagePath, sizeof(imagePath), "%s/%s/bg.png", THEME_PATH,emutag);
 	else if(type == ENTRY_ROM)
-		snprintf(imagePath, sizeof(imagePath), "%s/.media/bglist.png", rompath);
-
+		snprintf(imagePath, sizeof(imagePath), "%s/%s/bglist.png", THEME_PATH,emutag);
+	
+	// fallback for old .media system
+	if(!exists(imagePath)) {
+		if(type == ENTRY_DIR)
+			snprintf(imagePath, sizeof(imagePath), "%s/.media/bg.png", rompath);
+		else if(type == ENTRY_ROM)
+			snprintf(imagePath, sizeof(imagePath), "%s/.media/bglist.png", rompath);
+	}
+		
+	
 	//LOG_info("Loading folder bg from %s\n", imagePath);
 	if(exists(imagePath)) {
 		SDL_Surface *image = IMG_Load(imagePath);
@@ -1462,7 +1474,10 @@ int main (int argc, char *argv[]) {
 
 	char folderBgPath[1024];
 	folderbgbmp = NULL;
-	SDL_Surface* bgbmp = IMG_Load(SDCARD_PATH "/bg.png");
+	SDL_Surface* bgbmp = IMG_Load(THEME_PATH "/bg.png");
+	if(!bgbmp)
+		bgbmp = IMG_Load(SDCARD_PATH "/bg.png");
+		
 	SDL_Surface* convertedbg = SDL_ConvertSurfaceFormat(bgbmp, SDL_PIXELFORMAT_RGBA8888, 0);
 	if (convertedbg) {
 		SDL_FreeSurface(bgbmp); 
@@ -1980,11 +1995,14 @@ int main (int argc, char *argv[]) {
 
 				// draw background
 				static int lastType = -1;
-				if(((entry->type == ENTRY_DIR || entry->type == ENTRY_ROM) && CFG_getRomsUseFolderBackground())) {
+				static int lastTotal = 0;
+				if((CFG_getRomsUseFolderBackground())) {
 					LOG_info("entry path %s %s\n",entry->path,rompath);
+					LOG_info("Totals %i %i\n",lastTotal,total);
 					char *newBg = entry->type == ENTRY_DIR ? entry->path:rompath;
-					if((strcmp(newBg, folderBgPath) != 0 || lastType != entry->type) && sizeof(folderBgPath) != 1) {
+					if((strcmp(newBg, folderBgPath) != 0 || lastType != entry->type || lastTotal != total) && sizeof(folderBgPath) != 1) {
 						lastType = entry->type;
+						lastTotal = total;
 						strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
 						SDL_FreeSurface(folderbgbmp);
 						folderbgbmp = loadFolderBackground(folderBgPath,entry->type);
@@ -2003,9 +2021,18 @@ int main (int argc, char *argv[]) {
 				if (total > 0) {
 					char thumbpath[1024];
 
-					if(CFG_getShowGameArt())
-						snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
-				
+					if(CFG_getShowGameArt()) {
+						char emutag[255];
+						getEmuName(rompath,emutag);
+						char *newBg = entry->type == ENTRY_DIR ? entry->path:rompath;
+						snprintf(thumbpath, sizeof(thumbpath), entry->type == ENTRY_DIR ? "":"%s/.media/%s.png", rompath, res_copy);
+
+						if( entry->type  == ENTRY_DIR)
+							snprintf(thumbpath, sizeof(thumbpath), "%s/%s/icon.png", THEME_PATH,emutag);
+						else
+							snprintf(thumbpath, sizeof(thumbpath),"%s/.media/%s.png", rompath, res_copy);
+
+					}
 					had_thumb = 0;
 					GFX_clearLayers(3);
 					if (exists(thumbpath)) {

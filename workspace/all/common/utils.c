@@ -353,8 +353,16 @@ void getEmuName(const char* in_name, char* out_name) { // NOTE: both char arrays
 	// printf("--------\n  in_name: %s\n",in_name); fflush(stdout);
 	
 	// extract just the Roms folder name if necessary
+	
 	if (prefixMatch(ROMS_PATH, tmp)) {
 		tmp += strlen(ROMS_PATH) + 1;
+		char* tmp2 = strchr(tmp, '/');
+		if (tmp2) tmp2[0] = '\0';
+		// printf("    tmp1: %s\n", tmp);
+		strcpy(out_name, tmp);
+		tmp = out_name;
+	} else if (prefixMatch(SDCARD_PATH, tmp)) { // doing this to also grab non systems like Tools, Collections etc
+		tmp += strlen(SDCARD_PATH) + 1;
 		char* tmp2 = strchr(tmp, '/');
 		if (tmp2) tmp2[0] = '\0';
 		// printf("    tmp1: %s\n", tmp);

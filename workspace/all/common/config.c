@@ -1,7 +1,9 @@
 #include "config.h"
 #include "defines.h"
 #include "utils.h"
-
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 NextUISettings settings = {0};
 
 // deprecated
@@ -87,38 +89,7 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 fontLoaded = true;
                 continue;
             }
-            if (sscanf(line, "color1=%x", &temp_color) == 1)
-            {
-                char hexColor[7];
-                snprintf(hexColor, sizeof(hexColor), "%06x", temp_color);
-                CFG_setColor(1, HexToUint32_unmapped(hexColor));
-                continue;
-            }
-            if (sscanf(line, "color2=%x", &temp_color) == 1)
-            {
-                CFG_setColor(2, temp_color);
-                continue;
-            }
-            if (sscanf(line, "color3=%x", &temp_color) == 1)
-            {
-                CFG_setColor(3, temp_color);
-                continue;
-            }
-            if (sscanf(line, "color4=%x", &temp_color) == 1)
-            {
-                CFG_setColor(4, temp_color);
-                continue;
-            }
-            if (sscanf(line, "color5=%x", &temp_color) == 1)
-            {
-                CFG_setColor(5, temp_color);
-                continue;
-            }
-            if (sscanf(line, "color6=%x", &temp_color) == 1)
-            {
-                CFG_setColor(6, temp_color);
-                continue;
-            }
+           
             if (sscanf(line, "radius=%i", &temp_value) == 1)
             {
                 CFG_setThumbnailRadius(temp_value);
@@ -212,6 +183,60 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
         }
         fclose(file);
     }
+    // Check for theme.txt settings file and overwrite configs if found
+    sprintf(settingsPath, "%s/theme.txt", THEME_PATH);
+    file = fopen(settingsPath, "r");
+    if (file == NULL)
+    {
+        printf("[CFG] Unable to open settings file, loading defaults\n");
+    }
+    else
+    {
+        char line[256];
+        while (fgets(line, sizeof(line), file))
+        {
+            int temp_value;
+            uint32_t temp_color;
+            if (sscanf(line, "color1=%x", &temp_color) == 1)
+            {
+                char hexColor[7];
+                snprintf(hexColor, sizeof(hexColor), "%06x", temp_color);
+                CFG_setColor(1, HexToUint32_unmapped(hexColor));
+                continue;
+            }
+            if (sscanf(line, "color2=%x", &temp_color) == 1)
+            {
+                CFG_setColor(2, temp_color);
+                continue;
+            }
+            if (sscanf(line, "color3=%x", &temp_color) == 1)
+            {
+                CFG_setColor(3, temp_color);
+                continue;
+            }
+            if (sscanf(line, "color4=%x", &temp_color) == 1)
+            {
+                CFG_setColor(4, temp_color);
+                continue;
+            }
+            if (sscanf(line, "color5=%x", &temp_color) == 1)
+            {
+                CFG_setColor(5, temp_color);
+                continue;
+            }
+            if (sscanf(line, "color6=%x", &temp_color) == 1)
+            {
+                CFG_setColor(6, temp_color);
+                continue;
+            }
+            if (sscanf(line, "radius=%i", &temp_value) == 1)
+            {
+                CFG_setThumbnailRadius(temp_value);
+                continue;
+            }
+        }
+        fclose(file);
+    }
 
     // load gfx related stuff until we drop the indirection
     CFG_setColor(1, CFG_getColor(1));
@@ -234,13 +259,21 @@ void CFG_setFontId(int id)
 {
     settings.font = clamp(id, 0, 2);
 
+    const char *themeFontPath = THEME_PATH "/font.ttf";
     char *fontPath;
-    if (settings.font == 1)
-        fontPath = RES_PATH "/font1.ttf";
-    else
-        fontPath = RES_PATH "/font2.ttf";
 
-    if(settings.onFontChange)
+    // Check if THEME_PATH/font.ttf exists
+    if (access(themeFontPath, F_OK) == 0) {
+        fontPath = (char *)themeFontPath;
+    } else {
+        // Fallback to default fonts
+        if (settings.font == 1)
+            fontPath = RES_PATH "/font1.ttf";
+        else
+            fontPath = RES_PATH "/font2.ttf";
+    }
+
+    if (settings.onFontChange)
         settings.onFontChange(fontPath);
 }
 
@@ -618,14 +651,7 @@ void CFG_sync(void)
     }
 
     fprintf(file, "font=%i\n", settings.font);
-    fprintf(file, "color1=0x%06X\n", settings.color1_255);
-    fprintf(file, "color2=0x%06X\n", settings.color2_255);
-    fprintf(file, "color3=0x%06X\n", settings.color3_255);
-    fprintf(file, "color4=0x%06X\n", settings.color4_255);
-    fprintf(file, "color5=0x%06X\n", settings.color5_255);
-    fprintf(file, "color6=0x%06X\n", settings.color6_255);
     fprintf(file, "bgcolor=0x%06X\n", settings.backgroundColor_255);
-    fprintf(file, "radius=%i\n", settings.thumbRadius);
     fprintf(file, "showclock=%i\n", settings.showClock);
     fprintf(file, "clock24h=%i\n", settings.clock24h);
     fprintf(file, "batteryperc=%i\n", settings.showBatteryPercent);
@@ -644,6 +670,25 @@ void CFG_sync(void)
     fprintf(file, "artWidth=%i\n", (int)(settings.gameArtWidth * 100));
     fprintf(file, "wifi=%i\n", settings.wifi);
 
+    fclose(file);
+    sprintf(settingsPath, "%s/theme.txt", THEME_PATH);
+
+    if (!exists(THEME_PATH)) {
+        mkdir(THEME_PATH, 0755);
+    }
+    file = fopen(settingsPath, "w");
+    if (file == NULL)
+    {
+        printf("[CFG] Unable to open settings file, cant write\n");
+        return;
+    }
+    fprintf(file, "color1=0x%06X\n", settings.color1_255);
+    fprintf(file, "color2=0x%06X\n", settings.color2_255);
+    fprintf(file, "color3=0x%06X\n", settings.color3_255);
+    fprintf(file, "color4=0x%06X\n", settings.color4_255);
+    fprintf(file, "color5=0x%06X\n", settings.color5_255);
+    fprintf(file, "color6=0x%06X\n", settings.color6_255);
+    fprintf(file, "radius=%i\n", settings.thumbRadius);
     fclose(file);
 }
 

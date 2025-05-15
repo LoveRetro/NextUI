@@ -321,7 +321,10 @@ SDL_Surface* GFX_init(int mode)
 	asset_rects[ASSET_GAMEPAD]			= (SDL_Rect){SCALE4(92,51,18,10)};
 
 	char asset_path[MAX_PATH];
-	sprintf(asset_path, RES_PATH "/assets@%ix.png", FIXED_SCALE);
+	// first see if there is an assets file in the Theme folder otherwise just load up default
+	sprintf(asset_path, THEME_PATH "/assets@%ix.png", FIXED_SCALE);
+	if (!exists(asset_path))
+		sprintf(asset_path, RES_PATH "/assets@%ix.png", FIXED_SCALE);
 	if (!exists(asset_path))
 		LOG_info("missing assets, you're about to segfault dummy!\n");
 	gfx.assets = IMG_Load(asset_path);

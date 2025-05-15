@@ -30,6 +30,7 @@
 
 #define FAUX_RECENT_PATH SDCARD_PATH "/Recently Played"
 #define COLLECTIONS_PATH SDCARD_PATH "/Collections"
+#define THEME_PATH SDCARD_PATH "/Theme"
 
 #define LAST_PATH "/tmp/last.txt" // transient
 #define CHANGE_DISC_PATH "/tmp/change_disc.txt"
