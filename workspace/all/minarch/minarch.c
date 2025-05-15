@@ -1199,6 +1199,8 @@ enum {
 	SYNC_SRC_CORE
 };
 enum {
+	SH_EXTRASETTINGS,
+	SH_SHADERS_PRESET,
 	SH_NROFSHADERS,
 	SH_SHADER1,
 	SH_SHADER1_FILTER,
@@ -1371,10 +1373,12 @@ static struct Config {
 	char* system_cfg; // system.cfg based on system limitations
 	char* default_cfg; // pak.cfg based on platform limitations
 	char* user_cfg; // minarch.cfg or game.cfg based on user preference
+	char* shaders_preset; // minarch.cfg or game.cfg based on user preference
 	char* device_tag;
 	OptionList frontend;
 	OptionList core;
 	OptionList shaders;
+	OptionList shaderpragmas;
 	ButtonMapping* controls;
 	ButtonMapping* shortcuts;
 	int loaded;
@@ -1460,8 +1464,7 @@ static struct Config {
 				.desc	= "LINEAR smooths lines, but works better when final image is at higher resolution, so either core that outputs higher resolution or upscaling with shaders",
 				.default_value = 1,
 				.value = 1,
-				// .count = 3,
-				.count = 2,
+				.count = 3,
 				.values = sharpness_labels,
 				.labels = sharpness_labels,
 			},
@@ -1535,8 +1538,28 @@ static struct Config {
 		},
 	},
 	.shaders = { // (OptionList)
-		.count = 16,
+		.count = 18,
 		.options = (Option[]){
+			[SH_EXTRASETTINGS] = {
+				.key	= "minarch_shaders_settings", 
+				.name	= "Optional Shaders Settings",
+				.desc	= "If shaders have extra settings they will show up in this settings menu", // will call getScreenScalingDesc()
+				.default_value = 1,
+				.value = 1,
+				.count = 0,
+				.values = NULL,
+				.labels = NULL,
+			},
+			[SH_SHADERS_PRESET] = {
+				.key	= "minarch_shaders_preset", 
+				.name	= "Shader / Emulator Settings Preset",
+				.desc	= "Load a premade shaders/emulators config, to try out a preset but not permantly overwite your current settings, exit the game without saving settings!", // will call getScreenScalingDesc()
+				.default_value = 1,
+				.value = 1,
+				.count = 0,
+				.values = NULL,
+				.labels = NULL,
+			},
 			[SH_NROFSHADERS] = {
 				.key	= "minarch_nrofshaders", 
 				.name	= "Number of Shaders",
@@ -1703,6 +1726,12 @@ static struct Config {
 			{NULL}
 		},
 	},
+	.shaderpragmas = {
+		.count = 0,
+		.options = (Option[]) {
+			{NULL},
+		}
+	},
 	.controls = default_button_mapping,
 	.shortcuts = (ButtonMapping[]){
 		[SHORTCUT_SAVE_STATE]			= {"Save State",		-1, BTN_ID_NONE, 0},
@@ -1739,6 +1768,8 @@ static int Config_getValue(char* cfg, const char* key, char* out_value, int* loc
 
 
 
+
+
 static void setOverclock(int i) {
     overclock = i;
     switch (i) {
@@ -1765,6 +1796,7 @@ static void setOverclock(int i) {
     }
 }
 static int toggle_thread = 0;
+static int shadersreload = 0;
 static void Config_syncFrontend(char* key, int value) {
 	int i = -1;
 	if (exactMatch(key,config.frontend.options[FE_OPT_SCALING].key)) {
@@ -1846,7 +1878,7 @@ static void Config_syncFrontend(char* key, int value) {
 	option->value = value;
 }
 
-char** list_files_in_folder(const char* folderPath, int* fileCount) {
+char** list_files_in_folder(const char* folderPath, int* fileCount, const char* extensionFilter) {
     DIR* dir = opendir(folderPath);
     if (!dir) {
         perror("opendir");
@@ -1863,10 +1895,16 @@ char** list_files_in_folder(const char* folderPath, int* fileCount) {
         snprintf(fullPath, sizeof(fullPath), "%s/%s", folderPath, entry->d_name);
 
         if (stat(fullPath, &fileStat) == 0 && S_ISREG(fileStat.st_mode)) {
-            char** temp = realloc(fileList, sizeof(char*) * (*fileCount + 2)); // +1 for new file, +1 for NULL
+            if (extensionFilter) {
+                const char* ext = strrchr(entry->d_name, '.');
+                if (!ext || strcmp(ext, extensionFilter) != 0) {
+                    continue;
+                }
+            }
+
+            char** temp = realloc(fileList, sizeof(char*) * (*fileCount + 2)); 
             if (!temp) {
                 perror("realloc");
-                // free previously allocated strings
                 for (int i = 0; i < *fileCount; ++i) {
                     free(fileList[i]);
                 }
@@ -1876,14 +1914,14 @@ char** list_files_in_folder(const char* folderPath, int* fileCount) {
             }
             fileList = temp;
             fileList[*fileCount] = strdup(entry->d_name);
-            fileList[*fileCount + 1] = NULL; // maintain NULL-termination
+            fileList[*fileCount + 1] = NULL;
             (*fileCount)++;
         }
     }
 
     closedir(dir);
 
-    // Inline alphabetical sort
+    // Alphabetical sort
     for (int i = 0; i < *fileCount - 1; ++i) {
         for (int j = i + 1; j < *fileCount; ++j) {
             if (strcmp(fileList[i], fileList[j]) > 0) {
@@ -1898,109 +1936,8 @@ char** list_files_in_folder(const char* folderPath, int* fileCount) {
 }
 
 
-static void Config_syncShaders(char* key, int value) {
-	int i = -1;
-	if (exactMatch(key,config.shaders.options[SH_NROFSHADERS].key)) {
-		GFX_setShaders(value);
-		i = SH_NROFSHADERS;
-	}
-	if (exactMatch(key, config.shaders.options[SH_SHADER1].key)) {
-		char** shaderList = config.shaders.options[SH_SHADER1].values;
-		if (shaderList) {
-			LOG_info("minarch: updating shader 1 - %i\n",value);
-			int count = 0;
-			while (shaderList && shaderList[count]) count++;
-			if (value >= 0 && value < count) {
-				GFX_updateShader(0, shaderList[value], NULL, NULL,NULL,NULL);
-				i = SH_SHADER1;
-			} 
-		}
-	}
-	if (exactMatch(key,config.shaders.options[SH_SHADER1_FILTER].key)) {
-		GFX_updateShader(0,NULL,NULL,&value,NULL,NULL);
-		i = SH_SHADER1_FILTER;
-	}
-	if (exactMatch(key,config.shaders.options[SH_SRCTYPE1].key)) {
-		GFX_updateShader(0,NULL,NULL,NULL,NULL,&value);
-		i = SH_SRCTYPE1;
-	}
-	if (exactMatch(key,config.shaders.options[SH_SCALETYPE1].key)) {
-		GFX_updateShader(0,NULL,NULL,NULL,&value,NULL);
-		i = SH_SCALETYPE1;
-	}
-	if (exactMatch(key,config.shaders.options[SH_UPSCALE1].key)) {
-		GFX_updateShader(0,NULL,&value,NULL,NULL,NULL);
-		i = SH_UPSCALE1;
-	}
-	if (exactMatch(key, config.shaders.options[SH_SHADER2].key)) {
-		char** shaderList = config.shaders.options[SH_SHADER2].values;
-		if (shaderList) {
-			LOG_info("minarch: updating shader 2 - %i\n",value);
-			int count = 0;
-			while (shaderList && shaderList[count]) count++;
-			if (value >= 0 && value < count) {
-				GFX_updateShader(1, shaderList[value], NULL, NULL,NULL,NULL);
-				i = SH_SHADER2;
-			}
-		}
-	}
-	if (exactMatch(key,config.shaders.options[SH_SHADER2_FILTER].key)) {
-		GFX_updateShader(1,NULL,NULL,&value,NULL,NULL);
-		i = SH_SHADER2_FILTER;
-	}
-	if (exactMatch(key,config.shaders.options[SH_SRCTYPE2].key)) {
-		GFX_updateShader(1,NULL,NULL,NULL,NULL,&value);
-		i = SH_SRCTYPE2;
-	}
-	if (exactMatch(key,config.shaders.options[SH_SCALETYPE2].key)) {
-		GFX_updateShader(1,NULL,NULL,NULL,&value,NULL);
-		i = SH_SCALETYPE2;
-	}
-	if (exactMatch(key,config.shaders.options[SH_UPSCALE2].key)) {
-		GFX_updateShader(1,NULL,&value,NULL,NULL,NULL);
-		i = SH_UPSCALE2;
-	}
-	if (exactMatch(key, config.shaders.options[SH_SHADER3].key)) {
-		char** shaderList = config.shaders.options[SH_SHADER3].values;
-		if (shaderList) {
-			LOG_info("minarch: updating shader 3 - %i\n",value);
-			int count = 0;
-			while (shaderList && shaderList[count]) count++;
-			if (value >= 0 && value < count) {
-				GFX_updateShader(2, shaderList[value], NULL, NULL,NULL,NULL);
-				i = SH_SHADER3;
-			}
-		}
-	}
-	if (exactMatch(key,config.shaders.options[SH_SHADER3_FILTER].key)) {
-		GFX_updateShader(2,NULL,NULL,&value,NULL,NULL);
-		i = SH_SHADER3_FILTER;
-	}
-	if (exactMatch(key,config.shaders.options[SH_SRCTYPE3].key)) {
-		GFX_updateShader(2,NULL,NULL,NULL,NULL,&value);
-		i = SH_SRCTYPE3;
-	}
-	if (exactMatch(key,config.shaders.options[SH_SCALETYPE3].key)) {
-		GFX_updateShader(2,NULL,NULL,NULL,&value,NULL);
-		i = SH_SCALETYPE3;
-	}
-	if (exactMatch(key,config.shaders.options[SH_UPSCALE3].key)) {
-		GFX_updateShader(2,NULL,&value,NULL,NULL,NULL);
-		i = SH_UPSCALE3;
-	}
-	
-	if (i==-1) return;
-	Option* option = &config.shaders.options[i];
-	option->value = value;
-}
 
-void initShaders() {
-	LOG_info("Init shaders\n");
-	for (int i=0; config.shaders.options[i].key; i++) {
-		Option* option = &config.shaders.options[i];
-		Config_syncShaders(option->key, option->value);
-	}
-}
+
 static void OptionList_setOptionValue(OptionList* list, const char* key, const char* value);
 enum {
 	CONFIG_WRITE_ALL,
@@ -2079,20 +2016,28 @@ static void Config_init(void) {
 	
 	// populate shader options
 	int filecount;
-	char** filelist = list_files_in_folder(SHADERS_FOLDER, &filecount);
+	char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount,NULL);
+	int preset_filecount;
+	char** preset_filelist = list_files_in_folder(SHADERS_FOLDER, &preset_filecount,".cfg");
+	
 	config.shaders.options[SH_SHADER1].values = filelist;
 	config.shaders.options[SH_SHADER2].values = filelist;
 	config.shaders.options[SH_SHADER3].values = filelist;
+	config.shaders.options[SH_SHADERS_PRESET].values = preset_filelist;
+
 	config.shaders.options[SH_SHADER1].labels = filelist;
 	config.shaders.options[SH_SHADER2].labels = filelist;
 	config.shaders.options[SH_SHADER3].labels = filelist;
+	config.shaders.options[SH_SHADERS_PRESET].labels = preset_filelist;
+
 	config.shaders.options[SH_SHADER1].count = filecount;
 	config.shaders.options[SH_SHADER2].count = filecount;
 	config.shaders.options[SH_SHADER3].count = filecount;
+	config.shaders.options[SH_SHADERS_PRESET].count = preset_filecount;
 	
 	char overlaypath[255];
 	snprintf(overlaypath, sizeof(overlaypath), "%s/%s", OVERLAYS_FOLDER, core.tag);
-	char** overlaylist = list_files_in_folder(overlaypath, &filecount);
+	char** overlaylist = list_files_in_folder(overlaypath, &filecount,NULL);
 
 	if (overlaylist) {
 		int newcount = filecount + 1;
@@ -2143,7 +2088,6 @@ static void Config_readOptionsString(char* cfg) {
 		int device = strtol(gamepad_values[gamepad_type], NULL, 0);
 		core.set_controller_port_device(0, device);
 	}
-	
 	for (int i=0; config.core.options[i].key; i++) {
 		Option* option = &config.core.options[i];
 		// LOG_info("%s\n",option->key);
@@ -2154,6 +2098,13 @@ static void Config_readOptionsString(char* cfg) {
 		Option* option = &config.shaders.options[i];
 		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
 		OptionList_setOptionValue(&config.shaders, option->key, value);
+	}
+	if(config.shaderpragmas.count > 0) {
+		for (int i=0; config.shaderpragmas.options[i].key; i++) {
+			Option* option = &config.shaderpragmas.options[i];
+			if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
+			OptionList_setOptionValue(&config.shaderpragmas, option->key, value);
+		}
 	}
 }
 static void Config_readControlsString(char* cfg) {
@@ -2243,6 +2194,8 @@ static void Config_load(void) {
 	else if (exists(system_path)) config.system_cfg = allocFile(system_path);
 	else config.system_cfg = NULL;
 	
+	
+	
 	// LOG_info("config.system_cfg: %s\n", config.system_cfg);
 	
 	char default_path[MAX_PATH];
@@ -2292,6 +2245,8 @@ static void Config_readOptions(void) {
 	Config_readOptionsString(config.default_cfg);
 	Config_readOptionsString(config.user_cfg);
 
+
+
 	// screen_scaling = SCALE_NATIVE; // TODO: tmp
 }
 static void Config_readControls(void) {
@@ -2326,6 +2281,14 @@ static void Config_write(int override) {
 	}
 	for (int i=0; config.shaders.options[i].key; i++) {
 		Option* option = &config.shaders.options[i];
+		int count = 0;
+		while ( option->values &&  option->values[count]) count++;
+		if (option->value >= 0 && option->value < count) {
+			fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
+		}
+	}
+	for (int i=0; config.shaderpragmas.options[i].key; i++) {
+		Option* option = &config.shaderpragmas.options[i];
 		int count = 0;
 		while ( option->values &&  option->values[count]) count++;
 		if (option->value >= 0 && option->value < count) {
@@ -2404,6 +2367,185 @@ static void Config_restore(void) {
 	Config_free();
 	
 	renderer.dst_p = 0;
+}
+
+void readShadersPreset(int i) {
+		char shaderspath[MAX_PATH] = {0};
+		sprintf(shaderspath, SHADERS_FOLDER "/%s", config.shaders.options[SH_SHADERS_PRESET].values[i]);
+		LOG_info("read shaders preset %s\n",shaderspath);
+		if (exists(shaderspath)) {
+			config.shaders_preset = allocFile(shaderspath);
+			Config_readOptionsString(config.shaders_preset);
+		}
+		else config.shaders_preset = NULL;
+		
+
+		
+}
+
+static void Config_syncShaders(char* key, int value) {
+	int i = -1;
+	if (exactMatch(key,config.shaders.options[SH_SHADERS_PRESET].key)) {
+		readShadersPreset(value);
+		i = SH_SHADERS_PRESET;
+	}
+	if (exactMatch(key,config.shaders.options[SH_NROFSHADERS].key)) {
+		GFX_setShaders(value);
+		shadersreload = 1;
+		i = SH_NROFSHADERS;
+	}
+
+	if (exactMatch(key, config.shaders.options[SH_SHADER1].key)) {
+		char** shaderList = config.shaders.options[SH_SHADER1].values;
+		if (shaderList) {
+			LOG_info("minarch: updating shader 1 - %i\n",value);
+			int count = 0;
+			while (shaderList && shaderList[count]) count++;
+			if (value >= 0 && value < count) {
+				GFX_updateShader(0, shaderList[value], NULL, NULL,NULL,NULL);
+				i = SH_SHADER1;
+			} 
+		}
+	}
+	if (exactMatch(key,config.shaders.options[SH_SHADER1_FILTER].key)) {
+		GFX_updateShader(0,NULL,NULL,&value,NULL,NULL);
+		i = SH_SHADER1_FILTER;
+	}
+	if (exactMatch(key,config.shaders.options[SH_SRCTYPE1].key)) {
+		GFX_updateShader(0,NULL,NULL,NULL,NULL,&value);
+		i = SH_SRCTYPE1;
+	}
+	if (exactMatch(key,config.shaders.options[SH_SCALETYPE1].key)) {
+		GFX_updateShader(0,NULL,NULL,NULL,&value,NULL);
+		i = SH_SCALETYPE1;
+	}
+	if (exactMatch(key,config.shaders.options[SH_UPSCALE1].key)) {
+		GFX_updateShader(0,NULL,&value,NULL,NULL,NULL);
+		i = SH_UPSCALE1;
+	}
+	if (exactMatch(key, config.shaders.options[SH_SHADER2].key)) {
+		char** shaderList = config.shaders.options[SH_SHADER2].values;
+		if (shaderList) {
+			LOG_info("minarch: updating shader 2 - %i\n",value);
+			int count = 0;
+			while (shaderList && shaderList[count]) count++;
+			if (value >= 0 && value < count) {
+				GFX_updateShader(1, shaderList[value], NULL, NULL,NULL,NULL);
+				i = SH_SHADER2;
+			}
+		}
+	}
+	if (exactMatch(key,config.shaders.options[SH_SHADER2_FILTER].key)) {
+		GFX_updateShader(1,NULL,NULL,&value,NULL,NULL);
+		i = SH_SHADER2_FILTER;
+	}
+	if (exactMatch(key,config.shaders.options[SH_SRCTYPE2].key)) {
+		GFX_updateShader(1,NULL,NULL,NULL,NULL,&value);
+		i = SH_SRCTYPE2;
+	}
+	if (exactMatch(key,config.shaders.options[SH_SCALETYPE2].key)) {
+		GFX_updateShader(1,NULL,NULL,NULL,&value,NULL);
+		i = SH_SCALETYPE2;
+	}
+	if (exactMatch(key,config.shaders.options[SH_UPSCALE2].key)) {
+		GFX_updateShader(1,NULL,&value,NULL,NULL,NULL);
+		i = SH_UPSCALE2;
+	}
+	if (exactMatch(key, config.shaders.options[SH_SHADER3].key)) {
+		char** shaderList = config.shaders.options[SH_SHADER3].values;
+		if (shaderList) {
+			LOG_info("minarch: updating shader 3 - %i\n",value);
+			int count = 0;
+			while (shaderList && shaderList[count]) count++;
+			if (value >= 0 && value < count) {
+				GFX_updateShader(2, shaderList[value], NULL, NULL,NULL,NULL);
+				i = SH_SHADER3;
+			}
+		}
+	}
+	if (exactMatch(key,config.shaders.options[SH_SHADER3_FILTER].key)) {
+		GFX_updateShader(2,NULL,NULL,&value,NULL,NULL);
+		i = SH_SHADER3_FILTER;
+	}
+	if (exactMatch(key,config.shaders.options[SH_SRCTYPE3].key)) {
+		GFX_updateShader(2,NULL,NULL,NULL,NULL,&value);
+		i = SH_SRCTYPE3;
+	}
+	if (exactMatch(key,config.shaders.options[SH_SCALETYPE3].key)) {
+		GFX_updateShader(2,NULL,NULL,NULL,&value,NULL);
+		i = SH_SCALETYPE3;
+	}
+	if (exactMatch(key,config.shaders.options[SH_UPSCALE3].key)) {
+		GFX_updateShader(2,NULL,&value,NULL,NULL,NULL);
+		i = SH_UPSCALE3;
+	}
+	
+	if (i==-1) return;
+	Option* option = &config.shaders.options[i];
+	option->value = value;
+	shadersreload = 1;
+}
+
+////////
+void loadShaderSettings() {
+	int menucount = 0;
+	config.shaderpragmas.options = calloc(config.shaders.options[SH_NROFSHADERS].value*32+1, sizeof(Option));
+	for (int i=0; i < config.shaders.options[SH_NROFSHADERS].value; i++) {
+		ShaderParam *params = PLAT_getShaderPragmas(i);
+		if(params == NULL) continue;
+		for (int j = 0; j < 32; j++) {
+			if(params[j].def || params[j].min || params[j].max) {
+				config.shaderpragmas.options[menucount].key = params[j].name;
+				config.shaderpragmas.options[menucount].name = params[j].name;
+				config.shaderpragmas.options[menucount].desc = params[j].name;
+				config.shaderpragmas.options[menucount].default_value = params[j].def;
+				
+				int steps = (int)((params[j].max - params[j].min) / params[j].step) + 1;
+				config.shaderpragmas.options[menucount].values = malloc(sizeof(char *) * (steps + 1));
+				config.shaderpragmas.options[menucount].labels = malloc(sizeof(char *) * (steps + 1));
+				for (int s = 0; s < steps; s++) {
+					float val = params[j].min + s * params[j].step;
+					char *str = malloc(16);
+					snprintf(str, 16, "%.2f", val);
+					config.shaderpragmas.options[menucount].values[s] = str;
+					config.shaderpragmas.options[menucount].labels[s] = str;
+					if(params[j].value == val)
+						config.shaderpragmas.options[menucount].value = s;
+				}
+				config.shaderpragmas.options[menucount].count = steps;
+				config.shaderpragmas.options[menucount].values[steps] = NULL;
+				config.shaderpragmas.options[menucount].labels[steps] = NULL;
+				menucount++;
+			}
+		}
+	}
+	config.shaderpragmas.count = menucount;
+}
+void initShaders() {
+	for (int i=0; config.shaders.options[i].key; i++) {
+		if(i!=SH_SHADERS_PRESET) {
+			Option* option = &config.shaders.options[i];;
+			Config_syncShaders(option->key, option->value);
+		}
+	}
+	// first initialize the shaders menu and then reinitilize settings to finally apply the extra shader settings to the shaders themselves
+	loadShaderSettings();
+	Config_readOptions();
+	// set shader settings after re-reading conigs
+	for (int y=0; y < config.shaders.options[SH_NROFSHADERS].value; y++) {
+		ShaderParam *params = PLAT_getShaderPragmas(y);
+		if (params == NULL) {
+			break;
+		}
+		for (int i=0; i < config.shaderpragmas.count; i++) {
+			for (int j = 0; j < 32; j++) {
+				if (exactMatch(params[j].name, config.shaderpragmas.options[i].key)) {
+					params[j].value = strtof(config.shaderpragmas.options[i].values[config.shaderpragmas.options[i].value], NULL);
+				}
+			}
+		}
+	}
+	shadersreload = 0;
 }
 
 ///////////////////////////////
@@ -5250,11 +5392,67 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 
 
 
+static int OptionPragmas_optionChanged(MenuList* list, int i) {
+		MenuItem* item = &list->items[i];
+		for (int i=0; i < config.shaders.options[SH_NROFSHADERS].value; i++) {
+			ShaderParam *params = PLAT_getShaderPragmas(i);
+			for (int j = 0; j < 32; j++) {
+				if (exactMatch(params[j].name, item->key)) {
+					params[j].value = strtof(item->values[item->value], NULL);
+				}
+			}
+		}
+		for (int i = 0; i < config.shaderpragmas.count; i++) {
+			MenuItem* item = &list->items[i];
+			config.shaderpragmas.options[i].value = item->value ;
+
+		}
+		return MENU_CALLBACK_NOP;
+}
+
+static MenuList PragmasOptions_menu = {
+	.type = MENU_FIXED,
+	.on_confirm = NULL,
+	.on_change = OptionPragmas_optionChanged,
+	.items = NULL
+};
+static int OptionPragmas_openMenu(MenuList* list, int i) {
+	LOG_info("OptionPragmas oppenen\n");
+	
+	PragmasOptions_menu.items = calloc(config.shaderpragmas.count + 1, sizeof(MenuItem));
+
+	for (int i = 0; i < config.shaderpragmas.count; i++) {
+		
+		MenuItem* item = &PragmasOptions_menu.items[i];
+		Option* configitem = &config.shaderpragmas.options[i];
+		item->id = i;
+		item->name = configitem->name;
+		item->desc = configitem->desc;
+		item->value = configitem->value;
+		item->key = configitem->key;
+		item->values = configitem->values;
+	
+	}
+	
+	
+	if (PragmasOptions_menu.items[0].name) {
+		Menu_options(&PragmasOptions_menu);
+	} else {
+		Menu_message("No extra settings found", (char*[]){"B", "BACK", NULL});
+	}
+
+	return MENU_CALLBACK_NOP;
+}
 static int OptionShaders_optionChanged(MenuList* list, int i) {
 		MenuItem* item = &list->items[i];
 		Config_syncShaders(item->key, item->value);
-		if(i==SH_NROFSHADERS)
-			initShaders();
+
+		for (int i = 0; i < config.shaders.count; i++) {
+			MenuItem* item = &list->items[i];
+			item->value = config.shaders.options[i].value;
+
+		}
+		initShaders();
 		return MENU_CALLBACK_NOP;
 }
 
@@ -5264,42 +5462,46 @@ static MenuList ShaderOptions_menu = {
 	.on_change = OptionShaders_optionChanged,
 	.items = NULL
 };
+
 static int OptionShaders_openMenu(MenuList* list, int i) {
 	LOG_info("OptionShaders_openMenu\n");
 
-	if (ShaderOptions_menu.items == NULL) {
+	
 		int filecount;
-		char** filelist = list_files_in_folder(SHADERS_FOLDER, &filecount);
+		char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount,NULL);
 
-		// Check if folder read failed or no files found
-		if (!filelist || filecount == 0) {
-			Menu_message("No shaders available\n/Shaders folder or shader files not found", (char*[]){"B", "BACK", NULL});
-			return MENU_CALLBACK_NOP;
-		}
 
-		// NULL-terminate filelist just in case
-		filelist = realloc(filelist, sizeof(char*) * (filecount + 1));
-		filelist[filecount] = NULL;
+	// Check if folder read failed or no files found
+	if (!filelist || filecount == 0) {
+		Menu_message("No shaders available\n/Shaders folder or shader files not found", (char*[]){"B", "BACK", NULL});
+		return MENU_CALLBACK_NOP;
+	}
 
-		ShaderOptions_menu.items = calloc(config.shaders.count + 1, sizeof(MenuItem));
-		for (int i = 0; i < config.shaders.count; i++) {
-			MenuItem* item = &ShaderOptions_menu.items[i];
-			item->id = i;
-			item->name = config.shaders.options[i].name;
-			item->desc = config.shaders.options[i].desc;
-			item->value = config.shaders.options[i].value;
-			item->key = config.shaders.options[i].key;
+	// NULL-terminate filelist just in case
+	filelist = realloc(filelist, sizeof(char*) * (filecount + 1));
+	filelist[filecount] = NULL;
 
-			if (strcmp(config.shaders.options[i].key, "minarch_shader1") == 0 ||
-			    strcmp(config.shaders.options[i].key, "minarch_shader2") == 0 ||
-			    strcmp(config.shaders.options[i].key, "minarch_shader3") == 0) {
-				item->values = filelist;
-				config.shaders.options[i].values = filelist;
-			} else {
-				item->values = config.shaders.options[i].values;
-			}
+	ShaderOptions_menu.items = calloc(config.shaders.count + 1, sizeof(MenuItem));
+	for (int i = 0; i < config.shaders.count; i++) {
+		MenuItem* item = &ShaderOptions_menu.items[i];
+		Option* configitem = &config.shaders.options[i];
+		item->id = i;
+		item->name = configitem->name;
+		item->desc = configitem->desc;
+		item->value = configitem->value;
+		item->key = configitem->key;
+		if(i == SH_EXTRASETTINGS) item->on_confirm = OptionPragmas_openMenu;
+
+		if (strcmp(config.shaders.options[i].key, "minarch_shader1") == 0 ||
+			strcmp(config.shaders.options[i].key, "minarch_shader2") == 0 ||
+			strcmp(config.shaders.options[i].key, "minarch_shader3") == 0) {
+			item->values = filelist;
+			config.shaders.options[i].values = filelist;
+		} else {
+			item->values = config.shaders.options[i].values;
 		}
 	}
+	
 
 	if (ShaderOptions_menu.items[0].name) {
 		Menu_options(&ShaderOptions_menu);
@@ -6566,7 +6768,7 @@ int main(int argc , char* argv[]) {
 	Input_init(NULL);
 	Config_readOptions(); // but others load and report options later (eg. nes)
 	Config_readControls(); // restore controls (after the core has reported its defaults)
-	Config_free();
+	
 	SND_init(core.sample_rate, core.fps);
 	InitSettings(); // after we initialize audio
 	Menu_init();
@@ -6599,6 +6801,8 @@ int main(int argc , char* argv[]) {
 	// then initialize custom  shaders from settings
 	initShaders();
 
+	// release config when all is loaded
+	Config_free();
 	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
 	while (!quit) {
 		GFX_startFrame();
@@ -6620,10 +6824,14 @@ int main(int argc , char* argv[]) {
 
 		
 		if (show_menu) {
+
 			Menu_loop();
 			has_pending_opt_change = config.core.changed;
 			resetFPSCounter();
 			chooseSyncRef();
+			// reload shaders if needed (dont want to always do it as it blacks the screen)
+			if(shadersreload) 
+				initShaders();
 			// this is not needed
 			// SND_resetAudio(core.sample_rate, core.fps);
 		}

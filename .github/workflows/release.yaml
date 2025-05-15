@@ -1,5 +1,5 @@
 ---
-name: CI
+name: Release NextUI
 
 # yamllint disable-line rule:truthy
 on:
@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   prepare:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04
     outputs:
       next-tag: ${{ steps.next-tag.outputs.version }}
       release-name: ${{ steps.release-name.outputs.RELEASE_NAME }}
@@ -191,5 +191,15 @@ jobs:
         with:
           files: releases/*
           generate_release_notes: true
-          make_latest: "true"
+          append_body: true
           tag_name: ${{ needs.prepare.outputs.next-tag }}
+          make_latest: "true"
+          body: |
+            
+            For full features list and help on how to use etc of NextUI:
+            https://nextui.loveretro.games/docs/
+
+            ## How to install/update
+            For a fresh installation, follow the instructions here: https://nextui.loveretro.games/getting-started/installation/
+            When updating from a previous release: https://nextui.loveretro.games/getting-started/updating/
+
