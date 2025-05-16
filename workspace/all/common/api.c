@@ -1750,7 +1750,7 @@ SDL_Color GFX_mapColor(uint32_t c)
 // to (try to) understand it 
 // better
 
-#define MAX_SAMPLE_RATE 48000
+#define MAX_SAMPLE_RATE 44100
 #define BATCH_SIZE 100
 #ifndef SAMPLES
 	#define SAMPLES 512 // default
@@ -1762,32 +1762,40 @@ SDL_Color GFX_mapColor(uint32_t c)
 
 pthread_mutex_t audio_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+  // 1.0 = 100% volume, 0.0 = muted
+int bluetoothEnabled = 0;
 static void SND_audioCallback(void *userdata, uint8_t *stream, int len) {
-	if (snd.frame_count == 0)
-		return;
+    if (snd.frame_count == 0)
+        return;
+	float vol = bluetoothEnabled ? GetVolume()/20.0f:1.0f;
+    int16_t *out = (int16_t *)stream;
+    len /= (sizeof(int16_t) * 2);
 
-	int16_t *out = (int16_t *)stream;
-	len /= (sizeof(int16_t) * 2);
+    while (snd.frame_out != snd.frame_in && len > 0) {
+        // Apply volume control to left channel
+        int left = (int)(snd.buffer[snd.frame_out].left * vol);
+        if (left > 32767) left = 32767;
+        if (left < -32768) left = -32768;
 
-	// Lock the mutex before accessing shared resources
-	
+        // Apply volume control to right channel
+        int right = (int)(snd.buffer[snd.frame_out].right * vol);
+        if (right > 32767) right = 32767;
+        if (right < -32768) right = -32768;
 
-	while (snd.frame_out != snd.frame_in && len > 0) {
-		
-		*out++ = snd.buffer[snd.frame_out].left;
-		*out++ = snd.buffer[snd.frame_out].right;
-		pthread_mutex_lock(&audio_mutex);
-		snd.frame_out += 1;
-		len -= 1;
-		if (snd.frame_out >= snd.frame_count)
-			snd.frame_out = 0;
-		pthread_mutex_unlock(&audio_mutex);
-	}
-	
+        *out++ = (int16_t)left;
+        *out++ = (int16_t)right;
 
-	if (len > 0) {
-		memset(out, 0, len * (sizeof(int16_t) * 2));
-	}
+        pthread_mutex_lock(&audio_mutex);
+        snd.frame_out += 1;
+        len -= 1;
+        if (snd.frame_out >= snd.frame_count)
+            snd.frame_out = 0;
+        pthread_mutex_unlock(&audio_mutex);
+    }
+
+    if (len > 0) {
+        memset(out, 0, len * (sizeof(int16_t) * 2));
+    }
 }
 static void SND_resizeBuffer(void) { // plat_sound_resize_buffer
 
@@ -2127,8 +2135,11 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count) 
 
 void SND_init(double sample_rate, double frame_rate) { // plat_sound_init
 	LOG_info("SND_init\n");
+		SDL_CloseAudio();
+		PLAT_setBluetoothaudio();
 	currentreqfps = frame_rate;
 	SDL_InitSubSystem(SDL_INIT_AUDIO);
+	;
 
 	fps_counter = 0;
 	fps_buffer_index = 0;
@@ -2152,7 +2163,7 @@ void SND_init(double sample_rate, double frame_rate) { // plat_sound_init
 	spec_in.channels = 2;
 	spec_in.samples = SAMPLES;
 	spec_in.callback = SND_audioCallback;
-	
+
 	if (SDL_OpenAudio(&spec_in, &spec_out)<0) LOG_info("SDL_OpenAudio error: %s\n", SDL_GetError());
 	
 	snd.frame_count = ((float)spec_out.freq/SCREEN_FPS)*6; // buffer size based on sample rate out (with 6 frames headroom), ideally you want to use actual FPS but don't know it at this point yet 
@@ -2172,9 +2183,10 @@ void SND_init(double sample_rate, double frame_rate) { // plat_sound_init
 void SND_quit(void) { // plat_sound_finish
 	if (!snd.initialized) return;
 	
+	if(!bluetoothEnabled) {
 	SDL_PauseAudio(1);
 	SDL_CloseAudio();
-	
+	}
 	if (snd.buffer) {
 		free(snd.buffer);
 		snd.buffer = NULL;

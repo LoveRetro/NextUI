@@ -55,6 +55,7 @@ void CFG_defaults(NextUISettings *cfg)
         .stateFormat = CFG_DEFAULT_STATEFORMAT,
 
         .wifi = CFG_DEFAULT_WIFI,
+        .bluetooth = CFG_DEFAULT_BLUETOOTH,
 };
 
     *cfg = defaults;
@@ -207,6 +208,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "wifi=%i", &temp_value) == 1)
             {
                 CFG_setWifi((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "bluetooth=%i", &temp_value) == 1)
+            {
+                CFG_setBluetooth((bool)temp_value);
                 continue;
             }
         }
@@ -485,6 +491,15 @@ void CFG_setWifi(bool on)
 {
     settings.wifi = on;
 }
+bool CFG_getBluetooth(void)
+{
+    return settings.bluetooth;
+}
+
+void CFG_setBluetooth(bool isBl)
+{
+    settings.bluetooth = isBl;
+}
 
 void CFG_get(const char *key, char *value)
 {
@@ -588,6 +603,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getWifi()));
     }
+    else if (strcmp(key, "bluetooth") == 0)
+    {
+        sprintf(value, "%i", CFG_getBluetooth());
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -643,6 +662,7 @@ void CFG_sync(void)
     fprintf(file, "muteLeds=%i\n", settings.muteLeds);
     fprintf(file, "artWidth=%i\n", (int)(settings.gameArtWidth * 100));
     fprintf(file, "wifi=%i\n", settings.wifi);
+    fprintf(file, "bluetooth=%i\n", settings.bluetooth);
 
     fclose(file);
 }
@@ -676,7 +696,7 @@ void CFG_print(void)
     printf("\t\"muteLeds\": %i,\n", settings.muteLeds);
     printf("\t\"artWidth\": %i,\n", (int)(settings.gameArtWidth * 100));
     printf("\t\"wifi\": %i,\n", settings.wifi);
-
+    printf("\t\"bluetooth\": %i,\n", settings.bluetooth);
     // meta, not a real setting
     if (settings.font == 1)
         printf("\t\"fontpath\": \"%s\"\n", RES_PATH "/chillroundm.ttf");

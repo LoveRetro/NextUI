@@ -10,7 +10,6 @@
 #define SETTINGS_DEFAULT_HEADPHONE_VOLUME 4
 
 #define SETTINGS_DEFAULT_MUTE_NO_CHANGE -69
-
 void InitSettings(void);
 void QuitSettings(void);
 int InitializedSettings(void);
@@ -60,5 +59,7 @@ void SetMutedContrast(int);
 void SetMutedSaturation(int);
 void SetMutedExposure(int);
 void SetMutedVolume(int);
+
+
 
 #endif  // __msettings_h__

@@ -6137,6 +6137,7 @@ int save_screenshot_thread(void* data) {
     free(args->path);
     free(args->pixels);
     free(args);
+	LOG_info("returning\n");
     return 0;
 }
 SDL_Thread* screenshotsavethread;
@@ -6856,20 +6857,29 @@ int main(int argc , char* argv[]) {
 	QuitSettings();
 	
 finish:
-
+	LOG_info("quit\n");
 	Game_close();
+	LOG_info("a\n");
 	Core_unload();
+	LOG_info("b\n");
 	Core_quit();
+	LOG_info("c\n");
 	Core_close();
+	LOG_info("d\n");
 	Config_quit();
+	LOG_info("2\n");
 	Special_quit();
 	MSG_quit();
 	PWR_quit();
 	VIB_quit();
+	LOG_info("4\n");
 	// already happens on Core_unload
-	SND_quit();
+	// SND_quit();
 	PAD_quit();
-	GFX_quit();
+		LOG_info("5\n");
+	// GFX_quit();
+		LOG_info("6\n");
 	SDL_WaitThread(screenshotsavethread, NULL);
+	LOG_info("done\n");
 	return EXIT_SUCCESS;
 }

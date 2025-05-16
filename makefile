@@ -97,6 +97,7 @@ ifeq ($(PLATFORM), tg5040)
 	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.* ./build/SYSTEM/$(PLATFORM)/lib/
 endif
+	cp ./workspace/all/bluetooth/build/$(PLATFORM)/bluetooth.elf ./build/EXTRAS/Tools/$(PLATFORM)/Bluetooth.pak/
 
 
 cores: # TODO: can't assume every platform will have the same stock cores (platform should be responsible for copy too)

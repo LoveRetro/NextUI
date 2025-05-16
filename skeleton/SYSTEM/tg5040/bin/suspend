@@ -7,27 +7,30 @@ hciattach_running=0
 bluetoothd_running=0
 
 # shellcheck disable=SC2317
+
+# honestly im kinda doubting if we even need to do all this because if i just disable everything bluetooth/wifi works perfect from suspend to wake up and all
+# doesnt the internal firmware already take care of this?? When i enable all this stuff im just getting all kinds of reconnection errors and what not specially on bluetooth
 resume() {
     >&2 echo "Resuming from suspend..."
 
-    >&2 echo "Unblocking wireless..."
-    echo 1 >/sys/class/rfkill/rfkill0/state || true
+    # >&2 echo "Unblocking wireless..."
+    # echo 1 >/sys/class/rfkill/rfkill0/state || true
 
-    if [ "$wpa_running" -eq 1 ]; then
-        >&2 echo "Starting wpa_supplicant..."
-        wpa_supplicant -B -iwlan0 -Dnl80211 -c/etc/wifi/wpa_supplicant.conf -I/etc/wifi/wpa_supplicant_overlay.conf -O/etc/wifi/sockets || true
-        udhcpc -i wlan0 &
-    fi
+    # if [ "$wpa_running" -eq 1 ]; then
+    #     >&2 echo "Starting wpa_supplicant..."
+    #     wpa_supplicant -B -iwlan0 -Dnl80211 -c/etc/wifi/wpa_supplicant.conf -I/etc/wifi/wpa_supplicant_overlay.conf -O/etc/wifi/sockets || true
+    #     udhcpc -i wlan0 &
+    # fi
 
-    if [ "$hciattach_running" -eq 1 ]; then
-        >&2 echo "Starting hciattach..."
-        /etc/init.d/hciattach start || true
-    fi
-    if [ "$bluetoothd_running" -eq 1 ]; then
-        >&2 echo "Starting bluetoothd..."
-        /etc/bluetooth/bluetoothd start || true
-        /usr/bin/bluetoothctl power on || true
-    fi
+    # if [ "$hciattach_running" -eq 1 ]; then
+    #     >&2 echo "Starting hciattach..."
+    #     /etc/init.d/hciattach start || true
+    # fi
+    # if [ "$bluetoothd_running" -eq 1 ]; then
+    #     >&2 echo "Starting bluetoothd..."
+    #     /etc/bluetooth/bluetoothd start || true
+    #     /usr/bin/bluetoothctl power on || true
+    # fi
 }
 
 main() {
@@ -35,30 +38,32 @@ main() {
 
     >&2 echo "Preparing for suspend..."
 
-    if pgrep wpa_supplicant; then
-        wpa_running=1
-        >&2 echo "Stopping wpa_supplicant..."
-        killall -9 wpa_supplicant
-    fi
-    ifconfig wlan0 down
+    # if pgrep wpa_supplicant; then
+    #     wpa_running=1
+    #     >&2 echo "Stopping wpa_supplicant..."
+    #     killall -9 wpa_supplicant
+    # fi
+    # ifconfig wlan0 down
 
-    if pgrep hciattach; then
-        hciattach_running=1
-        >&2 echo "Stopping hciattach..."
-        /etc/init.d/hciattach stop
-    fi
-    if pgrep bluetoothd; then
-        bluetoothd_running=1
-        >&2 echo "Stopping bluetoothd..."
-        /etc/bluetooth/bluetoothd stop
-        killall -15 bluealsa
-    fi
+    # if pgrep hciattach; then
+    #     hciattach_running=1
+    #     >&2 echo "Stopping hciattach..."
+    #     /etc/init.d/hciattach stop
+    # fi
+    # if pgrep bluetoothd; then
+    #     bluetoothd_running=1
+    #     >&2 echo "Stopping bluetoothd..."
+    #     /etc/bluetooth/bluetoothd stop
+    #     killall -15 bluealsa
+    # fi
 
-    >&2 echo "Blocking wireless..."
-    echo 0 >/sys/class/rfkill/rfkill0/state
+    # >&2 echo "Blocking wireless..."
+    # echo 0 >/sys/class/rfkill/rfkill0/state
+
 
     >&2 echo "Suspending..."
-    echo mem >/sys/power/state
+    # this is really the only line we really need to activate suspend
+	echo mem >/sys/power/state
 
     exit 0
 }

@@ -85,6 +85,7 @@ typedef struct
 
 	// Network
 	bool wifi;
+	bool bluetooth;
 
 } NextUISettings;
 
@@ -114,6 +115,7 @@ typedef struct
 #define CFG_DEFAULT_MUTELEDS false
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
+#define CFG_DEFAULT_BLUETOOTH false
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
@@ -189,6 +191,10 @@ void CFG_setGameArtWidth(double zeroToOne);
 // WiFi on/off (if available)
 bool CFG_getWifi(void);
 void CFG_setWifi(bool on);
+
+//bluetooth
+bool CFG_getBluetooth(void);
+void CFG_setBluetooth(bool);
 
 
 void CFG_sync(void);

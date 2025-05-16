@@ -34,6 +34,7 @@ all:
 	cd ./all/settings/ && make
 	cd ./all/ledcontrol/ && make
 	cd ./all/bootlogo/ && make
+	cd ./all/bluetooth/ && make
 # BUILDOPTION: don't forget to uncomment this to rebuild cores from  
 # source, idk if this was left commented by mistake, but I actually 
 # agree on leaving this commented out by default as they take a long 
@@ -73,4 +74,6 @@ clean:
 	cd ./all/settings/ && make clean
 	cd ./all/ledcontrol/ && make clean
 	cd ./all/bootlogo/ && make clean
+	cd ./all/scraper/ && make clean
+	cd ./all/bluetooth/ && make clean
 	cd ./$(PLATFORM) && make clean

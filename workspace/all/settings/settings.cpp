@@ -212,6 +212,11 @@ int main(int argc, char *argv[])
 
         auto systemMenu = new MenuList(MenuItemType::Fixed, "System",
         {
+            new MenuItem{ListItemType::Generic, "Bluetooth", "Blue", {false, true}, on_off, []() -> std::any
+            { return CFG_getBluetooth(); },
+            [](const std::any &value)
+            { CFG_setBluetooth(std::any_cast<bool>(value)); },
+            []() { CFG_setBluetooth(CFG_DEFAULT_BLUETOOTH);}}, 
             new MenuItem{ListItemType::Generic, "Volume", "Speaker volume", 
             {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}, 
             {"Muted", "5%","10%","15%","20%","25%","30%","35%","40%","45%","50%","55%","60%","65%","70%","75%","80%","85%","90%","95%","100%"}, 

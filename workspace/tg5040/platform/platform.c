@@ -2447,7 +2447,9 @@ void PLAT_setRumble(int strength) {
 }
 
 int PLAT_pickSampleRate(int requested, int max) {
-	return MIN(requested, max);
+	// return MIN(requested, max);
+	// temporary for bluetoth
+	return 44100;
 }
 
 char* PLAT_getModel(void) {
@@ -3328,4 +3330,74 @@ void PLAT_wifiDisconnect()
 
 	int ret = wifi.interface->disconnect_ap(42);
 	LOG_info("wifi disconnect_ap returned %d\n", ret);
+}
+/////////////////////////
+
+void PLAT_setBluetoothaudio() {
+	FILE *fp;
+    char path[1035];
+    char mac_address[18]; // MAC addresses are 17 characters long (+1 for null terminator)
+
+    // Run bluetoothctl devices to get a list of paired devices
+    fp = popen("bluetoothctl devices", "r");
+    if (fp == NULL) {
+        perror("Failed to run bluetoothctl devices");
+    } else {
+		// Read the output line by line to find the MAC addresses of all devices
+		while (fgets(path, sizeof(path)-1, fp) != NULL) {
+			// Check if the line contains the word "Device"
+			if (strstr(path, "Device") != NULL) {
+				// Extract the MAC address (it is the first part of the line)
+				sscanf(path, "Device %17s", mac_address);
+
+				// Run bluetoothctl info <MAC_ADDRESS> to check if it's connected
+				char command[256];
+				snprintf(command, sizeof(command), "bluetoothctl info %s", mac_address);
+
+				FILE *info_fp = popen(command, "r");
+				if (info_fp == NULL) {
+					perror("Failed to run bluetoothctl info");
+					continue; // Skip this device and try the next one
+				}
+
+				// Check if the device is connected
+				int is_connected = 0;
+				int is_audio_device = 0;
+				unsigned int class_value;
+				while (fgets(path, sizeof(path)-1, info_fp) != NULL) {
+					// Check for device class
+					if (sscanf(path, "        Class: 0x%x", &class_value) == 1) {
+						if ((class_value & 0x1F00) == 0x0400) {  // Check if major class is Audio/Video
+							is_audio_device = 1;
+						}
+					}
+				
+					// Check if the device is connected
+					if (strstr(path, "Connected: yes")) {
+						is_connected = 1;
+					}
+				}
+				fclose(info_fp);
+
+				// If the device is connected, print its MAC address
+				if (is_connected && is_audio_device) {
+					printf("Connected device MAC address: %s\n", mac_address);
+					setenv("SDL_AUDIODRIVER", "alsa", 1);
+					char value[256]; // Adjust the size if needed
+
+				
+					snprintf(value, sizeof(value), "bluealsa:HCI=hci0,DEV=%s", mac_address);
+					setenv("AUDIODEV", value, 1);
+					bluetoothEnabled = 1;
+					break; // Stop after finding the first connected device
+				}
+			}
+		}
+
+		// Close the file pointer for device list
+		fclose(fp);
+		
+
+
+	}
 }

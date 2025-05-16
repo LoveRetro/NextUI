@@ -99,7 +99,7 @@ extern double currentcpuse;
 extern int currentcputemp;
 extern int should_rotate;
 extern volatile int useAutoCpu;
-
+extern int bluetoothEnabled;
 enum {
 	ASSET_WHITE_PILL,
 	ASSET_BLACK_PILL,
@@ -614,6 +614,7 @@ void PLAT_setLedBrightness(LightSettings *led);
 void PLAT_setLedInbrightness(LightSettings *led);
 void PLAT_setLedEffectSpeed(LightSettings *led);
 void PLAT_setLedEffectCycles(LightSettings *led);
+void PLAT_setBluetoothaudio();
 
 ///////////////////
 
