@@ -1386,6 +1386,88 @@ SDL_Surface* loadFolderBackground(char* rompath, int type)
 }
 
 
+typedef void (*BackgroundLoadedCallback)(SDL_Surface* surface, void* userData);
+
+typedef struct {
+    char rompath[MAX_PATH];
+    int type;
+    BackgroundLoadedCallback callback;
+    void* userData;
+} LoadBackgroundTask;
+
+SDL_mutex* imgLoadMutex = NULL;
+
+
+int backgroundLoadThread(void* data)
+{
+    LoadBackgroundTask* task = (LoadBackgroundTask*)data;
+    char imagePath[MAX_PATH];
+	LOG_info("task->type: %i\n",task->type);
+    if (task->type == ENTRY_DIR)
+        snprintf(imagePath, sizeof(imagePath), "%s/.media/bg.png", task->rompath);
+    else if (task->type == ENTRY_ROM)
+        snprintf(imagePath, sizeof(imagePath), "%s/.media/bglist.png", task->rompath);
+    else
+        return -1;
+
+		LOG_info("loading image: %s\n",imagePath);
+    SDL_Surface* result = NULL;
+
+    if (access(imagePath, F_OK) == 0) {
+        SDL_LockMutex(imgLoadMutex);
+        SDL_Surface* image = IMG_Load(imagePath);
+        SDL_UnlockMutex(imgLoadMutex);
+
+        if (image) {
+            SDL_Surface* imageRGBA = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGBA8888, 0);
+            SDL_FreeSurface(image);
+
+            if (imageRGBA) {
+                LOG_info("backy packy loaded yass\n");
+				result = imageRGBA;
+
+				}
+        }
+    }
+
+    // callback for letting main loop know stuff ready
+    if (task->callback) {
+		LOG_info("calling callback with backy packy\n");
+        task->callback(result, task->userData);
+    }
+
+    free(task); 
+    return 0;
+}
+
+
+void startLoadFolderBackground(const char* rompath, int type, BackgroundLoadedCallback callback, void* userData)
+{
+    LoadBackgroundTask* task = malloc(sizeof(LoadBackgroundTask));
+    if (!task) return;
+
+    snprintf(task->rompath, sizeof(task->rompath), "%s", rompath);
+    task->type = type;
+    task->callback = callback;
+    task->userData = userData;
+
+    SDL_CreateThread(backgroundLoadThread, "BGLoader", task);
+}
+	SDL_Surface *folderbgbmp = NULL;
+	SDL_Surface* screen = NULL;
+void onBackgroundLoaded(SDL_Surface* surface, void* userData)
+{
+    if (surface) {
+		LOG_info("back packy loaded in callback maybe call flip?\n");
+        // Convert to texture, blit, or store it for later use
+		if(folderbgbmp)	SDL_FreeSurface(folderbgbmp);
+       	folderbgbmp = surface;
+		
+		
+    } else {
+        printf("Failed to load background.\n");
+    }
+}
 ///////////////////////////////////////
 
 enum {
@@ -1409,7 +1491,7 @@ int main (int argc, char *argv[]) {
 	LOG_info("NextUI\n");
 	InitSettings();
 	
-	SDL_Surface* screen = GFX_init(MODE_MAIN);
+	screen = GFX_init(MODE_MAIN);
 	// LOG_info("- graphics init: %lu\n", SDL_GetTicks() - main_begin);
 	
 	PAD_init();
@@ -1454,7 +1536,7 @@ int main (int argc, char *argv[]) {
 	float previousY;
 
 	SDL_Surface* thumbbmp = NULL;
-	SDL_Surface *folderbgbmp = NULL;
+
 
 	int ox;
 	int oy;
@@ -1986,18 +2068,13 @@ int main (int argc, char *argv[]) {
 					if((strcmp(newBg, folderBgPath) != 0 || lastType != entry->type) && sizeof(folderBgPath) != 1) {
 						lastType = entry->type;
 						strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
-						SDL_FreeSurface(folderbgbmp);
-						folderbgbmp = loadFolderBackground(folderBgPath,entry->type);
+					
+						// folderbgbmp = loadFolderBackground(folderBgPath,entry->type);
+
+						startLoadFolderBackground(folderBgPath, entry->type, onBackgroundLoaded, NULL);
 					}
 				} 
-				GFX_clearLayers(1);
-				if(folderbgbmp && CFG_getRomsUseFolderBackground()) {
-					GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
-				} else if(bgbmp) {
-					GFX_drawOnLayer(bgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
-				} else {
-					GFX_drawOnLayer(blackBG,0, 0, screen->w, screen->h,1.0f,0,1);
-				}
+				
 				
 				// draw game artwork
 				if (total > 0) {
@@ -2191,7 +2268,11 @@ int main (int argc, char *argv[]) {
 				SDL_FreeSurface(tmpNewScreen);
 				animationdirection=0;
 			} 
-				
+				GFX_clearLayers(1);
+				if(folderbgbmp && CFG_getRomsUseFolderBackground()) {
+					LOG_info("Flipping?\n");
+					GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
+				} 
 				GFX_flip(screen);
 			
 			
@@ -2224,6 +2305,11 @@ int main (int argc, char *argv[]) {
 				int max_width = MIN(available_width, text_width);
 
 				GFX_clearLayers(4);
+
+				if(folderbgbmp && CFG_getRomsUseFolderBackground()) {
+					LOG_info("Flipping?\n");
+					GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
+				} 
 				GFX_scrollTextTexture(
 					font.large,
 					entry_text,
