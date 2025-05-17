@@ -1955,18 +1955,14 @@ int main (int argc, char *argv[]) {
 				
 				animationdirection=0;
 				SDL_Surface *tmpsur = GFX_captureRendererToSurface();
-				// GFX_clearLayers(0);
-				// GFX_clear(screen);
-				// update cpu surface
-				// GFX_flipHidden();
 				GFX_clearLayers(0);
+				GFX_clear(screen);
+				GFX_flipHidden();
+				if(bgbmp) SDL_FreeSurface(bgbmp);
 				if(lastScreen==SCREEN_GAMESWITCHER) {
-					GFX_clear(screen);
-					GFX_flipHidden();
 					GFX_animateSurfaceOpacityAndScale(tmpsur,screen->w/2,screen->h/2,screen->w,screen->h,screen->w*4,screen->h*4,255,0,CFG_getMenuTransitions() ? 150:20,1);
 				} else {
-					SDL_FillRect(tmpsur,NULL,SDL_MapRGBA(screen->format,0,0,0,255));
-					GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,0,255,CFG_getMenuTransitions() ? 150:20,1);
+					GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,1);
 					GFX_clear(screen);
 				}
 				SDL_FreeSurface(tmpsur);
@@ -2286,7 +2282,7 @@ int main (int argc, char *argv[]) {
 			}
 
 			if(animationdirection > 0) {
-				// GFX_clearLayers(1);
+				GFX_clearLayers(1);
 				GFX_clearLayers(2);
 				GFX_flipHidden();
 				SDL_Surface *tmpNewScreen = GFX_captureRendererToSurface();
