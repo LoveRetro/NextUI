@@ -2434,7 +2434,8 @@ int main (int argc, char *argv[]) {
 	if (folderbgbmp) SDL_FreeSurface(folderbgbmp);
 	if (thumbbmp) SDL_FreeSurface(thumbbmp);
 
-	Menu_quit();
+	// Why need to do this?
+	// Menu_quit();
 	PWR_quit();
 	PAD_quit();
 	GFX_quit();
