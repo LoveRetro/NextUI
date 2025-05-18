@@ -2148,20 +2148,21 @@ int main (int argc, char *argv[]) {
 				// load game thumbnails
 				if (total > 0) {
 					char thumbpath[1024];
-					if(CFG_getShowGameArt())
+					if(CFG_getShowGameArt()) {
 						snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
-					had_thumb = 0;
-					SDL_LockMutex(thumbMutex);
-				
-					startLoadThumb(thumbpath, onThumbLoaded, NULL);
-					int max_w = (int)(screen->w - (screen->w * CFG_getGameArtWidth())); 
-					int max_h = (int)(screen->h * 0.6);  
-					int new_w = max_w;
-					int new_h = max_h; 
-					had_thumb = 1;
-					ox = (int)(max_w) - SCALE1(BUTTON_MARGIN*5);
-				
-					SDL_UnlockMutex(thumbMutex);
+						had_thumb = 0;
+						SDL_LockMutex(thumbMutex);
+					
+						startLoadThumb(thumbpath, onThumbLoaded, NULL);
+						int max_w = (int)(screen->w - (screen->w * CFG_getGameArtWidth())); 
+						int max_h = (int)(screen->h * 0.6);  
+						int new_w = max_w;
+						int new_h = max_h; 
+						had_thumb = 1;
+						ox = (int)(max_w) - SCALE1(BUTTON_MARGIN*5);
+					
+						SDL_UnlockMutex(thumbMutex);
+					}
 				}
 
 				// buttons
