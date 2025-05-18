@@ -6,6 +6,7 @@ resume() {
 
 main() {
     echo "Preparing for suspend..."
+    sync
     echo mem > /sys/power/state
     echo "Resuming..."
     resume
