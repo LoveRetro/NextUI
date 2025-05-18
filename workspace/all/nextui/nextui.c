@@ -1418,6 +1418,7 @@ static SDL_Surface* screen = NULL; // Must be assigned externally
 static int had_thumb = 0;
 static int ox;
 static int oy;
+
 // queue a new image load task :D
 void enqueueTask(LoadBackgroundTask* task) {
     TaskNode* node = (TaskNode*)malloc(sizeof(TaskNode));
@@ -1545,6 +1546,82 @@ void onThumbLoaded(SDL_Surface* surface) {
     SDL_UnlockMutex(thumbMutex);
 }
 
+typedef void (*AnimTaskCallback)(SDL_Rect moveDst);
+typedef struct AnimTask {
+	int startX;
+	int targetX;
+	int startY;
+	int targetY;
+	int startAlpha;
+	int targetAlpha;
+	const char* reveal_direction;
+	int move_w; 
+	int move_h;
+	int reveal_w;
+	int reveal_h;
+	int reveal_x;
+	int reveal_y;
+	int duration;
+	AnimTaskCallback callback;
+} AnimTask;
+
+SDL_Rect pillRect;
+void animcallback(SDL_Rect dst) {
+	pillRect = dst;
+}
+int doAnimTask(AnimTask* task) {
+	const int fps = 60;
+	const int frame_delay = 1000 / fps;
+	const int total_frames = task->duration / frame_delay;
+
+	for (int frame = 0; frame <= total_frames; ++frame) {
+		float t = (float)frame / total_frames;
+		if (t > 1.0f) t = 1.0f;
+
+		int current_x = task->startX + (int)((task->targetX - task->startX) * t);
+		int current_y = task->startY + (int)(( task->targetY -  task->startY) * t);
+		int current_opacity = task->startAlpha + (int)((task->targetAlpha - task->startAlpha) * t);
+		if (current_opacity < 0) current_opacity = 0;
+		if (current_opacity > 255) current_opacity = 255;
+		
+
+		int reveal_src_x = 0, reveal_src_y = 0;
+		int reveal_draw_w = task->reveal_w, reveal_draw_h = task->reveal_h;
+
+		if (strcmp(task->reveal_direction, "left") == 0) {
+			reveal_draw_w = (int)(task->reveal_w * t + 0.5f);
+		}
+		else if (strcmp(task->reveal_direction, "right") == 0) {
+			reveal_draw_w = (int)(task->reveal_w * t + 0.5f);
+			reveal_src_x = task->reveal_w - reveal_draw_w;
+		}
+		else if (strcmp(task->reveal_direction, "up") == 0) {
+			reveal_draw_h = (int)(task->reveal_h * t + 0.5f);
+		}
+		else if (strcmp(task->reveal_direction, "down") == 0) {
+			reveal_draw_h = (int)(task->reveal_h * t + 0.5f);
+			reveal_src_y = task->reveal_h - reveal_draw_h;
+		}
+
+		SDL_Rect revealSrc = { reveal_src_x, reveal_src_y, reveal_draw_w, reveal_draw_h };
+		SDL_Rect revealDst = { task->reveal_x + reveal_src_x, task->reveal_y + reveal_src_y, reveal_draw_w, reveal_draw_h };
+		SDL_Rect moveDst = { current_x, current_y, task->move_w, task->move_h };
+		task->callback(moveDst);
+		SDL_Delay(16);
+
+
+	}
+
+
+}
+
+
+int animTaskThread(void *data) {
+    AnimTask *task = (AnimTask *)data;
+	task->callback = animcallback;
+    doAnimTask(task);
+    return 0;
+}
 ///////////////////////////////////////
 
 enum {
@@ -1630,6 +1707,16 @@ int main (int argc, char *argv[]) {
 
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
+
+			SDL_Surface *globalpill = SDL_CreateRGBSurfaceWithFormat(
+								SDL_SWSURFACE, 500, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888
+							);
+							    
+
+							GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){
+								0,0, 500, SCALE1(PILL_SIZE)
+							});
+
 	LOG_info("Start time time %ims\n",SDL_GetTicks());
 	while (!quit) {
 
@@ -2264,24 +2351,27 @@ int main (int argc, char *argv[]) {
 							SDL_Surface* text = TTF_RenderUTF8_Blended(font.large,  entry_unique ? entry_unique : entry_name, text_color);
 
 							is_scrolling = GFX_resetScrollText(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
-							SDL_Surface *pill = SDL_CreateRGBSurfaceWithFormat(
-								SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888
-							);
-							GFX_blitPillDark(ASSET_WHITE_PILL, pill, &(SDL_Rect){
-								0,0, max_width, SCALE1(PILL_SIZE)
-							});
+
 							if(animationdirection == 0)	{
-								GFX_flipHidden();
-								GFX_animateAndRevealSurfaces(
-									pill,text,
-									SCALE1(BUTTON_MARGIN), SCALE1(previousY+PADDING),SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING),max_width,SCALE1(PILL_SIZE),
-									SCALE1(BUTTON_MARGIN + BUTTON_PADDING),SCALE1(targetY+PADDING+4),max_width - SCALE1(BUTTON_PADDING*2),text->h,
-									selected_row == remember_selection ? "none" : selected_row > remember_selection ? "up":"down",
-									CFG_getMenuAnimations() ? 40:10,255,255,255,0,1
-								);
+								AnimTask* task = malloc(sizeof(AnimTask));
+								task->startX = SCALE1(BUTTON_MARGIN);
+								task->startY = SCALE1(previousY+PADDING);
+								task->targetX = SCALE1(BUTTON_MARGIN);
+								task->targetY = SCALE1(targetY+PADDING);
+								task->move_w = max_width;
+								task->move_h = SCALE1(PILL_SIZE);
+								task->reveal_x = SCALE1(BUTTON_MARGIN + BUTTON_PADDING);
+								task->reveal_y = SCALE1(targetY+PADDING+4);
+								task->reveal_w = max_width - SCALE1(BUTTON_PADDING*2);
+								task->reveal_h = text->h;
+								task->reveal_direction = selected_row == remember_selection ? "none" : selected_row > remember_selection ? "up":"down";
+								task->duration = 100;
+								task->startAlpha = 255;
+								task->targetAlpha = 255;
+								SDL_Thread *test = SDL_CreateThread(animTaskThread, "AnimThread", task);
+
 							} 
-							SDL_FreeSurface(text);
-							SDL_FreeSurface(pill);
+			
 						} 
 					}
 					remember_selection = selected_row;
@@ -2432,7 +2522,12 @@ int main (int argc, char *argv[]) {
 				);
 
 				
-			} else if (!show_switcher  && !show_version) {
+			} 
+			if (!show_switcher  && !show_version) {
+		
+							GFX_clearLayers(3);
+							GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 3);
+								PLAT_GPU_Flip();
 				PLAT_GPU_Flip();
 			} 
 			dirty = 0;
