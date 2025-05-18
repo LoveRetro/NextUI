@@ -2365,7 +2365,7 @@ int main (int argc, char *argv[]) {
 								task->reveal_w = max_width - SCALE1(BUTTON_PADDING*2);
 								task->reveal_h = text->h;
 								task->reveal_direction = selected_row == remember_selection ? "none" : selected_row > remember_selection ? "up":"down";
-								task->duration = 100;
+								task->duration = 60;
 								task->startAlpha = 255;
 								task->targetAlpha = 255;
 								SDL_Thread *test = SDL_CreateThread(animTaskThread, "AnimThread", task);
@@ -2437,6 +2437,9 @@ int main (int argc, char *argv[]) {
 				}
 				SDL_UnlockMutex(thumbMutex);
 			}
+			GFX_clearLayers(3);
+			GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 3);
+			PLAT_GPU_Flip();
 			GFX_flip(screen);
 			dirty = 0;
 			readytoscroll = 0;
@@ -2524,10 +2527,8 @@ int main (int argc, char *argv[]) {
 				
 			} 
 			if (!show_switcher  && !show_version) {
-		
-							GFX_clearLayers(3);
-							GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 3);
-								PLAT_GPU_Flip();
+				GFX_clearLayers(3);
+				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 3);
 				PLAT_GPU_Flip();
 			} 
 			dirty = 0;
