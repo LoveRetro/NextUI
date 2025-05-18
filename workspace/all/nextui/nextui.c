@@ -1413,7 +1413,7 @@ static SDL_Surface* thumbbmp = NULL;
 static SDL_Surface* screen = NULL; // Must be assigned externally
 
 // i think 2 is fine could probably even be 1
-#define THREAD_POOL_SIZE 1
+#define THREAD_POOL_SIZE 2
 
 static int had_thumb = 0;
 static int ox;
