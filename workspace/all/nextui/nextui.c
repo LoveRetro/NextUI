@@ -1435,26 +1435,48 @@ static SDL_Surface* folderbgbmp = NULL;
 static SDL_Surface* thumbbmp = NULL;
 static SDL_Surface* screen = NULL; // Must be assigned externally
 
-// i think 2 is fine could probably even be 1
-#define THREAD_POOL_SIZE 2
 
 static int had_thumb = 0;
 static int ox;
 static int oy;
 
 // queue a new image load task :D
+#define MAX_QUEUE_SIZE 3
+
+int currentQueueSize = 0;
+
 void enqueueTask(LoadBackgroundTask* task) {
     TaskNode* node = (TaskNode*)malloc(sizeof(TaskNode));
     node->task = task;
     node->next = NULL;
 
     SDL_LockMutex(queueMutex);
+
+    // If queue is full, drop the oldest task (head)
+    if (currentQueueSize >= MAX_QUEUE_SIZE) {
+        TaskNode* oldNode = taskQueueHead;
+        if (oldNode) {
+            taskQueueHead = oldNode->next;
+            if (!taskQueueHead) {
+                taskQueueTail = NULL;
+            }
+            if (oldNode->task) {
+                free(oldNode->task);  // Only if task was malloc'd
+            }
+            free(oldNode);
+            currentQueueSize--;
+        }
+    }
+
+    // Enqueue the new task
     if (taskQueueTail) {
         taskQueueTail->next = node;
         taskQueueTail = node;
     } else {
         taskQueueHead = taskQueueTail = node;
     }
+
+    currentQueueSize++;
     SDL_CondSignal(queueCond);
     SDL_UnlockMutex(queueMutex);
 }
@@ -1490,6 +1512,10 @@ int imageLoadWorker(void* unused) {
 
         if (task->callback) task->callback(result);
         free(task);
+		SDL_LockMutex(queueMutex);
+		if (!taskQueueHead) taskQueueTail = NULL;
+		currentQueueSize--;  // <-- add this
+		SDL_UnlockMutex(queueMutex);
     }
     return 0;
 }
@@ -1638,10 +1664,8 @@ void initImageLoaderPool() {
     folderBgMutex = SDL_CreateMutex();
     thumbMutex = SDL_CreateMutex();
 
-    for (int i = 0; i < THREAD_POOL_SIZE; ++i) {
-        SDL_CreateThread(imageLoadWorker, "ImageLoadWorker", NULL);
-    }
-	 SDL_CreateThread(animWorker, "animWorker", NULL);
+    SDL_CreateThread(imageLoadWorker, "ImageLoadWorker", NULL);
+	SDL_CreateThread(animWorker, "animWorker", NULL);
 }
 ///////////////////////////////////////
 
@@ -1958,6 +1982,7 @@ int main (int argc, char *argv[]) {
 				GFX_clearLayers(0);
 			}
 			else {	
+				GFX_clearLayers(2);
 				if(lastScreen!=SCREEN_GAMELIST)	GFX_clearLayers(3);
 				GFX_clearLayers(4);
 				GFX_clearLayers(5);
@@ -2079,7 +2104,7 @@ int main (int argc, char *argv[]) {
 				SDL_FreeSurface(tmpsur);
 			}
 			else if(show_switcher) {
-				GFX_clearLayers(2);
+				GFX_clearLayers(0);
 
 				// For all recents with resumable state (i.e. has savegame), show game switcher carousel
 
@@ -2410,14 +2435,14 @@ int main (int argc, char *argv[]) {
 				animationdirection=0;
 			} 
 			if(lastScreen == SCREEN_GAMELIST) {
-							SDL_LockMutex(folderBgMutex);
-			if(folderbgchanged && folderbgbmp) {
-				GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
-				folderbgchanged = 0;
-			} else if(folderbgchanged) {
-				GFX_clearLayers(1);
-			}
-			SDL_UnlockMutex(folderBgMutex);
+				SDL_LockMutex(folderBgMutex);
+				if(folderbgchanged && folderbgbmp) {
+					GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,1);
+					folderbgchanged = 0;
+				} else if(folderbgchanged) {
+					GFX_clearLayers(1);
+				}
+				SDL_UnlockMutex(folderBgMutex);
 				SDL_LockMutex(thumbMutex);
 				if(thumbbmp && thumbchanged) {
 					int img_w = thumbbmp->w;
@@ -2446,9 +2471,10 @@ int main (int argc, char *argv[]) {
 					GFX_clearLayers(3);
 				}
 				SDL_UnlockMutex(thumbMutex);
+				GFX_clearLayers(2);
+				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 2);
 			}
-			GFX_clearLayers(2);
-			GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 2);
+			
 			GFX_flip(screen);
 			SDL_LockMutex(animMutex);
 			frameReady = true;
@@ -2524,7 +2550,7 @@ int main (int argc, char *argv[]) {
 			
 				GFX_clearLayers(2);
 				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 2);
-				
+
 				GFX_clearLayers(4);
 				GFX_scrollTextTexture(
 					font.large,
