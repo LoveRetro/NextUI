@@ -1359,32 +1359,6 @@ static int remember_selection = 0;
 
 ///////////////////////////////////////
 
-SDL_Surface* loadFolderBackground(char* rompath, int type)
-{
-	char imagePath[MAX_PATH];
-	if(type == ENTRY_DIR)
-		snprintf(imagePath, sizeof(imagePath), "%s/.media/bg.png", rompath);
-	else if(type == ENTRY_ROM)
-		snprintf(imagePath, sizeof(imagePath), "%s/.media/bglist.png", rompath);
-
-	//LOG_info("Loading folder bg from %s\n", imagePath);
-	if(exists(imagePath)) {
-		SDL_Surface *image = IMG_Load(imagePath);
-		if(!image)
-			return NULL;
-		
-		SDL_Surface *image565 = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGBA8888, 0);
-		if(image565) {
-			SDL_FreeSurface(image);
-			image = image565;
-		}
-
-		return image;
-	} else {
-		return NULL;
-	}
-}
-
 typedef void (*BackgroundLoadedCallback)(SDL_Surface* surface);
 
 typedef struct {
@@ -1405,7 +1379,7 @@ typedef struct AnimTask {
 	AnimTaskCallback callback;
 	void* userData;
 } AnimTask;
-// --- Thread pool structures ---
+
 typedef struct TaskNode {
     LoadBackgroundTask* task;
     struct TaskNode* next;
@@ -1444,6 +1418,7 @@ static int oy;
 #define MAX_QUEUE_SIZE 3
 
 int currentQueueSize = 0;
+int currentAnimQueueSize = 0;
 
 void enqueueTask(LoadBackgroundTask* task) {
     TaskNode* node = (TaskNode*)malloc(sizeof(TaskNode));
@@ -1498,16 +1473,12 @@ int imageLoadWorker(void* unused) {
 
         SDL_Surface* result = NULL;
         if (access(task->imagePath, F_OK) == 0) {
-            SDL_LockMutex(imgLoadMutex);
             SDL_Surface* image = IMG_Load(task->imagePath);
-           
-
             if (image) {
                 SDL_Surface* imageRGBA = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGBA8888, 0);
                 SDL_FreeSurface(image);
                 result = imageRGBA;
             }
-			 SDL_UnlockMutex(imgLoadMutex);
         }
 
         if (task->callback) task->callback(result);
@@ -1544,8 +1515,7 @@ void onBackgroundLoaded(SDL_Surface* surface) {
 	}
 
     SDL_Surface* safeCopy = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA8888, 0);
-    SDL_FreeSurface(surface);  // Free the original from the thread
-
+    SDL_FreeSurface(surface); 
     if (!safeCopy) return;
 
     if (folderbgbmp) SDL_FreeSurface(folderbgbmp);
@@ -1572,9 +1542,8 @@ void onThumbLoaded(SDL_Surface* surface) {
 		return;
 	}
 
-    // Convert to a known pixel format (e.g., RGBA8888) to ensure compatibility
     SDL_Surface* safeCopy = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA8888, 0);
-    SDL_FreeSurface(surface);  // Free the thread-allocated surface
+    SDL_FreeSurface(surface);  
     if (!safeCopy) return;
 
    
@@ -1584,11 +1553,7 @@ void onThumbLoaded(SDL_Surface* surface) {
     SDL_UnlockMutex(thumbMutex);
 }
 
-
-
 SDL_Rect pillRect;
-
-
 
 void animcallback(SDL_Rect dst) {
 	pillRect = dst;
@@ -1627,10 +1592,11 @@ int animWorker(void* unused) {
 			}
 			frameReady = false;
 			SDL_UnlockMutex(animMutex);
-
-
-
 		}
+		SDL_LockMutex(animqueueMutex);
+		if (!animTaskQueueHead) animTtaskQueueTail = NULL;
+		currentAnimQueueSize--;  // <-- add this
+		SDL_UnlockMutex(animqueueMutex);
 		pillanimdone = 1;
 
 	}
@@ -1640,17 +1606,38 @@ void enqueueanmimtask(AnimTask* task) {
     AnimTaskNode* node = (AnimTaskNode*)malloc(sizeof(AnimTaskNode));
     node->task = task;
     node->next = NULL;
-	pillanimdone = 0;
+	
     SDL_LockMutex(animqueueMutex);
+	pillanimdone = 0;
+    // If queue is full, drop the oldest task (head)
+    if (currentAnimQueueSize >= MAX_QUEUE_SIZE) {
+        AnimTaskNode* oldNode = animTaskQueueHead;
+        if (oldNode) {
+            animTaskQueueHead = oldNode->next;
+            if (!animTaskQueueHead) {
+                animTtaskQueueTail = NULL;
+            }
+            if (oldNode->task) {
+                free(oldNode->task);  // Only if task was malloc'd
+            }
+            free(oldNode);
+            currentAnimQueueSize--;
+        }
+    }
+
+    // Enqueue the new task
     if (animTtaskQueueTail) {
         animTtaskQueueTail->next = node;
         animTtaskQueueTail = node;
     } else {
         animTaskQueueHead = animTtaskQueueTail = node;
     }
+
+    currentAnimQueueSize++;
     SDL_CondSignal(animqueueCond);
     SDL_UnlockMutex(animqueueMutex);
 }
+
 
 int animPill(AnimTask *task) {
 	task->callback = animcallback;
@@ -1753,14 +1740,14 @@ int main (int argc, char *argv[]) {
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
 
-			SDL_Surface *globalpill = SDL_CreateRGBSurfaceWithFormat(
-								SDL_SWSURFACE, 500, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888
-							);
+	SDL_Surface *globalpill = SDL_CreateRGBSurfaceWithFormat(
+						SDL_SWSURFACE, 500, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888
+					);
 							    
 
-							GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){
-								0,0, 500, SCALE1(PILL_SIZE)
-							});
+	GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){
+		0,0, 500, SCALE1(PILL_SIZE)
+	});
 
 	LOG_info("Start time time %ims\n",SDL_GetTicks());
 	while (!quit) {
@@ -2393,7 +2380,14 @@ int main (int argc, char *argv[]) {
 							SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
 							SDL_BlitSurface(text, &text_rect, screen, &dest_rect);
 							is_scrolling = GFX_resetScrollText(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
-
+							if(globalpill) SDL_FreeSurface(globalpill);
+							SDL_Surface *globalpill = SDL_CreateRGBSurfaceWithFormat(
+								SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888
+							);
+											
+							GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){
+								0,0, max_width, SCALE1(PILL_SIZE)
+							});
 							if(animationdirection == 0)	{
 								AnimTask* task = malloc(sizeof(AnimTask));
 								task->startX = SCALE1(BUTTON_MARGIN);
