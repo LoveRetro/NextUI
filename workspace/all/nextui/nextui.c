@@ -1393,16 +1393,39 @@ typedef struct {
     void* userData;
 } LoadBackgroundTask;
 
+typedef void (*AnimTaskCallback)(SDL_Rect moveDst);
+typedef struct AnimTask {
+	int startX;
+	int targetX;
+	int startY;
+	int targetY;
+	int move_w; 
+	int move_h;
+	int duration;
+	AnimTaskCallback callback;
+	void* userData;
+} AnimTask;
 // --- Thread pool structures ---
 typedef struct TaskNode {
     LoadBackgroundTask* task;
     struct TaskNode* next;
 } TaskNode;
+typedef struct AnimTaskNode {
+	AnimTask* task;
+    struct AnimTaskNode* next;
+} AnimTaskNode;
 
 static TaskNode* taskQueueHead = NULL;
 static TaskNode* taskQueueTail = NULL;
+static AnimTaskNode* animTaskQueueHead = NULL;
+static AnimTaskNode* animTtaskQueueTail = NULL;
 static SDL_mutex* queueMutex = NULL;
+static SDL_mutex* animqueueMutex = NULL;
 static SDL_cond* queueCond = NULL;
+static SDL_cond* animqueueCond = NULL;
+
+static SDL_mutex* animMutex = NULL;
+static SDL_cond* flipCond = NULL;
 
 static SDL_mutex* imgLoadMutex = NULL;
 static SDL_mutex* folderBgMutex = NULL;
@@ -1471,17 +1494,6 @@ int imageLoadWorker(void* unused) {
     return 0;
 }
 
-void initImageLoaderPool() {
-    queueMutex = SDL_CreateMutex();
-    queueCond = SDL_CreateCond();
-    imgLoadMutex = SDL_CreateMutex();
-    folderBgMutex = SDL_CreateMutex();
-    thumbMutex = SDL_CreateMutex();
-
-    for (int i = 0; i < THREAD_POOL_SIZE; ++i) {
-        SDL_CreateThread(imageLoadWorker, "ImageLoadWorker", NULL);
-    }
-}
 
 int folderbgchanged=0;
 int thumbchanged=0;
@@ -1546,81 +1558,90 @@ void onThumbLoaded(SDL_Surface* surface) {
     SDL_UnlockMutex(thumbMutex);
 }
 
-typedef void (*AnimTaskCallback)(SDL_Rect moveDst);
-typedef struct AnimTask {
-	int startX;
-	int targetX;
-	int startY;
-	int targetY;
-	int startAlpha;
-	int targetAlpha;
-	const char* reveal_direction;
-	int move_w; 
-	int move_h;
-	int reveal_w;
-	int reveal_h;
-	int reveal_x;
-	int reveal_y;
-	int duration;
-	AnimTaskCallback callback;
-} AnimTask;
+
 
 SDL_Rect pillRect;
+
+
+
 void animcallback(SDL_Rect dst) {
 	pillRect = dst;
 }
-int doAnimTask(AnimTask* task) {
-	const int fps = 60;
-	const int frame_delay = 1000 / fps;
-	const int total_frames = task->duration / frame_delay;
+bool frameReady = false;
+int pillanimdone = 0;
+int animWorker(void* unused) {
+	  while (true) {
+ 		SDL_LockMutex(animqueueMutex);
+        while (!animTaskQueueHead) {
+            SDL_CondWait(animqueueCond, animqueueMutex);
+        }
+        AnimTaskNode* node = animTaskQueueHead;
+        animTaskQueueHead = node->next;
+        if (!animTaskQueueHead) animTtaskQueueTail = NULL;
+		SDL_UnlockMutex(animqueueMutex);
 
-	for (int frame = 0; frame <= total_frames; ++frame) {
-		float t = (float)frame / total_frames;
-		if (t > 1.0f) t = 1.0f;
+        AnimTask* task = node->task;
 
-		int current_x = task->startX + (int)((task->targetX - task->startX) * t);
-		int current_y = task->startY + (int)(( task->targetY -  task->startY) * t);
-		int current_opacity = task->startAlpha + (int)((task->targetAlpha - task->startAlpha) * t);
-		if (current_opacity < 0) current_opacity = 0;
-		if (current_opacity > 255) current_opacity = 255;
-		
+		int fps = 60;
+		int frame_delay = 1000 / fps;
+		int total_frames = task->duration / frame_delay;
 
-		int reveal_src_x = 0, reveal_src_y = 0;
-		int reveal_draw_w = task->reveal_w, reveal_draw_h = task->reveal_h;
+		for (int frame = 0; frame <= total_frames; ++frame) {
+			float t = (float)frame / total_frames;
+			if (t > 1.0f) t = 1.0f;
 
-		if (strcmp(task->reveal_direction, "left") == 0) {
-			reveal_draw_w = (int)(task->reveal_w * t + 0.5f);
+			int current_x = task->startX + (int)((task->targetX - task->startX) * t);
+			int current_y = task->startY + (int)(( task->targetY -  task->startY) * t);
+			
+			SDL_Rect moveDst = { current_x, current_y, task->move_w, task->move_h };
+			task->callback(moveDst);
+			SDL_LockMutex(animMutex);
+			while (!frameReady) {
+				SDL_CondWait(flipCond, animMutex);
+			}
+			frameReady = false;
+			SDL_UnlockMutex(animMutex);
+
+
+
 		}
-		else if (strcmp(task->reveal_direction, "right") == 0) {
-			reveal_draw_w = (int)(task->reveal_w * t + 0.5f);
-			reveal_src_x = task->reveal_w - reveal_draw_w;
-		}
-		else if (strcmp(task->reveal_direction, "up") == 0) {
-			reveal_draw_h = (int)(task->reveal_h * t + 0.5f);
-		}
-		else if (strcmp(task->reveal_direction, "down") == 0) {
-			reveal_draw_h = (int)(task->reveal_h * t + 0.5f);
-			reveal_src_y = task->reveal_h - reveal_draw_h;
-		}
-
-		SDL_Rect revealSrc = { reveal_src_x, reveal_src_y, reveal_draw_w, reveal_draw_h };
-		SDL_Rect revealDst = { task->reveal_x + reveal_src_x, task->reveal_y + reveal_src_y, reveal_draw_w, reveal_draw_h };
-		SDL_Rect moveDst = { current_x, current_y, task->move_w, task->move_h };
-		task->callback(moveDst);
-		SDL_Delay(16);
-
+		pillanimdone = 1;
 
 	}
-
-
 }
 
+void enqueueanmimtask(AnimTask* task) {
+    AnimTaskNode* node = (AnimTaskNode*)malloc(sizeof(AnimTaskNode));
+    node->task = task;
+    node->next = NULL;
+	pillanimdone = 0;
+    SDL_LockMutex(animqueueMutex);
+    if (animTtaskQueueTail) {
+        animTtaskQueueTail->next = node;
+        animTtaskQueueTail = node;
+    } else {
+        animTaskQueueHead = animTtaskQueueTail = node;
+    }
+    SDL_CondSignal(animqueueCond);
+    SDL_UnlockMutex(animqueueMutex);
+}
 
-int animTaskThread(void *data) {
-    AnimTask *task = (AnimTask *)data;
+int animPill(AnimTask *task) {
 	task->callback = animcallback;
-    doAnimTask(task);
+  	 enqueueanmimtask(task);
     return 0;
+}
+void initImageLoaderPool() {
+    queueMutex = SDL_CreateMutex();
+    queueCond = SDL_CreateCond();
+    imgLoadMutex = SDL_CreateMutex();
+    folderBgMutex = SDL_CreateMutex();
+    thumbMutex = SDL_CreateMutex();
+
+    for (int i = 0; i < THREAD_POOL_SIZE; ++i) {
+        SDL_CreateThread(imageLoadWorker, "ImageLoadWorker", NULL);
+    }
+	 SDL_CreateThread(animWorker, "animWorker", NULL);
 }
 ///////////////////////////////////////
 
@@ -1937,9 +1958,9 @@ int main (int argc, char *argv[]) {
 				GFX_clearLayers(0);
 			}
 			else {	
-				if(lastScreen!=SCREEN_GAMELIST)	GFX_clearLayers(2);
-				GFX_clearLayers(3);
+				if(lastScreen!=SCREEN_GAMELIST)	GFX_clearLayers(3);
 				GFX_clearLayers(4);
+				GFX_clearLayers(5);
 			}
 			GFX_clear(screen);
 
@@ -2303,14 +2324,6 @@ int main (int argc, char *argv[]) {
 						int max_width = MIN(available_width, text_width);
 					
 						SDL_Color text_color = uintToColour(THEME_COLOR4_255);
-
-						if (j == selected_row && animationdirection > 0) {
-							GFX_blitPillDark(ASSET_WHITE_PILL, screen, &(SDL_Rect){
-								SCALE1(BUTTON_MARGIN),SCALE1(targetY+PADDING), max_width, SCALE1(PILL_SIZE)
-							});
-							text_color = uintToColour(THEME_COLOR5_255);
-						}
-
 						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
 						SDL_Surface* text_unique = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_DARK_TEXT);
 						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
@@ -2348,8 +2361,12 @@ int main (int argc, char *argv[]) {
 							int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width, SCALE1(BUTTON_PADDING * 2));
 							int max_width = MIN(available_width, text_width);
 							SDL_Color text_color = uintToColour(THEME_COLOR5_255);
-							SDL_Surface* text = TTF_RenderUTF8_Blended(font.large,  entry_unique ? entry_unique : entry_name, text_color);
-
+							SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
+							SDL_Surface* text_unique = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_DARK_TEXT);
+							SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
+							SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)+4) };
+							SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
+							SDL_BlitSurface(text, &text_rect, screen, &dest_rect);
 							is_scrolling = GFX_resetScrollText(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
 
 							if(animationdirection == 0)	{
@@ -2360,15 +2377,8 @@ int main (int argc, char *argv[]) {
 								task->targetY = SCALE1(targetY+PADDING);
 								task->move_w = max_width;
 								task->move_h = SCALE1(PILL_SIZE);
-								task->reveal_x = SCALE1(BUTTON_MARGIN + BUTTON_PADDING);
-								task->reveal_y = SCALE1(targetY+PADDING+4);
-								task->reveal_w = max_width - SCALE1(BUTTON_PADDING*2);
-								task->reveal_h = text->h;
-								task->reveal_direction = selected_row == remember_selection ? "none" : selected_row > remember_selection ? "up":"down";
-								task->duration = 60;
-								task->startAlpha = 255;
-								task->targetAlpha = 255;
-								SDL_Thread *test = SDL_CreateThread(animTaskThread, "AnimThread", task);
+								task->duration = 50;
+								animPill(task);
 
 							} 
 			
@@ -2410,7 +2420,6 @@ int main (int argc, char *argv[]) {
 			SDL_UnlockMutex(folderBgMutex);
 				SDL_LockMutex(thumbMutex);
 				if(thumbbmp && thumbchanged) {
-					GFX_clearLayers(2);
 					int img_w = thumbbmp->w;
 					int img_h = thumbbmp->h;
 					double aspect_ratio = (double)img_h / img_w;
@@ -2431,19 +2440,24 @@ int main (int argc, char *argv[]) {
 					int target_x = screen->w-(new_w + SCALE1(BUTTON_MARGIN*3));
 					int target_y = (int)(screen->h * 0.50);
 					int center_y = target_y - (new_h / 2); // FIX: use new_h instead of thumbbmp->h
-					GFX_drawOnLayer(thumbbmp,target_x,center_y,new_w,new_h,1.0f,0,2);
+					GFX_clearLayers(3);
+					GFX_drawOnLayer(thumbbmp,target_x,center_y,new_w,new_h,1.0f,0,3);
 				} else if(thumbchanged) {
-					GFX_clearLayers(2);
+					GFX_clearLayers(3);
 				}
 				SDL_UnlockMutex(thumbMutex);
 			}
-			GFX_clearLayers(3);
-			GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 3);
-			PLAT_GPU_Flip();
+			GFX_clearLayers(2);
+			GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 2);
 			GFX_flip(screen);
+			SDL_LockMutex(animMutex);
+			frameReady = true;
+			SDL_CondSignal(flipCond);
+			SDL_UnlockMutex(animMutex);
 			dirty = 0;
 			readytoscroll = 0;
 		} else {
+		
 			// honestly this whole thing is here only for the scrolling text, I set it now to run this at 30fps which is enough for scrolling text, should move this to seperate animation function eventually
 			Uint32 now = SDL_GetTicks();
 			Uint32 frame_start = now;
@@ -2459,7 +2473,6 @@ int main (int argc, char *argv[]) {
 			SDL_UnlockMutex(folderBgMutex);
 			SDL_LockMutex(thumbMutex);
 			if(thumbbmp && thumbchanged) {
-				GFX_clearLayers(2);
 				int img_w = thumbbmp->w;
 				int img_h = thumbbmp->h;
 				double aspect_ratio = (double)img_h / img_w;
@@ -2482,15 +2495,15 @@ int main (int argc, char *argv[]) {
 				int target_x = screen->w-(new_w + SCALE1(BUTTON_MARGIN*3));
 				int target_y = (int)(screen->h * 0.50);
 				int center_y = target_y - (new_h / 2); // FIX: use new_h instead of thumbbmp->h
-				GFX_clearLayers(2);
-				GFX_drawOnLayer(thumbbmp,target_x,center_y,new_w,new_h,1.0f,0,2);
+				GFX_clearLayers(3);
+				GFX_drawOnLayer(thumbbmp,target_x,center_y,new_w,new_h,1.0f,0,3);
 				thumbchanged = 0;
 			}  else if(thumbchanged) {
-					GFX_clearLayers(2);
-				}
+					GFX_clearLayers(3);
+			}
 			SDL_UnlockMutex(thumbMutex);
 			
-			if (!show_switcher && !show_version && is_scrolling) {
+			if (!show_switcher && !show_version && is_scrolling && pillanimdone) {
 				
 				int ow = GFX_blitHardwareGroup(screen, show_setting);
 				Entry* entry = top->entries->items[top->selected];
@@ -2508,10 +2521,10 @@ int main (int argc, char *argv[]) {
 
 				int text_width = GFX_getTextWidth(font.large, entry_text, cached_display_name, available_width, SCALE1(BUTTON_PADDING * 2));
 				int max_width = MIN(available_width, text_width);
-
-				
-				
 			
+				GFX_clearLayers(2);
+				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 2);
+				
 				GFX_clearLayers(4);
 				GFX_scrollTextTexture(
 					font.large,
@@ -2524,20 +2537,19 @@ int main (int argc, char *argv[]) {
 					1
 				);
 
-				
 			} 
-			if (!show_switcher  && !show_version) {
-				GFX_clearLayers(3);
-				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 3);
-				PLAT_GPU_Flip();
+			else if (!show_switcher  && !show_version) {
+				GFX_clearLayers(2);
+				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, pillRect.w, pillRect.h, 1.0f, 0, 2);
+				PLAT_GPU_Flip();	
 			} 
+			SDL_LockMutex(animMutex);
+			frameReady = true;
+			SDL_CondSignal(flipCond);
+			SDL_UnlockMutex(animMutex);
 			dirty = 0;
-			const int fps = 30; // 30fps is more then enough for scrolling text
-				const int frame_delay = 1000 / fps;
-				Uint32 frame_time = SDL_GetTicks() - frame_start;
-				if (frame_time < frame_delay) {
-					SDL_Delay(frame_delay - frame_time);
-				}
+			
+		
 		}
 		
 		// handle HDMI change

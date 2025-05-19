@@ -94,6 +94,7 @@ static struct VID_Context {
 	SDL_Texture* stream_layer1;
 	SDL_Texture* target_layer3;
 	SDL_Texture* target_layer4;
+	SDL_Texture* target_layer5;
 	SDL_Texture* target;
 	SDL_Texture* effect;
 	SDL_Texture* overlay;
@@ -478,6 +479,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.target_layer2 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	vid.target_layer3 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	vid.target_layer4 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer5 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	
 	vid.target	= NULL; // only needed for non-native sizes
 	
@@ -488,6 +490,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_SetTextureBlendMode(vid.target_layer2, SDL_BLENDMODE_BLEND);
 	SDL_SetTextureBlendMode(vid.target_layer3, SDL_BLENDMODE_BLEND);
 	SDL_SetTextureBlendMode(vid.target_layer4, SDL_BLENDMODE_BLEND);
+	SDL_SetTextureBlendMode(vid.target_layer5, SDL_BLENDMODE_BLEND);
 	
 	vid.width	= w;
 	vid.height	= h;
@@ -737,6 +740,7 @@ void PLAT_quitVideo(void) {
 	if (vid.target_layer1) SDL_DestroyTexture(vid.target_layer1);
 	if (vid.target_layer2) SDL_DestroyTexture(vid.target_layer2);
 	if (vid.target_layer4) SDL_DestroyTexture(vid.target_layer4);
+	if (vid.target_layer5) SDL_DestroyTexture(vid.target_layer5);
 	if (overlay_path) free(overlay_path);
 	SDL_DestroyTexture(vid.stream_layer1);
 	SDL_DestroyRenderer(vid.renderer);
@@ -1005,6 +1009,10 @@ void PLAT_clearLayers(int layer) {
 		SDL_SetRenderTarget(vid.renderer, vid.target_layer4);
 		SDL_RenderClear(vid.renderer);
 	}
+	if(layer==0 || layer==5) {
+		SDL_SetRenderTarget(vid.renderer, vid.target_layer5);
+		SDL_RenderClear(vid.renderer);
+	}
 
 	SDL_SetRenderTarget(vid.renderer, NULL);
 }
@@ -1035,6 +1043,9 @@ void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, flo
 		break;
 	case 4:
 		SDL_SetRenderTarget(vid.renderer, vid.target_layer4);
+		break;
+	case 5:
+		SDL_SetRenderTarget(vid.renderer, vid.target_layer5);
 		break;
 	default:
 		SDL_SetRenderTarget(vid.renderer, vid.target_layer1);
@@ -1221,6 +1232,7 @@ void PLAT_GPU_Flip() {
 	SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer3, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer4, NULL, NULL);
+	SDL_RenderCopy(vid.renderer, vid.target_layer5, NULL, NULL);
 	SDL_RenderPresent(vid.renderer);
 }
 
@@ -1670,6 +1682,7 @@ void PLAT_flipHidden() {
 	SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer3, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer4, NULL, NULL);
+	SDL_RenderCopy(vid.renderer, vid.target_layer5, NULL, NULL);
 	//  SDL_RenderPresent(vid.renderer); // no present want to flip  hidden
 }
 
@@ -1684,6 +1697,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
         SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
 		SDL_RenderCopy(vid.renderer, vid.target_layer3, NULL, NULL);
 		SDL_RenderCopy(vid.renderer, vid.target_layer4, NULL, NULL);
+		SDL_RenderCopy(vid.renderer, vid.target_layer5, NULL, NULL);
         SDL_RenderPresent(vid.renderer);
         return;
     }
