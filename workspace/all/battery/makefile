@@ -37,4 +37,4 @@ clean:
 	rm -f $(PRODUCT)
 
 $(PREFIX)/include/batmondb.h:
-	cd /root/workspace/all/libbatmondb && make
+	cd ../libbatmondb && make

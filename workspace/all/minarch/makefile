@@ -27,7 +27,11 @@ SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../
 CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(ARCH) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -O3 -Ofast -std=gnu99
-LDFLAGS	 += -lmsettings -lzip -lsamplerate -Llibretro-common -lsrm
+LDFLAGS	 += -lmsettings -lzip -lsamplerate
+ifeq ($(PLATFORM), tg5040)
+LDFLAGS	 +=  -Llibretro-common -lsrm
+CFLAGS   += -DHAS_SRM
+endif
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 # CFLAGS  += -fsanitize=address -fno-common
 # LDFLAGS += -lasan
@@ -39,6 +43,11 @@ BUILD_DATE!=date +%Y.%m.%d
 BUILD_HASH!=cat ../../hash.txt
 CFLAGS += -DBUILD_DATE=\"${BUILD_DATE}\" -DBUILD_HASH=\"${BUILD_HASH}\"
 
+ifeq ($(PLATFORM), desktop)
+all: libretro-common $(PREFIX)/include/msettings.h
+	mkdir -p build/$(PLATFORM)
+	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
+else
 all: libretro-common libsrm.a $(PREFIX)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	cp /usr/lib/aarch64-linux-gnu/libsamplerate.so.0 build/$(PLATFORM)
@@ -48,12 +57,13 @@ all: libretro-common libsrm.a $(PREFIX)/include/msettings.h
 	cp /lib/aarch64-linux-gnu/liblzma.so.5 build/$(PLATFORM)
 	cp /usr/lib/aarch64-linux-gnu/libzstd.so.1 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
+endif
 
 libretro-common:
 	git clone https://github.com/libretro/libretro-common
 	
 $(PREFIX)/include/msettings.h:
-	cd /root/workspace/$(PLATFORM)/libmsettings && make
+	cd ../../$(PLATFORM)/libmsettings && make
 
 ### libsrm stuff
 OBJECTS = streams/rzip_stream.o streams/file_stream.o vfs/vfs_implementation.o file/file_path.o file/file_path_io.o compat/compat_strl.o time/rtime.o string/stdstring.o encodings/encoding_utf.o streams/trans_stream.o streams/trans_stream_pipe.o streams/trans_stream_zlib.o
@@ -62,7 +72,7 @@ $(OBJECTS) :
 	cd libretro-common && $(CC) $(CFLAGS) -DHAVE_ZLIB -c -o $@ $(subst .o,.c,$@) -I include/
 
 libsrm.a: $(OBJECTS)
-	cd libretro-common && $(AR) $(ARFLAGS) $@ $?
+	cd libretro-common # && $(AR) $(ARFLAGS) $@ $?
 
 clean:
 	rm -f $(PRODUCT)

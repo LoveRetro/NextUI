@@ -15,8 +15,10 @@
 
 // libretro-common
 #include "libretro.h"
+#ifdef HAS_SRM
 #include "streams/rzip_stream.h"
 #include "streams/file_stream.h"
+#endif
 
 #include "defines.h"
 #include "api.h"
@@ -630,6 +632,7 @@ static void SRAM_read(void) {
 
 	void* sram = core.get_memory_data(RETRO_MEMORY_SAVE_RAM);
 
+#ifdef HAS_SRM
 	// TODO: rzipstream_open can also handle uncompressed, else branch is probably unnecessary
 	// srm, potentially compressed
 	if (CFG_getSaveFormat() == SAVE_FORMAT_SRM) {
@@ -651,6 +654,14 @@ static void SRAM_read(void) {
 		
 		filestream_close(sram_file);
 	}
+#else 
+	FILE *sram_file = fopen(filename, "r");
+	if (!sram_file) return;
+	if (!sram || !fread(sram, 1, sram_size, sram_file)) {
+		LOG_error("Error reading SRAM data\n");
+	}
+	fclose(sram_file);
+#endif
 }
 
 static void SRAM_write(void) {
@@ -663,6 +674,7 @@ static void SRAM_write(void) {
 	
 	void *sram = core.get_memory_data(RETRO_MEMORY_SAVE_RAM);
 
+#ifdef HAS_SRM
 	// srm, compressed
 	if (CFG_getSaveFormat() == SAVE_FORMAT_SRM) {
 		if(!rzipstream_write_file(filename, sram, sram_size))
@@ -672,7 +684,17 @@ static void SRAM_write(void) {
 		if(!filestream_write_file(filename, sram, sram_size))
 			LOG_error("filestream: Error writing SRAM data to file\n");
 	}
-
+#else
+	FILE *sram_file = fopen(filename, "w");
+	if (!sram_file) {
+		LOG_error("Error opening SRAM file: %s\n", strerror(errno));
+		return;
+	}
+	if (!sram || sram_size != fwrite(sram, 1, sram_size, sram_file)) {
+		LOG_error("Error writing SRAM data to file\n");
+	}
+	fclose(sram_file);
+#endif
 	sync();
 }
 
@@ -773,6 +795,7 @@ static void State_read(void) { // from picoarch
 	char filename[MAX_PATH];
 	State_getPath(filename);
 
+#ifdef HAS_SRM
 	RFILE *state_rfile = NULL;
 	rzipstream_t *state_rzfile = NULL;
 
@@ -825,7 +848,31 @@ error:
 	if (state) free(state);
 	if (state_rfile) filestream_close(state_rfile);
 	if (state_rzfile) rzipstream_close(state_rzfile);
+#else
+	FILE *state_file = fopen(filename, "r");
+	if (!state_file) {
+		if (state_slot!=8) { // st8 is a default state in MiniUI and may not exist, that's okay
+			LOG_error("Error opening state file: %s (%s)\n", filename, strerror(errno));
+		}
+		goto error;
+	}
 	
+	// some cores report the wrong serialize size initially for some games, eg. mgba: Wario Land 4
+	// so we allow a size mismatch as long as the actual size fits in the buffer we've allocated
+	if (state_size < fread(state, 1, state_size, state_file)) {
+		LOG_error("Error reading state data from file: %s (%s)\n", filename, strerror(errno));
+		goto error;
+	}
+
+	if (!core.unserialize(state, state_size)) {
+		LOG_error("Error restoring save state: %s (%s)\n", filename, strerror(errno));
+		goto error;
+	}
+
+error:
+	if (state) free(state);
+	if (state_file) fclose(state_file);
+#endif
 	fast_forward = was_ff;
 }
 
@@ -846,10 +893,10 @@ static void State_write(void) { // from picoarch
 		LOG_error("Error serializing save state\n");
 		goto error;
 	}
-
+	
 	char filename[MAX_PATH];
 	State_getPath(filename);
-
+#ifdef HAS_SRM
 	if (CFG_getStateFormat() == STATE_FORMAT_SRM) {
 		if(!rzipstream_write_file(filename, state, state_size)) {
 			LOG_error("rzipstream: Error writing state data to file: %s\n", filename);
@@ -865,9 +912,22 @@ static void State_write(void) { // from picoarch
 
 error:
 	if (state) free(state);
+#else
+	FILE *state_file = fopen(filename, "w");
+	if (!state_file) {
+		LOG_error("Error opening state file: %s (%s)\n", filename, strerror(errno));
+		goto error;
+	}
+	if (state_size != fwrite(state, 1, state_size, state_file)) {
+		LOG_error("Error writing state data to file: %s (%s)\n", filename, strerror(errno));
+		goto error;
+	}
+	error:
+	if (state) free(state);
+	if (state_file) fclose(state_file);
+#endif
 
 	sync();
-	
 	fast_forward = was_ff;
 }
 
@@ -6712,7 +6772,10 @@ int main(int argc , char* argv[]) {
 	char core_path[MAX_PATH];
 	char rom_path[MAX_PATH]; 
 	char tag_name[MAX_PATH];
-	
+
+	if(argc < 2)
+		return EXIT_FAILURE;
+
 	strcpy(core_path, argv[1]);
 	strcpy(rom_path, argv[2]);
 	getEmuName(rom_path, tag_name);

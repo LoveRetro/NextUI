@@ -1,6 +1,6 @@
 # there is no reason to use this makefile manually
 
-.PHONY: build
+.PHONY: build clean
 
 ifeq (,$(PLATFORM))
 $(error please specify PLATFORM, eg. make PLATFORM=trimui)

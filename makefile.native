@@ -1,0 +1,34 @@
+# there is no reason to use this makefile manually
+
+.PHONY: build clean
+
+ifeq (,$(PLATFORM))
+$(error please specify PLATFORM, eg. make PLATFORM=tg5040)
+endif
+
+.EXPORT_ALL_VARIABLES:
+# pseudo toolchain
+# TODO: brew installs gcc to e.g. /opt/homebrew/bin/gcc-14, but none of our makefiles support the suffix. 
+#       For now, just manually symlink all the build tools to a suffix-less path: sudo ./workspace/desktop/macos_create_gcc_symlinks.sh
+#       and make with: make setup common PLATFORM=desktop
+#       From brew we need at least: brew install gcc make zlib libsamplerate sqlite
+CROSS_COMPILE=/usr/local/bin/
+PREFIX=/opt/homebrew
+UNION_PLATFORM=desktop
+
+all: 
+	
+clean:
+	cd workspace && make clean
+	
+build: 
+	COMPILE_CORES=$(COMPILE_CORES) cd workspace && make
+
+build-cores: 
+    COMPILE_CORES=$(COMPILE_CORES) cd workspace && make cores
+
+build-core:
+ifndef CORE
+	$(error CORE is not set)
+endif
+	COMPILE_CORES=$(COMPILE_CORES) CORE=$(CORE) cd workspace && make core

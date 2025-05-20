@@ -5,18 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "NextUI Launcher",
+            "name": "NextUI",
             "request": "launch",
             "type": "cppdbg",
             "osx": {
               "MIMode": "lldb"
             },
-            "cwd": "${workspaceFolder}/workspace/all/nextui/build/macos",
-            "program": "${workspaceFolder}/workspace/all/nextui/build/macos/nextui",
-            "preLaunchTask": "C/C++: gcc build macos",
+            "cwd": "${workspaceFolder}/workspace/all/nextui/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/nextui/build/desktop/nextui.elf",
+            "preLaunchTask": "make desktop",
             "environment": [{
               "name": "SHARED_USERDATA_PATH", 
-              "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
+              "value": "/tmp/MinUI_FAKESD/.userdata/shared", 
             }]
         },
         {
@@ -26,9 +26,9 @@
             "osx": {
               "MIMode": "lldb"
             },
-            "cwd": "${workspaceFolder}/workspace/all/battery/build/macos",
-            "program": "${workspaceFolder}/workspace/all/battery/build/macos/battery",
-            "preLaunchTask": "C/C++: gcc build macos - Battery",
+            "cwd": "${workspaceFolder}/workspace/all/battery/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/battery/build/desktop/battery.elf",
+            "preLaunchTask": "make desktop",
         },
         {
             "name": "App: Input",
@@ -37,9 +37,9 @@
             "osx": {
               "MIMode": "lldb"
             },
-            "cwd": "${workspaceFolder}/workspace/all/minput/build/macos",
-            "program": "${workspaceFolder}/workspace/all/minput/build/macos/minput",
-            "preLaunchTask": "C/C++: gcc build macos - Minput",
+            "cwd": "${workspaceFolder}/workspace/all/minput/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/minput/build/desktop/minput.elf",
+            "preLaunchTask": "make desktop",
         },
         {
             "name": "App: Gametime",
@@ -48,9 +48,9 @@
             "osx": {
               "MIMode": "lldb"
             },
-            "cwd": "${workspaceFolder}/workspace/all/gametime/build/macos",
-            "program": "${workspaceFolder}/workspace/all/gametime/build/macos/gametime",
-            "preLaunchTask": "C/C++: gcc build macos - Gametime",
+            "cwd": "${workspaceFolder}/workspace/all/gametime/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/gametime/build/desktop/gametime.elf",
+            "preLaunchTask": "make desktop",
         },
         {
             "name": "App: Gametimectl",
@@ -59,10 +59,10 @@
             "osx": {
               "MIMode": "lldb"
             },
-            "cwd": "${workspaceFolder}/workspace/all/gametimectl/build/macos",
-            "program": "${workspaceFolder}/workspace/all/gametimectl/build/macos/gametimectl",
+            "cwd": "${workspaceFolder}/workspace/all/gametimectl/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/gametimectl/build/desktop/gametimectl.elf",
+            "preLaunchTask": "make desktop",
             "args": ["start", "foo.txt"],
-            "preLaunchTask": "C/C++: gcc build macos - Gametimectl",
         },
         {
             "name": "App: Settings",
@@ -71,13 +71,28 @@
             "osx": {
               "MIMode": "lldb"
             },
-            "cwd": "${workspaceFolder}/workspace/all/settings/build/macos",
-            "program": "${workspaceFolder}/workspace/all/settings/build/macos/settings",
-            "preLaunchTask": "C/C++: gcc build macos - Settings",
+            "cwd": "${workspaceFolder}/workspace/all/settings/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/settings/build/desktop/settings.elf",
+            "preLaunchTask": "make desktop",
             "environment": [{
               "name": "SHARED_USERDATA_PATH", 
-              "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
+              "value": "/tmp/MinUI_FAKESD/.userdata/shared", 
             }]
-        }
+        },
+        {
+            "name": "Minarch",
+            "request": "launch",
+            "type": "cppdbg",
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
+            "preLaunchTask": "make desktop",
+            "environment": [{
+              "name": "SHARED_USERDATA_PATH", 
+              "value": "/tmp/MinUI_FAKESD/.userdata/shared", 
+            }]
+        },
     ]
 }

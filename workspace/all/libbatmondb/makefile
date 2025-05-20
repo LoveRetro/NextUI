@@ -37,14 +37,14 @@ SOURCE = $(TARGET).c ../common/utils.c ../common/api.c ../../$(PLATFORM)/platfor
 
 CFLAGS  += $(ARCH) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
-LDFLAGS += -s
+LDFLAGS += -s -lsqlite3
 
 PRODUCT= build/$(PLATFORM)/lib$(TARGET).so
 
 build: 
 	mkdir -p build/$(PLATFORM)
 	$(CC) -c -Werror -fpic $(SOURCE) -Wl,--no-as-needed $(LDFLAGS) $(CFLAGS)
-	$(CC) -shared -o $(PRODUCT) "$(TARGET).o" $(LDFLAGS)
+	$(CC) -shared -o $(PRODUCT) "$(TARGET).o" "utils.o" $(LDFLAGS)
 	cp "$(TARGET).h" "$(PREFIX)/include"
 	cp $(PRODUCT) "$(PREFIX)/lib"
 clean:

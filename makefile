@@ -25,6 +25,11 @@ ifeq ($(BUILD_BRANCH),main)
 else
   RELEASE_BETA := -$(BUILD_BRANCH)
 endif
+ifeq ($(PLATFORM), desktop)
+	TOOLCHAIN_FILE := makefile.native
+else
+	TOOLCHAIN_FILE := makefile.toolchain
+endif
 RELEASE_BASE=NextUI-$(RELEASE_TIME)$(RELEASE_BETA)
 RELEASE_DOT:=$(shell find ./releases/. -regex ".*/${RELEASE_BASE}-[0-9]+-base\.zip" | wc -l | sed 's/ //g')
 RELEASE_NAME ?= $(RELEASE_BASE)-$(RELEASE_DOT)
@@ -38,38 +43,40 @@ export MAKEFLAGS=--no-print-directory
 all: setup $(PLATFORMS) special package done
 	
 shell:
-	make -f makefile.toolchain PLATFORM=$(PLATFORM)
+	make -f $(TOOLCHAIN_FILE) PLATFORM=$(PLATFORM)
 
 name: 
 	@echo $(RELEASE_NAME)
 
 build:
 	# ----------------------------------------------------
-	make build -f makefile.toolchain PLATFORM=$(PLATFORM) COMPILE_CORES=$(COMPILE_CORES)
+	make build -f $(TOOLCHAIN_FILE) PLATFORM=$(PLATFORM) COMPILE_CORES=$(COMPILE_CORES)
 	# ----------------------------------------------------
 
 build-cores:
-	make build-cores -f makefile.toolchain PLATFORM=$(PLATFORM) COMPILE_CORES=true
+	make build-cores -f $(TOOLCHAIN_FILE) PLATFORM=$(PLATFORM) COMPILE_CORES=true
 	# ----------------------------------------------------
 
 cores-json:
-	@cat workspace/tg5040/cores/makefile | grep ^CORES | cut -d' ' -f2 | jq  --raw-input .  | jq --slurp -cM .
+	@cat workspace/$(PLATFORM)/cores/makefile | grep ^CORES | cut -d' ' -f2 | jq  --raw-input .  | jq --slurp -cM .
 
 build-core:
 ifndef CORE
 	$(error CORE is not set)
 endif
-	make build-core -f makefile.toolchain PLATFORM=$(PLATFORM) COMPILE_CORES=true CORE=$(CORE)
+	make build-core -f $(TOOLCHAIN_FILE) PLATFORM=$(PLATFORM) COMPILE_CORES=true CORE=$(CORE)
 
 system:
 	make -f ./workspace/$(PLATFORM)/platform/makefile.copy PLATFORM=$(PLATFORM)
 	
 	# populate system
+ifneq ($(PLATFORM), desktop)
 	cp ./workspace/$(PLATFORM)/keymon/keymon.elf ./build/SYSTEM/$(PLATFORM)/bin/
+	cp ./workspace/all/syncsettings/build/$(PLATFORM)/syncsettings.elf ./build/SYSTEM/$(PLATFORM)/bin/
+endif
 	cp ./workspace/$(PLATFORM)/libmsettings/libmsettings.so ./build/SYSTEM/$(PLATFORM)/lib
 	cp ./workspace/all/nextui/build/$(PLATFORM)/nextui.elf ./build/SYSTEM/$(PLATFORM)/bin/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/minarch.elf ./build/SYSTEM/$(PLATFORM)/bin/
-	cp ./workspace/all/syncsettings/build/$(PLATFORM)/syncsettings.elf ./build/SYSTEM/$(PLATFORM)/bin/
 	cp ./workspace/all/nextval/build/$(PLATFORM)/nextval.elf ./build/SYSTEM/$(PLATFORM)/bin/
 	cp ./workspace/all/clock/build/$(PLATFORM)/clock.elf ./build/EXTRAS/Tools/$(PLATFORM)/Clock.pak/
 	cp ./workspace/all/minput/build/$(PLATFORM)/minput.elf ./build/EXTRAS/Tools/$(PLATFORM)/Input.pak/
@@ -99,6 +106,9 @@ ifeq ($(PLATFORM), tg5040)
 endif
 
 
+ifeq ($(PLATFORM), desktop)
+cores:
+else
 cores: # TODO: can't assume every platform will have the same stock cores (platform should be responsible for copy too)
 	# stock cores
 	cp ./workspace/$(PLATFORM)/cores/output/fceumm_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
@@ -135,11 +145,13 @@ endif
 	cp ./workspace/$(PLATFORM)/cores/output/vice_xplus4_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/PLUS4.pak
 	cp ./workspace/$(PLATFORM)/cores/output/vice_xpet_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/PET.pak
 	cp ./workspace/$(PLATFORM)/cores/output/vice_xvic_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/VIC.pak
+endif
 
 common: build system cores
 	
 clean:
 	rm -rf ./build
+	make clean -f $(TOOLCHAIN_FILE) PLATFORM=$(PLATFORM) COMPILE_CORES=$(COMPILE_CORES)
 
 setup: name
 	# ----------------------------------------------------
