@@ -60,7 +60,6 @@ before() {
         echo "Timed out: wakeup sources still active or unreadable after $max_retries attempts."
         exit 1
     fi
-    
     i=1
     while [ "$i" -le "$max_retries" ]; do
         if [ -w /sys/power/state ] && grep -qw mem /sys/power/state; then
