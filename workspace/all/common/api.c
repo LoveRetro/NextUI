@@ -2854,6 +2854,22 @@ static void PWR_exitSleep(void) {
 		PLAT_enableBacklight(1);
 		SetVolume(GetVolume());
 	}
+	// reinitialize audio after sleep otherwise it doesnt come back on sometimes
+	LOG_info("Reinitialize audio after sleep\n");
+	SDL_CloseAudio();
+
+	SDL_AudioSpec spec_in;
+	SDL_AudioSpec spec_out;
+
+	spec_in.freq = PLAT_pickSampleRate(snd.sample_rate_in, MAX_SAMPLE_RATE);
+	spec_in.format = AUDIO_S16;
+	spec_in.channels = 2;
+	spec_in.samples = SAMPLES;
+	spec_in.callback = SND_audioCallback;
+	
+	if (SDL_OpenAudio(&spec_in, &spec_out)<0) LOG_info("SDL_OpenAudio error: %s\n", SDL_GetError());
+	snd.sample_rate_out = spec_out.freq;
+
 	SDL_PauseAudio(0);
 	
 	sync();
