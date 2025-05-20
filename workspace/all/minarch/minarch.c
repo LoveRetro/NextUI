@@ -4804,7 +4804,6 @@ void Menu_quit(void) {
 	SDL_FreeSurface(menu.overlay);
 }
 void Menu_beforeSleep() {
-	LOG_info("beforeSleep\n");
 	SRAM_write();
 	RTC_write();
 	State_autosave();
@@ -4812,7 +4811,6 @@ void Menu_beforeSleep() {
 	PWR_setCPUSpeed(CPU_SPEED_MENU);
 }
 void Menu_afterSleep() {
-	LOG_info("beforeSleep\n");
 	unlink(AUTO_RESUME_PATH);
 	setOverclock(overclock);
 }
