@@ -47,7 +47,7 @@ after() {
 	>&2 echo "Resumed from suspend."
 
     for f in $(find /sys/devices/platform/soc/7081400.s_twi/i2c-6/6-0034/ -name wakeup); do
-        echo "Disabling wakeup in $f"
+        echo "Enabling wakeup in $f"
         echo enabled > "$f"
     done
 
