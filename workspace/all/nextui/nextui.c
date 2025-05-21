@@ -1644,7 +1644,7 @@ int animWorker(void* unused) {
 			finaltask->move_w = task->move_w;
 			finaltask->move_h = task->move_h;
 			finaltask->targetY = task->targetY;
-			finaltask->move_y = task->targetY+8;
+			finaltask->move_y = SCALE1(PADDING + task->targetY+4);
 			finaltask->done = 0;
 			if(frame >= total_frames) finaltask->done=1;
 			task->callback(finaltask);
