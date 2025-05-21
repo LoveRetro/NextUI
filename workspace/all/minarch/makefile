@@ -72,7 +72,7 @@ $(OBJECTS) :
 	cd libretro-common && $(CC) $(CFLAGS) -DHAVE_ZLIB -c -o $@ $(subst .o,.c,$@) -I include/
 
 libsrm.a: $(OBJECTS)
-	cd libretro-common # && $(AR) $(ARFLAGS) $@ $?
+	cd libretro-common && $(AR) $(ARFLAGS) $@ $?
 
 clean:
 	rm -f $(PRODUCT)
