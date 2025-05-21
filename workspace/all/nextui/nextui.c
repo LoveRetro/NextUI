@@ -2033,8 +2033,8 @@ int main (int argc, char *argv[]) {
 		}
 		
 		if(dirty) {
-			SDL_Surface *tmpOldScreen;
-			SDL_Surface * switchetsur;
+			SDL_Surface *tmpOldScreen = NULL;
+			SDL_Surface * switchetsur = NULL;
 			if(animationdirection > 0 || (lastScreen==SCREEN_GAMELIST && show_switcher)) {
 				if(tmpOldScreen) SDL_FreeSurface(tmpOldScreen);
 				tmpOldScreen = GFX_captureRendererToSurface();
