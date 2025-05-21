@@ -10,7 +10,6 @@ void main() {
 #endif
 
 #if defined(FRAGMENT)
-precision mediump float;
 uniform sampler2D Texture;
 varying vec2 vTexCoord;
 

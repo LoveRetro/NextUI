@@ -261,15 +261,15 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
         define = "#define VERTEX\n";
     } else if (type == GL_FRAGMENT_SHADER) {
         define = "#define FRAGMENT\n";
-        default_precision =
-            "#ifdef GL_ES\n"
-            "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
-            "precision highp float;\n"
-            "#else\n"
-            "precision mediump float;\n"
-            "#endif\n"
-            "#endif\n"
-			"#define PARAMETER_UNIFORM\n";
+        //default_precision =
+        //    "#ifdef GL_ES\n"
+        //    "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
+        //    "precision highp float;\n"
+        //    "#else\n"
+        //    "precision mediump float;\n"
+        //    "#endif\n"
+        //    "#endif\n"
+		//	"#define PARAMETER_UNIFORM\n";
     } else {
         fprintf(stderr, "Unsupported shader type\n");
         free(source);
@@ -279,8 +279,8 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
     const char* version_start = strstr(source, "#version");
     const char* version_end = version_start ? strchr(version_start, '\n') : NULL;
 
-    const char* replacement_version = "#version 300 es\n";
-    const char* fallback_version = "#version 100\n";
+    const char* replacement_version = "#version 120\n";
+    const char* fallback_version = "#version 120\n";
 
     char* combined = NULL;
     size_t define_len = strlen(define);
@@ -289,7 +289,7 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
     size_t combined_len = 0;
 
     // Helper: check if the version is one of the desktop ones to upgrade
-    int should_replace_with_300es = 0;
+    int should_replace = 0;
     if (version_start && version_end) {
         char version_str[32] = {0};
         size_t len = version_end - version_start;
@@ -298,27 +298,27 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
             version_str[len] = '\0';
 
             // Check for desktop GLSL versions that should be replaced
-            if (
-                strstr(version_str, "#version 110") ||
-                strstr(version_str, "#version 120") ||
-                strstr(version_str, "#version 130") ||
-                strstr(version_str, "#version 140") ||
-                strstr(version_str, "#version 150") ||
-                strstr(version_str, "#version 330") ||
-                strstr(version_str, "#version 400") ||
-                strstr(version_str, "#version 410") ||
-                strstr(version_str, "#version 420") ||
-                strstr(version_str, "#version 430") ||
-                strstr(version_str, "#version 440") ||
-                strstr(version_str, "#version 450")
-            ) {
-                should_replace_with_300es = 1;
-            }
+            //if (
+            //    strstr(version_str, "#version 110") ||
+            //    strstr(version_str, "#version 120") ||
+            //    strstr(version_str, "#version 130") ||
+            //    strstr(version_str, "#version 140") ||
+            //    strstr(version_str, "#version 150") ||
+            //    strstr(version_str, "#version 330") ||
+            //    strstr(version_str, "#version 400") ||
+            //    strstr(version_str, "#version 410") ||
+            //    strstr(version_str, "#version 420") ||
+            //    strstr(version_str, "#version 430") ||
+            //    strstr(version_str, "#version 440") ||
+            //    strstr(version_str, "#version 450")
+            //) {
+            //    should_replace = 1;
+            //}
         }
     }
 
-    if (version_start && version_end && should_replace_with_300es) {
-        // Replace old desktop version with 300 es
+    if (version_start && version_end && should_replace) {
+        // Replace old desktop version with replacement version
         size_t header_len = version_end - source + 1;
         size_t version_len = strlen(replacement_version);
         combined_len = version_len + define_len + precision_len + (source_len - header_len) + 1;
@@ -383,6 +383,9 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
         glDeleteShader(shader);
         return 0;
     }
+	else{
+		fprintf(stdout, "Shader compilation successful\n");
+	}
 
     return shader;
 }
@@ -410,8 +413,8 @@ void PLAT_initShaders() {
 }
 
 SDL_Surface* PLAT_initVideo(void) {
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	//SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
@@ -471,6 +474,8 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.gl_context = SDL_GL_CreateContext(vid.window);
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
+
+	LOG_info("OpenGL version: %s\n", (char *)glGetString(GL_VERSION));
 
 	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
