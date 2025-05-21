@@ -18,6 +18,7 @@ jobs:
     runs-on: macos-latest
     env:
       PLATFORM: desktop
+      COMPILE_CORES: true
 
     steps:
       - name: Checkout
@@ -32,4 +33,4 @@ jobs:
         run: make setup
 
       - name: Build
-        run: make common PLATFORM=${{ env.PLATFORM }}
+        run: make common PLATFORM=${{ env.PLATFORM }} COMPILE_CORES=${{ env.COMPILE_CORES }}
