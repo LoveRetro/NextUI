@@ -1372,6 +1372,7 @@ typedef struct finishedTask {
 	int targetX;
 	int startY;
 	int targetY;
+	int targetTextY;
 	int move_y;
 	int move_w; 
 	int move_h;
@@ -1388,6 +1389,7 @@ typedef struct AnimTask {
 	int targetX;
 	int startY;
 	int targetY;
+	int targetTextY;
 	int move_w; 
 	int move_h;
 	int frames;
@@ -1580,12 +1582,14 @@ SDL_Rect pillRect;
 SDL_Surface *globalpill;
 SDL_Surface *globalText;
 int pilltargetY =0;
+int pilltargetTextY =0;
 void animcallback(finishedTask *task) {
 	SDL_LockMutex(animMutex);
 	pillRect = task->dst; 
-	pilltargetY = -screen->w; // move offscreen
+	pilltargetY = +screen->w; // move offscreen
 	if(task->done) {
 		pilltargetY = task->targetY;
+		pilltargetTextY = task->targetTextY;
 		SDL_Color text_color = uintToColour(THEME_COLOR5_255);
 		SDL_Surface *tmp = TTF_RenderUTF8_Blended(font.large, task->entry_name, text_color);
 
@@ -1644,6 +1648,7 @@ int animWorker(void* unused) {
 			finaltask->move_w = task->move_w;
 			finaltask->move_h = task->move_h;
 			finaltask->targetY = task->targetY;
+			finaltask->targetTextY = task->targetTextY;
 			finaltask->move_y = SCALE1(PADDING + task->targetY+4);
 			finaltask->done = 0;
 			if(frame >= total_frames) finaltask->done=1;
@@ -2148,7 +2153,7 @@ int main (int argc, char *argv[]) {
 				GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
 			}
 			else if(startgame) {
-				pilltargetY = -screen->w;
+				pilltargetY = +screen->w;
 				animationdirection=0;
 				SDL_Surface *tmpsur = GFX_captureRendererToSurface();
 				GFX_clearLayers(0);
@@ -2433,6 +2438,8 @@ int main (int argc, char *argv[]) {
 							task->startY = SCALE1(previousY+PADDING);
 							task->targetX = SCALE1(BUTTON_MARGIN);
 							task->targetY = SCALE1(targetY+PADDING);
+							task->targetTextY = SCALE1(PADDING + targetY+4);
+							pilltargetTextY = +screen->w;
 							task->move_w = max_width;
 							task->move_h = SCALE1(PILL_SIZE);
 							task->frames = CFG_getMenuAnimations() ? 3:0;
@@ -2534,7 +2541,7 @@ int main (int argc, char *argv[]) {
 				
 				SDL_LockMutex(animMutex);
 				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, 2);
-				GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING), pilltargetY, globalText->w, globalText->h, 1.0f, 0, 4);
+				// GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, 4);
 				SDL_UnlockMutex(animMutex);
 			}
 			if(!startgame) // dont flip if game gonna start
@@ -2632,7 +2639,7 @@ int main (int argc, char *argv[]) {
 				GFX_clearLayers(4);
 				SDL_LockMutex(animMutex);
 				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, 2);
-				GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING),pilltargetY, globalText->w, globalText->h, 1.0f, 0, 4);
+				GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, 4);
 				SDL_UnlockMutex(animMutex);
 				PLAT_GPU_Flip();
 			} 
