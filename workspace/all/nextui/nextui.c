@@ -2534,7 +2534,7 @@ int main (int argc, char *argv[]) {
 				
 				SDL_LockMutex(animMutex);
 				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, 2);
-				GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING), pilltargetY+SCALE1(PADDING)-3, globalText->w, globalText->h, 1.0f, 0, 4);
+				GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING), pilltargetY, globalText->w, globalText->h, 1.0f, 0, 4);
 				SDL_UnlockMutex(animMutex);
 			}
 			if(!startgame) // dont flip if game gonna start
