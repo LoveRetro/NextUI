@@ -1,0 +1,35 @@
+---
+name: Development/Desktop
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+
+permissions:
+  attestations: write
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    env:
+      PLATFORM: desktop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Install dependencies
+        run: |
+          brew install make sdl2_image sdl2_ttf libzip libsamplerate
+          sudo ./workspace/desktop/macos_create_gcc_symlinks.sh
+
+      - name: Setup
+        run: make setup
+
+      - name: Build
+        run: make common PLATFORM=${{ env.PLATFORM }}
