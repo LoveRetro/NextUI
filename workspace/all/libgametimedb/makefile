@@ -45,10 +45,11 @@ build:
 	mkdir -p build/$(PLATFORM)
 	$(CC) -c -Werror -fpic $(SOURCE) -Wl,--no-as-needed $(LDFLAGS) $(CFLAGS)
 	$(CC) -shared -o $(PRODUCT) "$(TARGET).o" "utils.o" $(LDFLAGS)
-	cp "$(TARGET).h" "$(PREFIX)/include"
-	cp $(PRODUCT) "$(PREFIX)/lib"
+	cp "$(TARGET).h" "$(PREFIX_LOCAL)/include"
+	cp $(PRODUCT) "$(PREFIX_LOCAL)/lib"
+
 clean:
 	rm -f *.o
 	rm -f $(PRODUCT)
-	rm -f $(PREFIX)/include/$(TARGET).h
-	rm -f $(PREFIX)/lib/lib$(TARGET).so
+	rm -f $(PREFIX_LOCAL)/include/$(TARGET).h
+	rm -f $(PREFIX_LOCAL)/lib/lib$(TARGET).so

@@ -14,7 +14,7 @@ permissions:
   id-token: write
 
 jobs:
-  build:
+  build-macos:
     runs-on: macos-latest
     env:
       PLATFORM: desktop
@@ -27,6 +27,26 @@ jobs:
         run: |
           brew install make sdl2_image sdl2_ttf libzip libsamplerate
           sudo ./workspace/desktop/macos_create_gcc_symlinks.sh
+
+      - name: Setup
+        run: make setup
+
+      - name: Build
+        run: make common PLATFORM=${{ env.PLATFORM }}
+
+  build-linux:
+    runs-on: ubuntu-24.04-arm
+    env:
+      PLATFORM: desktop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-image-dev libsdl2-ttf-dev 
 
       - name: Setup
         run: make setup
