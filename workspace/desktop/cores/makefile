@@ -1,25 +1,25 @@
-CORES= c128
-CORES+= c64
-CORES+= fake-08
-CORES+= fbneo
-CORES+= fceumm
+#CORES= c128
+#CORES+= c64
+#CORES+= fake-08 (clang)
+#CORES+= fbneo
+#CORES+= fceumm (clang)
 CORES+= gambatte
-CORES+= gpsp
-CORES+= libretro-cap32
-CORES+= libretro-uae
-CORES+= mednafen_pce_fast
-CORES+= mednafen_supafaust
-CORES+= mednafen_vb
-CORES+= mgba
-CORES+= pcsx_rearmed
-CORES+= pet
-CORES+= picodrive
-CORES+= plus4
-CORES+= pokemini
-CORES+= race
-CORES+= snes9x
-CORES+= vic
-CORES+= prboom
+#CORES+= gpsp
+#CORES+= libretro-cap32
+#CORES+= libretro-uae
+#CORES+= mednafen_pce_fast
+#CORES+= mednafen_supafaust
+#CORES+= mednafen_vb
+#CORES+= mgba
+#CORES+= pcsx_rearmed
+#CORES+= pet
+#CORES+= picodrive (clang)
+#CORES+= plus4
+#CORES+= pokemini (clang)
+#CORES+= race (clang)
+#CORES+= snes9x
+#CORES+= vic
+#CORES+= prboom
 
 ###############################
 
