@@ -87,11 +87,14 @@
             },
             "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
             "program": "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
-            "preLaunchTask": "make desktop",
             "environment": [{
               "name": "SHARED_USERDATA_PATH", 
-              "value": "/tmp/MinUI_FAKESD/.userdata/shared", 
-            }]
+              "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
+            }],
+            "args": [
+              "/Library/Developer/Projects/private/MinUI_ro8inmorgan/workspace/desktop/cores/output/gambatte_libretro.so", 
+              "/Library/Developer/Projects/private/MinUI_FAKESD/Roms/Game Boy Color (GBC)/Tetris DX (SGB Enhanced) (GB Compatible).zip"
+            ],
         },
     ]
 }
