@@ -144,7 +144,7 @@
 
 ///////////////////////////////
 
-#define SDCARD_PATH "/tmp/MinUI_FAKESD"
+#define SDCARD_PATH "/Library/Developer/Projects/private/MinUI_FAKESD"
 #define MUTE_VOLUME_RAW 63 // 0 unintuitively is 100% volume
 
 #define MAX_LIGHTS 4
