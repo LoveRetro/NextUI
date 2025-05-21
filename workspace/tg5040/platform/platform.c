@@ -1573,6 +1573,9 @@ void PLAT_animateAndFadeSurface(
 		case 4:
 			SDL_SetRenderTarget(vid.renderer, vid.target_layer4);
 			break;
+		case 5:
+			SDL_SetRenderTarget(vid.renderer, vid.target_layer5);
+			break;
 		default:
 			SDL_SetRenderTarget(vid.renderer, vid.target_layer1);
 			break;
