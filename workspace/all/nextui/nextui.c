@@ -1502,7 +1502,6 @@ int imageLoadWorker(void* unused) {
 
         if (task->callback) {
 			task->callback(result);
-				LOG_info("thumb loaded %s\n",task->imagePath);
 		}
         free(task);
 		SDL_LockMutex(queueMutex);
