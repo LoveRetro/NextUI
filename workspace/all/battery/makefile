@@ -30,11 +30,11 @@ LDFLAGS	 += -lmsettings -lbatmondb -lsqlite3
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 
-all: $(PREFIX)/include/batmondb.h
+all: $(PREFIX_LOCAL)/include/batmondb.h
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 clean:
 	rm -f $(PRODUCT)
 
-$(PREFIX)/include/batmondb.h:
+$(PREFIX_LOCAL)/include/batmondb.h:
 	cd ../libbatmondb && make

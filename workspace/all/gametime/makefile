@@ -30,11 +30,11 @@ LDFLAGS	 += -lmsettings -lgametimedb -lsqlite3
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 
-all: $(PREFIX)/include/gametimedb.h
+all: $(PREFIX_LOCAL)/include/gametimedb.h
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 clean:
 	rm -f $(PRODUCT)
 
-$(PREFIX)/include/gametimedb.h:
-	cd /root/workspace/all/libgametimedb && make
+$(PREFIX_LOCAL)/include/gametimedb.h:
+	cd ../libgametimedb && make
