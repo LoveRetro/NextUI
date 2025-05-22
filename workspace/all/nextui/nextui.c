@@ -2035,6 +2035,7 @@ int main (int argc, char *argv[]) {
 		if(dirty) {
 			SDL_Surface *tmpOldScreen = NULL;
 			SDL_Surface * switchetsur = NULL;
+			// NOTE:22 This causes slowdown when CFG_getMenuTransitions is set to false because animationdirection turns > 0 somewhere but is never set back to 0 and so this code runs on every action, will fix later
 			if(animationdirection > 0 || (lastScreen==SCREEN_GAMELIST && show_switcher)) {
 				if(tmpOldScreen) SDL_FreeSurface(tmpOldScreen);
 				tmpOldScreen = GFX_captureRendererToSurface();
@@ -2501,7 +2502,7 @@ int main (int argc, char *argv[]) {
 				SDL_FreeSurface(tmpNewScreen);
 				animationdirection=0;
 			} else {
-				// TODO somehow this fixes a slowdown when CFG_getMenuTransitions() is off idk why, will need to check and fix the real problem later
+				// TODO SEE comment with NOTE:22 ... For now this fixes slowdown, but need to check a better solution probably
 				animationdirection=0;
 			}
 			if(lastScreen == SCREEN_GAMELIST) {
