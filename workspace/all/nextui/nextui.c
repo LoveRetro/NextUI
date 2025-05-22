@@ -2500,7 +2500,10 @@ int main (int argc, char *argv[]) {
 				GFX_clearLayers(3);
 				SDL_FreeSurface(tmpNewScreen);
 				animationdirection=0;
-			} 
+			} else {
+				// TODO somehow this fixes a slowdown when CFG_getMenuTransitions() is off idk why, will need to check and fix the real problem later
+				animationdirection=0;
+			}
 			if(lastScreen == SCREEN_GAMELIST) {
 				SDL_LockMutex(bgMutex);
 				if(folderbgchanged && folderbgbmp) {
