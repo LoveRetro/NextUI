@@ -202,4 +202,18 @@ jobs:
             ## How to install/update
             For a fresh installation, follow the instructions here: https://nextui.loveretro.games/getting-started/installation/
             When updating from a previous release: https://nextui.loveretro.games/getting-started/updating/
+      
+      - name: Github Releases To Discord
+        uses: SethCohen/github-releases-to-discord@master
+        with:
+          webhook_url: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          color: "10166871"
+          username: "Release Changelog"
+          avatar_url: "https://cdn.discordapp.com/avatars/487431320314576937/bd64361e4ba6313d561d54e78c9e7171.png"
+          content: "||@everyone||"
+          footer_title: "Changelog"
+          footer_icon_url: "https://cdn.discordapp.com/avatars/487431320314576937/bd64361e4ba6313d561d54e78c9e7171.png"
+          footer_timestamp: true
+          max_description: '4096'
+          reduce_headings: true
 
