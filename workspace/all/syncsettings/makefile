@@ -18,7 +18,7 @@ TARGET = syncsettings
 SOURCE = $(TARGET).c
 
 CC = $(CROSS_COMPILE)gcc
-CFLAGS   = $(ARCH) -DPLATFORM=\"$(PLATFORM)\"
+CFLAGS   = $(ARCH) -I$(PREFIX_LOCAL)/include -DPLATFORM=\"$(PLATFORM)\"
 LDFLAGS	 = -Os -lmsettings -lrt -ldl -Wl,--gc-sections -s
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
