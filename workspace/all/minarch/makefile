@@ -32,6 +32,12 @@ ifeq ($(PLATFORM), tg5040)
 LDFLAGS	 +=  -Llibretro-common -lsrm
 CFLAGS   += -DHAS_SRM
 endif
+ifeq ($(PLATFORM), desktop)
+ifeq ($(UNAME_S),Linux)
+CFLAGS += `pkg-config --cflags libzip`
+LDFLAGS += `pkg-config --libs libzip`
+endif
+endif
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 # CFLAGS  += -fsanitize=address -fno-common
 # LDFLAGS += -lasan

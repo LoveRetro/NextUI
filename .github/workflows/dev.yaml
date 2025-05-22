@@ -47,6 +47,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libsdl2-image-dev libsdl2-ttf-dev 
+          sudo apt-get install -y libzip-dev liblzma-dev libzstd-dev libbz2-dev zlib1g-dev
 
       - name: Setup
         run: make setup
