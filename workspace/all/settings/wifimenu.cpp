@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <map>
 
+#include <mutex>
 #include <shared_mutex>
 typedef std::shared_mutex Lock;
 typedef std::unique_lock<Lock> WriteLock;
