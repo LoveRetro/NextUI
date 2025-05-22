@@ -248,15 +248,15 @@ int main(int argc, char *argv[])
             { return std::string(TIME_getCurrentTimezone()); }, [](const std::any &value)
             { TIME_setCurrentTimezone(std::any_cast<std::string>(value).c_str()); },
             []() { TIME_setCurrentTimezone("Asia/Shanghai");}}, // default from Stock
-            new MenuItem{ListItemType::Generic, "Save format", "The save format to use. \"Retroarch\" uses compression.\nMinUI: Game.gba.sav, Retroarch: Game.srm, Generic: Game.sav", 
-            {(int)SAVE_FORMAT_SAV, (int)SAVE_FORMAT_SRM, (int)SAVE_FORMAT_GEN}, 
-            {"MinUI (default)", "Retroarch", "Generic"}, []() -> std::any
+            new MenuItem{ListItemType::Generic, "Save format", "The save format to use.\nMinUI: Game.gba.sav, Retroarch: Game.srm, Generic: Game.sav", 
+            {(int)SAVE_FORMAT_SAV, (int)SAVE_FORMAT_SRM, (int)SAVE_FORMAT_SRM_UNCOMPRESSED, (int)SAVE_FORMAT_GEN}, 
+            {"MinUI (default)", "Retroarch (compressed)", "Retroarch (uncompressed)", "Generic"}, []() -> std::any
             { return CFG_getSaveFormat(); }, [](const std::any &value)
             { CFG_setSaveFormat(std::any_cast<int>(value)); },
             []() { CFG_setSaveFormat(CFG_DEFAULT_SAVEFORMAT);}},
-            new MenuItem{ListItemType::Generic, "Save state format", "The save state format to use. \"Retroarch\" uses compression.\nMinUI: Game.st0, Retroarch: Game.state.0", 
-            {(int)STATE_FORMAT_SAV, (int)STATE_FORMAT_SRM}, 
-            {"MinUI (default)", "Retroarch"}, []() -> std::any
+            new MenuItem{ListItemType::Generic, "Save state format", "The save state format to use.\nMinUI: Game.st0, Retroarch: Game.state.0", 
+            {(int)STATE_FORMAT_SAV, (int)STATE_FORMAT_SRM, (int)STATE_FORMAT_SRM_UNCOMRESSED}, 
+            {"MinUI (default)", "Retroarch (compressed)", "Retroarch (uncompressed)"}, []() -> std::any
             { return CFG_getStateFormat(); }, [](const std::any &value)
             { CFG_setStateFormat(std::any_cast<int>(value)); },
             []() { CFG_setStateFormat(CFG_DEFAULT_STATEFORMAT);}},

@@ -605,7 +605,8 @@ static void formatSavePath(char* work_name, char* filename, const char* suffix) 
 static void SRAM_getPath(char* filename) {
 	char work_name[MAX_PATH];
 
-	if (CFG_getSaveFormat() == SAVE_FORMAT_SRM) {
+	if (CFG_getSaveFormat() == SAVE_FORMAT_SRM 
+	 || CFG_getSaveFormat() == SAVE_FORMAT_SRM_UNCOMPRESSED) {
 		strcpy(work_name, game.name);
 		formatSavePath(work_name, filename, ".srm");
 	}
@@ -740,7 +741,8 @@ static void formatStatePath(char* work_name, char* filename, const char* suffix)
 static void State_getPath(char* filename) {
 	char work_name[MAX_PATH];
 
-	if (CFG_getStateFormat() == STATE_FORMAT_SRM) {
+	if (CFG_getStateFormat() == STATE_FORMAT_SRM 
+	 || CFG_getStateFormat() == STATE_FORMAT_SRM_UNCOMRESSED) {
 		strcpy(work_name, game.name);
 		char* tmp = strrchr(work_name, '.');
 		if (tmp != NULL && strlen(tmp) > 2 && strlen(tmp) <= 5) {
