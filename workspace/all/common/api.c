@@ -761,42 +761,12 @@ struct blend_args {
 	uint16_t *blend_line;
 } blend_args;
 
-#if __ARM_ARCH >= 5 && !defined(__APPLE__) && !defined(__SNAPDRAGON__)
-static inline uint32_t average16(uint32_t c1, uint32_t c2) {
-	uint32_t ret, lowbits = 0x0821;
-	asm ("eor %0, %2, %3\r\n"
-	     "and %0, %0, %1\r\n"
-	     "add %0, %3, %0\r\n"
-	     "add %0, %0, %2\r\n"
-	     "lsr %0, %0, #1\r\n"
-	     : "=&r" (ret) : "r" (lowbits), "r" (c1), "r" (c2) : );
-	return ret;
-}
-static inline uint32_t average32(uint32_t c1, uint32_t c2) {
-	uint32_t ret, lowbits = 0x08210821;
-
-	asm ("eor %0, %3, %1\r\n"
-	     "and %0, %0, %2\r\n"
-	     "adds %0, %1, %0\r\n"
-	     "and %1, %1, #0\r\n"
-	     "movcs %1, #0x80000000\r\n"
-	     "adds %0, %0, %3\r\n"
-	     "rrx %0, %0\r\n"
-	     "orr %0, %0, %1\r\n"
-	     : "=&r" (ret), "+r" (c2) : "r" (lowbits), "r" (c1) : "cc" );
-
-	return ret;
-}
-
-#define AVERAGE16_NOCHK(c1, c2) (average16((c1), (c2)))
-#define AVERAGE32_NOCHK(c1, c2) (average32((c1), (c2)))
-
-#else
-
-static inline uint32_t average16(uint32_t c1, uint32_t c2) {
+// Pure C fallbacks
+static inline uint32_t average16_c(uint32_t c1, uint32_t c2) {
 	return (c1 + c2 + ((c1 ^ c2) & 0x0821))>>1;
 }
-static inline uint32_t average32(uint32_t c1, uint32_t c2) {
+
+static inline uint32_t average32_c(uint32_t c1, uint32_t c2) {
 	uint32_t sum = c1 + c2;
 	uint32_t ret = sum + ((c1 ^ c2) & 0x08210821);
 	uint32_t of = ((sum < c1) | (ret < sum)) << 31;
@@ -804,10 +774,91 @@ static inline uint32_t average32(uint32_t c1, uint32_t c2) {
 	return (ret >> 1) | of;
 }
 
+// not sure we are activating this anywhere currently, but we could.
+// to be honest, I'm not sure if we're using this function at all right now,
+// but I'm fixing it anyway so might as well improve it.
+#ifdef HAS_NEON 
+// #if defined(__ARM_NEON) || defined(__ARM_NEON__)
+static inline uint32x4_t average32_neon(uint32x4_t a, uint32x4_t b) {
+    return vhaddq_u32(a, b); // vector halving add (a + b) >> 1
+}
+#endif
+
+// aarch32 asm
+#if defined(__arm__) && !defined(__aarch64__)
+static inline uint32_t average16(uint32_t c1, uint32_t c2) {
+    uint32_t ret, lowbits = 0x0821;
+    asm volatile (
+        "eor %0, %2, %3\n\t"
+        "and %0, %0, %1\n\t"
+        "add %0, %3, %0\n\t"
+        "add %0, %0, %2\n\t"
+        "lsr %0, %0, #1\n\t"
+        : "=&r" (ret)
+        : "r" (lowbits), "r" (c1), "r" (c2)
+    );
+    return ret;
+}
+
+static inline uint32_t average32(uint32_t c1, uint32_t c2) {
+    uint32_t ret, lowbits = 0x08210821;
+    asm volatile (
+        "eor %0, %3, %1\n\t"
+        "and %0, %0, %2\n\t"
+        "adds %0, %1, %0\n\t"
+        "and %1, %1, #0\n\t"
+        "movcs %1, #0x80000000\n\t"
+        "adds %0, %0, %3\n\t"
+        "rrx %0, %0\n\t"
+        "orr %0, %0, %1\n\t"
+        : "=&r" (ret), "+r" (c2)
+        : "r" (lowbits), "r" (c1)
+        : "cc"
+    );
+    return ret;
+}
+
+// aarch64 asm
+#elif defined(__aarch64__)
+
+static inline uint32_t average16(uint32_t c1, uint32_t c2) {
+    uint32_t result;
+    asm volatile (
+        "and w2, %w0, %w1\n\t"
+        "eor w3, %w0, %w1\n\t"
+        "lsr w3, w3, #1\n\t"
+        "add %w2, w2, w3\n\t"
+        "mov %w0, w2\n\t"
+        : "+r"(c1)
+        : "r"(c2)
+        : "w2", "w3"
+    );
+    return c1;
+}
+
+static inline uint32_t average32(uint32_t c1, uint32_t c2) {
+    uint32_t result;
+    asm volatile (
+        "and w2, %w0, %w1\n\t"
+        "eor w3, %w0, %w1\n\t"
+        "lsr w3, w3, #1\n\t"
+        "add w2, w2, w3\n\t"
+        "mov %w0, w2\n\t"
+        : "+r"(c1)
+        : "r"(c2)
+        : "w2", "w3"
+    );
+    return c1;
+}
+
+// fallback if nothing else works
+#else
+#define average16 average16_c
+#define average32 average32_c
+#endif
+
 #define AVERAGE16_NOCHK(c1, c2) (average16((c1), (c2)))
 #define AVERAGE32_NOCHK(c1, c2) (average32((c1), (c2)))
-
-#endif
 
 #define AVERAGE16(c1, c2) ((c1) == (c2) ? (c1) : AVERAGE16_NOCHK((c1), (c2)))
 #define AVERAGE16_1_3(c1, c2) ((c1) == (c2) ? (c1) : (AVERAGE16_NOCHK(AVERAGE16_NOCHK((c1), (c2)), (c2))))
