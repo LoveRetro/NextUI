@@ -27,7 +27,7 @@ SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../
 CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(ARCH) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
-LDFLAGS	 += -lmsettings -lzip -lsamplerate
+LDFLAGS	 += -lmsettings -lsamplerate
 ifeq ($(PLATFORM), tg5040)
 LDFLAGS	 +=  -Llibretro-common -lsrm
 CFLAGS   += -DHAS_SRM
@@ -36,6 +36,8 @@ ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
 CFLAGS += `pkg-config --cflags libzip`
 LDFLAGS += `pkg-config --libs libzip`
+else
+LDFLAGS += -lzip
 endif
 endif
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
@@ -50,11 +52,11 @@ BUILD_HASH!=cat ../../hash.txt
 CFLAGS += -DBUILD_DATE=\"${BUILD_DATE}\" -DBUILD_HASH=\"${BUILD_HASH}\"
 
 ifeq ($(PLATFORM), desktop)
-all: libretro-common $(PREFIX)/include/msettings.h
+all: libretro-common $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 else
-all: libretro-common libsrm.a $(PREFIX)/include/msettings.h
+all: libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	cp /usr/lib/aarch64-linux-gnu/libsamplerate.so.0 build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
@@ -68,7 +70,7 @@ endif
 libretro-common:
 	git clone https://github.com/libretro/libretro-common
 	
-$(PREFIX)/include/msettings.h:
+$(PREFIX_LOCAL)/include/msettings.h:
 	cd ../../$(PLATFORM)/libmsettings && make
 
 ### libsrm stuff

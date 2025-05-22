@@ -30,11 +30,11 @@ LDFLAGS	 += -lmsettings
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 
-all: $(PREFIX)/include/msettings.h
+all: $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 clean:
 	rm -f $(PRODUCT)
 
-$(PREFIX)/include/msettings.h:
+$(PREFIX_LOCAL)/include/msettings.h:
 	cd ../../$(PLATFORM)/libmsettings && make
