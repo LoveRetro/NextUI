@@ -51,6 +51,7 @@ gambatte_REPO = https://github.com/libretro/gambatte-libretro
 mednafen_supafaust_REPO = https://github.com/libretro/supafaust
 
 pcsx_rearmed_MAKEFILE = Makefile.libretro
+# pcsx has a disabled submodule for gnulib, which takes forever to check out and is unused - skil checkout
 pcsx_rearmed_SUBMODULES = frontend/libpicofe
 
 picodrive_REPO = https://github.com/irixxxx/picodrive
