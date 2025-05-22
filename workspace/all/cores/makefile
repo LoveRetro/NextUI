@@ -34,8 +34,9 @@ $1_BUILD_PATH ?= $(1)
 
 src/$(1):
 	mkdir -p src
-	cd src && git clone $(if $($1_HASH),,--depth 1) --recursive $$($(1)_REPO) $(1)
+	cd src && git clone $(if $($1_HASH),,--depth 1) $$($(1)_REPO) $(1)
 	$(if $($1_HASH),cd src/$$($1_BUILD_PATH) && git checkout $($1_HASH) && echo $($1_HASH),)
+	$(if $($1_SUBMODULES),cd src/$(1) && git submodule init $($1_SUBMODULES) && git submodule update $($1_SUBMODULES),cd src/$(1) && git submodule update --init --recursive)
 
 src/$(1)/.patched: src/$(1)
 	(test ! -f patches/$(1).patch) || (test -f src/$(1)/.patched) || (cd src/$(1) && $(PATCH) -p1 < ../../patches/$(1).patch && touch .patched && true)
