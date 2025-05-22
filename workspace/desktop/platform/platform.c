@@ -19,7 +19,6 @@
 #include "utils.h"
 
 #include "scaler.h"
-#include "opengl.h"
 
 #include <dirent.h>
 

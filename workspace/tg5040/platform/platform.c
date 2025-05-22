@@ -22,8 +22,6 @@
 #include <time.h>
 #include <pthread.h>
 
-#include "opengl.h"
-
 #include <dirent.h>
 
 static int finalScaleFilter=GL_LINEAR;

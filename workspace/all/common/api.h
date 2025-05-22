@@ -212,7 +212,6 @@ enum {
 	MODE_MAIN,
 	MODE_MENU,
 };
-#include "opengl.h"
 #define MAX_PARAM_NAME 128
 #define MAX_PARAM_LABEL 128
 typedef struct {
