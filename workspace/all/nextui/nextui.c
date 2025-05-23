@@ -2643,7 +2643,7 @@ int main (int argc, char *argv[]) {
 				GFX_clearLayers(4);
 				SDL_LockMutex(animMutex);
 				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, 2);
-				GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, 4);
+				GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, 4);
 				SDL_UnlockMutex(animMutex);
 				PLAT_GPU_Flip();
 			} 
