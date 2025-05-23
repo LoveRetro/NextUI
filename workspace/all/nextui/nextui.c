@@ -1437,6 +1437,7 @@ int thumbchanged=0;
 
 // queue a new image load task :D
 #define MAX_QUEUE_SIZE 4
+#define THREAD_POOL_SIZE 3
 
 int currentQueueSize = 0;
 int currentAnimQueueSize = 0;
@@ -1716,6 +1717,7 @@ int animPill(AnimTask *task) {
 	enqueueanmimtask(task);
     return 0;
 }
+
 void initImageLoaderPool() {
     queueMutex = SDL_CreateMutex();
     queueCond = SDL_CreateCond();
@@ -1726,8 +1728,12 @@ void initImageLoaderPool() {
 	animqueueCond = SDL_CreateCond();
 	frameMutex = SDL_CreateMutex();
 	flipCond = SDL_CreateCond();
+    for (int i = 0; i < THREAD_POOL_SIZE; ++i) {
+      	char thread_name[32];
+		snprintf(thread_name, sizeof(thread_name), "ImageLoadWorker_%d", i);
+		SDL_CreateThread(imageLoadWorker, thread_name, NULL);
+    }
 
-    SDL_CreateThread(imageLoadWorker, "ImageLoadWorker", NULL);
 	SDL_CreateThread(animWorker, "animWorker", NULL);
 }
 ///////////////////////////////////////
