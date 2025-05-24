@@ -11,8 +11,8 @@ endif
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	CROSS_COMPILE=/usr/bin/
-	PREFIX=/usr
-	PREFIX_LOCAL=/opt/nextui
+	PREFIX=$(HOME)/nextui
+	PREFIX_LOCAL=$(HOME)/nextui
 endif
 ifeq ($(UNAME_S),Darwin)
 	# TODO: brew installs gcc to e.g. /opt/homebrew/bin/gcc-14, but none of our makefiles support the suffix. 
