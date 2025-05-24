@@ -245,7 +245,6 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_resetScrollText PLAT_resetScrollText
 #define GFX_scrollTextTexture PLAT_scrollTextTexture
 #define GFX_flipHidden PLAT_flipHidden //(void)
-#define GFX_GL_Swap PLAT_GL_Swap //(void)
 #define GFX_GL_screenCapture PLAT_GL_screenCapture //(void)
 
 #define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
@@ -563,6 +562,7 @@ scaler_t PLAT_getScaler(GFX_Renderer* renderer);
 void PLAT_blitRenderer(GFX_Renderer* renderer);
 void PLAT_flip(SDL_Surface* screen, int sync);
 void PLAT_GL_Swap();
+void GFX_GL_Swap();
 unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight);
 unsigned char* PLAT_pixelscaler(const unsigned char* src, int sw, int sh, int scale, int* outW, int* outH);
 void PLAT_GPU_Flip();

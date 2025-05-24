@@ -533,6 +533,36 @@ void GFX_flip(SDL_Surface* screen) {
 	
 	per_frame_start = SDL_GetPerformanceCounter();
 }
+void GFX_GL_Swap() {
+
+	PLAT_GL_Swap();
+
+	currentfps = current_fps;
+	fps_counter++;
+
+	uint64_t performance_frequency = SDL_GetPerformanceFrequency();
+	uint64_t frame_duration = SDL_GetPerformanceCounter() - per_frame_start;
+	double elapsed_time_s = (double)frame_duration / performance_frequency;
+	double tempfps = 1.0 / elapsed_time_s;
+
+	if(tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2) tempfps = SCREEN_FPS;
+	
+	fps_buffer[fps_buffer_index] = tempfps;
+	fps_buffer_index = (fps_buffer_index + 1) % FPS_BUFFER_SIZE;
+	// give it a little bit to stabilize and then use, meanwhile the buffer will
+	// cover it
+	if (fps_counter > 100) {
+		double average_fps = 0.0;
+		int fpsbuffersize = MIN(fps_counter, FPS_BUFFER_SIZE);
+		for (int i = 0; i < fpsbuffersize; i++) {
+			average_fps += fps_buffer[i];
+		}
+		average_fps /= fpsbuffersize;
+		current_fps = average_fps;
+	}
+	
+	per_frame_start = SDL_GetPerformanceCounter();
+}
 // eventually this function should be removed as its only here because of all the audio buffer based delay stuff
 void GFX_sync(void) {
 	uint32_t frame_duration = SDL_GetTicks() - frame_start;
