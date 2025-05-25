@@ -1414,9 +1414,11 @@ static TaskNode* taskThumbQueueHead = NULL;
 static TaskNode* taskThumbQueueTail = NULL;
 static AnimTaskNode* animTaskQueueHead = NULL;
 static AnimTaskNode* animTtaskQueueTail = NULL;
-static SDL_mutex* queueMutex = NULL;
+static SDL_mutex* bgqueueMutex = NULL;
+static SDL_mutex* thumbqueueMutex = NULL;
 static SDL_mutex* animqueueMutex = NULL;
-static SDL_cond* queueCond = NULL;
+static SDL_cond* bgqueueCond = NULL;
+static SDL_cond* thumbqueueCond = NULL;
 static SDL_cond* animqueueCond = NULL;
 
 static SDL_mutex* bgMutex = NULL;
@@ -1445,7 +1447,7 @@ int currentThumbQueueSize = 0;
 int currentAnimQueueSize = 0;
 
 void enqueueBGTask(LoadBackgroundTask* task) {
-	SDL_LockMutex(queueMutex);
+	SDL_LockMutex(bgqueueMutex);
     TaskNode* node = (TaskNode*)malloc(sizeof(TaskNode));
     node->task = task;
     node->next = NULL;
@@ -1475,11 +1477,11 @@ void enqueueBGTask(LoadBackgroundTask* task) {
     }
  
     currentBGQueueSize++;
-    SDL_CondSignal(queueCond);
-    SDL_UnlockMutex(queueMutex);
+    SDL_CondSignal(bgqueueCond);
+    SDL_UnlockMutex(bgqueueMutex);
 }
 void enqueueThumbTask(LoadBackgroundTask* task) {
-	SDL_LockMutex(queueMutex);
+	SDL_LockMutex(thumbqueueMutex);
     TaskNode* node = (TaskNode*)malloc(sizeof(TaskNode));
     node->task = task;
     node->next = NULL;
@@ -1509,21 +1511,21 @@ void enqueueThumbTask(LoadBackgroundTask* task) {
     }
  
     currentThumbQueueSize++;
-    SDL_CondSignal(queueCond);
-    SDL_UnlockMutex(queueMutex);
+    SDL_CondSignal(thumbqueueCond);
+    SDL_UnlockMutex(thumbqueueMutex);
 }
 
 // Worker threadd
 int BGLoadWorker(void* unused) {
     while (true) {
-        SDL_LockMutex(queueMutex);
+        SDL_LockMutex(bgqueueMutex);
         while (!taskBGQueueHead) {
-        	SDL_CondWait(queueCond, queueMutex);
+        	SDL_CondWait(bgqueueCond, bgqueueMutex);
         }
         TaskNode* node = taskBGQueueHead;
         taskBGQueueHead = node->next;
         if (!taskBGQueueHead) taskBGQueueTail = NULL;
-        SDL_UnlockMutex(queueMutex);
+        SDL_UnlockMutex(bgqueueMutex);
 		// give processor lil space in between queue items for other shit
 		SDL_Delay(100);
         LoadBackgroundTask* task = node->task;
@@ -1543,23 +1545,23 @@ int BGLoadWorker(void* unused) {
 			task->callback(result);
 		}
         free(task);
-		SDL_LockMutex(queueMutex);
+		SDL_LockMutex(bgqueueMutex);
 		if (!taskBGQueueHead) taskBGQueueTail = NULL;
 		currentBGQueueSize--;  // <-- add this
-		SDL_UnlockMutex(queueMutex);
+		SDL_UnlockMutex(bgqueueMutex);
     }
     return 0;
 }
 int ThumbLoadWorker(void* unused) {
     while (true) {
-        SDL_LockMutex(queueMutex);
+        SDL_LockMutex(thumbqueueMutex);
         while (!taskThumbQueueHead) {
-        	SDL_CondWait(queueCond, queueMutex);
+        	SDL_CondWait(thumbqueueCond, thumbqueueMutex);
         }
         TaskNode* node = taskThumbQueueHead;
         taskThumbQueueHead = node->next;
         if (!taskThumbQueueHead) taskThumbQueueTail = NULL;
-        SDL_UnlockMutex(queueMutex);
+        SDL_UnlockMutex(thumbqueueMutex);
 		// give processor lil space in between queue items for other shit
 		SDL_Delay(100);
         LoadBackgroundTask* task = node->task;
@@ -1579,10 +1581,10 @@ int ThumbLoadWorker(void* unused) {
 			task->callback(result);
 		}
         free(task);
-		SDL_LockMutex(queueMutex);
+		SDL_LockMutex(thumbqueueMutex);
 		if (!taskThumbQueueHead) taskThumbQueueTail = NULL;
 		currentThumbQueueSize--;  // <-- add this
-		SDL_UnlockMutex(queueMutex);
+		SDL_UnlockMutex(thumbqueueMutex);
     }
     return 0;
 }
@@ -1790,8 +1792,10 @@ int animPill(AnimTask *task) {
     return 0;
 }
 void initImageLoaderPool() {
-    queueMutex = SDL_CreateMutex();
-    queueCond = SDL_CreateCond();
+    thumbqueueMutex = SDL_CreateMutex();
+    bgqueueMutex = SDL_CreateMutex();
+    bgqueueCond = SDL_CreateCond();
+    thumbqueueCond = SDL_CreateCond();
 	bgMutex = SDL_CreateMutex();
 	thumbMutex = SDL_CreateMutex();
 	animMutex = SDL_CreateMutex();
