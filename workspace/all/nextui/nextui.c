@@ -2421,7 +2421,7 @@ int main (int argc, char *argv[]) {
 					
 						SDL_Color text_color = uintToColour(THEME_COLOR4_255);
 						int notext = 0;
-						if(selected_row == remember_selection && j == selected_row && (selected_row+1 >= (top->end-top->start) || selected_row == 0)) {
+						if(selected_row == remember_selection && j == selected_row && (selected_row+1 >= (top->end-top->start) || selected_row == 0 || selected_row == remember_selection)) {
 							text_color = uintToColour(THEME_COLOR5_255);
 							notext=1;
 						}
@@ -2450,7 +2450,7 @@ int main (int argc, char *argv[]) {
 							task->move_w = max_width;
 							task->move_h = SCALE1(PILL_SIZE);
 							task->frames = CFG_getMenuAnimations() ? 3:0;
-							task->entry_name = notext ? "  ":entry_name;
+							task->entry_name = notext ? " ":entry_name;
 							animPill(task);
 							
 			
@@ -2638,7 +2638,6 @@ int main (int argc, char *argv[]) {
 					entry_text,
 					SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (remember_selection * PILL_SIZE) + 4),
 					max_width - SCALE1(BUTTON_PADDING * 2),
-					0,
 					0,
 					text_color,
 					1

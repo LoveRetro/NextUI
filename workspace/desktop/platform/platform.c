@@ -1109,55 +1109,59 @@ void PLAT_scrollTextTexture(
     const char* in_name,
     int x, int y,      // Position on target layer
     int w, int h,      // Clipping width and height
-    int padding,
     SDL_Color color,
     float transparency
 ) {
-   
     static int frame_counter = 0;
+	int padding = 30;
 
     if (transparency < 0.0f) transparency = 0.0f;
     if (transparency > 1.0f) transparency = 1.0f;
     color.a = (Uint8)(transparency * 255);
 
-    char scroll_text[1024];
-    snprintf(scroll_text, sizeof(scroll_text), "%s  %s", in_name, in_name);
+    // Render the original text only once
+    SDL_Surface* singleSur = TTF_RenderUTF8_Blended(font, in_name, color);
+    if (!singleSur) return;
 
-	SDL_Surface* tempSur = TTF_RenderUTF8_Blended(font, scroll_text, color);
-	SDL_Surface* text_surface = SDL_CreateRGBSurfaceWithFormat(0,
-		tempSur->w, tempSur->h, 32, SDL_PIXELFORMAT_RGBA8888);
-	
-	SDL_FillRect(text_surface, NULL, THEME_COLOR1);
-	SDL_BlitSurface(tempSur, NULL, text_surface, NULL);
+    int single_width = singleSur->w;
+    int single_height = singleSur->h;
+
+    // Create a surface to hold two copies side by side with padding
+    SDL_Surface* text_surface = SDL_CreateRGBSurfaceWithFormat(0,
+        single_width * 2 + padding, single_height, 32, SDL_PIXELFORMAT_RGBA8888);
+
+    SDL_FillRect(text_surface, NULL, THEME_COLOR1);
+    SDL_BlitSurface(singleSur, NULL, text_surface, NULL);
+
+    SDL_Rect second = { single_width + padding, 0, single_width, single_height };
+    SDL_BlitSurface(singleSur, NULL, text_surface, &second);
+    SDL_FreeSurface(singleSur);
 
     SDL_Texture* full_text_texture = SDL_CreateTextureFromSurface(vid.renderer, text_surface);
     int full_text_width = text_surface->w;
-	int full_text_height = text_surface->h;
     SDL_FreeSurface(text_surface);
-    SDL_FreeSurface(tempSur);
 
-    if (!full_text_texture) {
-        return;
-    }
+    if (!full_text_texture) return;
 
     SDL_SetTextureBlendMode(full_text_texture, SDL_BLENDMODE_BLEND);
     SDL_SetTextureAlphaMod(full_text_texture, color.a);
 
     SDL_SetRenderTarget(vid.renderer, vid.target_layer4);
 
-    SDL_Rect src_rect = { text_offset, 0, w, full_text_height };
-    SDL_Rect dst_rect = { x, y, w, full_text_height };
+    SDL_Rect src_rect = { text_offset, 0, w, single_height };
+    SDL_Rect dst_rect = { x, y, w, single_height };
 
     SDL_RenderCopy(vid.renderer, full_text_texture, &src_rect, &dst_rect);
 
     SDL_SetRenderTarget(vid.renderer, NULL);
     SDL_DestroyTexture(full_text_texture);
 
-    if (full_text_width > w + padding) {
+    // Scroll only if text is wider than clip width
+    if (single_width > w) {
         frame_counter++;
-        if (frame_counter >= 1) {
-            text_offset += 3;
-            if (text_offset >= full_text_width / 2) {
+        if (frame_counter >= 0) {
+            text_offset += 2;
+            if (text_offset >= single_width + padding) {
                 text_offset = 0;
             }
             frame_counter = 0;
@@ -1166,7 +1170,7 @@ void PLAT_scrollTextTexture(
         text_offset = 0;
     }
 
-	PLAT_GPU_Flip();
+    PLAT_GPU_Flip();
 }
 
 // super fast without update_texture to draw screen

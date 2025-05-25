@@ -551,7 +551,6 @@ void PLAT_scrollTextTexture(
     const char* in_name,
     int x, int y,      // Position on target layer
     int w, int h,      // Clipping width and height
-    int padding,
     SDL_Color color,
     float transparency
 );
