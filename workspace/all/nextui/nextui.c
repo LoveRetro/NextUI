@@ -1408,8 +1408,10 @@ typedef struct AnimTaskNode {
     struct AnimTaskNode* next;
 } AnimTaskNode;
 
-static TaskNode* taskQueueHead = NULL;
-static TaskNode* taskQueueTail = NULL;
+static TaskNode* taskBGQueueHead = NULL;
+static TaskNode* taskBGQueueTail = NULL;
+static TaskNode* taskThumbQueueHead = NULL;
+static TaskNode* taskThumbQueueTail = NULL;
 static AnimTaskNode* animTaskQueueHead = NULL;
 static AnimTaskNode* animTtaskQueueTail = NULL;
 static SDL_mutex* queueMutex = NULL;
@@ -1436,57 +1438,91 @@ int folderbgchanged=0;
 int thumbchanged=0;
 
 // queue a new image load task :D
-#define MAX_QUEUE_SIZE 4
-#define THREAD_POOL_SIZE 3
+#define MAX_QUEUE_SIZE 1
 
-int currentQueueSize = 0;
+int currentBGQueueSize = 0;
+int currentThumbQueueSize = 0;
 int currentAnimQueueSize = 0;
 
-void enqueueTask(LoadBackgroundTask* task) {
+void enqueueBGTask(LoadBackgroundTask* task) {
 	SDL_LockMutex(queueMutex);
     TaskNode* node = (TaskNode*)malloc(sizeof(TaskNode));
     node->task = task;
     node->next = NULL;
 
     // If queue is full, drop the oldest task (head)
-    if (currentQueueSize >= MAX_QUEUE_SIZE) {
-        TaskNode* oldNode = taskQueueHead;
+    if (currentBGQueueSize >= MAX_QUEUE_SIZE) {
+        TaskNode* oldNode = taskBGQueueHead;
         if (oldNode) {
-            taskQueueHead = oldNode->next;
-            if (!taskQueueHead) {
-                taskQueueTail = NULL;
+            taskBGQueueHead = oldNode->next;
+            if (!taskBGQueueHead) {
+                taskBGQueueTail = NULL;
             }
             if (oldNode->task) {
                 free(oldNode->task);  // Only if task was malloc'd
             }
             free(oldNode);
-            currentQueueSize--;
+            currentBGQueueSize--;
         }
     }
 
     // Enqueue the new task
-    if (taskQueueTail) {
-        taskQueueTail->next = node;
-        taskQueueTail = node;
+    if (taskBGQueueTail) {
+        taskBGQueueTail->next = node;
+        taskBGQueueTail = node;
     } else {
-        taskQueueHead = taskQueueTail = node;
+        taskBGQueueHead = taskBGQueueTail = node;
     }
  
-    currentQueueSize++;
+    currentBGQueueSize++;
+    SDL_CondSignal(queueCond);
+    SDL_UnlockMutex(queueMutex);
+}
+void enqueueThumbTask(LoadBackgroundTask* task) {
+	SDL_LockMutex(queueMutex);
+    TaskNode* node = (TaskNode*)malloc(sizeof(TaskNode));
+    node->task = task;
+    node->next = NULL;
+
+    // If queue is full, drop the oldest task (head)
+    if (currentThumbQueueSize >= MAX_QUEUE_SIZE) {
+        TaskNode* oldNode = taskThumbQueueHead;
+        if (oldNode) {
+            taskThumbQueueHead = oldNode->next;
+            if (!taskThumbQueueHead) {
+                taskThumbQueueTail = NULL;
+            }
+            if (oldNode->task) {
+                free(oldNode->task);  // Only if task was malloc'd
+            }
+            free(oldNode);
+            currentThumbQueueSize--;
+        }
+    }
+
+    // Enqueue the new task
+    if (taskThumbQueueTail) {
+        taskThumbQueueTail->next = node;
+        taskThumbQueueTail = node;
+    } else {
+        taskThumbQueueHead = taskThumbQueueTail = node;
+    }
+ 
+    currentThumbQueueSize++;
     SDL_CondSignal(queueCond);
     SDL_UnlockMutex(queueMutex);
 }
 
 // Worker threadd
-int imageLoadWorker(void* unused) {
+int BGLoadWorker(void* unused) {
     while (true) {
         SDL_LockMutex(queueMutex);
-        while (!taskQueueHead) {
+        while (!taskBGQueueHead) {
         	SDL_CondWait(queueCond, queueMutex);
         }
-        TaskNode* node = taskQueueHead;
-        taskQueueHead = node->next;
-        if (!taskQueueHead) taskQueueTail = NULL;
+        TaskNode* node = taskBGQueueHead;
+        taskBGQueueHead = node->next;
+        if (!taskBGQueueHead) taskBGQueueTail = NULL;
         SDL_UnlockMutex(queueMutex);
 		// give processor lil space in between queue items for other shit
 		SDL_Delay(100);
@@ -1508,8 +1544,44 @@ int imageLoadWorker(void* unused) {
 		}
         free(task);
 		SDL_LockMutex(queueMutex);
-		if (!taskQueueHead) taskQueueTail = NULL;
-		currentQueueSize--;  // <-- add this
+		if (!taskBGQueueHead) taskBGQueueTail = NULL;
+		currentBGQueueSize--;  // <-- add this
+		SDL_UnlockMutex(queueMutex);
+    }
+    return 0;
+}
+int ThumbLoadWorker(void* unused) {
+    while (true) {
+        SDL_LockMutex(queueMutex);
+        while (!taskThumbQueueHead) {
+        	SDL_CondWait(queueCond, queueMutex);
+        }
+        TaskNode* node = taskThumbQueueHead;
+        taskThumbQueueHead = node->next;
+        if (!taskThumbQueueHead) taskThumbQueueTail = NULL;
+        SDL_UnlockMutex(queueMutex);
+		// give processor lil space in between queue items for other shit
+		SDL_Delay(100);
+        LoadBackgroundTask* task = node->task;
+        free(node);
+
+        SDL_Surface* result = NULL;
+        if (access(task->imagePath, F_OK) == 0) {
+            SDL_Surface* image = IMG_Load(task->imagePath);
+            if (image) {
+                SDL_Surface* imageRGBA = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGBA8888, 0);
+                SDL_FreeSurface(image);
+                result = imageRGBA;
+            }
+        }
+
+        if (task->callback) {
+			task->callback(result);
+		}
+        free(task);
+		SDL_LockMutex(queueMutex);
+		if (!taskThumbQueueHead) taskThumbQueueTail = NULL;
+		currentThumbQueueSize--;  // <-- add this
 		SDL_UnlockMutex(queueMutex);
     }
     return 0;
@@ -1522,7 +1594,7 @@ void startLoadFolderBackground(const char* imagePath, int type, BackgroundLoaded
  	snprintf(task->imagePath, sizeof(task->imagePath), "%s", imagePath);
     task->callback = callback;
     task->userData = userData;
-    enqueueTask(task);
+    enqueueBGTask(task);
 }
 
 void onBackgroundLoaded(SDL_Surface* surface) {
@@ -1545,7 +1617,7 @@ void startLoadThumb(const char* thumbpath, BackgroundLoadedCallback callback, vo
     snprintf(task->imagePath, sizeof(task->imagePath), "%s", thumbpath);
     task->callback = callback;
     task->userData = userData;
-    enqueueTask(task);
+    enqueueThumbTask(task);
 }
 void onThumbLoaded(SDL_Surface* surface) {
 	SDL_LockMutex(thumbMutex);
@@ -1717,7 +1789,6 @@ int animPill(AnimTask *task) {
 	enqueueanmimtask(task);
     return 0;
 }
-
 void initImageLoaderPool() {
     queueMutex = SDL_CreateMutex();
     queueCond = SDL_CreateCond();
@@ -1728,12 +1799,9 @@ void initImageLoaderPool() {
 	animqueueCond = SDL_CreateCond();
 	frameMutex = SDL_CreateMutex();
 	flipCond = SDL_CreateCond();
-    for (int i = 0; i < THREAD_POOL_SIZE; ++i) {
-      	char thread_name[32];
-		snprintf(thread_name, sizeof(thread_name), "ImageLoadWorker_%d", i);
-		SDL_CreateThread(imageLoadWorker, thread_name, NULL);
-    }
 
+    SDL_CreateThread(BGLoadWorker, "BGLoadWorker", NULL);
+    SDL_CreateThread(ThumbLoadWorker, "ThumbLoadWorker", NULL);
 	SDL_CreateThread(animWorker, "animWorker", NULL);
 }
 ///////////////////////////////////////
