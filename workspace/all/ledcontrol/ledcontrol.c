@@ -41,7 +41,7 @@ const char *lr_effect_names[] = {
             snprintf(diskfilename, sizeof(diskfilename), SHARED_USERDATA_PATH "/ledsettings_brick.txt");
         }
         else {
-            maxlights = 2;
+            maxlights = 3;
             snprintf(diskfilename, sizeof(diskfilename), SHARED_USERDATA_PATH "/ledsettings.txt");
         }
 
@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
         const char *brick_names[] = {"F1 key", "F2 key", "Top bar", "L&R triggers"};
         memcpy(lightnames, brick_names, sizeof(brick_names)); // Copy values
     } else {
-        const char *default_names[] = {"Joysticks", "Logo"};
+        const char *default_names[] = {"Joystick L","Joystick R", "Logo"};
         memcpy(lightnames, default_names, sizeof(default_names)); // Copy values
     }
     PLAT_initLeds(lightsDefault);
@@ -280,7 +280,7 @@ int main(int argc, char *argv[])
         int is_online = PLAT_isOnline();
 		if (was_online!=is_online) dirty = 1;
 		was_online = is_online;
-        int numOfLights = 2;
+        int numOfLights = 3;
         if(is_brick) numOfLights = 4;
 
 

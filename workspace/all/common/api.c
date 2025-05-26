@@ -3134,7 +3134,7 @@ void LED_setColor(uint32_t color,int ledindex) {
 
 void LEDS_updateLeds() {
 	if(pwr.charge > PWR_LOW_CHARGE) {
-		int lightsize = 2;
+		int lightsize = 3;
 		if(is_brick)
 			lightsize=4;
 		for (int i = 0; i < lightsize; i++)

@@ -2600,8 +2600,8 @@ void PLAT_initDefaultLeds() {
 	};
 } else {
 	lightsDefault[0] = (LightSettings) {
-		"Joysticks",
-		"lr",
+		"Joystick L",
+		"l",
 		4,
 		1000,
 		100,
@@ -2614,6 +2614,20 @@ void PLAT_initDefaultLeds() {
 		0
 	};
 	lightsDefault[1] = (LightSettings) {
+		"Joystick R",
+		"r",
+		4,
+		1000,
+		100,
+		0xFFFFFF,
+		0xFFFFFF,
+		0,
+		{},
+		1,
+		100,
+		0
+	};
+	lightsDefault[2] = (LightSettings) {
 		"Logo",
 		"m",
 		4,
