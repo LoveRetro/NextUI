@@ -3134,7 +3134,9 @@ void LED_setColor(uint32_t color,int ledindex) {
 
 void LEDS_updateLeds() {
 	if(pwr.charge > PWR_LOW_CHARGE) {
-		int lightsize = sizeof(*lights) / sizeof(LightSettings);
+		int lightsize = 2;
+		if(is_brick)
+			lightsize=4;
 		for (int i = 0; i < lightsize; i++)
 		{
 			PLAT_setLedBrightness(  &(*lights)[i]); // set brightness of each led
