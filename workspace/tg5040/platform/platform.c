@@ -1765,6 +1765,7 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 	static GLfloat last_texelSize[2] = {-1.0f, -1.0f};
 	static GLfloat texelSize[2] = {-1.0f, -1.0f};
 	static GLuint fbo = 0;
+
 	texelSize[0] = 1.0f / shader->texw;
 	texelSize[1] = 1.0f / shader->texh;
 
@@ -1779,11 +1780,11 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 		glBindBuffer(GL_ARRAY_BUFFER, static_VBO);
 
 		float vertices[] = {
-			//   x,     y,    u,    v,    z,    w
-			-1.0f,  1.0f,  0.0f, 1.0f, 0.0f, 1.0f,  // top-left
-			-1.0f, -1.0f,  0.0f, 0.0f, 0.0f, 1.0f,  // bottom-left
-			 1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 1.0f,  // top-right
-			 1.0f, -1.0f,  1.0f, 0.0f, 0.0f, 1.0f   // bottom-right
+			// x,    y,    z,    w,     u,    v,    s,    t
+			-1.0f,  1.0f, 0.0f, 1.0f,  0.0f, 1.0f, 0.0f, 0.0f,  // top-left
+			-1.0f, -1.0f, 0.0f, 1.0f,  0.0f, 0.0f, 0.0f, 0.0f,  // bottom-left
+			1.0f,  1.0f, 0.0f, 1.0f,  1.0f, 1.0f, 0.0f, 0.0f,  // top-right
+			1.0f, -1.0f, 0.0f, 1.0f,  1.0f, 0.0f, 0.0f, 0.0f   // bottom-right
 		};
 
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
@@ -1793,25 +1794,21 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 	if (shader_program != last_program) {
 		GLint posAttrib = glGetAttribLocation(shader_program, "VertexCoord");
 		if (posAttrib >= 0) {
-			
-			glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+			glVertexAttribPointer(posAttrib, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
 			glEnableVertexAttribArray(posAttrib);
 		}
 		GLint texAttrib = glGetAttribLocation(shader_program, "TexCoord");
 		if (texAttrib >= 0) {
-			
-			glVertexAttribPointer(texAttrib, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
+			glVertexAttribPointer(texAttrib,  4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(4 * sizeof(float)));
 			glEnableVertexAttribArray(texAttrib);
 		}
-
-
 
 		if (shader->u_FrameDirection >= 0) glUniform1i(shader->u_FrameDirection, 1);
 		if (shader->u_FrameCount >= 0) glUniform1i(shader->u_FrameCount, frame_count);
 		if (shader->u_OutputSize >= 0) glUniform2f(shader->u_OutputSize, dst_width, dst_height);
-		if (shader->u_TextureSize >= 0) glUniform2f(shader->u_TextureSize, shader->texw, shader->texh); 
+		if (shader->u_TextureSize >= 0) glUniform2f(shader->u_TextureSize, shader->srcw, shader->srch); 
 		if (shader->OrigInputSize >= 0) glUniform2f(shader->OrigInputSize, shader->srcw, shader->srch); 
-		if (shader->u_InputSize >= 0) glUniform2f(shader->u_InputSize, shader->srcw, shader->srch); 
+		if (shader->u_InputSize >= 0) glUniform2f(shader->u_InputSize, shader->srcw, shader->srcw); 
 		for (int i = 0; i < shader->num_pragmas; ++i) {
 			glUniform1f(shader->pragmas[i].uniformLocation, shader->pragmas[i].value);
 		}
@@ -1837,6 +1834,7 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 			// }
 			if(*target_texture==0)
 				glGenTextures(1, target_texture);
+			glActiveTexture(GL_TEXTURE0);	
 			glBindTexture(GL_TEXTURE_2D, *target_texture);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
@@ -1873,6 +1871,7 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 
 	static GLuint last_bound_texture = 0;
 	if (src_texture != last_bound_texture) {
+		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, src_texture);
 		last_bound_texture = src_texture;
 	}
@@ -1881,8 +1880,7 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 	
 	if (shader->texLocation >= 0) glUniform1i(shader->texLocation, 0);  
 	
-
-	if (shader->texelSizeLocation >= 0 && (shader->updated || texelSize[0] != last_texelSize[0] || texelSize[1] != last_texelSize[1])) {
+	if (shader->texelSizeLocation >= 0) {
 		glUniform2fv(shader->texelSizeLocation, 1, texelSize);
 		last_texelSize[0] = texelSize[0];
 		last_texelSize[1] = texelSize[1];
@@ -2062,10 +2060,8 @@ void PLAT_GL_Swap() {
     last_h = vid.blit->src_h;
 
     for (int i = 0; i < nrofshaders; i++) {
-        int src_w = last_w;
-        int src_h = last_h;
-        int dst_w = src_w * shaders[i]->scale;
-        int dst_h = src_h * shaders[i]->scale;
+        int dst_w = last_w * shaders[i]->scale;
+        int dst_h = last_h * shaders[i]->scale;
 
         if (shaders[i]->scale == 9) {
             dst_w = dst_rect.w;
@@ -2077,10 +2073,10 @@ void PLAT_GL_Swap() {
                 int real_input_w = (i == 0) ? vid.blit->src_w : last_w;
                 int real_input_h = (i == 0) ? vid.blit->src_h : last_h;
 
-                shaders[i]->srcw = shaders[i]->srctype == 0 ? vid.blit->src_w : shaders[i]->srctype == 2 ? dst_rect.w : real_input_w;
-                shaders[i]->srch = shaders[i]->srctype == 0 ? vid.blit->src_h : shaders[i]->srctype == 2 ? dst_rect.h : real_input_h;
-                shaders[i]->texw = shaders[i]->scaletype == 0 ? vid.blit->src_w : shaders[i]->scaletype == 2 ? dst_rect.w : real_input_w;
-                shaders[i]->texh = shaders[i]->scaletype == 0 ? vid.blit->src_h : shaders[i]->scaletype == 2 ? dst_rect.h : real_input_h;
+                shaders[i]->srcw = vid.blit->src_w;
+                shaders[i]->srch = vid.blit->src_h;
+                shaders[i]->texw = real_input_w;
+                shaders[i]->texh = real_input_h;
             }
         }
 
@@ -2133,7 +2129,7 @@ void PLAT_GL_Swap() {
             g_shader_default,
             NULL,
             dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h,
-            &(Shader){.srcw = last_w, .srch = last_h, .texw = last_w, .texh = last_h},
+            &(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_w, .texw = last_w, .texh = last_h},
             0, GL_NONE
         );
     }

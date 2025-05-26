@@ -1264,18 +1264,18 @@ enum {
 	SH_NROFSHADERS,
 	SH_SHADER1,
 	SH_SHADER1_FILTER,
-	SH_SRCTYPE1,
-	SH_SCALETYPE1,
+	// SH_SRCTYPE1,
+	// SH_SCALETYPE1,
 	SH_UPSCALE1,
 	SH_SHADER2,
 	SH_SHADER2_FILTER,
-	SH_SRCTYPE2,
-	SH_SCALETYPE2,
+	// SH_SRCTYPE2,
+	// SH_SCALETYPE2,
 	SH_UPSCALE2,
 	SH_SHADER3,
 	SH_SHADER3_FILTER,
-	SH_SRCTYPE3,
-	SH_SCALETYPE3,
+	// SH_SRCTYPE3,
+	// SH_SCALETYPE3,
 	SH_UPSCALE3,
 	SH_NONE
 };
@@ -1598,7 +1598,7 @@ static struct Config {
 		},
 	},
 	.shaders = { // (OptionList)
-		.count = 18,
+		.count = 12,
 		.options = (Option[]){
 			[SH_EXTRASETTINGS] = {
 				.key	= "minarch_shaders_settings", 
@@ -1651,26 +1651,26 @@ static struct Config {
 				.values = shfilter_labels,
 				.labels = shfilter_labels,
 			},
-			[SH_SRCTYPE1] = {
-				.key	= "minarch_shader1_srctype", 
-				.name	= "Shader 1 Source type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
-				.default_value = 0,
-				.value = 0,
-				.count = 3,
-				.values = shscaletype_labels,
-				.labels = shscaletype_labels,
-			},
-			[SH_SCALETYPE1] = {
-				.key	= "minarch_shader1_scaletype", 
-				.name	= "Shader 1 Texture Type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
-				.default_value = 1,
-				.value = 1,
-				.count = 3,
-				.values = shscaletype_labels,
-				.labels = shscaletype_labels,
-			},
+			// [SH_SRCTYPE1] = {
+			// 	.key	= "minarch_shader1_srctype", 
+			// 	.name	= "Shader 1 Source type",
+			// 	.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+			// 	.default_value = 0,
+			// 	.value = 0,
+			// 	.count = 3,
+			// 	.values = shscaletype_labels,
+			// 	.labels = shscaletype_labels,
+			// },
+			// [SH_SCALETYPE1] = {
+			// 	.key	= "minarch_shader1_scaletype", 
+			// 	.name	= "Shader 1 Texture Type",
+			// 	.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+			// 	.default_value = 1,
+			// 	.value = 1,
+			// 	.count = 3,
+			// 	.values = shscaletype_labels,
+			// 	.labels = shscaletype_labels,
+			// },
 			[SH_UPSCALE1] = {
 				.key	= "minarch_shader1_upscale", 
 				.name	= "Shader 1 Scale",
@@ -1702,26 +1702,26 @@ static struct Config {
 				.values = shfilter_labels,
 				.labels = shfilter_labels,
 			},
-			[SH_SRCTYPE2] = {
-				.key	= "minarch_shader2_srctype", 
-				.name	= "Shader 2 Source type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
-				.default_value = 0,
-				.value = 0,
-				.count = 3,
-				.values = shscaletype_labels,
-				.labels = shscaletype_labels,
-			},
-			[SH_SCALETYPE2] = {
-				.key	= "minarch_shader2_scaletype", 
-				.name	= "Shader 2 Texture Type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
-				.default_value = 1,
-				.value = 1,
-				.count = 3,
-				.values = shscaletype_labels,
-				.labels = shscaletype_labels,
-			},
+			// [SH_SRCTYPE2] = {
+			// 	.key	= "minarch_shader2_srctype", 
+			// 	.name	= "Shader 2 Source type",
+			// 	.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+			// 	.default_value = 0,
+			// 	.value = 0,
+			// 	.count = 3,
+			// 	.values = shscaletype_labels,
+			// 	.labels = shscaletype_labels,
+			// },
+			// [SH_SCALETYPE2] = {
+			// 	.key	= "minarch_shader2_scaletype", 
+			// 	.name	= "Shader 2 Texture Type",
+			// 	.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+			// 	.default_value = 1,
+			// 	.value = 1,
+			// 	.count = 3,
+			// 	.values = shscaletype_labels,
+			// 	.labels = shscaletype_labels,
+			// },
 			[SH_UPSCALE2] = {
 				.key	= "minarch_shader2_upscale", 
 				.name	= "Shader 2 Scale",
@@ -1753,26 +1753,26 @@ static struct Config {
 				.values = shfilter_labels,
 				.labels = shfilter_labels,
 			},
-			[SH_SRCTYPE3] = {
-				.key	= "minarch_shader3_srctype", 
-				.name	= "Shader 3 Source type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
-				.default_value = 0,
-				.value = 0,
-				.count = 3,
-				.values = shscaletype_labels,
-				.labels = shscaletype_labels,
-			},
-			[SH_SCALETYPE3] = {
-				.key	= "minarch_shader3_scaletype", 
-				.name	= "Shader 3 Texture Type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
-				.default_value = 1,
-				.value = 1,
-				.count = 3,
-				.values = shscaletype_labels,
-				.labels = shscaletype_labels,
-			},
+			// [SH_SRCTYPE3] = {
+			// 	.key	= "minarch_shader3_srctype", 
+			// 	.name	= "Shader 3 Source type",
+			// 	.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+			// 	.default_value = 0,
+			// 	.value = 0,
+			// 	.count = 3,
+			// 	.values = shscaletype_labels,
+			// 	.labels = shscaletype_labels,
+			// },
+			// [SH_SCALETYPE3] = {
+			// 	.key	= "minarch_shader3_scaletype", 
+			// 	.name	= "Shader 3 Texture Type",
+			// 	.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+			// 	.default_value = 1,
+			// 	.value = 1,
+			// 	.count = 3,
+			// 	.values = shscaletype_labels,
+			// 	.labels = shscaletype_labels,
+			// },
 			[SH_UPSCALE3] = {
 				.key	= "minarch_shader3_upscale", 
 				.name	= "Shader 3 Scale",
@@ -2450,29 +2450,38 @@ void loadShaderSettings(int i) {
 	ShaderParam *params = PLAT_getShaderPragmas(i);
 	if(params == NULL) return;
 	for (int j = 0; j < 32; j++) {
-		if(params[j].def || params[j].min || params[j].max) {
-			config.shaderpragmas[i].options[menucount].key = params[j].name;
-			config.shaderpragmas[i].options[menucount].name = params[j].name;
-			config.shaderpragmas[i].options[menucount].desc = params[j].name;
-			config.shaderpragmas[i].options[menucount].default_value = params[j].def;
-			
-			int steps = (int)((params[j].max - params[j].min) / params[j].step) + 1;
-			config.shaderpragmas[i].options[menucount].values = malloc(sizeof(char *) * (steps + 1));
-			config.shaderpragmas[i].options[menucount].labels = malloc(sizeof(char *) * (steps + 1));
-			for (int s = 0; s < steps; s++) {
-				float val = params[j].min + s * params[j].step;
-				char *str = malloc(16);
-				snprintf(str, 16, "%.2f", val);
-				config.shaderpragmas[i].options[menucount].values[s] = str;
-				config.shaderpragmas[i].options[menucount].labels[s] = str;
-				if(params[j].value == val)
-					config.shaderpragmas[i].options[menucount].value = s;
-			}
-			config.shaderpragmas[i].options[menucount].count = steps;
-			config.shaderpragmas[i].options[menucount].values[steps] = NULL;
-			config.shaderpragmas[i].options[menucount].labels[steps] = NULL;
-			menucount++;
+	
+		if (params[j].step == 0.0f) {
+			// Prevent division by zero; skip this parameter or set steps to 1
+			continue;
 		}
+
+		if (!params[j].name || strlen(params[j].name) == 0) {
+			// Skip invalid parameter names
+			continue;
+		}
+		config.shaderpragmas[i].options[menucount].key = params[j].name;
+		config.shaderpragmas[i].options[menucount].name = params[j].name;
+		config.shaderpragmas[i].options[menucount].desc = params[j].name;
+		config.shaderpragmas[i].options[menucount].default_value = params[j].def;
+		
+		int steps = (int)((params[j].max - params[j].min) / params[j].step) + 1;
+		config.shaderpragmas[i].options[menucount].values = malloc(sizeof(char *) * (steps + 1));
+		config.shaderpragmas[i].options[menucount].labels = malloc(sizeof(char *) * (steps + 1));
+		for (int s = 0; s < steps; s++) {
+			float val = params[j].min + s * params[j].step;
+			char *str = malloc(16);
+			snprintf(str, 16, "%.2f", val);
+			config.shaderpragmas[i].options[menucount].values[s] = str;
+			config.shaderpragmas[i].options[menucount].labels[s] = str;
+			if (fabs(params[j].value - val) < 0.001f)
+				config.shaderpragmas[i].options[menucount].value = s;
+		}
+		config.shaderpragmas[i].options[menucount].count = steps;
+		config.shaderpragmas[i].options[menucount].values[steps] = NULL;
+		config.shaderpragmas[i].options[menucount].labels[steps] = NULL;
+		menucount++;
+		
 	}
 	config.shaderpragmas[i].count = menucount;
 }
@@ -2506,14 +2515,14 @@ static void Config_syncShaders(char* key, int value) {
 		GFX_updateShader(0,NULL,NULL,&value,NULL,NULL);
 		i = SH_SHADER1_FILTER;
 	}
-	if (exactMatch(key,config.shaders.options[SH_SRCTYPE1].key)) {
-		GFX_updateShader(0,NULL,NULL,NULL,NULL,&value);
-		i = SH_SRCTYPE1;
-	}
-	if (exactMatch(key,config.shaders.options[SH_SCALETYPE1].key)) {
-		GFX_updateShader(0,NULL,NULL,NULL,&value,NULL);
-		i = SH_SCALETYPE1;
-	}
+	// if (exactMatch(key,config.shaders.options[SH_SRCTYPE1].key)) {
+	// 	GFX_updateShader(0,NULL,NULL,NULL,NULL,&value);
+	// 	i = SH_SRCTYPE1;
+	// }
+	// if (exactMatch(key,config.shaders.options[SH_SCALETYPE1].key)) {
+	// 	GFX_updateShader(0,NULL,NULL,NULL,&value,NULL);
+	// 	i = SH_SCALETYPE1;
+	// }
 	if (exactMatch(key,config.shaders.options[SH_UPSCALE1].key)) {
 		GFX_updateShader(0,NULL,&value,NULL,NULL,NULL);
 		i = SH_UPSCALE1;
@@ -2535,14 +2544,14 @@ static void Config_syncShaders(char* key, int value) {
 		GFX_updateShader(1,NULL,NULL,&value,NULL,NULL);
 		i = SH_SHADER2_FILTER;
 	}
-	if (exactMatch(key,config.shaders.options[SH_SRCTYPE2].key)) {
-		GFX_updateShader(1,NULL,NULL,NULL,NULL,&value);
-		i = SH_SRCTYPE2;
-	}
-	if (exactMatch(key,config.shaders.options[SH_SCALETYPE2].key)) {
-		GFX_updateShader(1,NULL,NULL,NULL,&value,NULL);
-		i = SH_SCALETYPE2;
-	}
+	// if (exactMatch(key,config.shaders.options[SH_SRCTYPE2].key)) {
+	// 	GFX_updateShader(1,NULL,NULL,NULL,NULL,&value);
+	// 	i = SH_SRCTYPE2;
+	// }
+	// if (exactMatch(key,config.shaders.options[SH_SCALETYPE2].key)) {
+	// 	GFX_updateShader(1,NULL,NULL,NULL,&value,NULL);
+	// 	i = SH_SCALETYPE2;
+	// }
 	if (exactMatch(key,config.shaders.options[SH_UPSCALE2].key)) {
 		GFX_updateShader(1,NULL,&value,NULL,NULL,NULL);
 		i = SH_UPSCALE2;
@@ -2564,14 +2573,14 @@ static void Config_syncShaders(char* key, int value) {
 		GFX_updateShader(2,NULL,NULL,&value,NULL,NULL);
 		i = SH_SHADER3_FILTER;
 	}
-	if (exactMatch(key,config.shaders.options[SH_SRCTYPE3].key)) {
-		GFX_updateShader(2,NULL,NULL,NULL,NULL,&value);
-		i = SH_SRCTYPE3;
-	}
-	if (exactMatch(key,config.shaders.options[SH_SCALETYPE3].key)) {
-		GFX_updateShader(2,NULL,NULL,NULL,&value,NULL);
-		i = SH_SCALETYPE3;
-	}
+	// if (exactMatch(key,config.shaders.options[SH_SRCTYPE3].key)) {
+	// 	GFX_updateShader(2,NULL,NULL,NULL,NULL,&value);
+	// 	i = SH_SRCTYPE3;
+	// }
+	// if (exactMatch(key,config.shaders.options[SH_SCALETYPE3].key)) {
+	// 	GFX_updateShader(2,NULL,NULL,NULL,&value,NULL);
+	// 	i = SH_SCALETYPE3;
+	// }
 	if (exactMatch(key,config.shaders.options[SH_UPSCALE3].key)) {
 		GFX_updateShader(2,NULL,&value,NULL,NULL,NULL);
 		i = SH_UPSCALE3;
@@ -5454,19 +5463,20 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 
 static int OptionPragmas_optionChanged(MenuList* list, int i) {
 		MenuItem* item = &list->items[i];
-		for (int i=0; i < config.shaders.options[SH_NROFSHADERS].value; i++) {
-			ShaderParam *params = PLAT_getShaderPragmas(i);
+		for (int shader_index=0; shader_index < config.shaders.options[SH_NROFSHADERS].value; shader_index++) {
+			ShaderParam *params = PLAT_getShaderPragmas(shader_index);
 			for (int j = 0; j < 32; j++) {
 				if (exactMatch(params[j].name, item->key)) {
 					params[j].value = strtof(item->values[item->value], NULL);
 				}
 			}
 		}
-		for (int y=0; y < config.shaders.options[SH_NROFSHADERS].value; y++) {
-			for (int i = 0; i < config.shaderpragmas[y].count; i++) {
-				MenuItem* item = &list->items[i];
-				config.shaderpragmas[y].options[i].value = item->value ;
-
+		int global_index = 0;
+		for (int y = 0; y < SH_NROFSHADERS; y++) {
+			for (int j = 0; j < config.shaderpragmas[y].count; j++) {
+				MenuItem* item = &list->items[global_index];
+				config.shaderpragmas[y].options[j].value = item->value;
+				global_index++;
 			}
 		}
 		return MENU_CALLBACK_NOP;
@@ -5485,11 +5495,11 @@ static int OptionPragmas_openMenu(MenuList* list, int i) {
 		totalcount += config.shaderpragmas[y].count;
 	}
 	PragmasOptions_menu.items = calloc(totalcount + 1, sizeof(MenuItem));
-	for (int y=0; y < config.shaders.options[SH_NROFSHADERS].value; y++) {
-		for (int i = 0; i < config.shaderpragmas[y].count; i++) {
+	for (int y=0; y < SH_NROFSHADERS; y++) {
+		for (int j = 0; j < config.shaderpragmas[y].count; j++) {
 			MenuItem* item = &PragmasOptions_menu.items[progressCount];
-			Option* configitem = &config.shaderpragmas[y].options[i];
-			item->id = i;
+			Option* configitem = &config.shaderpragmas[y].options[j];
+			item->id = j;
 			item->name = configitem->name;
 			item->desc = configitem->desc;
 			item->value = configitem->value;
