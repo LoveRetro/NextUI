@@ -251,10 +251,30 @@ char* load_shader_source(const char* filename) {
 }
 
 GLuint load_shader_from_file(GLenum type, const char* filename, const char* path) {
-	char filepath[256];
-	snprintf(filepath, sizeof(filepath), "%s/%s", path,filename);
+    char filepath[256];
+    snprintf(filepath, sizeof(filepath), "%s/%s", path, filename);
     char* source = load_shader_source(filepath);
     if (!source) return 0;
+
+    LOG_info("load shader from file %s\n", filepath);
+
+    // Filter out lines starting with "#pragma parameter"
+    char* cleaned = malloc(strlen(source) + 1);
+    if (!cleaned) {
+        fprintf(stderr, "Out of memory\n");
+        free(source);
+        return 0;
+    }
+    cleaned[0] = '\0';
+
+    char* line = strtok(source, "\n");
+    while (line) {
+        if (strncmp(line, "#pragma parameter", 17) != 0) {
+            strcat(cleaned, line);
+            strcat(cleaned, "\n");
+        }
+        line = strtok(NULL, "\n");
+    }
 
     const char* define = NULL;
     const char* default_precision = NULL;
@@ -270,14 +290,15 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
             "precision mediump float;\n"
             "#endif\n"
             "#endif\n"
-			"#define PARAMETER_UNIFORM\n";
+            "#define PARAMETER_UNIFORM\n";
     } else {
         fprintf(stderr, "Unsupported shader type\n");
         free(source);
+        free(cleaned);
         return 0;
     }
 
-    const char* version_start = strstr(source, "#version");
+    const char* version_start = strstr(cleaned, "#version");
     const char* version_end = version_start ? strchr(version_start, '\n') : NULL;
 
     const char* replacement_version = "#version 300 es\n";
@@ -286,10 +307,9 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
     char* combined = NULL;
     size_t define_len = strlen(define);
     size_t precision_len = default_precision ? strlen(default_precision) : 0;
-    size_t source_len = strlen(source);
+    size_t source_len = strlen(cleaned);
     size_t combined_len = 0;
 
-    // Helper: check if the version is one of the desktop ones to upgrade
     int should_replace_with_300es = 0;
     if (version_start && version_end) {
         char version_str[32] = {0};
@@ -298,7 +318,6 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
             strncpy(version_str, version_start, len);
             version_str[len] = '\0';
 
-            // Check for desktop GLSL versions that should be replaced
             if (
                 strstr(version_str, "#version 110") ||
                 strstr(version_str, "#version 120") ||
@@ -319,52 +338,52 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
     }
 
     if (version_start && version_end && should_replace_with_300es) {
-        // Replace old desktop version with 300 es
-        size_t header_len = version_end - source + 1;
+        size_t header_len = version_end - cleaned + 1;
         size_t version_len = strlen(replacement_version);
         combined_len = version_len + define_len + precision_len + (source_len - header_len) + 1;
         combined = (char*)malloc(combined_len);
         if (!combined) {
             fprintf(stderr, "Out of memory\n");
             free(source);
+            free(cleaned);
             return 0;
         }
 
         strcpy(combined, replacement_version);
         strcat(combined, define);
         if (default_precision) strcat(combined, default_precision);
-        strcat(combined, source + header_len);
+        strcat(combined, cleaned + header_len);
     } else if (version_start && version_end) {
-        // Keep existing version, insert define after it
-        size_t header_len = version_end - source + 1;
+        size_t header_len = version_end - cleaned + 1;
         combined_len = header_len + define_len + precision_len + (source_len - header_len) + 1;
         combined = (char*)malloc(combined_len);
         if (!combined) {
             fprintf(stderr, "Out of memory\n");
             free(source);
+            free(cleaned);
             return 0;
         }
 
-        memcpy(combined, source, header_len);
+        memcpy(combined, cleaned, header_len);
         memcpy(combined + header_len, define, define_len);
         if (default_precision)
             memcpy(combined + header_len + define_len, default_precision, precision_len);
-        strcpy(combined + header_len + define_len + precision_len, source + header_len);
+        strcpy(combined + header_len + define_len + precision_len, cleaned + header_len);
     } else {
-        // No version — use fallback
         size_t version_len = strlen(fallback_version);
         combined_len = version_len + define_len + precision_len + source_len + 1;
         combined = (char*)malloc(combined_len);
         if (!combined) {
             fprintf(stderr, "Out of memory\n");
             free(source);
+            free(cleaned);
             return 0;
         }
 
         strcpy(combined, fallback_version);
         strcat(combined, define);
         if (default_precision) strcat(combined, default_precision);
-        strcat(combined, source);
+        strcat(combined, cleaned);
     }
 
     GLuint shader = glCreateShader(type);
@@ -373,6 +392,7 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
     glCompileShader(shader);
 
     free(source);
+    free(cleaned);
     free(combined);
 
     GLint compiled;
