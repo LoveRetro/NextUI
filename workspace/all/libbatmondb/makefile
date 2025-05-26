@@ -45,6 +45,8 @@ build:
 	mkdir -p build/$(PLATFORM)
 	$(CC) -c -Werror -fpic $(SOURCE) -Wl,--no-as-needed $(LDFLAGS) $(CFLAGS)
 	$(CC) -shared -o $(PRODUCT) "$(TARGET).o" "utils.o" $(LDFLAGS)
+	mkdir -p "$(PREFIX_LOCAL)/include"
+	mkdir -p "$(PREFIX_LOCAL)/lib"
 	cp "$(TARGET).h" "$(PREFIX_LOCAL)/include"
 	cp $(PRODUCT) "$(PREFIX_LOCAL)/lib"
 

@@ -35,3 +35,6 @@ all: $(PREFIX_LOCAL)/include/msettings.h
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 clean:
 	rm -f $(PRODUCT)
+
+$(PREFIX_LOCAL)/include/msettings.h:
+	cd ../../$(PLATFORM)/libmsettings && make
