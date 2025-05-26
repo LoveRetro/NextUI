@@ -1216,7 +1216,6 @@ static char* shfilter_labels[] = {
 static char* shscaletype_labels[] = {
 	"source",
 	"relative",
-	"screen",
 	NULL
 };
 
@@ -1657,7 +1656,7 @@ static struct Config {
 				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
 				.default_value = 0,
 				.value = 0,
-				.count = 3,
+				.count = 2,
 				.values = shscaletype_labels,
 				.labels = shscaletype_labels,
 			},
@@ -1667,7 +1666,7 @@ static struct Config {
 				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
-				.count = 3,
+				.count = 2,
 				.values = shscaletype_labels,
 				.labels = shscaletype_labels,
 			},
@@ -1708,7 +1707,7 @@ static struct Config {
 				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
 				.default_value = 0,
 				.value = 0,
-				.count = 3,
+				.count = 2,
 				.values = shscaletype_labels,
 				.labels = shscaletype_labels,
 			},
@@ -1718,7 +1717,7 @@ static struct Config {
 				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
-				.count = 3,
+				.count = 2,
 				.values = shscaletype_labels,
 				.labels = shscaletype_labels,
 			},
@@ -1759,7 +1758,7 @@ static struct Config {
 				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
 				.default_value = 0,
 				.value = 0,
-				.count = 3,
+				.count = 2,
 				.values = shscaletype_labels,
 				.labels = shscaletype_labels,
 			},
@@ -1769,7 +1768,7 @@ static struct Config {
 				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
-				.count = 3,
+				.count = 2,
 				.values = shscaletype_labels,
 				.labels = shscaletype_labels,
 			},
