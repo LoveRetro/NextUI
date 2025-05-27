@@ -3136,7 +3136,7 @@ void LEDS_updateLeds() {
 	if(pwr.charge > PWR_LOW_CHARGE) {
 		int lightsize = 3;
 		char* device = getenv("DEVICE");
-		is_brick = exactMatch("brick", device);
+		int is_brick = exactMatch("brick", device);
 		if(is_brick)
 			lightsize=4;
 		for (int i = 0; i < lightsize; i++)
