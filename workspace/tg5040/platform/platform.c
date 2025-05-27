@@ -474,7 +474,10 @@ SDL_Surface* PLAT_initVideo(void) {
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-	
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"1");
+	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengl");
+	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");
+
 	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w,h, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN);
@@ -484,9 +487,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	// SDL_GetRendererInfo(vid.renderer, &info);
 	// LOG_info("Current render driver: %s\n", info.name);
 	
-	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"1");
-	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengl");
-	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");
+
 
 	vid.gl_context = SDL_GL_CreateContext(vid.window);
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
@@ -513,8 +514,6 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.width	= w;
 	vid.height	= h;
 	vid.pitch	= p;
-
-	PWR_disablePowerOff();
 	
 	SDL_transparentBlack = SDL_MapRGBA(vid.screen->format, 0, 0, 0, 0);
 	
