@@ -2741,7 +2741,7 @@ int main (int argc, char *argv[]) {
 				PLAT_GPU_Flip();
 				needDraw = 0;
 			} else {
-				SDL_Delay(100);
+				SDL_Delay(17);
 			}
 			SDL_UnlockMutex(bgqueueMutex);
 			SDL_UnlockMutex(thumbqueueMutex);
