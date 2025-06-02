@@ -25,7 +25,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install make sdl2_image sdl2_ttf libzip libsamplerate
+          brew install gcc make sdl2_image sdl2_ttf libzip libsamplerate
           sudo ./workspace/desktop/macos_create_gcc_symlinks.sh
 
       - name: Setup
