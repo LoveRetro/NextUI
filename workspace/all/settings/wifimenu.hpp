@@ -37,7 +37,7 @@ namespace Wifi
     public:
         NetworkItem(WIFI_network n, bool connected, MenuList *submenu);
 
-        void drawCustomItem(SDL_Surface *surface, const SDL_Rect &dst, const MenuItem &item, bool selected) const override;
+        void drawCustomItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected) const override;
     };
 
     class ConnectKnownItem : public MenuItem

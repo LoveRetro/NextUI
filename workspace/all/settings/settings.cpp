@@ -313,6 +313,26 @@ int main(int argc, char *argv[])
         // TODO: check WIFI_supported(), hide menu otherwise
         auto networkMenu = new Wifi::Menu(appQuit);
 
+        auto aboutMenu = new MenuList(MenuItemType::Fixed, "About",
+        {
+            new StaticMenuItem{ListItemType::Generic, "NextUI version", "", 
+            []() -> std::any { 
+                char release[256];
+                getFile(ROOT_SYSTEM_PATH "/version.txt", release, 256);
+                return std::string(release); 
+            }},
+            new StaticMenuItem{ListItemType::Generic, "Platform", "", 
+            []() -> std::any { 
+                return std::string(PLAT_getModel()); }
+            },
+            new StaticMenuItem{ListItemType::Generic, "Stock OS version", "", 
+            []() -> std::any { 
+                char osver[128];
+                PLAT_getOsVersionInfo(osver, 128);
+                return std::string(osver); }
+            },
+        });
+
         ctx.menu = new MenuList(MenuItemType::List, "Main",
         {
             new MenuItem{ListItemType::Generic, "Appearance", "UI customization", {}, {}, nullptr, nullptr, DeferToSubmenu, appearanceMenu},
@@ -320,6 +340,7 @@ int main(int argc, char *argv[])
             new MenuItem{ListItemType::Generic, "System", "", {}, {}, nullptr, nullptr, DeferToSubmenu, systemMenu},
             new MenuItem{ListItemType::Generic, "FN switch", "FN switch settings", {}, {}, nullptr, nullptr, DeferToSubmenu, muteMenu},
             new MenuItem{ListItemType::Generic, "Network", "", {}, {}, nullptr, nullptr, DeferToSubmenu, networkMenu},
+            new MenuItem{ListItemType::Generic, "About", "", {}, {}, nullptr, nullptr, DeferToSubmenu, aboutMenu},
         });
 
         //ctx.menu = new KeyboardPrompt("test", [](MenuItem &itm) -> InputReactionHint
