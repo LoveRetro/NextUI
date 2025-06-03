@@ -14,6 +14,8 @@
 #include <sys/resource.h>
 #include <pthread.h>
 
+#include "config.h"
+
 ///////////////////////////////////////
 
 typedef struct Array {
@@ -2114,6 +2116,11 @@ int main (int argc, char *argv[]) {
 			}
 		}
 		
+		int show_entry_names = 1;
+		if (strcmp(top->path, SDCARD_PATH) == 0 && !CFG_getShowFolderNamesAtRoot()) {
+			show_entry_names = 0;
+		}
+
 		if(dirty) {
 			SDL_Surface *tmpOldScreen = NULL;
 			SDL_Surface * switchetsur = NULL;
@@ -2478,71 +2485,67 @@ int main (int argc, char *argv[]) {
 					selected_row = top->selected - top->start;
 					previousY = (remember_selection) * PILL_SIZE;
 					targetY = selected_row * PILL_SIZE;
-					for (int i = top->start, j = 0; i < top->end; i++, j++) {
-						Entry* entry = top->entries->items[i];
-						char* entry_name = entry->name;
-						char* entry_unique = entry->unique;
-						int available_width = (had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_MARGIN)) - SCALE1(PADDING * 2);
-						if (i == top->start && !(had_thumb)) available_width -= ow;
-						trimSortingMeta(&entry_name);
 
-						if (entry_unique) { // Only render if a unique name exists
-							trimSortingMeta(&entry_unique);
-						} 
-						
-						char display_name[256];
-						int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name,display_name, available_width, SCALE1(BUTTON_PADDING * 2));
-						
-						int max_width = MIN(available_width, text_width);
-					
-						SDL_Color text_color = uintToColour(THEME_COLOR4_255);
-						int notext = 0;
-						if(selected_row == remember_selection && j == selected_row && (selected_row+1 >= (top->end-top->start) || selected_row == 0 || selected_row == remember_selection)) {
-							text_color = uintToColour(THEME_COLOR5_255);
-							notext=1;
+					if (show_entry_names) {
+						for (int i = top->start, j = 0; i < top->end; i++, j++) {
+							Entry* entry = top->entries->items[i];
+							char* entry_name = entry->name;
+							char* entry_unique = entry->unique;
+							int available_width = (had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_MARGIN)) - SCALE1(PADDING * 2);
+							if (i == top->start && !(had_thumb)) available_width -= ow;
+							trimSortingMeta(&entry_name);
+
+							if (entry_unique) { // Only render if a unique name exists
+								trimSortingMeta(&entry_unique);
+							} 
+
+							char display_name[256];
+							int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name,display_name, available_width, SCALE1(BUTTON_PADDING * 2));
+
+							int max_width = MIN(available_width, text_width);
+
+							SDL_Color text_color = uintToColour(THEME_COLOR4_255);
+							int notext = 0;
+							if(selected_row == remember_selection && j == selected_row && (selected_row+1 >= (top->end-top->start) || selected_row == 0 || selected_row == remember_selection)) {
+								text_color = uintToColour(THEME_COLOR5_255);
+								notext=1;
+							}
+							SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
+							SDL_Surface* text_unique = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_DARK_TEXT);
+							if (j == selected_row) {
+								is_scrolling = GFX_resetScrollText(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
+								SDL_LockMutex(animMutex);
+								if(globalpill) SDL_FreeSurface(globalpill);
+								globalpill = SDL_CreateRGBSurfaceWithFormat(
+									SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888
+								);
+								GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){
+									0,0, max_width, SCALE1(PILL_SIZE)
+								});
+								globallpillW =  max_width;
+								SDL_UnlockMutex(animMutex);
+								AnimTask* task = malloc(sizeof(AnimTask));
+								task->startX = SCALE1(BUTTON_MARGIN);
+								task->startY = SCALE1(previousY+PADDING);
+								task->targetX = SCALE1(BUTTON_MARGIN);
+								task->targetY = SCALE1(targetY+PADDING);
+								task->targetTextY = SCALE1(PADDING + targetY+4);
+								pilltargetTextY = +screen->w;
+								task->move_w = max_width;
+								task->move_h = SCALE1(PILL_SIZE);
+								task->frames = CFG_getMenuAnimations() ? 3:0;
+								task->entry_name = notext ? " ":entry_name;
+								animPill(task);
+							} 
+							SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
+							SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)+4) };
+
+							SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
+							SDL_BlitSurface(text, &text_rect, screen, &dest_rect);
+
+							SDL_FreeSurface(text_unique); // Free after use
+							SDL_FreeSurface(text); // Free after use
 						}
-						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
-						SDL_Surface* text_unique = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_DARK_TEXT);
-						if (j == selected_row) {
-
-							is_scrolling = GFX_resetScrollText(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
-							SDL_LockMutex(animMutex);
-							if(globalpill) SDL_FreeSurface(globalpill);
-							globalpill = SDL_CreateRGBSurfaceWithFormat(
-								SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888
-							);
-							GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){
-								0,0, max_width, SCALE1(PILL_SIZE)
-							});
-							globallpillW =  max_width;
-							SDL_UnlockMutex(animMutex);
-							AnimTask* task = malloc(sizeof(AnimTask));
-							task->startX = SCALE1(BUTTON_MARGIN);
-							task->startY = SCALE1(previousY+PADDING);
-							task->targetX = SCALE1(BUTTON_MARGIN);
-							task->targetY = SCALE1(targetY+PADDING);
-							task->targetTextY = SCALE1(PADDING + targetY+4);
-							pilltargetTextY = +screen->w;
-							task->move_w = max_width;
-							task->move_h = SCALE1(PILL_SIZE);
-							task->frames = CFG_getMenuAnimations() ? 3:0;
-							task->entry_name = notext ? " ":entry_name;
-							animPill(task);
-							
-			
-						} 
-						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
-						SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)+4) };
-				
-						SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
-						SDL_BlitSurface(text, &text_rect, screen, &dest_rect);
-						
-					
-						SDL_FreeSurface(text_unique); // Free after use
-						SDL_FreeSurface(text); // Free after use
-						
-						
-					
 					}
 					if(lastScreen==SCREEN_GAMESWITCHER) {
 						if(switchetsur) {
@@ -2625,10 +2628,12 @@ int main (int argc, char *argv[]) {
 				GFX_clearLayers(2);
 				GFX_clearLayers(4);
 				
-				SDL_LockMutex(animMutex);
-				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, 2);
-				// GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, 4);
-				SDL_UnlockMutex(animMutex);
+				if (show_entry_names) {
+					SDL_LockMutex(animMutex);
+					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, 2);
+					// GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, 4);
+					SDL_UnlockMutex(animMutex);
+				}
 			}
 			if(!startgame) // dont flip if game gonna start
 				GFX_flip(screen);
@@ -2681,8 +2686,10 @@ int main (int argc, char *argv[]) {
 			SDL_LockMutex(animMutex);
 			if(animationDraw) {
 				GFX_clearLayers(2);
-				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, 2);
-				animationDraw = 0;
+				if (show_entry_names) {
+					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, 2);
+					animationDraw = 0;
+				}
 			}
 			SDL_UnlockMutex(animMutex);
 			if (!show_switcher && !show_version && is_scrolling && pillanimdone && currentAnimQueueSize < 1) {
@@ -2708,23 +2715,27 @@ int main (int argc, char *argv[]) {
 	
 
 				GFX_clearLayers(4);
-				GFX_scrollTextTexture(
-					font.large,
-					entry_text,
-					SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (remember_selection * PILL_SIZE) + 4),
-					max_width - SCALE1(BUTTON_PADDING * 2),
-					0,
-					text_color,
-					1
-				);
-			} 
+				if (show_entry_names) {
+					GFX_scrollTextTexture(
+						font.large,
+						entry_text,
+						SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (remember_selection * PILL_SIZE) + 4),
+						max_width - SCALE1(BUTTON_PADDING * 2),
+						0,
+						text_color,
+						1
+					);
+				}
+			}
 			else if (!show_switcher  && !show_version) {
 				GFX_clearLayers(2);
 				GFX_clearLayers(4);
-				SDL_LockMutex(animMutex);
-				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, 2);
-				GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, 4);
-				SDL_UnlockMutex(animMutex);
+				if (show_entry_names) {
+					SDL_LockMutex(animMutex);
+					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, 2);
+					GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, 4);
+					SDL_UnlockMutex(animMutex);
+				}
 				PLAT_GPU_Flip();
 			} 
 			else {
