@@ -54,6 +54,7 @@ typedef struct
 	int thumbRadius;
 	int gameSwitcherScaling; // enum
 	double gameArtWidth;	 // [0,1] -> 0-100% of screen width
+	bool showFolderNamesAtRoot;
 
 	// font loading/unloading callback
     FontLoad_callback_t onFontChange;
@@ -115,6 +116,7 @@ typedef struct
 #define CFG_DEFAULT_STATEFORMAT STATE_FORMAT_SAV
 #define CFG_DEFAULT_MUTELEDS false
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
+#define CFG_DEFAULT_SHOWFOLDERNAMESATROOT true
 #define CFG_DEFAULT_WIFI false
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
@@ -188,6 +190,9 @@ void CFG_setMuteLEDs(bool);
 // Set game art width percentage.
 double CFG_getGameArtWidth(void);
 void CFG_setGameArtWidth(double zeroToOne);
+// Show/hide folder names at root directory.
+bool CFG_getShowFolderNamesAtRoot(void);
+void CFG_setShowFolderNamesAtRoot(bool show);
 // WiFi on/off (if available)
 bool CFG_getWifi(void);
 void CFG_setWifi(bool on);
