@@ -1,5 +1,8 @@
-CORES= c128
+CORES= a2600
+CORES+= a5200
+CORES+= a7800
 CORES+= c64
+CORES+= c128
 CORES+= fake-08
 CORES+= fbneo
 CORES+= fceumm
@@ -31,6 +34,14 @@ CORES+= prboom
 # *_MAKEFILE=
 # *_BUILD_PATH=
 # *_SUBMODULES=
+
+a2600_REPO = https://github.com/libretro/stella2014-libretro
+a2600_CORE = stella2014_libretro.so
+
+a5200_CORE = a5200_libretro.so
+
+a7800_CORE = prosystem_libretro.so
+a7800_REPO = https://github.com/libretro/prosystem-libretro
 
 fbneo_REPO = https://github.com/libretro/FBNeo
 fbneo_CORE = fbneo_libretro.so
