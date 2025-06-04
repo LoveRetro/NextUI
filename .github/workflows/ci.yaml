@@ -143,7 +143,7 @@ jobs:
         id: skip
         if: github.ref != 'refs/heads/main'
         run: |
-          echo '::warning title=Attest skipped::Attest action requires permissions and isn't done for PRs.'
+          echo '::warning title=Attest skipped::Attest action requires permissions and is performed only for main branch.'
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2.3.0
