@@ -1,24 +1,23 @@
 diff --git a/Makefile b/Makefile
-index 18885d8..078fa13 100644
+index a22eb5d..0e36f02 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -377,6 +377,18 @@ else ifeq ($(platform), miyoo)
-    FLAGS += -fomit-frame-pointer -ffast-math -march=armv5te -mtune=arm926ej-s
-    fpic := -fPIC
--
+@@ -383,6 +383,20 @@ else ifeq ($(platform), miyoo)
+ 	FLAGS += -fomit-frame-pointer -ffast-math -march=armv5te -mtune=arm926ej-s
+ 	fpic := -fPIC
+ 
 +# target platform tg5040 trimUI brick
 +else ifeq ($(platform), tg5040)
 +	TARGET := $(TARGET_NAME)_libretro.so
-+   CC = $(CROSS_COMPILE)gcc
-+   CXX = $(CROSS_COMPILE)g++
-+   AR = $(CROSS_COMPILE)ar
++	CC = $(CROSS_COMPILE)gcc
++	CXX = $(CROSS_COMPILE)g++
++	AR = $(CROSS_COMPILE)ar
 +	SHARED := -shared -Wl,--no-undefined
 +	LDFLAGS += -shared -Wl,--version-script=$(CORE_DIR)/libretro/link.T
-+   CFLAGS += -DARM -DALIGN_DWORD -falign-functions=16 -pipe -fstack-protector
-+   CFLAGS += -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a
-+   $(MYARCH)
-+   fpic := -fPIC
-+   HAVE_NEON = 1
++	CFLAGS += -DARM -DALIGN_DWORD -falign-functions=16 -pipe -fstack-protector
++	CFLAGS += -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a
++	fpic := -fPIC
++	HAVE_NEON = 1
 +
  # Windows MSVC 2003 Xbox 1
  else ifeq ($(platform), xbox1_msvc2003)
