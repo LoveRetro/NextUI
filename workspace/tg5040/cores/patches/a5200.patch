@@ -1,24 +1,22 @@
 diff --git a/Makefile b/Makefile
-index 502a75b..a5bda46 100644
+index 67a7e1f..184ec33 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -324,6 +324,16 @@ else ifeq ($(platform), miyoo)
-    FLAGS += -fomit-frame-pointer -ffast-math -mcpu=arm926ej-s
-    fpic := -fPIC
--
+@@ -326,6 +326,18 @@ else ifeq ($(platform), miyoo)
+ 	FLAGS += -fomit-frame-pointer -ffast-math -mcpu=arm926ej-s
+ 	fpic := -fPIC
+ 
 +# target platform tg5040 trimUI brick
 +else ifeq ($(platform), tg5040)
 +	TARGET := $(TARGET_NAME)_libretro.so
 +	CC = $(CROSS_COMPILE)gcc
-+   CXX = $(CROSS_COMPILE)g++
++	CXX = $(CROSS_COMPILE)g++
 +	AR = $(CROSS_COMPILE)ar
 +	SHARED := -shared -Wl,--no-undefined
-+	LDFLAGS += -shared -Wl,--version-script=$(CORE_DIR)/libretro/link.T
-+   CFLAGS += -DARM -DALIGN_DWORD -falign-functions=16 -pipe -fstack-protector
-+   CFLAGS += -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a
-+   $(MYARCH)
++	LDFLAGS += -shared -Wl,--version-script=link.T
++	FLAGS += -fomit-frame-pointer -ffast-math -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a
 +	fpic := -fPIC
-+   HAVE_NEON = 1
++	HAVE_NEON = 1
 +
  # Raspberry Pi 1
  else ifeq ($(platform), rpi1)
