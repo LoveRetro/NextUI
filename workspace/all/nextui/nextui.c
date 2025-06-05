@@ -1931,6 +1931,7 @@ int main (int argc, char *argv[]) {
 				show_version = 0;
 				dirty = 1;
 				if (!HAS_POWER_BUTTON && !simple_mode) PWR_disableSleep();
+				folderbgchanged = 1; // The background painting code is a clusterfuck, just force a repaint here
 			}
 		}
 		else if(show_switcher) {
@@ -1938,6 +1939,7 @@ int main (int argc, char *argv[]) {
 				show_switcher = 0;
 				switcher_selected = 0;
 				dirty = 1;
+				folderbgchanged = 1; // The background painting code is a clusterfuck, just force a repaint here
 			}
 			else if (recents->count > 0 && PAD_justReleased(BTN_A)) {
 				// this will drop us back into game switcher after leaving the game
