@@ -509,17 +509,17 @@ static Entry* entryFromPakName(char* pak_name)
 {
 	char pak_path[256];
 	// Check in Tools
-	sprintf(pak_path, "%s/Tools/%s/%s.pak/launch.sh", SDCARD_PATH, PLATFORM, pak_name);
+	sprintf(pak_path, "%s/Tools/%s/%s.pak", SDCARD_PATH, PLATFORM, pak_name);
 	if(exists(pak_path))
 		return Entry_newNamed(pak_path, ENTRY_PAK, pak_name);
 
 	// Check in Emus
-	sprintf(pak_path, "%s/Emus/%s.pak/launch.sh", PAKS_PATH, pak_name);
+	sprintf(pak_path, "%s/Emus/%s.pak", PAKS_PATH, pak_name);
 	if(exists(pak_path)) 
 		return Entry_newNamed(pak_path, ENTRY_PAK, pak_name);
 
 	// Check in platform Emus
-	sprintf(pak_path, "%s/Emus/%s/%s.pak/launch.sh", SDCARD_PATH, PLATFORM, pak_name);
+	sprintf(pak_path, "%s/Emus/%s/%s.pak", SDCARD_PATH, PLATFORM, pak_name);
 	if(exists(pak_path)) 
 		return Entry_newNamed(pak_path, ENTRY_PAK, pak_name);
 
@@ -2071,18 +2071,6 @@ int main (int argc, char *argv[]) {
 					qm_col = 0;
 					dirty = 1;
 				}
-			}
-			else if (PAD_justRepeated(BTN_L1) && !PAD_isPressed(BTN_R1) && !PWR_ignoreSettingInput(BTN_L1, show_setting)) {
-			
-			}
-			else if (PAD_justRepeated(BTN_R1) && !PAD_isPressed(BTN_L1) && !PWR_ignoreSettingInput(BTN_R1, show_setting)) {
-			
-			}
-			else if (PAD_justRepeated(BTN_L2) && !PAD_isPressed(BTN_R2) && !PWR_ignoreSettingInput(BTN_L2, show_setting)) {
-			
-			}
-			else if (PAD_justRepeated(BTN_R2) && !PAD_isPressed(BTN_L2) && !PWR_ignoreSettingInput(BTN_R2, show_setting)) {
-			
 			}
 		}
 		else if(currentScreen == SCREEN_GAMESWITCHER) {
