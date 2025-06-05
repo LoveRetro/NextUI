@@ -2035,12 +2035,14 @@ int main (int argc, char *argv[]) {
 
 			if (PAD_justPressed(BTN_B) || PAD_tappedMenu(now)) {
 				currentScreen = SCREEN_GAMELIST;
-				switcher_selected = 0;
-				dirty = 1;
 				folderbgchanged = 1; // The background painting code is a clusterfuck, just force a repaint here
+				dirty = 1;
 			}
 			else if (PAD_justReleased(BTN_A)) {
 				Entry *selected = qm_row == 0 ? quick->items[qm_col] : quickActions->items[qm_col];
+				if(selected->type == ENTRY_DIP) {
+					currentScreen = SCREEN_GAMELIST;
+				}
 				Entry_open(selected);
 				dirty = 1;
 			}
@@ -2296,7 +2298,7 @@ int main (int argc, char *argv[]) {
 
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
 			if (currentScreen == SCREEN_QUICKMENU) {
-				//GFX_clearLayers(LAYER_ALL);
+				GFX_clearLayers(LAYER_BACKGROUND);
 
 				Entry *current = qm_row == 0 ? quick->items[qm_col] : quickActions->items[qm_col];
 				char newBgPath[MAX_PATH];
@@ -2309,6 +2311,7 @@ int main (int argc, char *argv[]) {
 				}
 
 				// title pill
+				if(false)
 				{
 					int max_width = screen->w - SCALE1(PADDING * 2) - ow;
 					
@@ -2401,7 +2404,7 @@ int main (int argc, char *argv[]) {
 
 					int asset = ASSET_WIFI;
 					if (!strcmp(item->name,"Wifi"))
-						asset = WIFI_enabled() ? ASSET_WIFI_OFF : ASSET_WIFI;
+						asset = is_online ? ASSET_WIFI_OFF : ASSET_WIFI;
 					else if (!strcmp(item->name,"Sleep"))
 						asset = ASSET_SUSPEND;
 					else if (!strcmp(item->name,"Reboot"))
