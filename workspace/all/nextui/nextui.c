@@ -2036,6 +2036,7 @@ int main (int argc, char *argv[]) {
 				currentScreen = SCREEN_GAMELIST;
 				switcher_selected = 0;
 				dirty = 1;
+				folderbgchanged = 1; // The background painting code is a clusterfuck, just force a repaint here
 			}
 			else if (PAD_justReleased(BTN_A)) {
 				Entry *selected = qm_row == 0 ? quick->items[qm_col] : quickActions->items[qm_col];
