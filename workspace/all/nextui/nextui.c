@@ -2309,36 +2309,6 @@ int main (int argc, char *argv[]) {
 					strncpy(folderBgPath, newBgPath, sizeof(folderBgPath) - 1);
 					startLoadFolderBackground(newBgPath, onBackgroundLoaded, NULL);
 				}
-
-				// title pill
-				if(false)
-				{
-					int max_width = screen->w - SCALE1(PADDING * 2) - ow;
-					
-					char display_name[256];
-					int text_width = GFX_truncateText(font.large, "Quick Menu", display_name, max_width, SCALE1(BUTTON_PADDING*2));
-					max_width = MIN(max_width, text_width);
-
-					SDL_Surface* text;
-					SDL_Color textColor = uintToColour(THEME_COLOR6_255);
-					text = TTF_RenderUTF8_Blended(font.large, display_name, textColor);
-					GFX_blitPillLight(ASSET_WHITE_PILL, screen, &(SDL_Rect){
-						SCALE1(PADDING),
-						SCALE1(PADDING),
-						max_width,
-						SCALE1(PILL_SIZE)
-					});
-					SDL_BlitSurface(text, &(SDL_Rect){
-						0,
-						0,
-						max_width-SCALE1(BUTTON_PADDING*2),
-						text->h
-					}, screen, &(SDL_Rect){
-						SCALE1(PADDING+BUTTON_PADDING),
-						SCALE1(PADDING+4)
-					});
-					SDL_FreeSurface(text);
-				}
 				
 				// buttons (duped and trimmed from below)
 				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
