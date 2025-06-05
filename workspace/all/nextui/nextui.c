@@ -2676,6 +2676,7 @@ int main (int argc, char *argv[]) {
 				thumbchanged = 0;
 			} else if(thumbchanged) {
 				GFX_clearLayers(3);
+				thumbchanged = 0;
 			}
 			SDL_UnlockMutex(thumbMutex);
 			SDL_LockMutex(animMutex);
