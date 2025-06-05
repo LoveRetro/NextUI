@@ -2022,8 +2022,7 @@ int main (int argc, char *argv[]) {
 			
 		int selected = top->selected;
 		int total = top->entries->count;
-		int qm_total = qm_row == 0 ? quick->count : quickActions->count;
-
+		
 		PWR_update(&dirty, &show_setting, NULL, NULL);
 		
 		int is_online = PLAT_isOnline();
@@ -2032,6 +2031,8 @@ int main (int argc, char *argv[]) {
 		int gsanimdir = ANIM_NONE;
 		
 		if (currentScreen == SCREEN_QUICKMENU) {
+			int qm_total = qm_row == 0 ? quick->count : quickActions->count;
+
 			if (PAD_justPressed(BTN_B) || PAD_tappedMenu(now)) {
 				currentScreen = SCREEN_GAMELIST;
 				switcher_selected = 0;
@@ -2130,6 +2131,7 @@ int main (int argc, char *argv[]) {
 			if (PAD_tappedMenu(now)) {
 				currentScreen = SCREEN_QUICKMENU;
 				dirty = 1;
+				folderbgchanged = 1; // The background painting code is a clusterfuck, just force a repaint here
 				if (!HAS_POWER_BUTTON && !simple_mode) PWR_enableSleep();
 			}
 			else if (PAD_justReleased(BTN_SELECT)) {
@@ -2306,7 +2308,17 @@ int main (int argc, char *argv[]) {
 
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
 			if (currentScreen == SCREEN_QUICKMENU) {
-				GFX_clearLayers(LAYER_ALL);
+				//GFX_clearLayers(LAYER_ALL);
+
+				Entry *current = qm_row == 0 ? quick->items[qm_col] : quickActions->items[qm_col];
+				char newBgPath[MAX_PATH];
+				sprintf(newBgPath, "%s/quick_%s.png", SDCARD_PATH, current->name);
+				
+				// background
+				if(strcmp(newBgPath, folderBgPath) != 0) {
+					strncpy(folderBgPath, newBgPath, sizeof(folderBgPath) - 1);
+					startLoadFolderBackground(newBgPath, onBackgroundLoaded, NULL);
+				}
 
 				// title pill
 				{
@@ -2741,7 +2753,18 @@ int main (int argc, char *argv[]) {
 				animationdirection = ANIM_NONE;
 			}
 
-			if(lastScreen == SCREEN_GAMELIST) {
+			if(lastScreen == SCREEN_QUICKMENU) {
+				SDL_LockMutex(bgMutex);
+				if(folderbgchanged) {
+					if(folderbgbmp)
+						GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,LAYER_BACKGROUND);
+					else
+						GFX_clearLayers(LAYER_BACKGROUND);
+					folderbgchanged = 0;
+				}
+				SDL_UnlockMutex(bgMutex);
+			}
+			else if(lastScreen == SCREEN_GAMELIST) {
 				SDL_LockMutex(bgMutex);
 				if(folderbgchanged) {
 					if(folderbgbmp)
@@ -2893,9 +2916,9 @@ int main (int argc, char *argv[]) {
 			} else {
 				SDL_Delay(17);
 			}
-			SDL_UnlockMutex(bgqueueMutex);
-			SDL_UnlockMutex(thumbqueueMutex);
 			SDL_UnlockMutex(animqueueMutex);
+			SDL_UnlockMutex(thumbqueueMutex);
+			SDL_UnlockMutex(bgqueueMutex);
 		}
 	
 		SDL_LockMutex(frameMutex);
