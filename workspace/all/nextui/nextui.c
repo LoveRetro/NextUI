@@ -1326,7 +1326,7 @@ static void toggleQuick(Entry* self)
 		WIFI_enable(!WIFI_enabled());
 	}
 	else if(!strcmp(self->name, "Sleep")) {
-		PWR_deepSleep();
+		PWR_sleep();
 	}
 	else if(!strcmp(self->name, "Reboot")) {
 		PWR_powerOff(1);
@@ -2359,15 +2359,16 @@ int main (int argc, char *argv[]) {
 					SDL_Rect item_rect = {ox, oy, item_size, item_size};
 					Entry *item = quick->items[c];
 
-					SDL_Color text_color = COLOR_WHITE;
+					SDL_Color text_color = uintToColour(THEME_COLOR4_255);
 					uint32_t item_color = THEME_COLOR2;
 
 					if(qm_row == 0 && qm_col == c) {
-						text_color = COLOR_BLACK;
+						text_color = uintToColour(THEME_COLOR5_255);
 						item_color = THEME_COLOR1;
 					}
-
-					GFX_blitRectColor(ASSET_STATE_BG, screen, &item_rect, item_color);
+					
+					if(qm_row == 0 && qm_col == c)
+						GFX_blitRectColor(ASSET_STATE_BG, screen, &item_rect, item_color);
 
 					int w, h;
 					GFX_sizeText(font.tiny, item->name, SCALE1(FONT_TINY), &w, &h);
@@ -2385,12 +2386,11 @@ int main (int argc, char *argv[]) {
 					SDL_Rect item_rect = {ox, oy, SCALE1(PILL_SIZE), SCALE1(PILL_SIZE)};
 					Entry *item = quickActions->items[c];
 
-					SDL_Color text_color = COLOR_WHITE;
+					SDL_Color text_color = uintToColour(THEME_COLOR4_255);
 					uint32_t item_color = THEME_COLOR2;
-					uint32_t icon_color = THEME_COLOR5;
 
 					if(qm_row == 1 && qm_col == c) {
-						text_color = COLOR_BLACK;
+						text_color = uintToColour(THEME_COLOR5_255);
 						item_color = THEME_COLOR1;
 					}
 
@@ -2532,6 +2532,10 @@ int main (int argc, char *argv[]) {
 									GFX_animateSurface(bmp,ax-screen->w,ay,ax,ay,aw,ah,CFG_getMenuTransitions() ? 80:20,0,255,LAYER_ALL);
 								
 								GFX_drawOnLayer(bmp,ax,ay,aw,ah,1.0f,0,LAYER_BACKGROUND);
+							} else if(lastScreen == SCREEN_QUICKMENU) {
+								GFX_flipHidden();
+								GFX_drawOnLayer(blackBG,0,0,screen->w, screen->h,1.0f,0,LAYER_BACKGROUND);								
+								GFX_drawOnLayer(bmp,ax,ay,aw,ah,1.0f,0,LAYER_BACKGROUND);
 							}
 							SDL_FreeSurface(bmp);  // Free after rendering
 						}
@@ -2569,7 +2573,7 @@ int main (int argc, char *argv[]) {
 				switcherSur = GFX_captureRendererToSurface();
 				lastScreen = SCREEN_GAMESWITCHER;
 			}
-			else {
+			else { // if currentscreen == SCREEN_GAMELIST
 				static int lastType = -1;
 		
 				if(((entry->type == ENTRY_DIR || entry->type == ENTRY_ROM) && CFG_getRomsUseFolderBackground())) {

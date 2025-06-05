@@ -74,6 +74,7 @@ extern uint32_t THEME_COLOR3;
 extern uint32_t THEME_COLOR4;
 extern uint32_t THEME_COLOR5;
 extern uint32_t THEME_COLOR6;
+extern uint32_t THEME_COLOR7;
 extern SDL_Color ALT_BUTTON_TEXT_COLOR;
 
 // TODO: do we need that many free externs? This should move

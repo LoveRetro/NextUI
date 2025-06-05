@@ -87,6 +87,7 @@ uint32_t THEME_COLOR3;
 uint32_t THEME_COLOR4;
 uint32_t THEME_COLOR5;
 uint32_t THEME_COLOR6;
+uint32_t THEME_COLOR7;
 SDL_Color ALT_BUTTON_TEXT_COLOR;
 
 // move to utils?
@@ -248,6 +249,7 @@ int GFX_updateColors()
 	THEME_COLOR4 = mapUint(CFG_getColor(4));
 	THEME_COLOR5 = mapUint(CFG_getColor(5));
 	THEME_COLOR6 = mapUint(CFG_getColor(6));
+	THEME_COLOR7 = mapUint(CFG_getColor(7));
 	ALT_BUTTON_TEXT_COLOR = uintToColour(CFG_getColor(3));
 
 	return 0;
@@ -1358,6 +1360,8 @@ void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rec
 			asset_color = THEME_COLOR5_255;
 		else if(asset_color == THEME_COLOR6)
 			asset_color = THEME_COLOR6_255;
+		else if(asset_color == THEME_COLOR7)
+			asset_color = THEME_COLOR7_255;
 
 		SDL_Color restore;
 		SDL_GetSurfaceColorMod(gfx.assets, &restore.r, &restore.g, &restore.b);
