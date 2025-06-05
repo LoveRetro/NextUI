@@ -2360,15 +2360,15 @@ int main (int argc, char *argv[]) {
 					SDL_Rect item_rect = {ox, oy, item_size, item_size};
 					Entry *item = quick->items[c];
 
-					SDL_Color text_color = uintToColour(THEME_COLOR4_255);
-					uint32_t item_color = THEME_COLOR2;
+					SDL_Color text_color = uintToColour(THEME_COLOR5_255);
+					uint32_t item_color = THEME_COLOR1;
 
 					if(qm_row == 0 && qm_col == c) {
-						text_color = uintToColour(THEME_COLOR5_255);
-						item_color = THEME_COLOR1;
+						text_color = uintToColour(THEME_COLOR4_255);
+						item_color = THEME_COLOR2;
 					}
 					
-					if(qm_row == 0 && qm_col == c)
+					//if(qm_row == 0 && qm_col == c)
 						GFX_blitRectColor(ASSET_STATE_BG, screen, &item_rect, item_color);
 
 					int w, h;
@@ -2387,12 +2387,14 @@ int main (int argc, char *argv[]) {
 					SDL_Rect item_rect = {ox, oy, SCALE1(PILL_SIZE), SCALE1(PILL_SIZE)};
 					Entry *item = quickActions->items[c];
 
-					SDL_Color text_color = uintToColour(THEME_COLOR4_255);
-					uint32_t item_color = THEME_COLOR2;
+					SDL_Color text_color = uintToColour(THEME_COLOR5_255);
+					uint32_t item_color = THEME_COLOR1;
+					uint32_t icon_color = THEME_COLOR5;
 
 					if(qm_row == 1 && qm_col == c) {
-						text_color = uintToColour(THEME_COLOR5_255);
-						item_color = THEME_COLOR1;
+						text_color = uintToColour(THEME_COLOR4_255);
+						item_color = THEME_COLOR2;
+						icon_color = THEME_COLOR4;
 					}
 
 					GFX_blitPillColor(ASSET_WHITE_PILL, screen, &item_rect, item_color, RGB_WHITE);
@@ -2416,7 +2418,7 @@ int main (int argc, char *argv[]) {
 					x += (SCALE1(PILL_SIZE) - rect.w) / 2;
 					y += (SCALE1(PILL_SIZE) - rect.h) / 2;
 					
-					GFX_blitAssetColor(asset, NULL, screen, &(SDL_Rect){x,y}, THEME_COLOR5);
+					GFX_blitAssetColor(asset, NULL, screen, &(SDL_Rect){x,y}, icon_color);
 					
 					ox += item_rect.w + SCALE1(MENU_TOGGLE_MARGIN);
 				}
