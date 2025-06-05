@@ -1711,7 +1711,7 @@ int ThumbLoadWorker(void* unused) {
     return 0;
 }
 
-void startLoadFolderBackground(const char* imagePath, int type, BackgroundLoadedCallback callback, void* userData) {
+void startLoadFolderBackground(const char* imagePath, BackgroundLoadedCallback callback, void* userData) {
     LoadBackgroundTask* task = malloc(sizeof(LoadBackgroundTask));
     if (!task) return;
 
@@ -2592,12 +2592,12 @@ int main (int argc, char *argv[]) {
 						if(!exists(tmppath)) {
 							snprintf(tmppath, sizeof(tmppath), SDCARD_PATH "/bg.png", folderBgPath);
 						}
-						startLoadFolderBackground(tmppath, entry->type, onBackgroundLoaded, NULL);
+						startLoadFolderBackground(tmppath, onBackgroundLoaded, NULL);
 					}
 				} 
 				else if(strcmp(SDCARD_PATH "/bg.png", folderBgPath) != 0) {
 					strncpy(folderBgPath, SDCARD_PATH "/bg.png", sizeof(folderBgPath) - 1);
-					startLoadFolderBackground(SDCARD_PATH "/bg.png", entry->type, onBackgroundLoaded, NULL);
+					startLoadFolderBackground(SDCARD_PATH "/bg.png", onBackgroundLoaded, NULL);
 				}
 				// load game thumbnails
 				if (total > 0) {
