@@ -3108,7 +3108,11 @@ bool PLAT_wifiEnabled() {
 #define MAX_CONNECTION_ATTEMPTS 5
 
 void PLAT_wifiEnable(bool on) {
-	if(on) {
+	if(wifi.enabled == on)
+		return; 
+		
+	if (on)
+	{
 		LOG_info("turning wifi on...\n");
 		
 		// This shouldnt be needed, but we cant really rely on nobody else messing with this stuff. 
