@@ -2333,16 +2333,34 @@ int main (int argc, char *argv[]) {
 					SDL_Rect item_rect = {ox, oy, item_size, item_size};
 					Entry *item = quick->items[c];
 
-					SDL_Color text_color = uintToColour(THEME_COLOR5_255);
-					uint32_t item_color = THEME_COLOR1;
+					SDL_Color text_color = uintToColour(THEME_COLOR4_255);
+					uint32_t item_color = THEME_COLOR2;
 
 					if(qm_row == 0 && qm_col == c) {
-						text_color = uintToColour(THEME_COLOR4_255);
-						item_color = THEME_COLOR2;
+						text_color = uintToColour(THEME_COLOR5_255);
+						item_color = THEME_COLOR1;
 					}
 					
 					//if(qm_row == 0 && qm_col == c)
 						GFX_blitRectColor(ASSET_STATE_BG, screen, &item_rect, item_color);
+
+					char icon_path[MAX_PATH];
+					sprintf(icon_path, SDCARD_PATH "/.system/res/%s@%ix.png", item->name, 1);
+					SDL_Surface* bmp = IMG_Load(icon_path);
+					if(bmp) {
+						SDL_Surface* converted = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888, 0);
+						if (converted) {
+							SDL_FreeSurface(bmp); 
+							bmp = converted; 
+						}
+					}
+					if(bmp) {
+						// Calculate the position to center the source surface
+						int x = (item_rect.w - bmp->w) / 2;
+						int y = (item_rect.h - SCALE1(FONT_TINY + BUTTON_MARGIN) - bmp->h) / 2;
+						SDL_Rect destRect = { ox+x, oy+y, 0, 0 };  // width/height not required
+						SDL_BlitSurface(bmp, NULL, screen, &destRect);
+					}
 
 					int w, h;
 					GFX_sizeText(font.tiny, item->name, SCALE1(FONT_TINY), &w, &h);
@@ -2360,14 +2378,14 @@ int main (int argc, char *argv[]) {
 					SDL_Rect item_rect = {ox, oy, SCALE1(PILL_SIZE), SCALE1(PILL_SIZE)};
 					Entry *item = quickActions->items[c];
 
-					SDL_Color text_color = uintToColour(THEME_COLOR5_255);
-					uint32_t item_color = THEME_COLOR1;
-					uint32_t icon_color = THEME_COLOR5;
+					SDL_Color text_color = uintToColour(THEME_COLOR4_255);
+					uint32_t item_color = THEME_COLOR2;
+					uint32_t icon_color = THEME_COLOR4;
 
 					if(qm_row == 1 && qm_col == c) {
-						text_color = uintToColour(THEME_COLOR4_255);
-						item_color = THEME_COLOR2;
-						icon_color = THEME_COLOR4;
+						text_color = uintToColour(THEME_COLOR5_255);
+						item_color = THEME_COLOR1;
+						icon_color = THEME_COLOR5;
 					}
 
 					GFX_blitPillColor(ASSET_WHITE_PILL, screen, &item_rect, item_color, RGB_WHITE);
