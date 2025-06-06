@@ -800,7 +800,8 @@ static Array* getCollections(void)
 static Array* getQuickEntries(void) {
 	Array* entries = Array_new();
 
-	if (CFG_getShowRecents() && hasRecents())
+	// We assume Menu_init was already called and populated this
+	if (CFG_getShowRecents() && recents->count)
 		Array_push(entries, Entry_newNamed(FAUX_RECENT_PATH, ENTRY_DIR, "Recents"));
 
 	if (hasCollections())
@@ -1572,18 +1573,6 @@ static void loadLast(void) { // call after loading root directory
 
 ///////////////////////////////////////
 
-static void Menu_init(void) {
-	stack = Array_new(); // array of open Directories
-	recents = Array_new();
-
-	openDirectory(SDCARD_PATH, 0);
-	loadLast(); // restore state when available
-}
-static void Menu_quit(void) {
-	RecentArray_free(recents);
-	DirectoryArray_free(stack);
-}
-
 static void QuickMenu_init(void) {
 	quick = getQuickEntries();
 	quickActions = getQuickToggles();
@@ -1591,6 +1580,22 @@ static void QuickMenu_init(void) {
 static void QuickMenu_quit(void) {
 	EntryArray_free(quick);
 	EntryArray_free(quickActions);
+}
+
+static void Menu_init(void) {
+	stack = Array_new(); // array of open Directories
+	recents = Array_new();
+
+	openDirectory(SDCARD_PATH, 0);
+	loadLast(); // restore state when available
+
+	QuickMenu_init(); // needs Menu_init
+}
+static void Menu_quit(void) {
+	RecentArray_free(recents);
+	DirectoryArray_free(stack);
+
+	QuickMenu_quit();
 }
 
 ///////////////////////////////////////
@@ -2094,7 +2099,6 @@ int main (int argc, char *argv[]) {
 	// start my threaded image loader :D
 	initImageLoaderPool();
 	Menu_init();
-	QuickMenu_init();
 	int qm_row = 0;
 	int qm_col = 0;
 	// LOG_info("- menu init: %lu\n", SDL_GetTicks() - main_begin);
@@ -3062,7 +3066,6 @@ int main (int argc, char *argv[]) {
 	if (thumbbmp) SDL_FreeSurface(thumbbmp);
 
 	Menu_quit();
-	QuickMenu_quit();
 	PWR_quit();
 	PAD_quit();
 	GFX_quit();
