@@ -2930,8 +2930,7 @@ int main (int argc, char *argv[]) {
 	if (folderbgbmp) SDL_FreeSurface(folderbgbmp);
 	if (thumbbmp) SDL_FreeSurface(thumbbmp);
 
-	// Why need to do this?
-	// Menu_quit();
+	Menu_quit();
 	QuickMenu_quit();
 	PWR_quit();
 	PAD_quit();
