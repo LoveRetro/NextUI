@@ -304,9 +304,10 @@ SDL_Surface* GFX_init(int mode)
 	asset_rects[ASSET_BAR_BG_MENU]		= (SDL_Rect){SCALE4(85,56, 4, 4)};
 	asset_rects[ASSET_UNDERLINE]		= (SDL_Rect){SCALE4(85,51, 3, 3)};
 	asset_rects[ASSET_DOT]				= (SDL_Rect){SCALE4(33,54, 2, 2)};
-	asset_rects[ASSET_BRIGHTNESS]		= (SDL_Rect){SCALE4(23,33,19,19)};
-	asset_rects[ASSET_VOLUME_MUTE]		= (SDL_Rect){SCALE4(44,33,10,16)};
-	asset_rects[ASSET_VOLUME]			= (SDL_Rect){SCALE4(44,33,18,16)};
+	asset_rects[ASSET_BRIGHTNESS]		= (SDL_Rect){SCALE4( 1,85,19,19)};
+	asset_rects[ASSET_COLORTEMP]		= (SDL_Rect){SCALE4(41,85, 9,19)};
+	asset_rects[ASSET_VOLUME_MUTE]		= (SDL_Rect){SCALE4(21,85,10,19)};
+	asset_rects[ASSET_VOLUME]			= (SDL_Rect){SCALE4(21,85,19,19)};
 	asset_rects[ASSET_BATTERY]			= (SDL_Rect){SCALE4(47,51,17,10)};
 	asset_rects[ASSET_BATTERY_LOW]		= (SDL_Rect){SCALE4(66,51,17,10)};
 	asset_rects[ASSET_BATTERY_FILL]		= (SDL_Rect){SCALE4(81,33,12, 6)};
@@ -314,18 +315,18 @@ SDL_Surface* GFX_init(int mode)
 	asset_rects[ASSET_BATTERY_BOLT]		= (SDL_Rect){SCALE4(81,41,12, 6)};
 	asset_rects[ASSET_SCROLL_UP]		= (SDL_Rect){SCALE4(97,23,24, 6)};
 	asset_rects[ASSET_SCROLL_DOWN]		= (SDL_Rect){SCALE4(97,31,24, 6)};
-	asset_rects[ASSET_WIFI]				= (SDL_Rect){SCALE4(23,64,14,10)};
-	asset_rects[ASSET_WIFI_MED]			= (SDL_Rect){SCALE4(38,64,14,10)};
-	asset_rects[ASSET_WIFI_LOW]			= (SDL_Rect){SCALE4(54,64,14,10)};
-	asset_rects[ASSET_WIFI_OFF]			= (SDL_Rect){SCALE4(23,75,14,10)};
-	asset_rects[ASSET_CHECKCIRCLE]		= (SDL_Rect){SCALE4(68,63,12,12)};
-	asset_rects[ASSET_LOCK]				= (SDL_Rect){SCALE4(81,64,8,11)};
+	asset_rects[ASSET_WIFI]				= (SDL_Rect){SCALE4( 1,104,12,12)};
+	asset_rects[ASSET_WIFI_MED]			= (SDL_Rect){SCALE4(14,104,12,12)};
+	asset_rects[ASSET_WIFI_LOW]			= (SDL_Rect){SCALE4(27,104,12,12)};
+	asset_rects[ASSET_WIFI_OFF]			= (SDL_Rect){SCALE4(40,104,12,12)};
+	asset_rects[ASSET_CHECKCIRCLE]		= (SDL_Rect){SCALE4( 1,117,10,10)};
+	asset_rects[ASSET_LOCK]				= (SDL_Rect){SCALE4(12,116, 8,11)};
 	asset_rects[ASSET_HOLE]				= (SDL_Rect){SCALE4( 1,63,20,20)};
-	asset_rects[ASSET_GAMEPAD]			= (SDL_Rect){SCALE4(92,51,18,10)};
-	asset_rects[ASSET_SETTINGS]			= (SDL_Rect){SCALE4(93,64,10,10)};
-	asset_rects[ASSET_POWEROFF]			= (SDL_Rect){SCALE4(80,77,10,10)};
-	asset_rects[ASSET_SUSPEND]			= (SDL_Rect){SCALE4(68,77,11,10)};
-	asset_rects[ASSET_RESTART]			= (SDL_Rect){SCALE4(93,77,10,10)};
+	asset_rects[ASSET_GAMEPAD]			= (SDL_Rect){SCALE4(91,51,17,10)};
+	asset_rects[ASSET_SETTINGS]			= (SDL_Rect){SCALE4(21,117,10,10)};
+	asset_rects[ASSET_POWEROFF]			= (SDL_Rect){SCALE4(43,117,10,10)};
+	asset_rects[ASSET_SUSPEND]			= (SDL_Rect){SCALE4(32,117,10,10)};
+	asset_rects[ASSET_RESTART]			= (SDL_Rect){SCALE4(54,119,11,8)};
 
 	char asset_path[MAX_PATH];
 	sprintf(asset_path, RES_PATH "/assets@%ix.png", FIXED_SCALE);
@@ -1624,7 +1625,7 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 			setting_max = VOLUME_MAX;
 		}
 		
-		int asset = show_setting==3?ASSET_BUTTON:show_setting==1?ASSET_BRIGHTNESS:(setting_value>0?ASSET_VOLUME:ASSET_VOLUME_MUTE);
+		int asset = show_setting==3?ASSET_COLORTEMP:show_setting==1?ASSET_BRIGHTNESS:(setting_value>0?ASSET_VOLUME:ASSET_VOLUME_MUTE);
 		int ax = ox + (show_setting==1 || show_setting == 3 ? SCALE1(6) : SCALE1(8));
 		int ay = oy + (show_setting==1 || show_setting == 3 ? SCALE1(5) : SCALE1(7));
 		GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){ax,ay}, THEME_COLOR6_255);
