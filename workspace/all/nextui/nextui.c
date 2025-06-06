@@ -13,6 +13,7 @@
 #include "config.h"
 #include <sys/resource.h>
 #include <pthread.h>
+#include <assert.h>
 
 ///////////////////////////////////////
 
@@ -2555,6 +2556,7 @@ int main (int argc, char *argv[]) {
 			else { // if currentscreen == SCREEN_GAMELIST
 				// background and game art file path stuff
 				Entry* entry = top->entries->items[top->selected];
+				assert(entry);
 				char tmp_path[MAX_PATH];
 				strncpy(tmp_path, entry->path, sizeof(tmp_path) - 1);
 				tmp_path[sizeof(tmp_path) - 1] = '\0';
@@ -2721,21 +2723,21 @@ int main (int argc, char *argv[]) {
 				lastScreen = SCREEN_GAMELIST;
 			}
 
-			if(animationdirection != ANIM_NONE && CFG_getMenuTransitions()) {
-				GFX_clearLayers(LAYER_BACKGROUND);
-				folderbgchanged = 1;
-				GFX_clearLayers(LAYER_TRANSITION);
-				GFX_flipHidden();
-				SDL_Surface *tmpNewScreen = GFX_captureRendererToSurface();
-				SDL_SetSurfaceBlendMode(tmpNewScreen,SDL_BLENDMODE_BLEND);
-				GFX_clearLayers(LAYER_THUMBNAIL);
-				if(animationdirection == SLIDE_LEFT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpNewScreen,1,0,FIXED_WIDTH,FIXED_HEIGHT,0,255,LAYER_THUMBNAIL);
-				if(animationdirection == SLIDE_RIGHT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpNewScreen,1,0,FIXED_WIDTH,FIXED_HEIGHT,0,255,LAYER_THUMBNAIL);
-				GFX_clearLayers(LAYER_THUMBNAIL);
-				SDL_FreeSurface(tmpNewScreen);
-				animationdirection = ANIM_NONE;
-			} else {
-				// TODO SEE comment with NOTE:22 ... For now this fixes slowdown, but need to check a better solution probably
+			if(animationdirection != ANIM_NONE) {
+				if(CFG_getMenuTransitions()) {
+					GFX_clearLayers(LAYER_BACKGROUND);
+					folderbgchanged = 1;
+					GFX_clearLayers(LAYER_TRANSITION);
+					GFX_flipHidden();
+					SDL_Surface *tmpNewScreen = GFX_captureRendererToSurface();
+					SDL_SetSurfaceBlendMode(tmpNewScreen,SDL_BLENDMODE_BLEND);
+					GFX_clearLayers(LAYER_THUMBNAIL);
+					if(animationdirection == SLIDE_LEFT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpNewScreen,1,0,FIXED_WIDTH,FIXED_HEIGHT,0,255,LAYER_THUMBNAIL);
+					if(animationdirection == SLIDE_RIGHT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpNewScreen,1,0,FIXED_WIDTH,FIXED_HEIGHT,0,255,LAYER_THUMBNAIL);
+					GFX_clearLayers(LAYER_THUMBNAIL);
+					SDL_FreeSurface(tmpNewScreen);
+				}
+				// animation done
 				animationdirection = ANIM_NONE;
 			}
 
@@ -2911,6 +2913,10 @@ int main (int argc, char *argv[]) {
 		frameReady = true;
 		SDL_CondSignal(flipCond);
 		SDL_UnlockMutex(frameMutex);
+
+		// animation does not carry over between loops, this should only ever be set by
+		// input handling and directly consumed by the following render pass
+		assert(animationdirection == ANIM_NONE);
 
 		// handle HDMI change
 		static int had_hdmi = -1;
