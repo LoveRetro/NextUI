@@ -7,6 +7,8 @@ extern "C"
 #include "utils.h"
 }
 
+#include <fstream>
+#include <sstream>
 #include "wifimenu.hpp"
 #include "keyboardprompt.hpp"
 
@@ -321,9 +323,10 @@ int main(int argc, char *argv[])
         {
             new StaticMenuItem{ListItemType::Generic, "NextUI version", "", 
             []() -> std::any { 
-                char release[256];
-                getFile(ROOT_SYSTEM_PATH "/version.txt", release, 256);
-                return std::string(release); 
+                std::ifstream t(ROOT_SYSTEM_PATH "/version.txt");
+                std::stringstream buffer;
+                buffer << t.rdbuf();
+                return buffer.str();
             }},
             new StaticMenuItem{ListItemType::Generic, "Platform", "", 
             []() -> std::any { 
