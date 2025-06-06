@@ -805,6 +805,7 @@ static Array* getQuickEntries(void) {
 	if (hasCollections())
 		Array_push(entries, Entry_new(COLLECTIONS_PATH, ENTRY_DIR));
 
+	// Not sure we need this, its just a button press away (B)
 	Array_push(entries, Entry_newNamed(ROMS_PATH, ENTRY_DIR, "Games"));
 
 	// Add tools if applicable
@@ -1289,9 +1290,9 @@ static void openDirectory(char* path, int auto_launch) {
 		}
 		// TODO: doesn't handle empty m3u files
 	}
-	
+
 	int selected = 0;
-	int start = selected;
+	int start = 0;
 	int end = 0;
 	if (top && top->entries->count>0) {
 		if (restore_depth==stack->count && top->selected==restore_relative) {
@@ -2040,7 +2041,7 @@ int main (int argc, char *argv[]) {
 			}
 			else if (PAD_justReleased(BTN_A)) {
 				Entry *selected = qm_row == 0 ? quick->items[qm_col] : quickActions->items[qm_col];
-				if(selected->type == ENTRY_DIP) {
+				if(selected->type != ENTRY_DIP) {
 					currentScreen = SCREEN_GAMELIST;
 				}
 				Entry_open(selected);
@@ -2351,7 +2352,7 @@ int main (int argc, char *argv[]) {
 						GFX_blitRectColor(ASSET_STATE_BG, screen, &item_rect, item_color);
 
 					char icon_path[MAX_PATH];
-					sprintf(icon_path, SDCARD_PATH "/.system/res/%s@%ix.png", item->name, 1);
+					sprintf(icon_path, SDCARD_PATH "/.system/res/%s@%ix.png", item->name, FIXED_SCALE);
 					SDL_Surface* bmp = IMG_Load(icon_path);
 					if(bmp) {
 						SDL_Surface* converted = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888, 0);
