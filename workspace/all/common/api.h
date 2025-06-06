@@ -414,6 +414,7 @@ int PAD_justReleased(int btn);
 int PAD_justRepeated(int btn);
 
 int PAD_tappedMenu(uint32_t now); // special case, returns 1 on release of BTN_MENU within 250ms if BTN_PLUS/BTN_MINUS haven't been pressed
+int PAD_tappedSelect(uint32_t now); // special case, returns 1 on release of BTN_SELECT within 250ms if BTN_PLUS/BTN_MINUS haven't been pressed
 
 ///////////////////////////////
 #define VIB_sleepStrength 4

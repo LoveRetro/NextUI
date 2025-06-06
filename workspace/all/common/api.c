@@ -2607,18 +2607,26 @@ int PAD_isPressed(int btn)		{ return pad.is_pressed & btn; }
 int PAD_justReleased(int btn)	{ return pad.just_released & btn; }
 int PAD_justRepeated(int btn)	{ return pad.just_repeated & btn; }
 
-int PAD_tappedMenu(uint32_t now) {
+int PAD_tappedBtn(int btn, uint32_t now) {
 	#define MENU_DELAY 250 // also in PWR_update()
 	static uint32_t menu_start = 0;
 	static int ignore_menu = 0; 
-	if (PAD_justPressed(BTN_MENU)) {
+	if (PAD_justPressed(btn)) {
 		ignore_menu = 0;
 		menu_start = now;
 	}
-	else if (PAD_isPressed(BTN_MENU) && BTN_MOD_BRIGHTNESS==BTN_MENU && (PAD_justPressed(BTN_MOD_PLUS) || PAD_justPressed(BTN_MOD_MINUS))) {
+	else if (PAD_isPressed(btn) && BTN_MOD_BRIGHTNESS==btn && (PAD_justPressed(BTN_MOD_PLUS) || PAD_justPressed(BTN_MOD_MINUS))) {
 		ignore_menu = 1;
 	}
-	return (!ignore_menu && PAD_justReleased(BTN_MENU) && now-menu_start<MENU_DELAY);
+	return (!ignore_menu && PAD_justReleased(btn) && now-menu_start<MENU_DELAY);
+}
+
+int PAD_tappedMenu(uint32_t now) {
+	return PAD_tappedBtn(BTN_MENU, now);
+}
+
+int PAD_tappedSelect(uint32_t now) {
+	return PAD_tappedBtn(BTN_SELECT, now);
 }
 
 ///////////////////////////////

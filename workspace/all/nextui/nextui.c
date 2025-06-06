@@ -2201,7 +2201,7 @@ int main (int argc, char *argv[]) {
 			}
 		}
 		else if(currentScreen == SCREEN_GAMESWITCHER) {
-			if (PAD_justPressed(BTN_B) || PAD_justReleased(BTN_SELECT)) {
+			if (PAD_justPressed(BTN_B) || PAD_tappedSelect(now)) {
 				currentScreen = SCREEN_GAMELIST;
 				switcher_selected = 0;
 				dirty = 1;
@@ -2249,7 +2249,7 @@ int main (int argc, char *argv[]) {
 				folderbgchanged = 1; // The background painting code is a clusterfuck, just force a repaint here
 				if (!HAS_POWER_BUTTON && !simple_mode) PWR_enableSleep();
 			}
-			else if (PAD_justReleased(BTN_SELECT)) {
+			else if (PAD_tappedSelect(now)) {
 				currentScreen = SCREEN_GAMESWITCHER;
 				switcher_selected = 0; 
 				dirty = 1;
