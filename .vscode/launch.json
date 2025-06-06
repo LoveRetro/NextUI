@@ -13,9 +13,14 @@
             },
             "cwd": "${workspaceFolder}/workspace/all/nextui/build/desktop",
             "program": "${workspaceFolder}/workspace/all/nextui/build/desktop/nextui.elf",
+            "preLaunchTask": "make desktop",
             "environment": [{
               "name": "SHARED_USERDATA_PATH", 
               "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
+            },
+            {
+              "name": "LD_LIBRARY_PATH",
+              "value": "${env:HOME}/nextui/lib"
             }]
         },
         {
@@ -28,6 +33,10 @@
             "cwd": "${workspaceFolder}/workspace/all/battery/build/desktop",
             "program": "${workspaceFolder}/workspace/all/battery/build/desktop/battery.elf",
             "preLaunchTask": "make desktop",
+            "environment": [{
+              "name": "LD_LIBRARY_PATH",
+              "value": "${env:HOME}/nextui/lib"
+            }]
         },
         {
             "name": "App: Input",
@@ -39,6 +48,10 @@
             "cwd": "${workspaceFolder}/workspace/all/minput/build/desktop",
             "program": "${workspaceFolder}/workspace/all/minput/build/desktop/minput.elf",
             "preLaunchTask": "make desktop",
+            "environment": [{
+              "name": "LD_LIBRARY_PATH",
+              "value": "${env:HOME}/nextui/lib"
+            }]
         },
         {
             "name": "App: Gametime",
@@ -50,6 +63,10 @@
             "cwd": "${workspaceFolder}/workspace/all/gametime/build/desktop",
             "program": "${workspaceFolder}/workspace/all/gametime/build/desktop/gametime.elf",
             "preLaunchTask": "make desktop",
+            "environment": [{
+              "name": "LD_LIBRARY_PATH",
+              "value": "${env:HOME}/nextui/lib"
+            }]
         },
         {
             "name": "App: Gametimectl",
@@ -62,6 +79,10 @@
             "program": "${workspaceFolder}/workspace/all/gametimectl/build/desktop/gametimectl.elf",
             "preLaunchTask": "make desktop",
             "args": ["start", "foo.txt"],
+            "environment": [{
+              "name": "LD_LIBRARY_PATH",
+              "value": "${env:HOME}/nextui/lib"
+            }]
         },
         {
             "name": "App: Settings",
@@ -76,6 +97,10 @@
             "environment": [{
               "name": "SHARED_USERDATA_PATH", 
               "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
+            },
+            {
+              "name": "LD_LIBRARY_PATH",
+              "value": "${env:HOME}/nextui/lib"
             }]
         },
         {
@@ -90,6 +115,10 @@
             "environment": [{
               "name": "SHARED_USERDATA_PATH", 
               "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
+            },
+            {
+              "name": "LD_LIBRARY_PATH",
+              "value": "${env:HOME}/nextui/lib"
             }],
             "args": [
               "/Library/Developer/Projects/private/MinUI_ro8inmorgan/workspace/desktop/cores/output/gambatte_libretro.so", 
