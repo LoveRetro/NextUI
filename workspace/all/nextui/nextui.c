@@ -2275,28 +2275,6 @@ int main (int argc, char *argv[]) {
 			}
 			GFX_clear(screen);
 
-			// background and game art file path stuff
-			Entry* entry = top->entries->items[top->selected];
-			char tmp_path[MAX_PATH];
-			strncpy(tmp_path, entry->path, sizeof(tmp_path) - 1);
-			tmp_path[sizeof(tmp_path) - 1] = '\0';
-		
-			char* res_name = strrchr(tmp_path, '/');
-			if (res_name) res_name++;
-
-			char path_copy[1024];
-			strncpy(path_copy, entry->path, sizeof(path_copy) - 1);
-			path_copy[sizeof(path_copy) - 1] = '\0';
-	
-			char* rompath = dirname(path_copy);
-		
-			char res_copy[1024];
-			strncpy(res_copy, res_name, sizeof(res_copy) - 1);
-			res_copy[sizeof(res_copy) - 1] = '\0';
-	
-			char* dot = strrchr(res_copy, '.');
-			if (dot) *dot = '\0'; 
-
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
 			if (currentScreen == SCREEN_QUICKMENU) {
 				if(lastScreen != SCREEN_QUICKMENU)
@@ -2575,6 +2553,28 @@ int main (int argc, char *argv[]) {
 				lastScreen = SCREEN_GAMESWITCHER;
 			}
 			else { // if currentscreen == SCREEN_GAMELIST
+				// background and game art file path stuff
+				Entry* entry = top->entries->items[top->selected];
+				char tmp_path[MAX_PATH];
+				strncpy(tmp_path, entry->path, sizeof(tmp_path) - 1);
+				tmp_path[sizeof(tmp_path) - 1] = '\0';
+			
+				char* res_name = strrchr(tmp_path, '/');
+				if (res_name) res_name++;
+
+				char path_copy[1024];
+				strncpy(path_copy, entry->path, sizeof(path_copy) - 1);
+				path_copy[sizeof(path_copy) - 1] = '\0';
+		
+				char* rompath = dirname(path_copy);
+			
+				char res_copy[1024];
+				strncpy(res_copy, res_name, sizeof(res_copy) - 1);
+				res_copy[sizeof(res_copy) - 1] = '\0';
+		
+				char* dot = strrchr(res_copy, '.');
+				if (dot) *dot = '\0'; 
+
 				static int lastType = -1;
 		
 				if(((entry->type == ENTRY_DIR || entry->type == ENTRY_ROM) && CFG_getRomsUseFolderBackground())) {
