@@ -176,7 +176,7 @@ setup: name
 	cp ./skeleton/EXTRAS/README.txt ./workspace/readmes/EXTRAS-in.txt
 	
 done:
-	say "done" 2>/dev/null || true
+	# say "done" 2>/dev/null || true
 
 special:
 	# setup miyoomini/trimui/magicx family .tmp_update in BOOT

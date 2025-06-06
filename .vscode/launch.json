@@ -13,6 +13,7 @@
             },
             "cwd": "${workspaceFolder}/workspace/all/nextui/build/desktop",
             "program": "${workspaceFolder}/workspace/all/nextui/build/desktop/nextui.elf",
+            "preLaunchTask": "make desktop",
             "environment": [{
               "name": "SHARED_USERDATA_PATH", 
               "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
