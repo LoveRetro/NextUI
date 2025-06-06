@@ -2298,13 +2298,19 @@ int main (int argc, char *argv[]) {
 
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
 			if (currentScreen == SCREEN_QUICKMENU) {
-				GFX_clearLayers(LAYER_BACKGROUND);
+				if(lastScreen != SCREEN_QUICKMENU)
+					GFX_clearLayers(LAYER_BACKGROUND);
 
 				Entry *current = qm_row == 0 ? quick->items[qm_col] : quickActions->items[qm_col];
 				char newBgPath[MAX_PATH];
-				sprintf(newBgPath, "%s/quick_%s.png", SDCARD_PATH, current->name);
+				char fallbackBgPath[MAX_PATH];
+				sprintf(newBgPath, SDCARD_PATH "/.media/quick_%s.png", current->name);
+				sprintf(fallbackBgPath, SDCARD_PATH "/.media/quick.png");
 				
 				// background
+				if(!exists(newBgPath))
+					strncpy(newBgPath, fallbackBgPath, sizeof(newBgPath) - 1);
+
 				if(strcmp(newBgPath, folderBgPath) != 0) {
 					strncpy(folderBgPath, newBgPath, sizeof(folderBgPath) - 1);
 					startLoadFolderBackground(newBgPath, onBackgroundLoaded, NULL);
