@@ -2902,7 +2902,9 @@ int main (int argc, char *argv[]) {
 				PLAT_GPU_Flip();
 				needDraw = 0;
 			} else {
-				SDL_Delay(17);
+				// TODO: Why 17? Seems like an odd choice for 60fps, it almost guarantees we miss at least one frame.
+				// This should either be 16(.66666667) or make proper use of SDL_Ticks to only wait for the next render pass.
+				SDL_Delay(17); 
 			}
 			SDL_UnlockMutex(animqueueMutex);
 			SDL_UnlockMutex(thumbqueueMutex);
