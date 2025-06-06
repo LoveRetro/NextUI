@@ -1272,6 +1272,112 @@ static void openRom(char* path, char* last) {
 	sprintf(cmd, "'%s' '%s'", escapeSingleQuotes(emu_path), sd_path);
 	queueNext(cmd);
 }
+
+static bool isDirectSubdirectory(const Directory* parent, const Directory* child) {
+    const char* parent_path = parent->path;
+    const char* child_path = child->path;
+
+    size_t parent_len = strlen(parent_path);
+    size_t child_len = strlen(child_path);
+
+    // Child must be longer than parent to be a subdirectory
+    if (child_len <= parent_len || strncmp(child_path, parent_path, parent_len) != 0) {
+        return false;
+    }
+
+    // Next char after parent path must be '/'
+    if (child_path[parent_len] != '/') return false;
+
+    // Walk through the child path after parent, skipping PLATFORM segments
+    const char* cursor = child_path + parent_len + 1; // skip the slash
+
+    int levels = 0;
+    while (*cursor) {
+        const char* next = strchr(cursor, '/');
+        size_t segment_len = next ? (size_t)(next - cursor) : strlen(cursor);
+
+        if (segment_len == 0) break;
+
+        // Copy segment into a buffer to compare
+        char segment[PATH_MAX];
+        if (segment_len >= PATH_MAX) return false;
+        strncpy(segment, cursor, segment_len);
+        segment[segment_len] = '\0';
+
+        // Count level only if it's not PLATFORM
+        if (strcmp(segment, PLATFORM) != 0) {
+            levels++;
+        }
+
+        if (!next) break;
+        cursor = next + 1;
+    }
+
+    return (levels == 1);  // exactly one meaningful level deeper
+}
+
+Array* pathToStack(const char* path) {
+	Array* array = Array_new();
+
+	if (!path || strlen(path) == 0) return array;
+
+	// Ensure path starts with SDCARD_PATH
+	if (!prefixMatch(SDCARD_PATH, path)) return array;
+
+	char temp_path[PATH_MAX];
+	strcpy(temp_path, SDCARD_PATH);
+	size_t base_len = strlen(SDCARD_PATH);
+
+	// Exact match: return only SDCARD_PATH
+	if (exactMatch(path, SDCARD_PATH)) {
+		Directory* root_dir = Directory_new(SDCARD_PATH, 0);
+		Array_push(array, root_dir);
+		return array;
+	}
+
+	const char* cursor = path + base_len;
+	if (*cursor == '/') cursor++;
+
+	size_t current_len = base_len;
+
+	while (*cursor) {
+		const char* next = strchr(cursor, '/');
+		size_t segment_len = next ? (size_t)(next - cursor) : strlen(cursor);
+
+		if (segment_len == 0) break;
+
+		// Extract segment name into a buffer
+		char segment[PATH_MAX];
+		if (segment_len >= PATH_MAX) break;
+		strncpy(segment, cursor, segment_len);
+		segment[segment_len] = '\0';
+
+		// Append '/' if not present
+		if (temp_path[current_len - 1] != '/') {
+			if (current_len + 1 >= PATH_MAX) break;
+			temp_path[current_len++] = '/';
+			temp_path[current_len] = '\0';
+		}
+
+		// Append segment to temp_path
+		if (current_len + segment_len >= PATH_MAX) break;
+		strcat(temp_path, segment);
+		current_len += segment_len;
+
+		// Only create a Directory if segment is NOT PLATFORM
+		if (strcmp(segment, PLATFORM) != 0) {
+			Directory* dir = Directory_new(temp_path, 0);
+			Array_push(array, dir);
+		}
+
+		// Move to next segment
+		if (!next) break;
+		cursor = next + 1;
+	}
+
+	return array;
+}
+
 static void openDirectory(char* path, int auto_launch) {
 	char auto_path[256];
 	if (hasCue(path, auto_path) && auto_launch) {
@@ -1292,22 +1398,39 @@ static void openDirectory(char* path, int auto_launch) {
 		// TODO: doesn't handle empty m3u files
 	}
 
-	int selected = 0;
-	int start = 0;
-	int end = 0;
-	if (top && top->entries->count>0) {
-		if (restore_depth==stack->count && top->selected==restore_relative) {
-			selected = restore_selected;
-			start = restore_start;
-			end = restore_end;
-		}
-	}
-	
-	top = Directory_new(path, selected);
-	top->start = start;
-	top->end = end ? end : ((top->entries->count<MAIN_ROW_COUNT) ? top->entries->count : MAIN_ROW_COUNT);
+	// If this is a direct subdirectory of top, push it on top of the stack
+	// If it isnt, we need to recreate the stack to keep navigation consistent
+	Directory* opened = Directory_new(path, false);
 
-	Array_push(stack, top);
+	if(!top || isDirectSubdirectory(top, opened)) {
+		int selected = 0;
+		int start = 0;
+		int end = 0;
+		if (top && top->entries->count>0) {
+			if (restore_depth==stack->count && top->selected==restore_relative) {
+				selected = restore_selected;
+				start = restore_start;
+				end = restore_end;
+			}
+		}
+
+		opened->selected = selected;
+		top = opened;
+		top->start = start;
+		top->end = end ? end : ((top->entries->count<MAIN_ROW_COUNT) ? top->entries->count : MAIN_ROW_COUNT);
+	
+		Array_push(stack, top);
+	}
+	else {
+		// we could theoretically simulate selected/start/end here, but for now just leave them alone
+
+		// construct a fresh stack by walking upwards until SDCARD_ROOT
+		DirectoryArray_free(stack);
+
+		stack = pathToStack(path);
+		top = stack->items[stack->count - 1];
+		Directory_free(opened);
+	}
 }
 static void closeDirectory(void) {
 	restore_selected = top->selected;
@@ -2601,8 +2724,8 @@ int main (int argc, char *argv[]) {
 				}
 				// load game thumbnails
 				if (total > 0) {
-					char thumbpath[1024];
 					if(CFG_getShowGameArt()) {
+						char thumbpath[1024];
 						snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
 						had_thumb = 0;
 						startLoadThumb(thumbpath, onThumbLoaded, NULL);
