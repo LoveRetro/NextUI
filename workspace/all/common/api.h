@@ -319,6 +319,7 @@ SDL_Rect GFX_blitScaleAspect(SDL_Surface *src, SDL_Surface *dst);
 SDL_Rect GFX_blitScaleToFill(SDL_Surface *src, SDL_Surface *dst);
 
 // NOTE: all dimensions should be pre-scaled
+void GFX_blitSurfaceColor(SDL_Surface* src, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color);
 void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color);
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_blitPillColor(int asset, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color, uint32_t fill_color);

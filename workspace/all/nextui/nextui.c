@@ -2448,14 +2448,15 @@ int main (int argc, char *argv[]) {
 
 					SDL_Color text_color = uintToColour(THEME_COLOR4_255);
 					uint32_t item_color = THEME_COLOR2;
+					uint32_t icon_color = THEME_COLOR4;
 
 					if(qm_row == 0 && qm_col == c) {
 						text_color = uintToColour(THEME_COLOR5_255);
 						item_color = THEME_COLOR1;
+						icon_color = THEME_COLOR5;
 					}
 					
-					//if(qm_row == 0 && qm_col == c)
-						GFX_blitRectColor(ASSET_STATE_BG, screen, &item_rect, item_color);
+					GFX_blitRectColor(ASSET_STATE_BG, screen, &item_rect, item_color);
 
 					char icon_path[MAX_PATH];
 					sprintf(icon_path, SDCARD_PATH "/.system/res/%s@%ix.png", item->name, FIXED_SCALE);
@@ -2472,7 +2473,9 @@ int main (int argc, char *argv[]) {
 						int x = (item_rect.w - bmp->w) / 2;
 						int y = (item_rect.h - SCALE1(FONT_TINY + BUTTON_MARGIN) - bmp->h) / 2;
 						SDL_Rect destRect = { ox+x, oy+y, 0, 0 };  // width/height not required
-						SDL_BlitSurface(bmp, NULL, screen, &destRect);
+						//SDL_BlitSurface(bmp, NULL, screen, &destRect);
+
+						GFX_blitSurfaceColor(bmp, NULL, screen, &destRect, icon_color);
 					}
 
 					int w, h;

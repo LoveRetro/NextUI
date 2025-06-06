@@ -1328,22 +1328,8 @@ void BlitRGBA4444toRGB565(SDL_Surface* src, SDL_Surface* dest, SDL_Rect* dest_re
     }
 }
 
-void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color) {
-
-	SDL_Rect* rect = &asset_rects[asset];
-	SDL_Rect adj_rect = {
-		.x = rect->x,
-		.y = rect->y,
-		.w = rect->w,
-		.h = rect->h,
-	};
-	if (src_rect) {
-		adj_rect.x += src_rect->x;
-		adj_rect.y += src_rect->y;
-		adj_rect.w  = src_rect->w;
-		adj_rect.h  = src_rect->h;
-	}
-
+void GFX_blitSurfaceColor(SDL_Surface* src, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color)
+{
 	// This could be a RAII
 	if(asset_color != RGB_WHITE)
 	{
@@ -1365,17 +1351,36 @@ void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rec
 			asset_color = THEME_COLOR7_255;
 
 		SDL_Color restore;
-		SDL_GetSurfaceColorMod(gfx.assets, &restore.r, &restore.g, &restore.b);
-		SDL_SetSurfaceColorMod(gfx.assets, 
+		SDL_GetSurfaceColorMod(src, &restore.r, &restore.g, &restore.b);
+		SDL_SetSurfaceColorMod(src, 
 			(asset_color >> 16) & 0xFF, 
 			(asset_color >> 8) & 0xFF, 
 			asset_color & 0xFF);
-		SDL_BlitSurface(gfx.assets, &adj_rect, dst, dst_rect);
-		SDL_SetSurfaceColorMod(gfx.assets, restore.r, restore.g, restore.b);
+		SDL_BlitSurface(src, src_rect, dst, dst_rect);
+		SDL_SetSurfaceColorMod(src, restore.r, restore.g, restore.b);
 	}
 	else {
-		SDL_BlitSurface(gfx.assets, &adj_rect, dst, dst_rect);
+		SDL_BlitSurface(src, src_rect, dst, dst_rect);
 	}
+}
+
+void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color) {
+
+	SDL_Rect* rect = &asset_rects[asset];
+	SDL_Rect adj_rect = {
+		.x = rect->x,
+		.y = rect->y,
+		.w = rect->w,
+		.h = rect->h,
+	};
+	if (src_rect) {
+		adj_rect.x += src_rect->x;
+		adj_rect.y += src_rect->y;
+		adj_rect.w  = src_rect->w;
+		adj_rect.h  = src_rect->h;
+	}
+
+	GFX_blitSurfaceColor(gfx.assets, &adj_rect, dst, dst_rect, asset_color);
 }
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	GFX_blitAssetColor(asset, src_rect, dst, dst_rect, RGB_WHITE);
