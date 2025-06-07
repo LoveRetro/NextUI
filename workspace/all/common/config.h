@@ -34,6 +34,16 @@ enum
 	STATE_FORMAT_SRM_UNCOMRESSED
 };
 
+enum {
+	// actual views
+	SCREEN_GAMELIST,
+	SCREEN_GAMESWITCHER,
+	SCREEN_QUICKMENU,
+	// meta
+	SCREEN_GAME,
+	SCREEN_OFF
+};
+
 typedef struct
 {
 	// Theme
@@ -64,6 +74,7 @@ typedef struct
 	bool showRecents;
 	bool showGameArt;
 	bool romsUseFolderBackground;
+	int defaultView;
 
 	// Mute switch
 	bool muteLeds;
@@ -110,6 +121,7 @@ typedef struct
 #define CFG_DEFAULT_MUTELEDS false
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
+#define CFG_DEFAULT_VIEW SCREEN_GAMELIST
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
@@ -185,6 +197,9 @@ void CFG_setGameArtWidth(double zeroToOne);
 // WiFi on/off (if available)
 bool CFG_getWifi(void);
 void CFG_setWifi(bool on);
+// Default view on boot
+int CFG_getDefaultView(void);
+void CFG_setDefaultView(int view);
 
 
 void CFG_sync(void);

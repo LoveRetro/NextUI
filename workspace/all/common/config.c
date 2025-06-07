@@ -44,6 +44,7 @@ void CFG_defaults(NextUISettings *cfg)
         .showRecents = CFG_DEFAULT_SHOWRECENTS,
         .showGameArt = CFG_DEFAULT_SHOWGAMEART,
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
+        .defaultView = CFG_DEFAULT_VIEW,
 
         .muteLeds = CFG_DEFAULT_MUTELEDS,
 
@@ -213,6 +214,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "wifi=%i", &temp_value) == 1)
             {
                 CFG_setWifi((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "defaultView=%i", &temp_value) == 1)
+            {
+                CFG_setDefaultView(temp_value);
                 continue;
             }
         }
@@ -494,6 +500,16 @@ void CFG_setWifi(bool on)
     settings.wifi = on;
 }
 
+int CFG_getDefaultView(void)
+{
+    return settings.defaultView;
+}
+
+void CFG_setDefaultView(int view)
+{
+    settings.defaultView = view;
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -596,6 +612,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getWifi()));
     }
+    else if (strcmp(key, "defaultView") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getDefaultView()));
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -649,6 +669,7 @@ void CFG_sync(void)
     fprintf(file, "muteLeds=%i\n", settings.muteLeds);
     fprintf(file, "artWidth=%i\n", (int)(settings.gameArtWidth * 100));
     fprintf(file, "wifi=%i\n", settings.wifi);
+    fprintf(file, "defaultView=%i\n", settings.defaultView);
 
     fclose(file);
 }
@@ -682,6 +703,7 @@ void CFG_print(void)
     printf("\t\"muteLeds\": %i,\n", settings.muteLeds);
     printf("\t\"artWidth\": %i,\n", (int)(settings.gameArtWidth * 100));
     printf("\t\"wifi\": %i,\n", settings.wifi);
+    printf("\t\"defaultView\": %i,\n", settings.defaultView);
 
     // meta, not a real setting
     if (settings.font == 1)

@@ -236,6 +236,12 @@ int main(int argc, char *argv[])
             { return CFG_getHaptics(); }, [](const std::any &value)
             { CFG_setHaptics(std::any_cast<bool>(value)); },
             []() { CFG_setHaptics(CFG_DEFAULT_HAPTICS);}},
+            new MenuItem{ListItemType::Generic, "Default view", "The initial view to show on boot", 
+            {(int)SCREEN_GAMELIST, (int)SCREEN_GAMESWITCHER, (int)SCREEN_QUICKMENU}, 
+            {"Content List","Game Switcher","Quick Menu"}, 
+            []() -> std::any { return CFG_getDefaultView(); }, 
+            [](const std::any &value){ CFG_setDefaultView(std::any_cast<int>(value)); },
+            []() { CFG_setDefaultView(CFG_DEFAULT_VIEW);}},
             new MenuItem{ListItemType::Generic, "Show 24h time format", "Show clock in the 24hrs time format", {false, true}, on_off, []() -> std::any
             { return CFG_getClock24H(); },
             [](const std::any &value)

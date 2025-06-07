@@ -2066,18 +2066,6 @@ void initImageLoaderPool() {
 }
 ///////////////////////////////////////
 
-enum {
-	// actual views
-	SCREEN_GAMELIST,
-	SCREEN_GAMESWITCHER,
-	SCREEN_QUICKMENU,
-	// meta
-	SCREEN_GAME,
-	SCREEN_OFF
-};
-static int lastScreen = SCREEN_OFF;
-static int currentScreen = SCREEN_GAMELIST;
-
 int main (int argc, char *argv[]) {
 	// LOG_info("time from launch to:\n");
 	// unsigned long main_begin = SDL_GetTicks();
@@ -2110,12 +2098,18 @@ int main (int argc, char *argv[]) {
 #define QM_SLOTS 3
 	// LOG_info("- menu init: %lu\n", SDL_GetTicks() - main_begin);
 
+	int lastScreen = SCREEN_OFF;
+	int currentScreen = CFG_getDefaultView();
+
 	if(exists(GAME_SWITCHER_PERSIST_PATH)) {
 		// consider this "consumed", dont bring up the switcher next time we regularly exit a game
 		unlink(GAME_SWITCHER_PERSIST_PATH);
-		lastScreen = SCREEN_GAME;
 		currentScreen = SCREEN_GAMESWITCHER;
 	}
+
+	// add a nice fade into the game switcher
+	if(currentScreen == SCREEN_GAMESWITCHER)
+		lastScreen = SCREEN_GAME;
 
 	// make sure we have no running games logged as active anymore (we might be launching back into the UI here)
 	system("gametimectl.elf stop_all");
