@@ -388,7 +388,6 @@ void GFX_startFrame(void) {
 	frame_start = SDL_GetTicks();
 }
 
-
 void chmodfile(const char *file, int writable)
 {
     struct stat statbuf;
@@ -1632,10 +1631,12 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 		}
 		
 		int asset = show_setting==3?ASSET_COLORTEMP:show_setting==1?ASSET_BRIGHTNESS:(setting_value>0?ASSET_VOLUME:ASSET_VOLUME_MUTE);
-		int ax = ox + (show_setting==1 || show_setting == 3 ? SCALE1(6) : SCALE1(8));
-		int ay = oy + (show_setting==1 || show_setting == 3 ? SCALE1(5) : SCALE1(7));
-		GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){ax,ay}, THEME_COLOR6_255);
-		
+		SDL_Rect asset_rect;
+		GFX_assetRect(asset, &asset_rect);
+		int ax = ox + (SCALE1(PILL_SIZE) - asset_rect.w) / 2;
+		int ay = oy + (SCALE1(PILL_SIZE) - asset_rect.h) / 2;
+		GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){ax, ay}, THEME_COLOR6_255);
+
 		ox += SCALE1(PILL_SIZE);
 		oy += SCALE1((PILL_SIZE - SETTINGS_SIZE) / 2);
 		GFX_blitPill(gfx.mode==MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, &(SDL_Rect){

@@ -266,7 +266,7 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
 void GFX_setMode(int mode);
 int GFX_hdmiChanged(void);
-SDL_Color /*GFX_*/uintToColour(uint32_t colour);
+SDL_Color /*GFX_*/ uintToColour(uint32_t colour);
 
 #define GFX_clear PLAT_clearVideo // (SDL_Surface* screen)
 #define GFX_clearAll PLAT_clearAll // (void)
