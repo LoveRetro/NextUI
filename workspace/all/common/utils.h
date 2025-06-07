@@ -7,7 +7,7 @@
 
 int prefixMatch(char* pre, const char* str);
 int suffixMatch(char* suf,const char* str);
-int exactMatch(char* str1, char* str2);
+int exactMatch(const char* str1, const char* str2);
 int containsString(char* haystack, char* needle);
 int hide(char* file_name);
 
