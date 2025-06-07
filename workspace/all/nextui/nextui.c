@@ -2490,7 +2490,7 @@ int main (int argc, char *argv[]) {
 					Entry *item = quick->items[c];
 
 					SDL_Color text_color = uintToColour(THEME_COLOR4_255);
-					uint32_t item_color = THEME_COLOR2;
+					uint32_t item_color = THEME_COLOR3;
 					uint32_t icon_color = THEME_COLOR4;
 
 					if(qm_row == 0 && qm_col == c) {
@@ -2538,7 +2538,7 @@ int main (int argc, char *argv[]) {
 					Entry *item = quickActions->items[c];
 
 					SDL_Color text_color = uintToColour(THEME_COLOR4_255);
-					uint32_t item_color = THEME_COLOR2;
+					uint32_t item_color = THEME_COLOR3;
 					uint32_t icon_color = THEME_COLOR4;
 
 					if(qm_row == 1 && qm_col == c) {
