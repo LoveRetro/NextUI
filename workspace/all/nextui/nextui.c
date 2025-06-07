@@ -2101,6 +2101,9 @@ int main (int argc, char *argv[]) {
 	Menu_init();
 	int qm_row = 0;
 	int qm_col = 0;
+	int qm_slot = 0;
+	int qm_shift = 0;
+#define QM_SLOTS 3
 	// LOG_info("- menu init: %lu\n", SDL_GetTicks() - main_begin);
 
 	if(exists(GAME_SWITCHER_PERSIST_PATH)) {
@@ -2176,16 +2179,50 @@ int main (int argc, char *argv[]) {
 				dirty = 1;
 			}
 			else if (PAD_justPressed(BTN_RIGHT)) {
-				qm_col += 1;
-				if(qm_col >= qm_total) {
-					qm_col = 0;
+				if(qm_row == 0 && qm_total > QM_SLOTS) {
+					qm_col++;
+					if(qm_col >= qm_total) {
+						qm_col = 0;
+						qm_shift = 0;
+						qm_slot = 0;
+					}
+					else {
+						qm_slot++;
+						if(qm_slot >= QM_SLOTS) {
+							qm_slot = QM_SLOTS - 1;
+							qm_shift++;
+						}
+					}
+				}
+				else {
+					qm_col += 1;
+					if(qm_col >= qm_total) {
+						qm_col = 0;
+					}
 				}
 				dirty = 1;
 			}
 			else if (PAD_justPressed(BTN_LEFT)) {
-				qm_col -= 1;
-				if(qm_col < 0) {
-					qm_col = qm_total - 1;
+				if(qm_row == 0  && qm_total > QM_SLOTS) {
+					qm_col -= 1;
+					if(qm_col < 0) {
+						qm_col = qm_total - 1;
+						qm_shift = qm_total - QM_SLOTS;
+						qm_slot = QM_SLOTS - 1;
+					}
+					else {
+						qm_slot--;
+						if(qm_slot < 0) {
+							qm_slot = 0;
+							qm_shift--;
+						}
+					}
+				}
+				else {
+					qm_col -= 1;
+					if(qm_col < 0) {
+						qm_col = qm_total - 1;
+					}
 				}
 				dirty = 1;
 			}
@@ -2199,7 +2236,7 @@ int main (int argc, char *argv[]) {
 			else if(PAD_justPressed(BTN_UP)) {
 				if(qm_row == 1) {
 					qm_row = 0;
-					qm_col = 0;
+					qm_col = qm_slot + qm_shift;
 					dirty = 1;
 				}
 			}
@@ -2249,6 +2286,10 @@ int main (int argc, char *argv[]) {
 		else {
 			if (PAD_tappedMenu(now)) {
 				currentScreen = SCREEN_QUICKMENU;
+				qm_col = 0;
+				qm_row = 0;
+				qm_shift = 0;
+				qm_slot = 0;
 				dirty = 1;
 				folderbgchanged = 1; // The background painting code is a clusterfuck, just force a repaint here
 				if (!HAS_POWER_BUTTON && !simple_mode) PWR_enableSleep();
@@ -2442,7 +2483,11 @@ int main (int argc, char *argv[]) {
 				// primary
 				ox = SCALE1(PADDING + MENU_MARGIN_X);
 				oy = SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + MENU_MARGIN_Y);
-				for (int c = 0; c < quick->count; c++) {
+				// just to keep selection visible.
+				// every display should be able to fit three items, we shift horizontally to accomodate.
+				ox -= qm_shift * (item_size + SCALE1(MENU_ITEM_MARGIN));
+				for (int c = 0; c < quick->count; c++)
+				{
 					SDL_Rect item_rect = {ox, oy, item_size, item_size};
 					Entry *item = quick->items[c];
 
