@@ -2129,7 +2129,7 @@ int main (int argc, char *argv[]) {
 	int selected_row = top->selected - top->start;
 	float targetY;
 	float previousY;
-	int is_scrolling = 1;
+	int is_scrolling = 0;
 
 	char folderBgPath[1024];
 	folderbgbmp = NULL;
