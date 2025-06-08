@@ -19,9 +19,8 @@ MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string
                    const std::vector<std::any> &values, const std::vector<std::string> &labels,
                    ValueGetCallback on_get, ValueSetCallback on_set, ValueResetCallback on_reset, 
                    MenuListCallback on_confirm, MenuList *submenu)
-    : type(type), name(name), desc(desc), values(values), labels(labels),
-      on_get(on_get), on_set(on_set), on_confirm(on_confirm), on_reset(on_reset),
-      submenu(submenu)
+    : AbstractMenuItem(type, name, desc, on_get, on_set, on_reset, on_confirm, submenu), 
+    values(values), labels(labels)
 {
     initSelection();
 }
@@ -29,9 +28,8 @@ MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string
 MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string &desc, const std::vector<std::any> &values,
                    ValueGetCallback on_get, ValueSetCallback on_set, ValueResetCallback on_reset,
                    MenuListCallback on_confirm, MenuList *submenu)
-    : type(type), name(name), desc(desc), values(values), /*labels({}),*/
-    on_get(on_get), on_set(on_set), on_confirm(on_confirm), on_reset(on_reset),
-    submenu(submenu)
+    : AbstractMenuItem(type, name, desc, on_get, on_set, on_reset, on_confirm, submenu), 
+    values(values) /*labels({}),*/
 {
     generateDefaultLabels();
     initSelection();
@@ -41,9 +39,7 @@ MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string
                    int min, int max, const std::string suffix,
                    ValueGetCallback on_get, ValueSetCallback on_set, ValueResetCallback on_reset,
                    MenuListCallback on_confirm, MenuList *submenu)
-    : type(type), name(name), desc(desc),
-      on_get(on_get), on_set(on_set), on_confirm(on_confirm), on_reset(on_reset),
-      submenu(submenu)
+    : AbstractMenuItem(type, name, desc, on_get, on_set, on_reset, on_confirm, submenu)
 {
     const int step = 1; // until we need it
     const int num = (max - min) / step + 1;
@@ -58,14 +54,7 @@ MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string
 MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string &desc,
     MenuListCallback on_confirm, MenuList *submenu)
     : MenuItem(type, name, desc, 0,0, "", nullptr, nullptr, nullptr, on_confirm, submenu)
-{
-    
-}
-
-MenuItem::~MenuItem()
-{
-    // delete submenu;
-}
+{}
 
 void MenuItem::generateDefaultLabels(const std::string& suffix)
 {
@@ -257,16 +246,6 @@ InputReactionHint MenuItem::handleInput(int &dirty)
     return hint;
 }
 
-bool MenuItem::nextValue()
-{
-    return next(1);
-}
-
-bool MenuItem::prevValue()
-{
-    return prev(1);
-}
-
 bool MenuItem::next(int n)
 {
     if (valueIdx < 0)
@@ -285,7 +264,7 @@ bool MenuItem::prev(int n)
 
 ///////////////////////////////////////////////////////////
 
-MenuList::MenuList(MenuItemType type, const std::string &descp, std::vector<MenuItem*> items, MenuListCallback on_change, MenuListCallback on_confirm)
+MenuList::MenuList(MenuItemType type, const std::string &descp, std::vector<AbstractMenuItem*> items, MenuListCallback on_change, MenuListCallback on_confirm)
     : type(type), desc(descp), items(items), on_change(on_change), on_confirm(on_confirm)
 {
     // best effort layout based on the platform defines, user should really call performLayout manually
@@ -418,7 +397,7 @@ InputReactionHint MenuList::handleInput(int &dirty, int &quit)
     return Unhandled;
 }
 
-SDL_Rect MenuList::itemSizeHint(const MenuItem &item)
+SDL_Rect MenuList::itemSizeHint(const AbstractMenuItem &item)
 {
     if (type == MenuItemType::Fixed)
     {
@@ -564,7 +543,7 @@ void MenuList::drawList(SDL_Surface *surface, const SDL_Rect &dst)
     }
 }
 
-void MenuList::drawListItem(SDL_Surface *surface, const SDL_Rect &dst, const MenuItem &item, bool selected)
+void MenuList::drawListItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected)
 {
     SDL_Color text_color = uintToColour(THEME_COLOR4_255);
     SDL_Surface *text;
@@ -621,7 +600,7 @@ namespace
     }
 }
 
-void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const MenuItem &item, bool selected)
+void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected)
 {
     SDL_Color text_color = uintToColour(THEME_COLOR4_255);
     SDL_Color text_color_value = uintToColour(THEME_COLOR4_255);
@@ -711,7 +690,7 @@ void MenuList::drawInput(SDL_Surface *surface, const SDL_Rect &dst)
     }
 }
 
-void MenuList::drawInputItem(SDL_Surface *surface, const SDL_Rect &dst, const MenuItem &item, bool selected)
+void MenuList::drawInputItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected)
 {
     SDL_Color text_color = COLOR_WHITE;
     SDL_Surface *text;
@@ -772,7 +751,7 @@ void MenuList::drawMain(SDL_Surface *surface, const SDL_Rect &dst)
     }
 }
 
-void MenuList::drawMainItem(SDL_Surface *surface, const SDL_Rect &dst, const MenuItem &item, bool selected)
+void MenuList::drawMainItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected)
 {
     SDL_Color text_color = COLOR_WHITE;
     SDL_Surface *text;

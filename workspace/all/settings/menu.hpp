@@ -121,28 +121,24 @@ enum InputReactionHint
     ResetAllItems
 };
 
-class MenuItem;
+class AbstractMenuItem;
 class MenuList;
 // typedef InputReactionHint (*MenuListCallback)(MenuList* list, int i);
 //using ValueGetCallback = std::any (*)(void);
 //using ValueSetCallback = void (*)(const std::any &);
 //using ValueResetCallback = void (*)(void);
-using MenuListCallback = std::function<InputReactionHint(MenuItem &item)>;
+using MenuListCallback = std::function<InputReactionHint(AbstractMenuItem &item)>;
 using ValueGetCallback = std::function<std::any(void)>;
 using ValueSetCallback = std::function<void(const std::any& value)>;
 using ValueResetCallback = std::function<void(void)>;
 
-class MenuItem
+class AbstractMenuItem
 {
+protected:
     friend class MenuList;
 
     ListItemType type;
     std::string name, desc;
-    std::vector<std::any> values;
-    std::vector<std::string> labels;
-    std::string key; // optional, used by options
-    std::string id;  // optional, used by bindings
-    int valueIdx;
 
     MenuListCallback on_confirm; // handling drill-down and other custom item stuff
     ValueGetCallback on_get;
@@ -153,12 +149,75 @@ class MenuItem
     MenuList *submenu{nullptr};
     bool deferred{false};
 
+    virtual void initSelection() {}
+    virtual bool nextValue() { return next(1); };
+    virtual bool prevValue() { return prev(1); };
+    virtual bool next(int n) { return false; /* unchanged */ };
+    virtual bool prev(int n) { return false; /* unchanged */ };
+
+public:
+    AbstractMenuItem(ListItemType type, const std::string &name, const std::string &desc,
+                    ValueGetCallback on_get = nullptr, ValueSetCallback on_set = nullptr,
+                     ValueResetCallback on_reset = nullptr, MenuListCallback on_confirm = nullptr,
+                     MenuList *submenu = nullptr)
+        : type(type), name(name), desc(desc), on_get(on_get), on_set(on_set), 
+        on_reset(on_reset), on_confirm(on_confirm), submenu(submenu) {}
+    ~AbstractMenuItem() {
+         // delete submenu;
+    }
+
+    virtual const std::any getValue() const = 0;
+    virtual const std::string getLabel() const = 0;
+
+    virtual InputReactionHint handleInput(int &dirty) { return Unhandled; };
+
+    const std::string &getName() const { return name; }
+    const std::string &getDesc() const { return desc; }
+    void setDesc(const std::string &d) { desc = d; }
+    const ListItemType getType() const { return type; }
+
+    virtual void drawCustomItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected) const {}
+
+    virtual const std::vector<std::any> getValues() const { return {getValue()}; };
+    virtual const std::vector<std::string> getLabels() const { return {getLabel()}; };
+
+    bool isDeferred() const { return deferred; }
+    void defer(bool on) { deferred = on; }
+    MenuList *getSubMenu() { return submenu; }
+};
+
+// A simple menu item visualizing a fixed label and value that is read-only.
+class StaticMenuItem : public AbstractMenuItem
+{
+public:
+    StaticMenuItem(ListItemType type, const std::string &name, const std::string &desc,
+        ValueGetCallback on_get)
+        : AbstractMenuItem(type, name, desc, on_get) {}
+
+    const std::any getValue() const override {
+        assert(on_get);
+        if(on_get)
+            return on_get();
+        return {};
+    }
+    const std::string getLabel() const override {
+        auto v = getValue();
+        assert(v.has_value());
+        return std::any_cast<const std::string>(v);
+    }
+};
+
+// A generic menu item visualizing a list if values and the currently selected value.
+class MenuItem : public AbstractMenuItem
+{
+    std::vector<std::any> values;
+    std::vector<std::string> labels;
+    int valueIdx;
+
     void generateDefaultLabels(const std::string& suffix = "");
-    void initSelection();
-    bool nextValue();
-    bool prevValue();
-    bool next(int n);
-    bool prev(int n);
+    virtual void initSelection() override;
+    bool next(int n) override;
+    bool prev(int n) override;
 
 public:
     MenuItem(ListItemType type, const std::string &name, const std::string &desc,
@@ -180,33 +239,20 @@ public:
     MenuItem(ListItemType type, const std::string &name, const std::string &desc,
             MenuListCallback on_confirm = nullptr, MenuList *submenu = nullptr);
 
-    ~MenuItem();
+    virtual InputReactionHint handleInput(int &dirty) override;
 
-    InputReactionHint handleInput(int &dirty);
-
-    virtual void drawCustomItem(SDL_Surface *surface, const SDL_Rect &dst, const MenuItem &item, bool selected) const {}
-
-    const std::any &getValue() const
+    const std::any getValue() const override
     {
         assert(valueIdx >= 0);
         return values[valueIdx];
     }
-    const std::string &getLabel() const
+    const std::string getLabel() const override
     {
         assert(valueIdx >= 0);
         return labels[valueIdx];
     }
-    const std::string &getName() const { return name; }
-    const std::string &getDesc() const { return desc; }
-    void setDesc(const std::string &d) { desc = d; }
-    const ListItemType getType() const { return type; }
-    const std::vector<std::any> &getValues() const { return values; }
-    const std::vector<std::string> &getLabels() const { return labels; }
-    const std::string &getKey() const { return key; }
-    const std::string &getId() const { return id; }
-    bool isDeferred() const { return deferred; }
-    void defer(bool on) { deferred = on; }
-    MenuList *getSubMenu() { return submenu; }
+    const std::vector<std::any> getValues() const override{ return values; }
+    const std::vector<std::string> getLabels() const override { return labels; }
 };
 
 class MenuList
@@ -214,7 +260,7 @@ class MenuList
 protected:
     MenuItemType type;
     std::string desc;
-    std::vector<MenuItem*> items;
+    std::vector<AbstractMenuItem*> items;
     int max_width{0}; // cached on first draw
     bool layout_called{false};
 
@@ -234,7 +280,7 @@ protected:
     std::shared_mutex itemLock;
 
 public:
-    MenuList(MenuItemType type, const std::string &desc, std::vector<MenuItem*> items, MenuListCallback on_change = nullptr, MenuListCallback on_confirm = nullptr);
+    MenuList(MenuItemType type, const std::string &desc, std::vector<AbstractMenuItem*> items, MenuListCallback on_change = nullptr, MenuListCallback on_confirm = nullptr);
     ~MenuList();
     MenuList(MenuList &) = delete;
 
@@ -246,28 +292,28 @@ public:
     // returns true if the input was handled
     virtual InputReactionHint handleInput(int &dirty, int &quit);
 
-    SDL_Rect itemSizeHint(const MenuItem &item);
+    SDL_Rect itemSizeHint(const AbstractMenuItem &item);
 
     void draw(SDL_Surface *surface, const SDL_Rect &dst);
     void drawList(SDL_Surface *surface, const SDL_Rect &dst);
-    void drawListItem(SDL_Surface *surface, const SDL_Rect &dst, const MenuItem &item, bool selected);
+    void drawListItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
     void drawFixed(SDL_Surface *surface, const SDL_Rect &dst);
-    void drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const MenuItem &item, bool selected);
+    void drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
     void drawInput(SDL_Surface *surface, const SDL_Rect &dst);
-    void drawInputItem(SDL_Surface *surface, const SDL_Rect &dst, const MenuItem &item, bool selected);
+    void drawInputItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
     void drawMain(SDL_Surface *surface, const SDL_Rect &dst);
-    void drawMainItem(SDL_Surface *surface, const SDL_Rect &dst, const MenuItem &item, bool selected);
+    void drawMainItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
     virtual void drawCustom(SDL_Surface *surface, const SDL_Rect &dst) {};
 };
 
-const MenuListCallback DeferToSubmenu = [](MenuItem &itm) -> InputReactionHint
+const MenuListCallback DeferToSubmenu = [](AbstractMenuItem &itm) -> InputReactionHint
 {
     if (itm.getSubMenu())
         itm.defer(true);
     return InputReactionHint::NoOp;
 };
 
-const MenuListCallback ResetCurrentMenu = [](MenuItem &itm) -> InputReactionHint
+const MenuListCallback ResetCurrentMenu = [](AbstractMenuItem &itm) -> InputReactionHint
 {
     return InputReactionHint::ResetAllItems;
 };
