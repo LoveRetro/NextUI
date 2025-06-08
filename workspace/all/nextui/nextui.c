@@ -1957,14 +1957,14 @@ int main (int argc, char *argv[]) {
 					switcher_selected = recents->count - 1; // wrap
 				dirty = 1;
 			}
-			else if (PAD_justPressed(BTN_RIGHT)) {
+			else if (PAD_justRepeated(BTN_RIGHT)) {
 				switcher_selected++;
 				if(switcher_selected == recents->count)
 					switcher_selected = 0; // wrap
 				dirty = 1;
 				gsanimdir=1;
 			}
-			else if (PAD_justPressed(BTN_LEFT)) {
+			else if (PAD_justRepeated(BTN_LEFT)) {
 				switcher_selected--;
 				if(switcher_selected < 0)
 					switcher_selected = recents->count - 1; // wrap

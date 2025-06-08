@@ -74,11 +74,11 @@ NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH" && sync
 
 # enable wifi for now
-echo 1 > /sys/class/rfkill/rfkill0/state || true 
-ifconfig wlan0 up
-wpa_supplicant -B -D nl80211 -iwlan0 -c /userdata/cfg/wpa_supplicant.conf
-udhcpc -i wlan0
-ifconfig > /mnt/SDCARD/ifconfig.txt
+# echo 1 > /sys/class/rfkill/rfkill0/state || true 
+# ifconfig wlan0 up
+# wpa_supplicant -B -D nl80211 -iwlan0 -c /userdata/cfg/wpa_supplicant.conf
+# udhcpc -i wlan0
+# ifconfig > /mnt/SDCARD/ifconfig.txt
 
 while [ -f "$EXEC_PATH" ]; do
 	nextui.elf &> $LOGS_PATH/nextui.txt
