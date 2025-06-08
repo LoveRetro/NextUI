@@ -2280,17 +2280,14 @@ void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
 	online = prefixMatch("up", status);
 }
 
-#define LED_PATH "/sys/class/leds/work/brightness"
 void PLAT_enableBacklight(int enable) {
 	if (enable) {
 		putInt(BLANK_PATH, FB_BLANK_UNBLANK); // wake
 		SetBrightness(GetBrightness());
-		putInt(LED_PATH,0);
 	}
 	else {
 		putInt(BLANK_PATH, FB_BLANK_POWERDOWN); // sleep
 		SetRawBrightness(0);
-		putInt(LED_PATH,255);
 	}
 }
 
@@ -2299,7 +2296,7 @@ void PLAT_powerOff(void) {
 	sleep(2);
 
 	SetRawVolume(MUTE_VOLUME_RAW);
-	
+	PLAT_enableBacklight(0);
 	SND_quit();
 	VIB_quit();
 	PWR_quit();
