@@ -35,7 +35,7 @@ modetest -M rockchip -w 179:hue:60
 modetest -M rockchip -w 179:saturation:60
 
 #led
-# echo 0 > /sys/class/leds/work/brightness
+echo 100 > /sys/class/leds/work/brightness
 
 mkdir -p /tmp/miyoo_inputd
 miyoo_inputd &

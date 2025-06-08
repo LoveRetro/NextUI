@@ -10,8 +10,8 @@ before() {
 }
 
 after() {
+	echo 100 > /sys/class/leds/work/brightness
 	>&2 echo "Resumed from suspend."
-
 }
 
 before
