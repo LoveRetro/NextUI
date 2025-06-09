@@ -139,8 +139,15 @@ jobs:
           name: ${{ env.RELEASE_NAME }}-extras.zip
           path: releases/${{ env.RELEASE_NAME }}-extras.zip
 
+      - name: Skip Attest for PRs from forks
+        id: skip
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo '::warning title=Attest skipped::Attest action requires permissions and is performed only for main branch.'
+
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2.3.0
+        if: github.ref == 'refs/heads/main'
         with:
           subject-path: |
             releases/${{ env.RELEASE_NAME }}-all.zip
