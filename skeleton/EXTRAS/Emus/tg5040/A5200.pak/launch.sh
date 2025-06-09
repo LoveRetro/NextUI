@@ -1,6 +1,6 @@
 #!/bin/sh
 
-EMU_EXE=a5200_libretro
+EMU_EXE=a5200
 CORES_PATH=$(dirname "$0")
 
 ###############################
