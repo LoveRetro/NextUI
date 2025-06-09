@@ -45,6 +45,7 @@ void CFG_defaults(NextUISettings *cfg)
         .showGameArt = CFG_DEFAULT_SHOWGAMEART,
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
         .defaultView = CFG_DEFAULT_VIEW,
+        .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
 
         .muteLeds = CFG_DEFAULT_MUTELEDS,
 
@@ -219,6 +220,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "defaultView=%i", &temp_value) == 1)
             {
                 CFG_setDefaultView(temp_value);
+                continue;
+            }
+            if (sscanf(line, "quickSwitcherUi=%i", &temp_value) == 1)
+            {
+                CFG_setShowQuickswitcherUI(temp_value);
                 continue;
             }
         }
@@ -510,6 +516,16 @@ void CFG_setDefaultView(int view)
     settings.defaultView = view;
 }
 
+bool CFG_getShowQuickswitcherUI(void)
+{
+    return settings.showQuickSwitcherUi;
+}
+
+void CFG_setShowQuickswitcherUI(bool on)
+{
+    settings.showQuickSwitcherUi = on;
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -616,6 +632,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getDefaultView()));
     }
+    else if (strcmp(key, "quickSwitcherUi") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getShowQuickswitcherUI()));
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -670,6 +690,7 @@ void CFG_sync(void)
     fprintf(file, "artWidth=%i\n", (int)(settings.gameArtWidth * 100));
     fprintf(file, "wifi=%i\n", settings.wifi);
     fprintf(file, "defaultView=%i\n", settings.defaultView);
+    fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
 
     fclose(file);
 }
@@ -704,6 +725,7 @@ void CFG_print(void)
     printf("\t\"artWidth\": %i,\n", (int)(settings.gameArtWidth * 100));
     printf("\t\"wifi\": %i,\n", settings.wifi);
     printf("\t\"defaultView\": %i,\n", settings.defaultView);
+    printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
 
     // meta, not a real setting
     if (settings.font == 1)

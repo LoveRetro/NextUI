@@ -180,6 +180,10 @@ int main(int argc, char *argv[])
                 [](const std::any &value)
                 { CFG_setRomsUseFolderBackground(std::any_cast<bool>(value)); },
                 []() { CFG_setRomsUseFolderBackground(CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND);}},
+                new MenuItem{ListItemType::Generic, "Show Quickswitcher UI", "Show/hide Quickswitcher UI elements.\nWhen hidden, will only draw background images.", {false, true}, on_off, 
+                []() -> std::any{ return CFG_getShowQuickswitcherUI(); },
+                [](const std::any &value){ CFG_setShowQuickswitcherUI(std::any_cast<bool>(value)); },
+                []() { CFG_setShowQuickswitcherUI(CFG_DEFAULT_SHOWQUICKWITCHERUI);}},
                 // not needed anymore
                 // new MenuItem{ListItemType::Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
                 // { return CFG_getGameSwitcherScaling(); },

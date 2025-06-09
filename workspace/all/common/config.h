@@ -74,6 +74,7 @@ typedef struct
 	bool showRecents;
 	bool showGameArt;
 	bool romsUseFolderBackground;
+	bool showQuickSwitcherUi;
 	int defaultView;
 
 	// Mute switch
@@ -122,6 +123,7 @@ typedef struct
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
+#define CFG_DEFAULT_SHOWQUICKWITCHERUI true
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
@@ -200,6 +202,9 @@ void CFG_setWifi(bool on);
 // Default view on boot
 int CFG_getDefaultView(void);
 void CFG_setDefaultView(int view);
+// Quick switcher UI painting on/off
+bool CFG_getShowQuickswitcherUI(void);
+void CFG_setShowQuickswitcherUI(bool on);
 
 
 void CFG_sync(void);

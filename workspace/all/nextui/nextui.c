@@ -2468,111 +2468,113 @@ int main (int argc, char *argv[]) {
 				
 				GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
 
-				#define MENU_MARGIN_Y 32 // space between main UI elements and quick menu
-				#define MENU_MARGIN_X 40 // space between main UI elements and quick menu
-				#define MENU_ITEM_MARGIN 18 // space between items, top line
-				#define MENU_TOGGLE_MARGIN 8 // space between items, bottom line
-				#define MENU_LINE_MARGIN 8 // space between top and bottom line
+				if(CFG_getShowQuickswitcherUI()) {
+					#define MENU_MARGIN_Y 32 // space between main UI elements and quick menu
+					#define MENU_MARGIN_X 40 // space between main UI elements and quick menu
+					#define MENU_ITEM_MARGIN 18 // space between items, top line
+					#define MENU_TOGGLE_MARGIN 8 // space between items, bottom line
+					#define MENU_LINE_MARGIN 8 // space between top and bottom line
 
-				int item_size = screen->h - SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + // top pill area
-					MENU_MARGIN_Y + MENU_LINE_MARGIN + PILL_SIZE + MENU_MARGIN_Y + // our own area
-					BUTTON_MARGIN + PILL_SIZE + PADDING); // bottom pill area
+					int item_size = screen->h - SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + // top pill area
+						MENU_MARGIN_Y + MENU_LINE_MARGIN + PILL_SIZE + MENU_MARGIN_Y + // our own area
+						BUTTON_MARGIN + PILL_SIZE + PADDING); // bottom pill area
 
-				// primary
-				ox = SCALE1(PADDING + MENU_MARGIN_X);
-				oy = SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + MENU_MARGIN_Y);
-				// just to keep selection visible.
-				// every display should be able to fit three items, we shift horizontally to accomodate.
-				ox -= qm_shift * (item_size + SCALE1(MENU_ITEM_MARGIN));
-				for (int c = 0; c < quick->count; c++)
-				{
-					SDL_Rect item_rect = {ox, oy, item_size, item_size};
-					Entry *item = quick->items[c];
+					// primary
+					ox = SCALE1(PADDING + MENU_MARGIN_X);
+					oy = SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + MENU_MARGIN_Y);
+					// just to keep selection visible.
+					// every display should be able to fit three items, we shift horizontally to accomodate.
+					ox -= qm_shift * (item_size + SCALE1(MENU_ITEM_MARGIN));
+					for (int c = 0; c < quick->count; c++)
+					{
+						SDL_Rect item_rect = {ox, oy, item_size, item_size};
+						Entry *item = quick->items[c];
 
-					SDL_Color text_color = uintToColour(THEME_COLOR4_255);
-					uint32_t item_color = THEME_COLOR3;
-					uint32_t icon_color = THEME_COLOR4;
+						SDL_Color text_color = uintToColour(THEME_COLOR4_255);
+						uint32_t item_color = THEME_COLOR3;
+						uint32_t icon_color = THEME_COLOR4;
 
-					if(qm_row == 0 && qm_col == c) {
-						text_color = uintToColour(THEME_COLOR5_255);
-						item_color = THEME_COLOR1;
-						icon_color = THEME_COLOR5;
-					}
-					
-					GFX_blitRectColor(ASSET_STATE_BG, screen, &item_rect, item_color);
-
-					char icon_path[MAX_PATH];
-					sprintf(icon_path, SDCARD_PATH "/.system/res/%s@%ix.png", item->name, FIXED_SCALE);
-					SDL_Surface* bmp = IMG_Load(icon_path);
-					if(bmp) {
-						SDL_Surface* converted = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888, 0);
-						if (converted) {
-							SDL_FreeSurface(bmp); 
-							bmp = converted; 
+						if(qm_row == 0 && qm_col == c) {
+							text_color = uintToColour(THEME_COLOR5_255);
+							item_color = THEME_COLOR1;
+							icon_color = THEME_COLOR5;
 						}
-					}
-					if(bmp) {
-						// Calculate the position to center the source surface
-						int x = (item_rect.w - bmp->w) / 2;
-						int y = (item_rect.h - SCALE1(FONT_TINY + BUTTON_MARGIN) - bmp->h) / 2;
-						SDL_Rect destRect = { ox+x, oy+y, 0, 0 };  // width/height not required
-						//SDL_BlitSurface(bmp, NULL, screen, &destRect);
+						
+						GFX_blitRectColor(ASSET_STATE_BG, screen, &item_rect, item_color);
 
-						GFX_blitSurfaceColor(bmp, NULL, screen, &destRect, icon_color);
-					}
+						char icon_path[MAX_PATH];
+						sprintf(icon_path, SDCARD_PATH "/.system/res/%s@%ix.png", item->name, FIXED_SCALE);
+						SDL_Surface* bmp = IMG_Load(icon_path);
+						if(bmp) {
+							SDL_Surface* converted = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888, 0);
+							if (converted) {
+								SDL_FreeSurface(bmp); 
+								bmp = converted; 
+							}
+						}
+						if(bmp) {
+							// Calculate the position to center the source surface
+							int x = (item_rect.w - bmp->w) / 2;
+							int y = (item_rect.h - SCALE1(FONT_TINY + BUTTON_MARGIN) - bmp->h) / 2;
+							SDL_Rect destRect = { ox+x, oy+y, 0, 0 };  // width/height not required
+							//SDL_BlitSurface(bmp, NULL, screen, &destRect);
 
-					int w, h;
-					GFX_sizeText(font.tiny, item->name, SCALE1(FONT_TINY), &w, &h);
-					SDL_Rect text_rect = {item_rect.x + (item_size - w) / 2, item_rect.y + item_size - h - SCALE1(BUTTON_MARGIN), w, h};
-					GFX_blitText(font.tiny, item->name, SCALE1(FONT_TINY), text_color, screen, &text_rect);
+							GFX_blitSurfaceColor(bmp, NULL, screen, &destRect, icon_color);
+						}
 
-					ox += item_rect.w + SCALE1(MENU_ITEM_MARGIN);
-				}
+						int w, h;
+						GFX_sizeText(font.tiny, item->name, SCALE1(FONT_TINY), &w, &h);
+						SDL_Rect text_rect = {item_rect.x + (item_size - w) / 2, item_rect.y + item_size - h - SCALE1(BUTTON_MARGIN), w, h};
+						GFX_blitText(font.tiny, item->name, SCALE1(FONT_TINY), text_color, screen, &text_rect);
 
-				// secondary
-				ox = SCALE1(PADDING + MENU_MARGIN_X);
-				ox += (screen->w - SCALE1(PADDING + MENU_MARGIN_X + MENU_MARGIN_X + PADDING) - SCALE1(quickActions->count * PILL_SIZE) - SCALE1((quickActions->count - 1) * MENU_TOGGLE_MARGIN))/2;
-				oy = SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + MENU_MARGIN_Y + MENU_LINE_MARGIN) + item_size;
-				for (int c = 0; c < quickActions->count; c++) {
-					SDL_Rect item_rect = {ox, oy, SCALE1(PILL_SIZE), SCALE1(PILL_SIZE)};
-					Entry *item = quickActions->items[c];
-
-					SDL_Color text_color = uintToColour(THEME_COLOR4_255);
-					uint32_t item_color = THEME_COLOR3;
-					uint32_t icon_color = THEME_COLOR4;
-
-					if(qm_row == 1 && qm_col == c) {
-						text_color = uintToColour(THEME_COLOR5_255);
-						item_color = THEME_COLOR1;
-						icon_color = THEME_COLOR5;
+						ox += item_rect.w + SCALE1(MENU_ITEM_MARGIN);
 					}
 
-					GFX_blitPillColor(ASSET_WHITE_PILL, screen, &item_rect, item_color, RGB_WHITE);
+					// secondary
+					ox = SCALE1(PADDING + MENU_MARGIN_X);
+					ox += (screen->w - SCALE1(PADDING + MENU_MARGIN_X + MENU_MARGIN_X + PADDING) - SCALE1(quickActions->count * PILL_SIZE) - SCALE1((quickActions->count - 1) * MENU_TOGGLE_MARGIN))/2;
+					oy = SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + MENU_MARGIN_Y + MENU_LINE_MARGIN) + item_size;
+					for (int c = 0; c < quickActions->count; c++) {
+						SDL_Rect item_rect = {ox, oy, SCALE1(PILL_SIZE), SCALE1(PILL_SIZE)};
+						Entry *item = quickActions->items[c];
 
-					int asset = ASSET_WIFI;
-					if (!strcmp(item->name,"Wifi"))
-						asset = is_online ? ASSET_WIFI_OFF : ASSET_WIFI;
-					else if (!strcmp(item->name,"Sleep"))
-						asset = ASSET_SUSPEND;
-					else if (!strcmp(item->name,"Reboot"))
-						asset = ASSET_RESTART;
-					else if (!strcmp(item->name,"Poweroff"))
-						asset = ASSET_POWEROFF;
-					else if (!strcmp(item->name,"Settings"))
-						asset = ASSET_SETTINGS;
-					else if (!strcmp(item->name,"Pak Store"))
-						asset = ASSET_STORE;
+						SDL_Color text_color = uintToColour(THEME_COLOR4_255);
+						uint32_t item_color = THEME_COLOR3;
+						uint32_t icon_color = THEME_COLOR4;
 
-					SDL_Rect rect;
-					GFX_assetRect(asset, &rect);
-					int x = item_rect.x;
-					int y = item_rect.y;
-					x += (SCALE1(PILL_SIZE) - rect.w) / 2;
-					y += (SCALE1(PILL_SIZE) - rect.h) / 2;
-					
-					GFX_blitAssetColor(asset, NULL, screen, &(SDL_Rect){x,y}, icon_color);
-					
-					ox += item_rect.w + SCALE1(MENU_TOGGLE_MARGIN);
+						if(qm_row == 1 && qm_col == c) {
+							text_color = uintToColour(THEME_COLOR5_255);
+							item_color = THEME_COLOR1;
+							icon_color = THEME_COLOR5;
+						}
+
+						GFX_blitPillColor(ASSET_WHITE_PILL, screen, &item_rect, item_color, RGB_WHITE);
+
+						int asset = ASSET_WIFI;
+						if (!strcmp(item->name,"Wifi"))
+							asset = is_online ? ASSET_WIFI_OFF : ASSET_WIFI;
+						else if (!strcmp(item->name,"Sleep"))
+							asset = ASSET_SUSPEND;
+						else if (!strcmp(item->name,"Reboot"))
+							asset = ASSET_RESTART;
+						else if (!strcmp(item->name,"Poweroff"))
+							asset = ASSET_POWEROFF;
+						else if (!strcmp(item->name,"Settings"))
+							asset = ASSET_SETTINGS;
+						else if (!strcmp(item->name,"Pak Store"))
+							asset = ASSET_STORE;
+
+						SDL_Rect rect;
+						GFX_assetRect(asset, &rect);
+						int x = item_rect.x;
+						int y = item_rect.y;
+						x += (SCALE1(PILL_SIZE) - rect.w) / 2;
+						y += (SCALE1(PILL_SIZE) - rect.h) / 2;
+						
+						GFX_blitAssetColor(asset, NULL, screen, &(SDL_Rect){x,y}, icon_color);
+						
+						ox += item_rect.w + SCALE1(MENU_TOGGLE_MARGIN);
+					}
 				}
 				lastScreen = SCREEN_QUICKMENU;
 			}
