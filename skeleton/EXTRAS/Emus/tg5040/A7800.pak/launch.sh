@@ -1,6 +1,6 @@
 #!/bin/sh
 
-EMU_EXE=prosystem_libretro
+EMU_EXE=prosystem
 CORES_PATH=$(dirname "$0")
 
 ###############################

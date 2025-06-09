@@ -1,6 +1,6 @@
 #!/bin/sh
 
-EMU_EXE=stella2014_libretro
+EMU_EXE=stella2014
 CORES_PATH=$(dirname "$0")
 
 ###############################
