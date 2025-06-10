@@ -1329,35 +1329,32 @@ Array* pathToStack(const char* path) {
 	// Ensure path starts with SDCARD_PATH
 	if (!prefixMatch(SDCARD_PATH, path)) return array;
 
+	// Always include the root (SDCARD_PATH) directory
+	Directory* root_dir = Directory_new(SDCARD_PATH, 0);
+	Array_push(array, root_dir);
+
+	// If path is exactly SDCARD_PATH, return now
+	if (exactMatch(path, SDCARD_PATH)) return array;
+
 	char temp_path[PATH_MAX];
 	strcpy(temp_path, SDCARD_PATH);
-	size_t base_len = strlen(SDCARD_PATH);
+	size_t current_len = strlen(SDCARD_PATH);
 
-	// Exact match: return only SDCARD_PATH
-	if (exactMatch(path, SDCARD_PATH)) {
-		Directory* root_dir = Directory_new(SDCARD_PATH, 0);
-		Array_push(array, root_dir);
-		return array;
-	}
-
-	const char* cursor = path + base_len;
+	const char* cursor = path + current_len;
 	if (*cursor == '/') cursor++;
 
-	size_t current_len = base_len;
-
 	while (*cursor) {
+		// Find next slash
 		const char* next = strchr(cursor, '/');
 		size_t segment_len = next ? (size_t)(next - cursor) : strlen(cursor);
+		if (segment_len == 0 || segment_len >= PATH_MAX) break;
 
-		if (segment_len == 0) break;
-
-		// Extract segment name into a buffer
+		// Copy segment to compare
 		char segment[PATH_MAX];
-		if (segment_len >= PATH_MAX) break;
 		strncpy(segment, cursor, segment_len);
 		segment[segment_len] = '\0';
 
-		// Append '/' if not present
+		// Append '/' if needed
 		if (temp_path[current_len - 1] != '/') {
 			if (current_len + 1 >= PATH_MAX) break;
 			temp_path[current_len++] = '/';
@@ -1369,19 +1366,19 @@ Array* pathToStack(const char* path) {
 		strcat(temp_path, segment);
 		current_len += segment_len;
 
-		// Only create a Directory if segment is NOT PLATFORM
+		// Skip PLATFORM folder in hierarchy
 		if (strcmp(segment, PLATFORM) != 0) {
 			Directory* dir = Directory_new(temp_path, 0);
 			Array_push(array, dir);
 		}
 
-		// Move to next segment
 		if (!next) break;
 		cursor = next + 1;
 	}
 
 	return array;
 }
+
 
 static void openDirectory(char* path, int auto_launch) {
 	char auto_path[256];
@@ -1402,6 +1399,10 @@ static void openDirectory(char* path, int auto_launch) {
 		}
 		// TODO: doesn't handle empty m3u files
 	}
+
+	// If this is the exact same directory for some reason, just return.
+	if(top && strcmp(top->path, path) == 0)
+		return;
 
 	// If this is a direct subdirectory of top, push it on top of the stack
 	// If it isnt, we need to recreate the stack to keep navigation consistent
@@ -2101,6 +2102,9 @@ int main (int argc, char *argv[]) {
 	int lastScreen = SCREEN_OFF;
 	int currentScreen = CFG_getDefaultView();
 
+	//eofuwefowbefow
+	//Collections/Recents/Games only show correctly if previously populated?
+
 	if(exists(GAME_SWITCHER_PERSIST_PATH)) {
 		// consider this "consumed", dont bring up the switcher next time we regularly exit a game
 		unlink(GAME_SWITCHER_PERSIST_PATH);
@@ -2171,9 +2175,14 @@ int main (int argc, char *argv[]) {
 			else if (PAD_justReleased(BTN_A)) {
 				Entry *selected = qm_row == 0 ? quick->items[qm_col] : quickActions->items[qm_col];
 				if(selected->type != ENTRY_DIP) {
-					currentScreen = SCREEN_GAMELIST;
+					// still todo, not quite working yet
+					//currentScreen = SCREEN_GAMELIST;
+					//total = top->entries->count;
+					//if (total>0) readyResume(top->entries->items[top->selected]);
 				}
-				Entry_open(selected);
+				else {
+					Entry_open(selected);
+				}
 				dirty = 1;
 			}
 			else if (PAD_justPressed(BTN_RIGHT)) {
