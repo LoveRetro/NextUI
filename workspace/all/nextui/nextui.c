@@ -14,6 +14,7 @@
 #include <sys/resource.h>
 #include <pthread.h>
 #include <assert.h>
+#include <limits.h>
 
 ///////////////////////////////////////
 
