@@ -11,6 +11,7 @@ uint32_t THEME_COLOR3_255;
 uint32_t THEME_COLOR4_255;
 uint32_t THEME_COLOR5_255;
 uint32_t THEME_COLOR6_255;
+uint32_t THEME_COLOR7_255;
 
 static inline uint32_t HexToUint32_unmapped(const char *hexColor) {
     // Convert the hex string to an unsigned long
@@ -31,7 +32,7 @@ void CFG_defaults(NextUISettings *cfg)
         .color4_255 = CFG_DEFAULT_COLOR4,
         .color5_255 = CFG_DEFAULT_COLOR5,
         .color6_255 = CFG_DEFAULT_COLOR6,
-        .backgroundColor_255 = CFG_DEFAULT_BACKGROUNDCOLOR,
+        .color7_255 = CFG_DEFAULT_COLOR7,
         .thumbRadius = CFG_DEFAULT_THUMBRADIUS,
         .gameArtWidth = CFG_DEFAULT_GAMEARTWIDTH,
 
@@ -43,6 +44,8 @@ void CFG_defaults(NextUISettings *cfg)
         .showRecents = CFG_DEFAULT_SHOWRECENTS,
         .showGameArt = CFG_DEFAULT_SHOWGAMEART,
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
+        .defaultView = CFG_DEFAULT_VIEW,
+        .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
 
         .muteLeds = CFG_DEFAULT_MUTELEDS,
 
@@ -117,6 +120,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "color6=%x", &temp_color) == 1)
             {
                 CFG_setColor(6, temp_color);
+                continue;
+            }
+            if (sscanf(line, "color7=%x", &temp_color) == 1)
+            {
+                CFG_setColor(7, temp_color);
                 continue;
             }
             if (sscanf(line, "radius=%i", &temp_value) == 1)
@@ -209,6 +217,16 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 CFG_setWifi((bool)temp_value);
                 continue;
             }
+            if (sscanf(line, "defaultView=%i", &temp_value) == 1)
+            {
+                CFG_setDefaultView(temp_value);
+                continue;
+            }
+            if (sscanf(line, "quickSwitcherUi=%i", &temp_value) == 1)
+            {
+                CFG_setShowQuickswitcherUI(temp_value);
+                continue;
+            }
         }
         fclose(file);
     }
@@ -220,6 +238,7 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
     CFG_setColor(4, CFG_getColor(4));
     CFG_setColor(5, CFG_getColor(5));
     CFG_setColor(6, CFG_getColor(6));
+    CFG_setColor(7, CFG_getColor(7));
     // avoid reloading the font if not neccessary
     if (!fontLoaded)
         CFG_setFontId(CFG_getFontId());
@@ -261,7 +280,7 @@ uint32_t CFG_getColor(int color_id)
     case 6:
         return settings.color6_255;
     case 7:
-        return settings.backgroundColor_255;
+        return settings.color7_255;
     default:
         return 0;
     }
@@ -296,7 +315,8 @@ void CFG_setColor(int color_id, uint32_t color)
         THEME_COLOR6_255 = settings.color6_255;
         break;
     case 7:
-        settings.backgroundColor_255 = color;
+        settings.color7_255 = color;
+        THEME_COLOR7_255 = settings.color7_255;
         break;
     default:
         break;
@@ -486,6 +506,26 @@ void CFG_setWifi(bool on)
     settings.wifi = on;
 }
 
+int CFG_getDefaultView(void)
+{
+    return settings.defaultView;
+}
+
+void CFG_setDefaultView(int view)
+{
+    settings.defaultView = view;
+}
+
+bool CFG_getShowQuickswitcherUI(void)
+{
+    return settings.showQuickSwitcherUi;
+}
+
+void CFG_setShowQuickswitcherUI(bool on)
+{
+    settings.showQuickSwitcherUi = on;
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -516,7 +556,7 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "\"0x%06X\"", CFG_getColor(6));
     }
-    else if (strcmp(key, "bgcolor") == 0)
+    else if (strcmp(key, "color7") == 0)
     {
         sprintf(value, "\"0x%06X\"", CFG_getColor(7));
     }
@@ -588,6 +628,14 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getWifi()));
     }
+    else if (strcmp(key, "defaultView") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getDefaultView()));
+    }
+    else if (strcmp(key, "quickSwitcherUi") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getShowQuickswitcherUI()));
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -622,7 +670,7 @@ void CFG_sync(void)
     fprintf(file, "color4=0x%06X\n", settings.color4_255);
     fprintf(file, "color5=0x%06X\n", settings.color5_255);
     fprintf(file, "color6=0x%06X\n", settings.color6_255);
-    fprintf(file, "bgcolor=0x%06X\n", settings.backgroundColor_255);
+    fprintf(file, "color7=0x%06X\n", settings.color7_255);
     fprintf(file, "radius=%i\n", settings.thumbRadius);
     fprintf(file, "showclock=%i\n", settings.showClock);
     fprintf(file, "clock24h=%i\n", settings.clock24h);
@@ -641,6 +689,8 @@ void CFG_sync(void)
     fprintf(file, "muteLeds=%i\n", settings.muteLeds);
     fprintf(file, "artWidth=%i\n", (int)(settings.gameArtWidth * 100));
     fprintf(file, "wifi=%i\n", settings.wifi);
+    fprintf(file, "defaultView=%i\n", settings.defaultView);
+    fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
 
     fclose(file);
 }
@@ -655,7 +705,7 @@ void CFG_print(void)
     printf("\t\"color4\": \"0x%06X\",\n", settings.color4_255);
     printf("\t\"color5\": \"0x%06X\",\n", settings.color5_255);
     printf("\t\"color6\": \"0x%06X\",\n", settings.color6_255);
-    printf("\t\"bgcolor\": \"0x%06X\",\n", settings.backgroundColor_255);
+    printf("\t\"color7\": \"0x%06X\",\n", settings.color7_255);
     printf("\t\"radius\": %i,\n", settings.thumbRadius);
     printf("\t\"showclock\": %i,\n", settings.showClock);
     printf("\t\"clock24h\": %i,\n", settings.clock24h);
@@ -674,6 +724,8 @@ void CFG_print(void)
     printf("\t\"muteLeds\": %i,\n", settings.muteLeds);
     printf("\t\"artWidth\": %i,\n", (int)(settings.gameArtWidth * 100));
     printf("\t\"wifi\": %i,\n", settings.wifi);
+    printf("\t\"defaultView\": %i,\n", settings.defaultView);
+    printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
 
     // meta, not a real setting
     if (settings.font == 1)

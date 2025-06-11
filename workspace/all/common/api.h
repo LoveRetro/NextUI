@@ -74,6 +74,7 @@ extern uint32_t THEME_COLOR3;
 extern uint32_t THEME_COLOR4;
 extern uint32_t THEME_COLOR5;
 extern uint32_t THEME_COLOR6;
+extern uint32_t THEME_COLOR7;
 extern SDL_Color ALT_BUTTON_TEXT_COLOR;
 
 // TODO: do we need that many free externs? This should move
@@ -119,6 +120,7 @@ enum {
 	ASSET_COLORS,
 	
 	ASSET_BRIGHTNESS,
+	ASSET_COLORTEMP,
 	ASSET_VOLUME_MUTE,
 	ASSET_VOLUME,
 	ASSET_BATTERY,
@@ -133,11 +135,16 @@ enum {
 	ASSET_WIFI,
 	ASSET_WIFI_MED,
 	ASSET_WIFI_LOW,
+	ASSET_WIFI_OFF,
 	
 	ASSET_CHECKCIRCLE,
 	ASSET_LOCK,
-
+	ASSET_SETTINGS,
+	ASSET_STORE,
 	ASSET_GAMEPAD,
+	ASSET_POWEROFF,
+	ASSET_RESTART,
+	ASSET_SUSPEND,
 	
 	ASSET_COUNT,
 };
@@ -225,6 +232,15 @@ typedef struct {
 	GLint uniformLocation;
 } ShaderParam;
 
+enum {
+	LAYER_ALL = 0,
+	LAYER_BACKGROUND = 1,
+	LAYER_TRANSITION = 2,
+	LAYER_THUMBNAIL = 3,
+	LAYER_SCROLLTEXT = 4,
+	LAYER_IDK2 = 5, // unused?
+};
+
 SDL_Surface* GFX_init(int mode);
 #define GFX_resize PLAT_resizeVideo				// (int w, int h, int pitch);
 #define GFX_setScaleClip PLAT_setVideoScaleClip // (int x, int y, int width, int height)
@@ -250,7 +266,7 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
 void GFX_setMode(int mode);
 int GFX_hdmiChanged(void);
-SDL_Color /*GFX_*/uintToColour(uint32_t colour);
+SDL_Color /*GFX_*/ uintToColour(uint32_t colour);
 
 #define GFX_clear PLAT_clearVideo // (SDL_Surface* screen)
 #define GFX_clearAll PLAT_clearAll // (void)
@@ -304,6 +320,7 @@ SDL_Rect GFX_blitScaleAspect(SDL_Surface *src, SDL_Surface *dst);
 SDL_Rect GFX_blitScaleToFill(SDL_Surface *src, SDL_Surface *dst);
 
 // NOTE: all dimensions should be pre-scaled
+void GFX_blitSurfaceColor(SDL_Surface* src, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color);
 void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color);
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_blitPillColor(int asset, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color, uint32_t fill_color);
@@ -311,6 +328,7 @@ void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_blitPillLight(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_blitPillDark(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_blitRect(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
+void GFX_blitRectColor(int asset, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color);
 int GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect);
 int GFX_getButtonWidth(char* hint, char* button);
 void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rect);
@@ -320,6 +338,7 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
 void GFX_blitHardwareHints(SDL_Surface* dst, int show_setting);
 int GFX_blitButtonGroup(char** hints, int primary, SDL_Surface* dst, int align_right);
 
+void GFX_assetRect(int asset, SDL_Rect* dst_rect);
 void GFX_sizeText(TTF_Font* font, const char* str, int leading, int* w, int* h);
 void GFX_blitText(TTF_Font* font, const char* str, int leading, SDL_Color color, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch,int mode);
@@ -397,6 +416,7 @@ int PAD_justReleased(int btn);
 int PAD_justRepeated(int btn);
 
 int PAD_tappedMenu(uint32_t now); // special case, returns 1 on release of BTN_MENU within 250ms if BTN_PLUS/BTN_MINUS haven't been pressed
+int PAD_tappedSelect(uint32_t now); // special case, returns 1 on release of BTN_SELECT within 250ms if BTN_PLUS/BTN_MINUS haven't been pressed
 
 ///////////////////////////////
 #define VIB_sleepStrength 4
@@ -426,7 +446,7 @@ int PWR_ignoreSettingInput(int btn, int show_setting);
 void PWR_update(int* dirty, int* show_setting, PWR_callback_t before_sleep, PWR_callback_t after_sleep);
 
 void PWR_disablePowerOff(void);
-void PWR_powerOff(void);
+void PWR_powerOff(int reboot);
 int PWR_isPoweringOff(void);
 
 void PWR_sleep(void);
@@ -592,7 +612,7 @@ void PLAT_getBatteryStatusFine(int* is_charging, int* charge); // 0,1 and 0-100
 void PLAT_enableBacklight(int enable);
 int PLAT_supportsDeepSleep(void);
 int PLAT_deepSleep(void);
-void PLAT_powerOff(void);
+void PLAT_powerOff(int reboot);
 
 void *PLAT_cpu_monitor(void *arg);
 void PLAT_setCPUSpeed(int speed); // enum

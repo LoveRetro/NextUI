@@ -87,6 +87,7 @@ uint32_t THEME_COLOR3;
 uint32_t THEME_COLOR4;
 uint32_t THEME_COLOR5;
 uint32_t THEME_COLOR6;
+uint32_t THEME_COLOR7;
 SDL_Color ALT_BUTTON_TEXT_COLOR;
 
 // move to utils?
@@ -248,6 +249,7 @@ int GFX_updateColors()
 	THEME_COLOR4 = mapUint(CFG_getColor(4));
 	THEME_COLOR5 = mapUint(CFG_getColor(5));
 	THEME_COLOR6 = mapUint(CFG_getColor(6));
+	THEME_COLOR7 = mapUint(CFG_getColor(7));
 	ALT_BUTTON_TEXT_COLOR = uintToColour(CFG_getColor(3));
 
 	return 0;
@@ -302,9 +304,10 @@ SDL_Surface* GFX_init(int mode)
 	asset_rects[ASSET_BAR_BG_MENU]		= (SDL_Rect){SCALE4(85,56, 4, 4)};
 	asset_rects[ASSET_UNDERLINE]		= (SDL_Rect){SCALE4(85,51, 3, 3)};
 	asset_rects[ASSET_DOT]				= (SDL_Rect){SCALE4(33,54, 2, 2)};
-	asset_rects[ASSET_BRIGHTNESS]		= (SDL_Rect){SCALE4(23,33,19,19)};
-	asset_rects[ASSET_VOLUME_MUTE]		= (SDL_Rect){SCALE4(44,33,10,16)};
-	asset_rects[ASSET_VOLUME]			= (SDL_Rect){SCALE4(44,33,18,16)};
+	asset_rects[ASSET_BRIGHTNESS]		= (SDL_Rect){SCALE4( 1,85,19,19)};
+	asset_rects[ASSET_COLORTEMP]		= (SDL_Rect){SCALE4(41,85, 9,19)};
+	asset_rects[ASSET_VOLUME_MUTE]		= (SDL_Rect){SCALE4(21,85,10,19)};
+	asset_rects[ASSET_VOLUME]			= (SDL_Rect){SCALE4(21,85,19,19)};
 	asset_rects[ASSET_BATTERY]			= (SDL_Rect){SCALE4(47,51,17,10)};
 	asset_rects[ASSET_BATTERY_LOW]		= (SDL_Rect){SCALE4(66,51,17,10)};
 	asset_rects[ASSET_BATTERY_FILL]		= (SDL_Rect){SCALE4(81,33,12, 6)};
@@ -312,13 +315,19 @@ SDL_Surface* GFX_init(int mode)
 	asset_rects[ASSET_BATTERY_BOLT]		= (SDL_Rect){SCALE4(81,41,12, 6)};
 	asset_rects[ASSET_SCROLL_UP]		= (SDL_Rect){SCALE4(97,23,24, 6)};
 	asset_rects[ASSET_SCROLL_DOWN]		= (SDL_Rect){SCALE4(97,31,24, 6)};
-	asset_rects[ASSET_WIFI]				= (SDL_Rect){SCALE4(23,64,14,10)};
-	asset_rects[ASSET_WIFI_MED]			= (SDL_Rect){SCALE4(38,64,14,10)};
-	asset_rects[ASSET_WIFI_LOW]			= (SDL_Rect){SCALE4(54,64,14,10)};
-	asset_rects[ASSET_CHECKCIRCLE]		= (SDL_Rect){SCALE4(68,63,12,12)};
-	asset_rects[ASSET_LOCK]				= (SDL_Rect){SCALE4(81,64,8,11)};
+	asset_rects[ASSET_WIFI]				= (SDL_Rect){SCALE4( 1,104,12,12)};
+	asset_rects[ASSET_WIFI_MED]			= (SDL_Rect){SCALE4(14,104,12,12)};
+	asset_rects[ASSET_WIFI_LOW]			= (SDL_Rect){SCALE4(27,104,12,12)};
+	asset_rects[ASSET_WIFI_OFF]			= (SDL_Rect){SCALE4(40,104,12,12)};
+	asset_rects[ASSET_CHECKCIRCLE]		= (SDL_Rect){SCALE4( 1,117,10,10)};
+	asset_rects[ASSET_LOCK]				= (SDL_Rect){SCALE4(12,116, 8,11)};
 	asset_rects[ASSET_HOLE]				= (SDL_Rect){SCALE4( 1,63,20,20)};
-	asset_rects[ASSET_GAMEPAD]			= (SDL_Rect){SCALE4(92,51,18,10)};
+	asset_rects[ASSET_GAMEPAD]			= (SDL_Rect){SCALE4(91,51,17,10)};
+	asset_rects[ASSET_SETTINGS]			= (SDL_Rect){SCALE4(21,117,10,10)};
+	asset_rects[ASSET_STORE]			= (SDL_Rect){SCALE4(66,117,10,10)};
+	asset_rects[ASSET_POWEROFF]			= (SDL_Rect){SCALE4(43,117,10,10)};
+	asset_rects[ASSET_SUSPEND]			= (SDL_Rect){SCALE4(32,117,10,10)};
+	asset_rects[ASSET_RESTART]			= (SDL_Rect){SCALE4(54,119,11,8)};
 
 	char asset_path[MAX_PATH];
 	sprintf(asset_path, RES_PATH "/assets@%ix.png", FIXED_SCALE);
@@ -378,7 +387,6 @@ static int fps_buffer_index = 0;
 void GFX_startFrame(void) {
 	frame_start = SDL_GetTicks();
 }
-
 
 void chmodfile(const char *file, int writable)
 {
@@ -1320,22 +1328,8 @@ void BlitRGBA4444toRGB565(SDL_Surface* src, SDL_Surface* dest, SDL_Rect* dest_re
     }
 }
 
-void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color) {
-
-	SDL_Rect* rect = &asset_rects[asset];
-	SDL_Rect adj_rect = {
-		.x = rect->x,
-		.y = rect->y,
-		.w = rect->w,
-		.h = rect->h,
-	};
-	if (src_rect) {
-		adj_rect.x += src_rect->x;
-		adj_rect.y += src_rect->y;
-		adj_rect.w  = src_rect->w;
-		adj_rect.h  = src_rect->h;
-	}
-
+void GFX_blitSurfaceColor(SDL_Surface* src, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color)
+{
 	// This could be a RAII
 	if(asset_color != RGB_WHITE)
 	{
@@ -1353,19 +1347,40 @@ void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rec
 			asset_color = THEME_COLOR5_255;
 		else if(asset_color == THEME_COLOR6)
 			asset_color = THEME_COLOR6_255;
+		else if(asset_color == THEME_COLOR7)
+			asset_color = THEME_COLOR7_255;
 
 		SDL_Color restore;
-		SDL_GetSurfaceColorMod(gfx.assets, &restore.r, &restore.g, &restore.b);
-		SDL_SetSurfaceColorMod(gfx.assets, 
+		SDL_GetSurfaceColorMod(src, &restore.r, &restore.g, &restore.b);
+		SDL_SetSurfaceColorMod(src, 
 			(asset_color >> 16) & 0xFF, 
 			(asset_color >> 8) & 0xFF, 
 			asset_color & 0xFF);
-		SDL_BlitSurface(gfx.assets, &adj_rect, dst, dst_rect);
-		SDL_SetSurfaceColorMod(gfx.assets, restore.r, restore.g, restore.b);
+		SDL_BlitSurface(src, src_rect, dst, dst_rect);
+		SDL_SetSurfaceColorMod(src, restore.r, restore.g, restore.b);
 	}
 	else {
-		SDL_BlitSurface(gfx.assets, &adj_rect, dst, dst_rect);
+		SDL_BlitSurface(src, src_rect, dst, dst_rect);
 	}
+}
+
+void GFX_blitAssetColor(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color) {
+
+	SDL_Rect* rect = &asset_rects[asset];
+	SDL_Rect adj_rect = {
+		.x = rect->x,
+		.y = rect->y,
+		.w = rect->w,
+		.h = rect->h,
+	};
+	if (src_rect) {
+		adj_rect.x += src_rect->x;
+		adj_rect.y += src_rect->y;
+		adj_rect.w  = src_rect->w;
+		adj_rect.h  = src_rect->h;
+	}
+
+	GFX_blitSurfaceColor(gfx.assets, &adj_rect, dst, dst_rect, asset_color);
 }
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	GFX_blitAssetColor(asset, src_rect, dst, dst_rect, RGB_WHITE);
@@ -1401,24 +1416,33 @@ void GFX_blitPillDark(int asset, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	GFX_blitPillColor(asset, dst, dst_rect, THEME_COLOR1, RGB_WHITE);
 }
 void GFX_blitRect(int asset, SDL_Surface* dst, SDL_Rect* dst_rect) {
+	int c = asset_rgbs[asset];
+	GFX_blitRectColor(asset, dst, dst_rect, c);
+}
+void GFX_blitRectColor(int asset, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color){
 	int x = dst_rect->x;
 	int y = dst_rect->y;
 	int w = dst_rect->w;
 	int h = dst_rect->h;
-	int c = asset_rgbs[asset];
 	
 	SDL_Rect* rect = &asset_rects[asset];
 	int d = rect->w;
 	int r = d / 2;
 
-	GFX_blitAssetColor(asset, &(SDL_Rect){0,0,r,r}, dst, &(SDL_Rect){x,y}, THEME_COLOR1);
-	SDL_FillRect(dst, &(SDL_Rect){x+r,y,w-d,r}, c);
-	GFX_blitAssetColor(asset, &(SDL_Rect){r,0,r,r}, dst, &(SDL_Rect){x+w-r,y}, THEME_COLOR1);
-	SDL_FillRect(dst, &(SDL_Rect){x,y+r,w,h-d}, c);
-	GFX_blitAssetColor(asset, &(SDL_Rect){0,r,r,r}, dst, &(SDL_Rect){x,y+h-r}, THEME_COLOR1);
-	SDL_FillRect(dst, &(SDL_Rect){x+r,y+h-r,w-d,r}, c);
-	GFX_blitAssetColor(asset, &(SDL_Rect){r,r,r,r}, dst, &(SDL_Rect){x+w-r,y+h-r}, THEME_COLOR1);
+	GFX_blitAssetColor(asset, &(SDL_Rect){0,0,r,r}, dst, &(SDL_Rect){x,y}, asset_color);
+	SDL_FillRect(dst, &(SDL_Rect){x+r,y,w-d,r}, asset_color);
+	GFX_blitAssetColor(asset, &(SDL_Rect){r,0,r,r}, dst, &(SDL_Rect){x+w-r,y}, asset_color);
+	SDL_FillRect(dst, &(SDL_Rect){x,y+r,w,h-d}, asset_color);
+	GFX_blitAssetColor(asset, &(SDL_Rect){0,r,r,r}, dst, &(SDL_Rect){x,y+h-r}, asset_color);
+	SDL_FillRect(dst, &(SDL_Rect){x+r,y+h-r,w-d,r}, asset_color);
+	GFX_blitAssetColor(asset, &(SDL_Rect){r,r,r,r}, dst, &(SDL_Rect){x+w-r,y+h-r}, asset_color);
 }
+
+void GFX_assetRect(int asset, SDL_Rect* dst_rect)
+{
+	*dst_rect = asset_rects[asset];
+}
+
 int GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect) {
 	// LOG_info("dst: %p\n", dst);
 	int x = 0;
@@ -1606,11 +1630,13 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 			setting_max = VOLUME_MAX;
 		}
 		
-		int asset = show_setting==3?ASSET_BUTTON:show_setting==1?ASSET_BRIGHTNESS:(setting_value>0?ASSET_VOLUME:ASSET_VOLUME_MUTE);
-		int ax = ox + (show_setting==1 || show_setting == 3 ? SCALE1(6) : SCALE1(8));
-		int ay = oy + (show_setting==1 || show_setting == 3 ? SCALE1(5) : SCALE1(7));
-		GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){ax,ay}, THEME_COLOR6_255);
-		
+		int asset = show_setting==3?ASSET_COLORTEMP:show_setting==1?ASSET_BRIGHTNESS:(setting_value>0?ASSET_VOLUME:ASSET_VOLUME_MUTE);
+		SDL_Rect asset_rect;
+		GFX_assetRect(asset, &asset_rect);
+		int ax = ox + (SCALE1(PILL_SIZE) - asset_rect.w) / 2;
+		int ay = oy + (SCALE1(PILL_SIZE) - asset_rect.h) / 2;
+		GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){ax, ay}, THEME_COLOR6_255);
+
 		ox += SCALE1(PILL_SIZE);
 		oy += SCALE1((PILL_SIZE - SETTINGS_SIZE) / 2);
 		GFX_blitPill(gfx.mode==MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, &(SDL_Rect){
@@ -2510,7 +2536,7 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void) {
 				btn = BTN_NONE;
 			}
 		}
-		else if (event.type==SDL_QUIT) PWR_powerOff();
+		else if (event.type==SDL_QUIT) PWR_powerOff(0);
 		
 		if (btn==BTN_NONE) continue;
 		
@@ -2588,18 +2614,26 @@ int PAD_isPressed(int btn)		{ return pad.is_pressed & btn; }
 int PAD_justReleased(int btn)	{ return pad.just_released & btn; }
 int PAD_justRepeated(int btn)	{ return pad.just_repeated & btn; }
 
-int PAD_tappedMenu(uint32_t now) {
+int PAD_tappedBtn(int btn, uint32_t now) {
 	#define MENU_DELAY 250 // also in PWR_update()
 	static uint32_t menu_start = 0;
 	static int ignore_menu = 0; 
-	if (PAD_justPressed(BTN_MENU)) {
+	if (PAD_justPressed(btn)) {
 		ignore_menu = 0;
 		menu_start = now;
 	}
-	else if (PAD_isPressed(BTN_MENU) && BTN_MOD_BRIGHTNESS==BTN_MENU && (PAD_justPressed(BTN_MOD_PLUS) || PAD_justPressed(BTN_MOD_MINUS))) {
+	else if (PAD_isPressed(btn) && BTN_MOD_BRIGHTNESS==btn && (PAD_justPressed(BTN_MOD_PLUS) || PAD_justPressed(BTN_MOD_MINUS))) {
 		ignore_menu = 1;
 	}
-	return (!ignore_menu && PAD_justReleased(BTN_MENU) && now-menu_start<MENU_DELAY);
+	return (!ignore_menu && PAD_justReleased(btn) && now-menu_start<MENU_DELAY);
+}
+
+int PAD_tappedMenu(uint32_t now) {
+	return PAD_tappedBtn(BTN_MENU, now);
+}
+
+int PAD_tappedSelect(uint32_t now) {
+	return PAD_tappedBtn(BTN_SELECT, now);
 }
 
 ///////////////////////////////
@@ -2808,7 +2842,7 @@ void PWR_update(int* _dirty, int* _show_setting, PWR_callback_t before_sleep, PW
 	if (PAD_justReleased(BTN_POWEROFF) || (power_pressed_at && now-power_pressed_at>=1000)) {
 		if (before_sleep) before_sleep();
 		system("gametimectl.elf stop_all");
-		PWR_powerOff();
+		PWR_powerOff(0);
 	}
 	
 	if (PAD_justPressed(BTN_POWER)) {
@@ -2902,7 +2936,7 @@ void PWR_enableSleep(void) {
 void PWR_disablePowerOff(void) {
 	pwr.can_poweroff = 0;
 }
-void PWR_powerOff(void) {
+void PWR_powerOff(int reboot) {
 	if (pwr.can_poweroff) {
 		
 		int w = FIXED_WIDTH;
@@ -2916,8 +2950,17 @@ void PWR_powerOff(void) {
 		gfx.screen = GFX_resize(w,h,p);
 		
 		char* msg;
-		if (HAS_POWER_BUTTON || HAS_POWEROFF_BUTTON) msg = exists(AUTO_RESUME_PATH) ? (char*)"Quicksave created,\npowering off" :  (char*)"Powering off";
-		else msg = exists(AUTO_RESUME_PATH) ?  (char*)"Quicksave created,\npower off now" :  (char*)"Power off now";
+		if (HAS_POWER_BUTTON || HAS_POWEROFF_BUTTON) {
+			if(exists(AUTO_RESUME_PATH))
+				msg = (char *)"Quicksave created,\npowering off";
+			else if(reboot > 0)
+				msg = (char *)"Rebooting";
+			else 
+				msg = (char *)"Powering off";
+		} 
+		else {
+			msg = exists(AUTO_RESUME_PATH) ?  (char*)"Quicksave created,\npower off now" :  (char*)"Power off now";
+		} 
 		
 		// LOG_info("PWR_powerOff %s (%ix%i)\n", gfx.screen, gfx.screen->w, gfx.screen->h);
 		
@@ -2928,7 +2971,7 @@ void PWR_powerOff(void) {
 		GFX_blitMessage(font.large, msg, gfx.screen,&(SDL_Rect){0,0,gfx.screen->w,gfx.screen->h}); //, NULL);
 		GFX_flip(gfx.screen);
 
-		PLAT_powerOff();
+		PLAT_powerOff(reboot);
 	}
 }
 
@@ -3021,7 +3064,7 @@ static void PWR_waitForWake(void) {
 					}
 				}
 				if (pwr.can_poweroff) {
-					PWR_powerOff();
+					PWR_powerOff(0);
 				}
 			}
 		}

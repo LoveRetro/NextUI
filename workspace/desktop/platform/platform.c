@@ -2181,7 +2181,7 @@ void PLAT_enableBacklight(int enable) {
 	// buh
 }
 
-void PLAT_powerOff(void) {
+void PLAT_powerOff(int reboot) {
 	SND_quit();
 	VIB_quit();
 	PWR_quit();

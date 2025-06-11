@@ -17,6 +17,10 @@ if [ -f "/tmp/poweroff" ]; then
 	poweroff
 	exit 0
 fi
+if [ -f "/tmp/reboot" ]; then
+	reboot
+	exit 0
+fi
 
 export PLATFORM="tg5040"
 export SDCARD_PATH="/mnt/SDCARD"
@@ -166,6 +170,10 @@ while [ -f $EXEC_PATH ]; do
 
 	if [ -f "/tmp/poweroff" ]; then
 		poweroff
+		exit 0
+	fi
+	if [ -f "/tmp/reboot" ]; then
+		reboot
 		exit 0
 	fi
 done

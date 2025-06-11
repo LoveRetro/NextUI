@@ -7,6 +7,8 @@ extern "C"
 #include "utils.h"
 }
 
+#include <fstream>
+#include <sstream>
 #include "wifimenu.hpp"
 #include "keyboardprompt.hpp"
 
@@ -139,6 +141,10 @@ int main(int argc, char *argv[])
                 []() -> std::any { return CFG_getColor(5); }, 
                 [](const std::any &value) { CFG_setColor(5, std::any_cast<uint32_t>(value)); },
                 []() { CFG_setColor(5, CFG_DEFAULT_COLOR5);}},
+                //new MenuItem{ListItemType::Color, "Background color", "Main UI background color", colors, color_strings, 
+                //[]() -> std::any { return CFG_getColor(7); }, 
+                //[](const std::any &value) { CFG_setColor(7, std::any_cast<uint32_t>(value)); },
+                //[]() { CFG_setColor(7, CFG_DEFAULT_COLOR7);}},
                 new MenuItem{ListItemType::Generic, "Show battery percentage", "Show battery level as percent in the status pill", {false, true}, on_off, 
                 []() -> std::any { return CFG_getShowBatteryPercent(); },
                 [](const std::any &value) { CFG_setShowBatteryPercent(std::any_cast<bool>(value)); },
@@ -174,6 +180,10 @@ int main(int argc, char *argv[])
                 [](const std::any &value)
                 { CFG_setRomsUseFolderBackground(std::any_cast<bool>(value)); },
                 []() { CFG_setRomsUseFolderBackground(CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND);}},
+                new MenuItem{ListItemType::Generic, "Show Quickswitcher UI", "Show/hide Quickswitcher UI elements.\nWhen hidden, will only draw background images.", {false, true}, on_off, 
+                []() -> std::any{ return CFG_getShowQuickswitcherUI(); },
+                [](const std::any &value){ CFG_setShowQuickswitcherUI(std::any_cast<bool>(value)); },
+                []() { CFG_setShowQuickswitcherUI(CFG_DEFAULT_SHOWQUICKWITCHERUI);}},
                 // not needed anymore
                 // new MenuItem{ListItemType::Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
                 // { return CFG_getGameSwitcherScaling(); },
@@ -230,6 +240,12 @@ int main(int argc, char *argv[])
             { return CFG_getHaptics(); }, [](const std::any &value)
             { CFG_setHaptics(std::any_cast<bool>(value)); },
             []() { CFG_setHaptics(CFG_DEFAULT_HAPTICS);}},
+            new MenuItem{ListItemType::Generic, "Default view", "The initial view to show on boot", 
+            {(int)SCREEN_GAMELIST, (int)SCREEN_GAMESWITCHER, (int)SCREEN_QUICKMENU}, 
+            {"Content List","Game Switcher","Quick Menu"}, 
+            []() -> std::any { return CFG_getDefaultView(); }, 
+            [](const std::any &value){ CFG_setDefaultView(std::any_cast<int>(value)); },
+            []() { CFG_setDefaultView(CFG_DEFAULT_VIEW);}},
             new MenuItem{ListItemType::Generic, "Show 24h time format", "Show clock in the 24hrs time format", {false, true}, on_off, []() -> std::any
             { return CFG_getClock24H(); },
             [](const std::any &value)
@@ -317,9 +333,10 @@ int main(int argc, char *argv[])
         {
             new StaticMenuItem{ListItemType::Generic, "NextUI version", "", 
             []() -> std::any { 
-                char release[256];
-                getFile(ROOT_SYSTEM_PATH "/version.txt", release, 256);
-                return std::string(release); 
+                std::ifstream t(ROOT_SYSTEM_PATH "/version.txt");
+                std::stringstream buffer;
+                buffer << t.rdbuf();
+                return buffer.str();
             }},
             new StaticMenuItem{ListItemType::Generic, "Platform", "", 
             []() -> std::any { 
