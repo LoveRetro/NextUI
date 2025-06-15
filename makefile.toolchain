@@ -11,7 +11,7 @@ GUEST_WORKSPACE=/root/workspace
 
 GIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain
 INIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain/.build
-IMAGE_NAME=ghcr.io/loveretro/$(PLATFORM)-toolchain:latest
+IMAGE_NAME=$(PLATFORM)-toolchain:latest
 
 all: $(INIT_IF_NECESSARY)
 	docker run -it --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) $(IMAGE_NAME) /bin/bash
