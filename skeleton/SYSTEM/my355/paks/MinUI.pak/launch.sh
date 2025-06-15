@@ -54,7 +54,15 @@ echo $CPU_SPEED_PERF > $CPU_PATH
 
 #######################################
 
-keymon.elf > $LOGS_PATH/keymon.txt 2>&1 &
+# wifi handling
+rfkill unblock wifi
+echo 1 > /sys/class/rfkill/rfkill0/state || true
+ifconfig wlan0 up
+(( udhcpc -i wlan0 &)&)
+
+
+keymon.elf & # &> $SDCARD_PATH/keymon.txt &
+batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 
 #######################################
 
@@ -73,12 +81,6 @@ EXEC_PATH="/tmp/nextui_exec"
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH" && sync
 
-# enable wifi for now
-# echo 1 > /sys/class/rfkill/rfkill0/state || true 
-# ifconfig wlan0 up
-# wpa_supplicant -B -D nl80211 -iwlan0 -c /userdata/cfg/wpa_supplicant.conf
-# udhcpc -i wlan0
-# ifconfig > /mnt/SDCARD/ifconfig.txt
 
 while [ -f "$EXEC_PATH" ]; do
 	nextui.elf &> $LOGS_PATH/nextui.txt

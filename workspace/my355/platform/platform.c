@@ -2735,6 +2735,7 @@ void PLAT_setNetworkTimeSync(bool on) {
 	}
 }
 
+
 /////////////////////////
 
 bool PLAT_supportSSH() { return true; }
@@ -2810,56 +2811,56 @@ bool PLAT_wifiEnabled() {
 #define MAX_CONNECTION_ATTEMPTS 5
 
 void PLAT_wifiEnable(bool on) {
-	// if(on) {
-	// 	LOG_info("turning wifi on...\n");
+	if(on) {
+		LOG_info("turning wifi on...\n");
 		
-	// 	// This shouldnt be needed, but we cant really rely on nobody else messing with this stuff. 
-	// 	// Make sure supplicant is up and rfkill doesnt block.
-	// 	system("rfkill unblock wifi");
-	// 	//system("ifconfig wlan0 down");
-	// 	system("/etc/init.d/wpa_supplicant enable");
-	// 	system("/etc/init.d/wpa_supplicant start&");
+		// This shouldnt be needed, but we cant really rely on nobody else messing with this stuff. 
+		// Make sure supplicant is up and rfkill doesnt block.
+		system("rfkill unblock wifi");
+		system("ifconfig wlan0 up");
+		system("/etc/init.d/wpa_supplicant enable");
+		system("/etc/init.d/wpa_supplicant start&");
 
-	// 	int event_label = 42;
-	// 	for (int i = 0 ; i<= MAX_CONNECTION_ATTEMPTS ;i++) {
-	// 		wifi.interface = aw_wifi_on(wifi_state_handle, event_label);
-	// 		if(wifi.interface != NULL)
-	// 			break;
-	// 		ms_sleep(1000);
-	// 		LOG_info("connect wpa_supplicant: tried %d times\n", i+1);
-	// 	}
-	// 	if(wifi.interface == NULL) {
-	// 		LOG_error("failed to turn on wifi.\n");
-	// 		wifi.enabled = false;
-	// 	}
-	// 	else {
-	// 		wifi.enabled = true;
-	// 	}
-	// }
-	// else if(wifi.interface) {
-	// 	LOG_debug("turning wifi off...\n");
+		int event_label = 42;
+		for (int i = 0 ; i<= MAX_CONNECTION_ATTEMPTS ;i++) {
+			wifi.interface = aw_wifi_on(wifi_state_handle, event_label);
+			if(wifi.interface != NULL)
+				break;
+			ms_sleep(1000);
+			LOG_info("connect wpa_supplicant: tried %d times\n", i+1);
+		}
+		if(wifi.interface == NULL) {
+			LOG_error("failed to turn on wifi.\n");
+			wifi.enabled = false;
+		}
+		else {
+			wifi.enabled = true;
+		}
+	}
+	else if(wifi.interface) {
+		LOG_debug("turning wifi off...\n");
 
-	// 	// Honestly, I'd rather not do this but it seems to keep the  questionable wifi implementation
-	// 	// on Trimui from randomly reconnecting automatically
-	// 	system("rfkill block wifi");
-	// 	//system("ifconfig wlan0 up");
-	// 	system("/etc/init.d/wpa_supplicant stop&");
+		// Honestly, I'd rather not do this but it seems to keep the  questionable wifi implementation
+		// on Trimui from randomly reconnecting automatically
+		system("rfkill block wifi");
+		system("ifconfig wlan0 down");
+		system("/etc/init.d/wpa_supplicant stop&");
 
-	// 	int ret = aw_wifi_off(wifi.interface);
-	// 	if(ret < 0)
-	// 	{
-	// 		LOG_error("Test failed: wifi off error!\n");
-	// 		return;
-	// 	}
-	// 	// only necessary for the wmg_log output (debugging)
-	// 	fflush(stdout);
+		int ret = aw_wifi_off(wifi.interface);
+		if(ret < 0)
+		{
+			LOG_error("Test failed: wifi off error!\n");
+			return;
+		}
+		// only necessary for the wmg_log output (debugging)
+		fflush(stdout);
 
-	// 	wifi.interface = NULL;
-	// 	wifi.enabled = false;
-	// }
+		wifi.interface = NULL;
+		wifi.enabled = false;
+	}
 
-	// // Keep config in sync
-	// CFG_setWifi(wifi.enabled);
+	// Keep config in sync
+	CFG_setWifi(wifi.enabled);
 }
 
 int PLAT_wifiScan(struct WIFI_network *networks, int max)
@@ -3022,65 +3023,65 @@ void PLAT_wifiForget(char *ssid, WifiSecurityType sec)
 
 void PLAT_wifiConnect(char *ssid, WifiSecurityType sec)
 {
-	// if(wifi.interface == NULL) {
-	// 	LOG_info("failed to get wifi interface.\n");
-	// 	return;
-	// 	 //-1;
-	// }
+	if(wifi.interface == NULL) {
+		LOG_info("failed to get wifi interface.\n");
+		return;
+		 //-1;
+	}
 
-	// if(sec == SECURITY_UNSUPPORTED){
-	// 	LOG_info("unsupported WifiDecurityType.\n");
-	// 	return;
-	// }
+	if(sec == SECURITY_UNSUPPORTED){
+		LOG_info("unsupported WifiDecurityType.\n");
+		return;
+	}
 
-	// LOG_info("Attempting to connect to SSID %s\n", ssid);
+	LOG_info("Attempting to connect to SSID %s\n", ssid);
 
-	// char net_id[10]="";
-    // int id_len = sizeof(net_id);
-	// int ret = wifi.interface->get_netid(ssid, (tKEY_MGMT)sec, net_id, &id_len);
-	// if(ret != 0) {
-	// 	LOG_info("netid failed \n");
-	// 	return;
-	// }
-	// else {
-	// 	LOG_info("Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
-	// }
+	char net_id[10]="";
+    int id_len = sizeof(net_id);
+	int ret = wifi.interface->get_netid(ssid, (tKEY_MGMT)sec, net_id, &id_len);
+	if(ret != 0) {
+		LOG_info("netid failed \n");
+		return;
+	}
+	else {
+		LOG_info("Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
+	}
 
-	// ret = wifi.interface->connect_ap_with_netid(net_id, 42);
-	// LOG_info("wifi connect_ap_with_netid %s returned %d\n", net_id, ret);
-	// if (aw_wifi_get_wifi_state() == NETWORK_CONNECTED)
-	// 	LOG_info("wifi connected.\n");
-	// else
-	// 	LOG_info("wifi connection failed.\n");
+	ret = wifi.interface->connect_ap_with_netid(net_id, 42);
+	LOG_info("wifi connect_ap_with_netid %s returned %d\n", net_id, ret);
+	if (aw_wifi_get_wifi_state() == NETWORK_CONNECTED)
+		LOG_info("wifi connected.\n");
+	else
+		LOG_info("wifi connection failed.\n");
 }
 
 void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass)
 {
-	// if(wifi.interface == NULL) {
-	// 	LOG_info("failed to get wifi interface.\n");
-	// 	return;
-	// }
+	if(wifi.interface == NULL) {
+		LOG_info("failed to get wifi interface.\n");
+		return;
+	}
 
-	// if(sec == SECURITY_UNSUPPORTED){
-	// 	LOG_info("unsupported WifiDecurityType.\n");
-	// 	return;
-	// }
+	if(sec == SECURITY_UNSUPPORTED){
+		LOG_info("unsupported WifiDecurityType.\n");
+		return;
+	}
 
-	// int ret = wifi.interface->connect_ap_key_mgmt(ssid, (tKEY_MGMT)sec, pass, 42);
-	// LOG_info("wifi connect_ap returned %d\n", ret);
-	// if (aw_wifi_get_wifi_state() == NETWORK_CONNECTED)
-	// 	LOG_info("wifi connected.\n");
-	// else
-	// 	LOG_info("wifi connection failed.\n");
+	int ret = wifi.interface->connect_ap_key_mgmt(ssid, (tKEY_MGMT)sec, pass, 42);
+	LOG_info("wifi connect_ap returned %d\n", ret);
+	if (aw_wifi_get_wifi_state() == NETWORK_CONNECTED)
+		LOG_info("wifi connected.\n");
+	else
+		LOG_info("wifi connection failed.\n");
 }
 
 void PLAT_wifiDisconnect()
 {
-	// if(wifi.interface == NULL) {
-	// 	LOG_info("failed to get wifi interface.\n");
-	// 	return;
-	// }
+	if(wifi.interface == NULL) {
+		LOG_info("failed to get wifi interface.\n");
+		return;
+	}
 
-	// int ret = wifi.interface->disconnect_ap(42);
-	// LOG_info("wifi disconnect_ap returned %d\n", ret);
+	int ret = wifi.interface->disconnect_ap(42);
+	LOG_info("wifi disconnect_ap returned %d\n", ret);
 }
