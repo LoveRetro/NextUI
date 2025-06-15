@@ -140,7 +140,7 @@ extern int is_brick;
 #define SCREEN_FPS 60.235
 
 #define MAX_LIGHTS 4
-
+int is_brick = 0;
 ///////////////////////////////
 
 #endif
