@@ -19,7 +19,7 @@ all: readmes
 	cd ./boot && ./build.sh
 
 early: $(REQUIRES_COMMANDER)
-	cd other/DinguxCommander && make -j
+	# cd other/DinguxCommander && make -j
 
 clean:
 	cd ./overclock && make clean
