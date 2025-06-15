@@ -12,21 +12,21 @@ TARGET=msettings
 
 CC = $(CROSS_COMPILE)gcc
 
-SYSROOT     := $(shell $(CC) --print-sysroot)
-
-INCLUDEDIR = $(SYSROOT)/usr/include
-CFLAGS = -I$(INCLUDEDIR)
+CFLAGS = 
 LDFLAGS = -ldl -lrt -s
 
 OPTM=-Ofast
 
 build: 
-	$(CC) -c -Werror -fpic "$(TARGET).c" -Wl,--no-as-needed $(LDFLAGS)
+	$(CC) -c -Werror -fpic "$(TARGET).c" $(CFLAGS) -Wl,--no-as-needed $(LDFLAGS)
 	$(CC) -shared -o "lib$(TARGET).so" "$(TARGET).o" $(LDFLAGS)
-	cp "$(TARGET).h" "$(PREFIX)/include"
-	cp "lib$(TARGET).so" "$(PREFIX)/lib"
+	mkdir -p "$(PREFIX_LOCAL)/include"
+	mkdir -p "$(PREFIX_LOCAL)/lib"
+	cp "$(TARGET).h" "$(PREFIX_LOCAL)/include"
+	cp "lib$(TARGET).so" "$(PREFIX_LOCAL)/lib"
+
 clean:
 	rm -f *.o
 	rm -f "lib$(TARGET).so"
-	rm -f $(PREFIX)/include/$(TARGET).h
-	rm -f $(PREFIX)/lib/lib$(TARGET).so
+	rm -f $(PREFIX_LOCAL)/include/$(TARGET).h
+	rm -f $(PREFIX_LOCAL)/lib/lib$(TARGET).so

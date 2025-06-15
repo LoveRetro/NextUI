@@ -21,9 +21,9 @@ all: readmes
 early: $(REQUIRES_EVTEST) $(REQUIRES_JSTEST) $(REQUIRES_UNZIP60) $(REQUIRES_FILEMGR)
 	mkdir -p other
 	# cd $(REQUIRES_FILEMGR) && make -j
-	# cd $(REQUIRES_EVTEST) && $(CROSS_COMPILE)gcc -o evtest evtest.c
-	# cd $(REQUIRES_JSTEST) && $(CROSS_COMPILE)gcc -o jstest jstest.c
-	# cd $(REQUIRES_UNZIP60) && make -f unix/Makefile.trimuismart unzip
+	cd $(REQUIRES_EVTEST) && $(CROSS_COMPILE)gcc -o evtest evtest.c
+	cd $(REQUIRES_JSTEST) && $(CROSS_COMPILE)gcc -o jstest jstest.c
+	cd $(REQUIRES_UNZIP60) && make -f unix/Makefile.trimuismart unzip
 
 clean:
 	cd show && make clean

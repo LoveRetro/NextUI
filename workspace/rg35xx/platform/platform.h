@@ -9,8 +9,6 @@
 
 ///////////////////////////////
 
-extern int is_brick;
-
 ///////////////////////////////
 
 #define BUTTON_UP		BUTTON_NA
@@ -87,13 +85,13 @@ extern int is_brick;
 #define JOY_R1			5
 #define JOY_L2			JOY_NA
 #define JOY_R2			JOY_NA
-#define JOY_L3			(is_brick?9:JOY_NA)
-#define JOY_R3			(is_brick?10:JOY_NA)
+#define JOY_L3			JOY_NA
+#define JOY_R3			JOY_NA
 
 #define JOY_MENU		8
 #define JOY_POWER		102
-#define JOY_PLUS		(is_brick?14:128)
-#define JOY_MINUS		(is_brick?13:129)
+#define JOY_PLUS		14
+#define JOY_MINUS		129
 
 ///////////////////////////////
 
@@ -118,9 +116,9 @@ extern int is_brick;
 
 ///////////////////////////////
 
-#define FIXED_SCALE 	(is_brick?3:2)
-#define FIXED_WIDTH		(is_brick?1024:1280)
-#define FIXED_HEIGHT	(is_brick?768:720)
+#define FIXED_SCALE 	2
+#define FIXED_WIDTH		1280
+#define FIXED_HEIGHT	720
 #define FIXED_BPP		2
 #define FIXED_DEPTH		(FIXED_BPP * 8)
 #define FIXED_PITCH		(FIXED_WIDTH * FIXED_BPP)
@@ -128,8 +126,8 @@ extern int is_brick;
 
 ///////////////////////////////
 
-#define MAIN_ROW_COUNT (is_brick ? 7 : 10)
-#define PADDING (is_brick ? 5 : 10)
+#define MAIN_ROW_COUNT 10
+#define PADDING 10
 
 ///////////////////////////////
 
@@ -140,7 +138,6 @@ extern int is_brick;
 #define SCREEN_FPS 60.235
 
 #define MAX_LIGHTS 4
-int is_brick = 0;
 ///////////////////////////////
 
 #endif

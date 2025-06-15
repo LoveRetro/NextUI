@@ -24,7 +24,7 @@
 
 #include <dirent.h>
 #include <arm_neon.h>
-#include <SDL2/SDL_opengl.h>
+
 
 int on_hdmi = 0;
 
@@ -2742,24 +2742,24 @@ bool PLAT_supportSSH() { return true; }
 
 /////////////////////////
 
-// #include <wifi_intf.h>
-// #include "wmg_debug.h"
-// #include "wifi_udhcpc.h"
+#include <wifi_intf.h>
+#include "wmg_debug.h"
+#include "wifi_udhcpc.h"
 
-// static struct WIFI_Context {
-// 	const aw_wifi_interface_t *interface;
-// 	int lastEvent;
-// 	bool enabled;
-// 	bool connected;
-// } wifi = {
-// 	.interface = NULL,
-// 	.lastEvent = STATE_UNKNOWN,
-// 	.enabled = false,
-// 	.connected = false};
+static struct WIFI_Context {
+	const aw_wifi_interface_t *interface;
+	int lastEvent;
+	bool enabled;
+	bool connected;
+} wifi = {
+	.interface = NULL,
+	.lastEvent = STATE_UNKNOWN,
+	.enabled = false,
+	.connected = false};
 
-static void wifi_state_handle(int event_label)
+static void wifi_state_handle(struct Manager *w, int event_label)
 {
-    
+  
 }
 
 bool PLAT_hasWifi() { return true; }
@@ -2774,7 +2774,7 @@ bool PLAT_wifiEnabled() {
 #define MAX_CONNECTION_ATTEMPTS 5
 
 void PLAT_wifiEnable(bool on) {
-	
+
 }
 
 int PLAT_wifiScan(struct WIFI_network *networks, int max)
@@ -2784,7 +2784,7 @@ int PLAT_wifiScan(struct WIFI_network *networks, int max)
 
 bool PLAT_wifiConnected()
 {
-	
+
 }
 
 int PLAT_wifiConnection(struct WIFI_connection *connection_info)
@@ -2799,7 +2799,7 @@ bool PLAT_wifiHasCredentials(char *ssid, WifiSecurityType sec)
 
 void PLAT_wifiForget(char *ssid, WifiSecurityType sec)
 {
-
+	
 }
 
 void PLAT_wifiConnect(char *ssid, WifiSecurityType sec)
