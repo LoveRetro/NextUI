@@ -1370,6 +1370,7 @@ SDL_Surface* loadFolderBackground(char* rompath, int type)
 	else if(type == ENTRY_ROM)
 		snprintf(imagePath, sizeof(imagePath), "%s/%s/bglist.png", THEME_PATH,emutag);
 	
+	LOG_info("background path: %s\n",imagePath);
 	// fallback for old .media system
 	if(!exists(imagePath)) {
 		if(type == ENTRY_DIR)
@@ -2031,6 +2032,8 @@ int main (int argc, char *argv[]) {
 							snprintf(thumbpath, sizeof(thumbpath), "%s/%s/icon.png", THEME_PATH,emutag);
 						else
 							snprintf(thumbpath, sizeof(thumbpath),"%s/.media/%s.png", rompath, res_copy);
+						
+						LOG_info("gamearth path: %s\n",thumbpath);
 
 					}
 					had_thumb = 0;
