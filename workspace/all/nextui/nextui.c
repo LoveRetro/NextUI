@@ -2412,6 +2412,9 @@ int main (int argc, char *argv[]) {
 			else {
 				static int lastType = -1;
 		
+				// load folder background
+				char defaultBgPath[512];
+				snprintf(defaultBgPath, sizeof(defaultBgPath), SDCARD_PATH "/bg.png");
 				if(((entry->type == ENTRY_DIR || entry->type == ENTRY_ROM) && CFG_getRomsUseFolderBackground())) {
 					char *newBg = entry->type == ENTRY_DIR ? entry->path:rompath;
 					if((strcmp(newBg, folderBgPath) != 0 || lastType != entry->type) && sizeof(folderBgPath) != 1) {
@@ -2424,15 +2427,18 @@ int main (int argc, char *argv[]) {
 						else if (entry->type == ENTRY_ROM)
 							snprintf(tmppath, sizeof(tmppath), "%s/.media/bglist.png", folderBgPath);
 						if(!exists(tmppath)) {
-							snprintf(tmppath, sizeof(tmppath), SDCARD_PATH "/bg.png", folderBgPath);
+							show_entry_names = 1;
+							snprintf(tmppath, sizeof(tmppath), defaultBgPath, folderBgPath);
 						}
 						startLoadFolderBackground(tmppath, entry->type, onBackgroundLoaded, NULL);
 					}
-					
 				} 
-				else if(strcmp(SDCARD_PATH "/bg.png", folderBgPath) != 0) {
-					strncpy(folderBgPath, SDCARD_PATH "/bg.png", sizeof(folderBgPath) - 1);
-					startLoadFolderBackground(SDCARD_PATH "/bg.png", entry->type, onBackgroundLoaded, NULL);
+				else if(strcmp(defaultBgPath, folderBgPath) != 0 && exists(defaultBgPath)) {
+						strncpy(folderBgPath, defaultBgPath, sizeof(folderBgPath) - 1);
+						startLoadFolderBackground(defaultBgPath, entry->type, onBackgroundLoaded, NULL);
+				}
+				else {
+					show_entry_names = 1;
 				}
 
 			
@@ -2499,7 +2505,7 @@ int main (int argc, char *argv[]) {
 
 							if (entry_unique) { // Only render if a unique name exists
 								trimSortingMeta(&entry_unique);
-							} 
+							}
 
 							char display_name[256];
 							int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name,display_name, available_width, SCALE1(BUTTON_PADDING * 2));
