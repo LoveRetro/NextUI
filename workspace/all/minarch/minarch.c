@@ -6907,6 +6907,11 @@ int main(int argc , char* argv[]) {
 		GFX_startFrame();
 		if(doRunAhead) {
 			
+			// TODO
+			// this is runahead basically flipping an x avanced frames in future so it feels like it reacts more responsive
+			// currently it has performance issues
+			// serialize and unserialize are too cpu intensive it seems and cause slow downs, need to move it to seperate thread somehow
+
 			core.serialize(base_state, max_state_size);
 			// Run ahead one or more frames
 			set_video_refresh_callback(fakeVideoCall);
