@@ -2995,6 +2995,7 @@ static int setFastForward(int enable) {
 
 static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
 static int ignore_menu = 0;
+static int runahead_buttons = 0;
 static void input_poll_callback(void) {
 	PAD_poll();
 
@@ -3119,9 +3120,7 @@ static void input_poll_callback(void) {
 			buttons |= 1 << mapping->retro;
 			if (mapping->mod) ignore_menu = 1;
 		}
-		if(PAD_anyJustPressed()) {
-			doRunAhead = 1;
-		} 
+ 		runahead_buttons = buttons; 
 		//  && !PWR_ignoreSettingInput(btn, show_setting)
 	}
 	
@@ -3212,6 +3211,7 @@ static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uin
 	VIB_setStrength(strength);
 	return 1;
 }
+
 static bool environment_callback(unsigned cmd, void *data) { // copied from picoarch initially
 	// LOG_info("environment_callback: %i\n", cmd);
 	
@@ -4627,9 +4627,13 @@ void Core_getName(char* in_name, char* out_name) {
 	tmp[0] = '\0';
 }
 
-	void (*set_video_refresh_callback)(retro_video_refresh_t);
-	void (*set_audio_sample_callback)(retro_audio_sample_t);
-	void (*set_audio_sample_batch_callback)(retro_audio_sample_batch_t);
+void (*set_video_refresh_callback)(retro_video_refresh_t);
+void (*set_audio_sample_callback)(retro_audio_sample_t);
+void (*set_audio_sample_batch_callback)(retro_audio_sample_batch_t);
+void (*set_input_state_callback)(retro_input_state_t);
+
+
+
 
 void Core_open(const char* core_path, const char* tag_name) {
 	LOG_info("Core_open\n");
@@ -4659,7 +4663,7 @@ void Core_open(const char* core_path, const char* tag_name) {
 	void (*set_environment_callback)(retro_environment_t);
 
 	void (*set_input_poll_callback)(retro_input_poll_t);
-	void (*set_input_state_callback)(retro_input_state_t);
+
 	
 	set_environment_callback = dlsym(core.handle, "retro_set_environment");
 	set_video_refresh_callback = dlsym(core.handle, "retro_set_video_refresh");
@@ -4667,7 +4671,9 @@ void Core_open(const char* core_path, const char* tag_name) {
 	set_audio_sample_batch_callback = dlsym(core.handle, "retro_set_audio_sample_batch");
 	set_input_poll_callback = dlsym(core.handle, "retro_set_input_poll");
 	set_input_state_callback = dlsym(core.handle, "retro_set_input_state");
-	
+
+
+
 	struct retro_system_info info = {};
 	core.get_system_info(&info);
 	
@@ -4700,6 +4706,7 @@ void Core_open(const char* core_path, const char* tag_name) {
 	set_audio_sample_batch_callback(audio_sample_batch_callback);
 	set_input_poll_callback(input_poll_callback);
 	set_input_state_callback(input_state_callback);
+
 }
 void Core_init(void) {
 	LOG_info("Core_init\n");
@@ -6788,9 +6795,19 @@ static void limitFF(void) {
 }
 
 
+int16_t dummy_buffer[4096];
+
 static void fakeAudioCall(int16_t left, int16_t right) {}
-static size_t fakeBatchCall(const int16_t *data, size_t frames) {}
+size_t fakeBatchCall(const int16_t *data, size_t frames) {
+	memcpy(dummy_buffer, data, frames * sizeof(int16_t) * 2);  // Stereo
+	return frames;
+}
 static void fakeVideoCall(const void *data, unsigned width, unsigned height, size_t pitch) {}
+static int16_t fake_input_callback(unsigned port, unsigned device, unsigned index, unsigned id) {
+    int bit = 1 << id;
+    return (runahead_buttons & bit) ? 1 : 0;
+}
+
 
 int main(int argc , char* argv[]) {
 	LOG_info("MinArch\n");
@@ -6901,55 +6918,39 @@ int main(int argc , char* argv[]) {
 
 	max_state_size = core.serialize_size();
 	base_state = malloc(max_state_size);
-	runahead_state = malloc(max_state_size);
-
+	int runAheadFrames = 1;  // How many frames to run ahead
 	while (!quit) {
 		GFX_startFrame();
 
-		// TODO
-		// this is runahead basically flipping an x avanced frames in future so it feels like it reacts more responsive
-		// currently it has performance issues
-		// serialize and unserialize are too cpu intensive it seems and cause slow downs, need to move it to seperate thread somehow
-		static int aheadcount = 0;
-		if(doRunAhead == 1) {
-			core.serialize(base_state, max_state_size);
-			// Run ahead one or more frames
-			set_video_refresh_callback(fakeVideoCall);
-			set_audio_sample_callback(fakeAudioCall);
-			set_audio_sample_batch_callback(fakeBatchCall);
-			for (int i = 0; i < 1; i++) {
-				core.run();
-				aheadcount++;
-			}
-			set_video_refresh_callback(video_refresh_callback);
-			set_audio_sample_callback(audio_sample_callback);
-			set_audio_sample_batch_callback(audio_sample_batch_callback);
-			core.run();
-			aheadcount++;
-			doRunAhead = 2;
-			// restore base state and make it run 1 frame like normally
-			core.unserialize(base_state, max_state_size);
-		} else if(doRunAhead == 2) {
-			// first catchup
-			set_video_refresh_callback(fakeVideoCall);
-			set_audio_sample_callback(fakeAudioCall);
-			set_audio_sample_batch_callback(fakeBatchCall);
-			core.run();
-			set_video_refresh_callback(video_refresh_callback);
-			set_audio_sample_callback(audio_sample_callback);
-			set_audio_sample_batch_callback(audio_sample_batch_callback);
-			if(aheadcount<1)
-				doRunAhead = 0;
-			else
-				aheadcount--;
-		}
-		else {
+		retro_video_refresh_t saved_video = video_refresh_callback;
+		retro_audio_sample_t saved_audio = audio_sample_callback;
+		retro_audio_sample_batch_t saved_batch = audio_sample_batch_callback;
+		retro_input_state_t saved_input = input_state_callback;
+
+		core.serialize(base_state, max_state_size);
+
+		set_video_refresh_callback(fakeVideoCall);
+		set_audio_sample_callback(fakeAudioCall);
+		set_audio_sample_batch_callback(fakeBatchCall);
+		set_input_state_callback(fake_input_callback);
+
+		core.unserialize(base_state, max_state_size); 
+
+		for (int i = 0; i < runAheadFrames; i++) {
 			core.run();
 		}
-		
+
+		set_video_refresh_callback(saved_video);
+		set_audio_sample_callback(saved_audio);
+		set_audio_sample_batch_callback(saved_batch);
+		set_input_state_callback(saved_input);
+
+		core.unserialize(base_state, max_state_size);
+		core.run();  // Visible frame, synced to real time via your FPS limiter
+
 		limitFF();
 		trackFPS();
-		
+
 
 		if (has_pending_opt_change) {
 			has_pending_opt_change = 0;
