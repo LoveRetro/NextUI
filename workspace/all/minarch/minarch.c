@@ -80,6 +80,11 @@ static int DEVICE_PITCH = 0; // FIXED_PITCH;
 
 GFX_Renderer renderer;
 
+size_t max_state_size = 0;
+uint8_t *base_state;
+uint8_t *runahead_state;
+int doRunAhead = 0;
+
 ///////////////////////////////////////
 
 static struct Core {
@@ -3108,15 +3113,21 @@ static void input_poll_callback(void) {
 				case BTN_DPAD_LEFT: 	btn = BTN_LEFT; break;
 				case BTN_DPAD_RIGHT: 	btn = BTN_RIGHT; break;
 			}
+			
 		}
 		if (PAD_isPressed(btn) && (!mapping->mod || PAD_isPressed(BTN_MENU))) {
 			buttons |= 1 << mapping->retro;
 			if (mapping->mod) ignore_menu = 1;
 		}
+		if(PAD_anyJustPressed()) {
+			doRunAhead = 1;
+		} 
 		//  && !PWR_ignoreSettingInput(btn, show_setting)
 	}
 	
 	// if (buttons) LOG_info("buttons: %i\n", buttons);
+	
+	
 }
 static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) {
 	if (port==0 && device==RETRO_DEVICE_JOYPAD && index==0) {
@@ -4411,9 +4422,12 @@ void applyCircleReveal(uint32_t **data, size_t pitch, unsigned width, unsigned h
     *data = temp_buffer;
 }
 
+
+
 static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch) {
 	// return;
 	
+
 	Special_render();
 	
 	// static int tmp_frameskip = 0;
@@ -4513,7 +4527,7 @@ static Uint32* rgbaData = NULL;
 static size_t rgbaDataSize = 0;
 
 static void video_refresh_callback(const void* data, unsigned width, unsigned height, size_t pitch) {
-
+		
 	// I need to check quit here because sometimes quit is true but callback is still called by the core after and it still runs one more frame and it looks ugly :D
 	if(!quit) {
 		if (!rgbaData || rgbaDataSize != width * height) {
@@ -4602,7 +4616,8 @@ static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) {
 	}
 	else return frames;
 	// return frames;
-};
+} 
+
 
 ///////////////////////////////////////
 
@@ -4611,6 +4626,11 @@ void Core_getName(char* in_name, char* out_name) {
 	char* tmp = strrchr(out_name, '_');
 	tmp[0] = '\0';
 }
+
+	void (*set_video_refresh_callback)(retro_video_refresh_t);
+	void (*set_audio_sample_callback)(retro_audio_sample_t);
+	void (*set_audio_sample_batch_callback)(retro_audio_sample_batch_t);
+
 void Core_open(const char* core_path, const char* tag_name) {
 	LOG_info("Core_open\n");
 	core.handle = dlopen(core_path, RTLD_LAZY);
@@ -4637,9 +4657,7 @@ void Core_open(const char* core_path, const char* tag_name) {
 	core.get_memory_size = dlsym(core.handle, "retro_get_memory_size");
 	
 	void (*set_environment_callback)(retro_environment_t);
-	void (*set_video_refresh_callback)(retro_video_refresh_t);
-	void (*set_audio_sample_callback)(retro_audio_sample_t);
-	void (*set_audio_sample_batch_callback)(retro_audio_sample_batch_t);
+
 	void (*set_input_poll_callback)(retro_input_poll_t);
 	void (*set_input_state_callback)(retro_input_state_t);
 	
@@ -6770,6 +6788,15 @@ static void limitFF(void) {
 }
 
 
+static void fakecall(int16_t left, int16_t right) {
+
+}
+static size_t fakecalls(const int16_t *data, size_t frames) { 
+
+}
+static void fakecallv(const void *data, unsigned width, unsigned height, size_t pitch) {
+}
+
 int main(int argc , char* argv[]) {
 	LOG_info("MinArch\n");
 	pthread_t cpucheckthread;
@@ -6876,9 +6903,31 @@ int main(int argc , char* argv[]) {
 	// release config when all is loaded
 	Config_free();
 	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
+
+	max_state_size = core.serialize_size();
+	base_state = malloc(max_state_size);
+	runahead_state = malloc(max_state_size);
+
 	while (!quit) {
 		GFX_startFrame();
-	
+		if(doRunAhead) {
+			core.serialize(base_state, max_state_size);
+
+			// Run ahead one or more frames
+			set_video_refresh_callback(fakecallv);
+			set_audio_sample_callback(fakecall);
+			set_audio_sample_batch_callback(fakecalls);
+			for (int i = 0; i < 2; i++) {
+				core.run();
+			}
+			set_video_refresh_callback(video_refresh_callback);
+			set_audio_sample_callback(audio_sample_callback);
+			set_audio_sample_batch_callback(audio_sample_batch_callback);
+			core.serialize(runahead_state, max_state_size);
+
+			core.unserialize(runahead_state, max_state_size);
+			doRunAhead = 0;
+		}
 		core.run();
 		limitFF();
 		trackFPS();
