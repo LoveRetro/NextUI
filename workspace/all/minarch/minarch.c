@@ -6788,14 +6788,9 @@ static void limitFF(void) {
 }
 
 
-static void fakecall(int16_t left, int16_t right) {
-
-}
-static size_t fakecalls(const int16_t *data, size_t frames) { 
-
-}
-static void fakecallv(const void *data, unsigned width, unsigned height, size_t pitch) {
-}
+static void fakeAudioCall(int16_t left, int16_t right) {}
+static size_t fakeBatchCall(const int16_t *data, size_t frames) {}
+static void fakeVideoCall(const void *data, unsigned width, unsigned height, size_t pitch) {}
 
 int main(int argc , char* argv[]) {
 	LOG_info("MinArch\n");
@@ -6914,9 +6909,9 @@ int main(int argc , char* argv[]) {
 			
 			core.serialize(base_state, max_state_size);
 			// Run ahead one or more frames
-			set_video_refresh_callback(fakecallv);
-			set_audio_sample_callback(fakecall);
-			set_audio_sample_batch_callback(fakecalls);
+			set_video_refresh_callback(fakeVideoCall);
+			set_audio_sample_callback(fakeAudioCall);
+			set_audio_sample_batch_callback(fakeBatchCall);
 			for (int i = 0; i < 1; i++) {
 				core.run();
 			}
@@ -6926,10 +6921,10 @@ int main(int argc , char* argv[]) {
 			core.run();
 
 			// restore base state and make it run 1 frame to continue
-			set_video_refresh_callback(fakecallv);
-			set_audio_sample_callback(fakecall);
-			set_audio_sample_batch_callback(fakecalls);
 			core.unserialize(base_state, max_state_size);
+			set_video_refresh_callback(fakeVideoCall);
+			set_audio_sample_callback(fakeAudioCall);
+			set_audio_sample_batch_callback(fakeBatchCall);
 			core.run();
 			set_video_refresh_callback(video_refresh_callback);
 			set_audio_sample_callback(audio_sample_callback);
