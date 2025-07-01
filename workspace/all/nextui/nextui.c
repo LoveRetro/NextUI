@@ -1311,7 +1311,7 @@ static bool isDirectSubdirectory(const Directory* parent, const Directory* child
         segment[segment_len] = '\0';
 
         // Count level only if it's not PLATFORM
-        if (strcmp(segment, PLATFORM) != 0) {
+        if (strcmp(segment, PLATFORM) != 0 && strcmp(segment, "Roms") != 0) {
             levels++;
         }
 
