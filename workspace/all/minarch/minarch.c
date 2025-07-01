@@ -6911,24 +6911,34 @@ int main(int argc , char* argv[]) {
 	while (!quit) {
 		GFX_startFrame();
 		if(doRunAhead) {
+			
 			core.serialize(base_state, max_state_size);
-
 			// Run ahead one or more frames
 			set_video_refresh_callback(fakecallv);
 			set_audio_sample_callback(fakecall);
 			set_audio_sample_batch_callback(fakecalls);
-			for (int i = 0; i < 2; i++) {
+			for (int i = 0; i < 1; i++) {
 				core.run();
 			}
 			set_video_refresh_callback(video_refresh_callback);
 			set_audio_sample_callback(audio_sample_callback);
 			set_audio_sample_batch_callback(audio_sample_batch_callback);
-			core.serialize(runahead_state, max_state_size);
+			core.run();
 
-			core.unserialize(runahead_state, max_state_size);
+			// restore base state and make it run 1 frame to continue
+			set_video_refresh_callback(fakecallv);
+			set_audio_sample_callback(fakecall);
+			set_audio_sample_batch_callback(fakecalls);
+			core.unserialize(base_state, max_state_size);
+			core.run();
+			set_video_refresh_callback(video_refresh_callback);
+			set_audio_sample_callback(audio_sample_callback);
+			set_audio_sample_batch_callback(audio_sample_batch_callback);
 			doRunAhead = 0;
+		} else {
+			core.run();
 		}
-		core.run();
+		
 		limitFF();
 		trackFPS();
 		
