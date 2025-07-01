@@ -6905,13 +6905,13 @@ int main(int argc , char* argv[]) {
 
 	while (!quit) {
 		GFX_startFrame();
-		if(doRunAhead) {
-			
-			// TODO
-			// this is runahead basically flipping an x avanced frames in future so it feels like it reacts more responsive
-			// currently it has performance issues
-			// serialize and unserialize are too cpu intensive it seems and cause slow downs, need to move it to seperate thread somehow
 
+		// TODO
+		// this is runahead basically flipping an x avanced frames in future so it feels like it reacts more responsive
+		// currently it has performance issues
+		// serialize and unserialize are too cpu intensive it seems and cause slow downs, need to move it to seperate thread somehow
+
+		if(doRunAhead == 1) {
 			core.serialize(base_state, max_state_size);
 			// Run ahead one or more frames
 			set_video_refresh_callback(fakeVideoCall);
@@ -6924,8 +6924,10 @@ int main(int argc , char* argv[]) {
 			set_audio_sample_callback(audio_sample_callback);
 			set_audio_sample_batch_callback(audio_sample_batch_callback);
 			core.run();
-
-			// restore base state and make it run 1 frame to continue
+			doRunAhead = 2;
+	
+		} else if(doRunAhead == 2) {
+			// restore base state and make it run 1 frame like normally
 			core.unserialize(base_state, max_state_size);
 			set_video_refresh_callback(fakeVideoCall);
 			set_audio_sample_callback(fakeAudioCall);
@@ -6934,8 +6936,10 @@ int main(int argc , char* argv[]) {
 			set_video_refresh_callback(video_refresh_callback);
 			set_audio_sample_callback(audio_sample_callback);
 			set_audio_sample_batch_callback(audio_sample_batch_callback);
+			core.run();
 			doRunAhead = 0;
-		} else {
+		}
+		else {
 			core.run();
 		}
 		
