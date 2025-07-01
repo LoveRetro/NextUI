@@ -6910,7 +6910,7 @@ int main(int argc , char* argv[]) {
 		// this is runahead basically flipping an x avanced frames in future so it feels like it reacts more responsive
 		// currently it has performance issues
 		// serialize and unserialize are too cpu intensive it seems and cause slow downs, need to move it to seperate thread somehow
-
+		static int aheadcount = 0;
 		if(doRunAhead == 1) {
 			core.serialize(base_state, max_state_size);
 			// Run ahead one or more frames
@@ -6919,16 +6919,18 @@ int main(int argc , char* argv[]) {
 			set_audio_sample_batch_callback(fakeBatchCall);
 			for (int i = 0; i < 1; i++) {
 				core.run();
+				aheadcount++;
 			}
 			set_video_refresh_callback(video_refresh_callback);
 			set_audio_sample_callback(audio_sample_callback);
 			set_audio_sample_batch_callback(audio_sample_batch_callback);
 			core.run();
+			aheadcount++;
 			doRunAhead = 2;
-	
-		} else if(doRunAhead == 2) {
 			// restore base state and make it run 1 frame like normally
 			core.unserialize(base_state, max_state_size);
+		} else if(doRunAhead == 2) {
+			// first catchup
 			set_video_refresh_callback(fakeVideoCall);
 			set_audio_sample_callback(fakeAudioCall);
 			set_audio_sample_batch_callback(fakeBatchCall);
@@ -6936,8 +6938,10 @@ int main(int argc , char* argv[]) {
 			set_video_refresh_callback(video_refresh_callback);
 			set_audio_sample_callback(audio_sample_callback);
 			set_audio_sample_batch_callback(audio_sample_batch_callback);
-			core.run();
-			doRunAhead = 0;
+			if(aheadcount<1)
+				doRunAhead = 0;
+			else
+				aheadcount--;
 		}
 		else {
 			core.run();
