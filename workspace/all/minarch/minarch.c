@@ -3120,6 +3120,9 @@ static void input_poll_callback(void) {
 			buttons |= 1 << mapping->retro;
 			if (mapping->mod) ignore_menu = 1;
 		}
+		if(PAD_anyJustPressed()) {
+			doRunAhead = 1;
+		} 
  		runahead_buttons = buttons; 
 		//  && !PWR_ignoreSettingInput(btn, show_setting)
 	}
@@ -6921,31 +6924,33 @@ int main(int argc , char* argv[]) {
 	int runAheadFrames = 1;  // How many frames to run ahead
 	while (!quit) {
 		GFX_startFrame();
+		if(doRunAhead) {
+			retro_video_refresh_t saved_video = video_refresh_callback;
+			retro_audio_sample_t saved_audio = audio_sample_callback;
+			retro_audio_sample_batch_t saved_batch = audio_sample_batch_callback;
+			retro_input_state_t saved_input = input_state_callback;
 
-		retro_video_refresh_t saved_video = video_refresh_callback;
-		retro_audio_sample_t saved_audio = audio_sample_callback;
-		retro_audio_sample_batch_t saved_batch = audio_sample_batch_callback;
-		retro_input_state_t saved_input = input_state_callback;
+			core.serialize(base_state, max_state_size);
 
-		core.serialize(base_state, max_state_size);
+			set_video_refresh_callback(fakeVideoCall);
+			set_audio_sample_callback(fakeAudioCall);
+			set_audio_sample_batch_callback(fakeBatchCall);
+			set_input_state_callback(fake_input_callback);
 
-		set_video_refresh_callback(fakeVideoCall);
-		set_audio_sample_callback(fakeAudioCall);
-		set_audio_sample_batch_callback(fakeBatchCall);
-		set_input_state_callback(fake_input_callback);
+			core.unserialize(base_state, max_state_size); 
 
-		core.unserialize(base_state, max_state_size); 
+			for (int i = 0; i < runAheadFrames; i++) {
+				core.run();
+			}
 
-		for (int i = 0; i < runAheadFrames; i++) {
-			core.run();
+			set_video_refresh_callback(saved_video);
+			set_audio_sample_callback(saved_audio);
+			set_audio_sample_batch_callback(saved_batch);
+			set_input_state_callback(saved_input);
+
+			core.unserialize(base_state, max_state_size);
+			doRunAhead = 0;
 		}
-
-		set_video_refresh_callback(saved_video);
-		set_audio_sample_callback(saved_audio);
-		set_audio_sample_batch_callback(saved_batch);
-		set_input_state_callback(saved_input);
-
-		core.unserialize(base_state, max_state_size);
 		core.run();  // Visible frame, synced to real time via your FPS limiter
 
 		limitFF();
