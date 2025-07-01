@@ -474,6 +474,8 @@ SDL_Surface* PLAT_initVideo(void) {
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1); // ensure double buffering only
+	SDL_GL_SetSwapInterval(1); // ensure double buffering only
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"1");
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengl");
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");
