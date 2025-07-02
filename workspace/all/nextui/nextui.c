@@ -1369,6 +1369,8 @@ Array* pathToStack(const char* path) {
 		// Skip PLATFORM folder in hierarchy
 		if (strcmp(segment, PLATFORM) != 0) {
 			Directory* dir = Directory_new(temp_path, 0);
+			dir->start = 0;
+			dir->end = (dir->entries->count < MAIN_ROW_COUNT) ? dir->entries->count : MAIN_ROW_COUNT;
 			Array_push(array, dir);
 		}
 
