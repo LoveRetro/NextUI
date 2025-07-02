@@ -2204,7 +2204,7 @@ int PLAT_pickSampleRate(int requested, int max) {
 }
 
 char* PLAT_getModel(void) {
-	return "macOS";
+	return "Desktop";
 }
 
 void PLAT_getOsVersionInfo(char *output_str, size_t max_len)

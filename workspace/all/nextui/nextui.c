@@ -1966,8 +1966,13 @@ int animWorker(void* unused) {
         AnimTask* task = node->task;
 		finishedTask* finaltask = (finishedTask*)malloc(sizeof(finishedTask));
 		int total_frames = task->frames;
-		if(task->targetY > task->startY + SCALE1(PILL_SIZE) || task->targetY < task->startY - SCALE1(PILL_SIZE)) {
-			total_frames = 0;
+		// This somehow leads to the pill not rendering correctly when wrapping the list (last element to first, or reverse).
+		// TODO: Figure out why this is here. Ideally we shouldnt refer to specific platforms in here, but the commit message doesnt
+		// help all that much and comparing magic numbers also isnt that descriptive on its own.
+		if(strcmp("Desktop", PLAT_getModel()) != 0) {
+			if(task->targetY > task->startY + SCALE1(PILL_SIZE) || task->targetY < task->startY - SCALE1(PILL_SIZE)) {
+				total_frames = 0;
+			}
 		}
 			
 		for (int frame = 0; frame <= total_frames; frame++) {
