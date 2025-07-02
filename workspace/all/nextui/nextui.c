@@ -1797,7 +1797,7 @@ int BGLoadWorker(void* unused) {
         if (!taskBGQueueHead) taskBGQueueTail = NULL;
         SDL_UnlockMutex(bgqueueMutex);
 		// give processor lil space in between queue items for other shit
-		SDL_Delay(100);
+		//SDL_Delay(100);
         LoadBackgroundTask* task = node->task;
         free(node);
 
@@ -1833,7 +1833,7 @@ int ThumbLoadWorker(void* unused) {
         if (!taskThumbQueueHead) taskThumbQueueTail = NULL;
         SDL_UnlockMutex(thumbqueueMutex);
 		// give processor lil space in between queue items for other shit
-		SDL_Delay(100);
+		//SDL_Delay(100);
         LoadBackgroundTask* task = node->task;
         free(node);
 
