@@ -1279,9 +1279,8 @@ static void openRom(char* path, char* last) {
 	queueNext(cmd);
 }
 
-static bool isDirectSubdirectory(const Directory* parent, const Directory* child) {
+static bool isDirectSubdirectory(const Directory* parent, const char* child_path) {
     const char* parent_path = parent->path;
-    const char* child_path = child->path;
 
     size_t parent_len = strlen(parent_path);
     size_t child_len = strlen(child_path);
@@ -1405,11 +1404,9 @@ static void openDirectory(char* path, int auto_launch) {
 	if(top && strcmp(top->path, path) == 0)
 		return;
 
-	// If this is a direct subdirectory of top, push it on top of the stack
+	// If this path is a direct subdirectory of top, push it on top of the stack
 	// If it isnt, we need to recreate the stack to keep navigation consistent
-	Directory* opened = Directory_new(path, false);
-
-	if(!top || isDirectSubdirectory(top, opened)) {
+	if(!top || isDirectSubdirectory(top, path)) {
 		int selected = 0;
 		int start = 0;
 		int end = 0;
@@ -1421,24 +1418,21 @@ static void openDirectory(char* path, int auto_launch) {
 			}
 		}
 
-		opened->selected = selected;
-		top = opened;
+		top = Directory_new(path, selected);
 		top->start = start;
 		top->end = end ? end : ((top->entries->count<MAIN_ROW_COUNT) ? top->entries->count : MAIN_ROW_COUNT);
 	
 		Array_push(stack, top);
 	}
 	else {
-		// we could theoretically simulate selected/start/end here, but for now just leave them alone
-
 		// construct a fresh stack by walking upwards until SDCARD_ROOT
 		DirectoryArray_free(stack);
 
 		stack = pathToStack(path);
 		top = stack->items[stack->count - 1];
-		Directory_free(opened);
 	}
 }
+
 static void closeDirectory(void) {
 	restore_selected = top->selected;
 	restore_start = top->start;
@@ -2181,14 +2175,17 @@ int main (int argc, char *argv[]) {
 			else if (PAD_justReleased(BTN_A)) {
 				Entry *selected = qm_row == 0 ? quick->items[qm_col] : quickActions->items[qm_col];
 				if(selected->type != ENTRY_DIP) {
-					// still todo, not quite working yet
-					//currentScreen = SCREEN_GAMELIST;
-					//total = top->entries->count;
-					//if (total>0) readyResume(top->entries->items[top->selected]);
+					currentScreen = SCREEN_GAMELIST;
+					total = top->entries->count;
+					if (total>0) readyResume(top->entries->items[top->selected]);
+					// prevent restoring list state, game list screen currently isnt our nav origin
+					restore_depth = -1;
+					restore_relative = -1;
+					restore_selected = 0;
+					restore_start = 0;
+					restore_end = 0;
 				}
-				else {
-					Entry_open(selected);
-				}
+				Entry_open(selected);
 				dirty = 1;
 			}
 			else if (PAD_justPressed(BTN_RIGHT)) {
