@@ -2114,6 +2114,7 @@ int main (int argc, char *argv[]) {
 	int qm_col = 0;
 	int qm_slot = 0;
 	int qm_shift = 0;
+	int qm_slots = QUICK_SWITCHER_COUNT > quick->count ? quick->count : QUICK_SWITCHER_COUNT;
 	// LOG_info("- menu init: %lu\n", SDL_GetTicks() - main_begin);
 
 	int lastScreen = SCREEN_OFF;
@@ -2206,7 +2207,7 @@ int main (int argc, char *argv[]) {
 				dirty = 1;
 			}
 			else if (PAD_justPressed(BTN_RIGHT)) {
-				if(qm_row == 0 && qm_total > QUICK_SWITCHER_COUNT) {
+				if(qm_row == 0 && qm_total > qm_slots) {
 					qm_col++;
 					if(qm_col >= qm_total) {
 						qm_col = 0;
@@ -2215,8 +2216,8 @@ int main (int argc, char *argv[]) {
 					}
 					else {
 						qm_slot++;
-						if(qm_slot >= QUICK_SWITCHER_COUNT) {
-							qm_slot = QUICK_SWITCHER_COUNT - 1;
+						if(qm_slot >= qm_slots) {
+							qm_slot = qm_slots - 1;
 							qm_shift++;
 						}
 					}
@@ -2230,12 +2231,12 @@ int main (int argc, char *argv[]) {
 				dirty = 1;
 			}
 			else if (PAD_justPressed(BTN_LEFT)) {
-				if(qm_row == 0  && qm_total > QUICK_SWITCHER_COUNT) {
+				if(qm_row == 0  && qm_total > qm_slots) {
 					qm_col -= 1;
 					if(qm_col < 0) {
 						qm_col = qm_total - 1;
-						qm_shift = qm_total - QUICK_SWITCHER_COUNT;
-						qm_slot = QUICK_SWITCHER_COUNT - 1;
+						qm_shift = qm_total - qm_slots;
+						qm_slot = qm_slots - 1;
 					}
 					else {
 						qm_slot--;
@@ -2518,7 +2519,7 @@ int main (int argc, char *argv[]) {
 					int item_space_x = screen->w - SCALE1(PADDING + MENU_MARGIN_X + MENU_MARGIN_X + PADDING);
 					// extra left margin for the first item in order to properly center all of them in the 
 					// available space
-					int item_inset_x = (item_space_x - SCALE1(QUICK_SWITCHER_COUNT * MENU_ITEM_SIZE + (QUICK_SWITCHER_COUNT - 1) * MENU_ITEM_MARGIN)) / 2;
+					int item_inset_x = (item_space_x - SCALE1(qm_slots * MENU_ITEM_SIZE + (qm_slots - 1) * MENU_ITEM_MARGIN)) / 2;
 
 					// primary
 					ox = SCALE1(PADDING + MENU_MARGIN_X) + item_inset_x;
