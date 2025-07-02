@@ -1326,14 +1326,14 @@ Array* pathToStack(const char* path) {
 
 	if (!path || strlen(path) == 0) return array;
 
-	// Ensure path starts with SDCARD_PATH
 	if (!prefixMatch(SDCARD_PATH, path)) return array;
 
-	// Always include the root (SDCARD_PATH) directory
+	// Always include root directory
 	Directory* root_dir = Directory_new(SDCARD_PATH, 0);
+	root_dir->start = 0;
+	root_dir->end = (root_dir->entries->count < MAIN_ROW_COUNT) ? root_dir->entries->count : MAIN_ROW_COUNT;
 	Array_push(array, root_dir);
 
-	// If path is exactly SDCARD_PATH, return now
 	if (exactMatch(path, SDCARD_PATH)) return array;
 
 	char temp_path[PATH_MAX];
@@ -1344,12 +1344,10 @@ Array* pathToStack(const char* path) {
 	if (*cursor == '/') cursor++;
 
 	while (*cursor) {
-		// Find next slash
 		const char* next = strchr(cursor, '/');
 		size_t segment_len = next ? (size_t)(next - cursor) : strlen(cursor);
 		if (segment_len == 0 || segment_len >= PATH_MAX) break;
 
-		// Copy segment to compare
 		char segment[PATH_MAX];
 		strncpy(segment, cursor, segment_len);
 		segment[segment_len] = '\0';
@@ -1361,13 +1359,26 @@ Array* pathToStack(const char* path) {
 			temp_path[current_len] = '\0';
 		}
 
-		// Append segment to temp_path
+		// Append segment
 		if (current_len + segment_len >= PATH_MAX) break;
 		strcat(temp_path, segment);
 		current_len += segment_len;
 
-		// Skip PLATFORM folder in hierarchy
-		if (strcmp(segment, PLATFORM) != 0) {
+		if (strcmp(segment, PLATFORM) == 0) {
+			// Merge with previous directory
+			if (array->count > 0) {
+				// Remove the previous directory
+				Directory* last = (Directory*)array->items[array->count - 1];
+				Array_pop(array);
+				Directory_free(last); // assuming you have a Directory_free
+
+				// Replace with updated one using combined path
+				Directory* merged = Directory_new(temp_path, 0);
+				merged->start = 0;
+				merged->end = (merged->entries->count < MAIN_ROW_COUNT) ? merged->entries->count : MAIN_ROW_COUNT;
+				Array_push(array, merged);
+			}
+		} else {
 			Directory* dir = Directory_new(temp_path, 0);
 			dir->start = 0;
 			dir->end = (dir->entries->count < MAIN_ROW_COUNT) ? dir->entries->count : MAIN_ROW_COUNT;
@@ -1380,7 +1391,6 @@ Array* pathToStack(const char* path) {
 
 	return array;
 }
-
 
 static void openDirectory(char* path, int auto_launch) {
 	char auto_path[256];
