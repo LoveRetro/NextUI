@@ -351,6 +351,7 @@ static void Directory_index(Directory* self) {
 }
 
 static Array* getRoot(void);
+static Array* getRoms(void);
 static Array* getRecents(void);
 static Array* getCollection(char* path);
 static Array* getDiscs(char* path);
@@ -368,6 +369,9 @@ static Directory* Directory_new(char* path, int selected) {
 	}
 	else if (exactMatch(path, FAUX_RECENT_PATH)) {
 		self->entries = getRecents();
+	}
+	else if (exactMatch(path, ROMS_PATH)) {
+		self->entries = getRoms();
 	}
 	else if (!exactMatch(path, COLLECTIONS_PATH) && prefixMatch(COLLECTIONS_PATH, path) && suffixMatch(".txt", path)) {
 		self->entries = getCollection(path);
