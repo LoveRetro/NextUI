@@ -2474,8 +2474,10 @@ int main (int argc, char *argv[]) {
 
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
 			if (currentScreen == SCREEN_QUICKMENU) {
-				if(lastScreen != SCREEN_QUICKMENU)
+				if(lastScreen != SCREEN_QUICKMENU) {
 					GFX_clearLayers(LAYER_BACKGROUND);
+					GFX_clearLayers(LAYER_THUMBNAIL);
+				}
 
 				Entry *current = qm_row == 0 ? quick->items[qm_col] : quickActions->items[qm_col];
 				char newBgPath[MAX_PATH];
