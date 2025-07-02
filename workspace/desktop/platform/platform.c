@@ -2181,7 +2181,7 @@ void PLAT_enableBacklight(int enable) {
 	// buh
 }
 
-void PLAT_powerOff(void) {
+void PLAT_powerOff(int reboot) {
 	SND_quit();
 	VIB_quit();
 	PWR_quit();
@@ -2204,7 +2204,7 @@ int PLAT_pickSampleRate(int requested, int max) {
 }
 
 char* PLAT_getModel(void) {
-	return "macOS";
+	return "Desktop";
 }
 
 void PLAT_getOsVersionInfo(char *output_str, size_t max_len)

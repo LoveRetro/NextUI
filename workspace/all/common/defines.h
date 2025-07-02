@@ -64,6 +64,10 @@
 #define MAIN_ROW_COUNT 6 // FIXED_HEIGHT / (PILL_SIZE * FIXED_SCALE) - 2 (floor and subtract 1 if not an integer)
 #endif
 
+#ifndef QUICK_SWITCHER_COUNT
+#define QUICK_SWITCHER_COUNT 3
+#endif
+
 #ifndef PADDING
 #define PADDING 10 // PILL_SIZE / 3 (or non-integer part of the previous calculatiom divided by three)
 #endif

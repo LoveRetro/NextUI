@@ -511,7 +511,7 @@ void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
             int w, h;
             const auto description = cur->getDesc();
             GFX_sizeText(font.tiny, description.c_str(), SCALE1(FONT_SMALL), &w, &h);
-            GFX_blitTextCPP(font.tiny, description.c_str(), SCALE1(FONT_SMALL), COLOR_WHITE, surface, {(dst.x + dst.w - w) / 2, dst.y + dst.h - h, w, h});
+            GFX_blitTextCPP(font.tiny, description.c_str(), SCALE1(FONT_SMALL), uintToColour(THEME_COLOR4_255), surface, {(dst.x + dst.w - w) / 2, dst.y + dst.h - h, w, h});
         }
     }
 }

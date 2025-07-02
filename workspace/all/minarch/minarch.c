@@ -5381,7 +5381,7 @@ static int OptionSaveChanges_openMenu(MenuList* list, int i) {
 
 static int OptionQuicksave_onConfirm(MenuList* list, int i) {
 	Menu_beforeSleep();
-	PWR_powerOff();
+	PWR_powerOff(0);
 }
 
 static int OptionCheats_optionChanged(MenuList* list, int i) {
@@ -6670,7 +6670,7 @@ static void Menu_loop(void) {
 		sprintf(act, "gametimectl.elf start '%s' &", replaceString2(game.path, "'", "'\\''"));
 		system(act);
 	}
-	else if (exists(NOUI_PATH)) PWR_powerOff(); // TODO: won't work with threaded core, only check this once per launch
+	else if (exists(NOUI_PATH)) PWR_powerOff(0); // TODO: won't work with threaded core, only check this once per launch
 	
 
 	SDL_FreeSurface(backing);

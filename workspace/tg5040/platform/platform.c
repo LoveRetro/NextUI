@@ -2282,7 +2282,7 @@ void PLAT_enableBacklight(int enable) {
 	}
 }
 
-void PLAT_powerOff(void) {
+void PLAT_powerOff(int reboot) {
 	if (CFG_getHaptics()) {
 		VIB_singlePulse(VIB_bootStrength, VIB_bootDuration_ms);
 	}
@@ -2297,7 +2297,10 @@ void PLAT_powerOff(void) {
 	GFX_quit();
 
 	system("cat /dev/zero > /dev/fb0 2>/dev/null");
-	touch("/tmp/poweroff");
+	if(reboot > 0)
+		touch("/tmp/reboot");
+	else
+		touch("/tmp/poweroff");
 	sync();
 	exit(0);
 }
@@ -3105,7 +3108,11 @@ bool PLAT_wifiEnabled() {
 #define MAX_CONNECTION_ATTEMPTS 5
 
 void PLAT_wifiEnable(bool on) {
-	if(on) {
+	if(wifi.enabled == on)
+		return; 
+		
+	if (on)
+	{
 		LOG_info("turning wifi on...\n");
 		
 		// This shouldnt be needed, but we cant really rely on nobody else messing with this stuff. 
