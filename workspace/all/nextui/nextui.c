@@ -2114,7 +2114,6 @@ int main (int argc, char *argv[]) {
 	int qm_col = 0;
 	int qm_slot = 0;
 	int qm_shift = 0;
-#define QM_SLOTS 3
 	// LOG_info("- menu init: %lu\n", SDL_GetTicks() - main_begin);
 
 	int lastScreen = SCREEN_OFF;
@@ -2207,7 +2206,7 @@ int main (int argc, char *argv[]) {
 				dirty = 1;
 			}
 			else if (PAD_justPressed(BTN_RIGHT)) {
-				if(qm_row == 0 && qm_total > QM_SLOTS) {
+				if(qm_row == 0 && qm_total > QUICK_SWITCHER_COUNT) {
 					qm_col++;
 					if(qm_col >= qm_total) {
 						qm_col = 0;
@@ -2216,8 +2215,8 @@ int main (int argc, char *argv[]) {
 					}
 					else {
 						qm_slot++;
-						if(qm_slot >= QM_SLOTS) {
-							qm_slot = QM_SLOTS - 1;
+						if(qm_slot >= QUICK_SWITCHER_COUNT) {
+							qm_slot = QUICK_SWITCHER_COUNT - 1;
 							qm_shift++;
 						}
 					}
@@ -2231,12 +2230,12 @@ int main (int argc, char *argv[]) {
 				dirty = 1;
 			}
 			else if (PAD_justPressed(BTN_LEFT)) {
-				if(qm_row == 0  && qm_total > QM_SLOTS) {
+				if(qm_row == 0  && qm_total > QUICK_SWITCHER_COUNT) {
 					qm_col -= 1;
 					if(qm_col < 0) {
 						qm_col = qm_total - 1;
-						qm_shift = qm_total - QM_SLOTS;
-						qm_slot = QM_SLOTS - 1;
+						qm_shift = qm_total - QUICK_SWITCHER_COUNT;
+						qm_slot = QUICK_SWITCHER_COUNT - 1;
 					}
 					else {
 						qm_slot--;
@@ -2499,19 +2498,31 @@ int main (int argc, char *argv[]) {
 				GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
 
 				if(CFG_getShowQuickswitcherUI()) {
+					#define MENU_ITEM_SIZE 72 // item size, top line
 					#define MENU_MARGIN_Y 32 // space between main UI elements and quick menu
 					#define MENU_MARGIN_X 40 // space between main UI elements and quick menu
 					#define MENU_ITEM_MARGIN 18 // space between items, top line
 					#define MENU_TOGGLE_MARGIN 8 // space between items, bottom line
 					#define MENU_LINE_MARGIN 8 // space between top and bottom line
 
-					int item_size = screen->h - SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + // top pill area
+					// this is flexible, not sure I like it at smaller scales than 3 though
+					//int item_size = screen->h - SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + // top pill area
+					//	MENU_MARGIN_Y + MENU_LINE_MARGIN + PILL_SIZE + MENU_MARGIN_Y + // our own area
+					//	BUTTON_MARGIN + PILL_SIZE + PADDING); // bottom pill area
+
+					int item_space_y = screen->h - SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + // top pill area
 						MENU_MARGIN_Y + MENU_LINE_MARGIN + PILL_SIZE + MENU_MARGIN_Y + // our own area
-						BUTTON_MARGIN + PILL_SIZE + PADDING); // bottom pill area
+						BUTTON_MARGIN + PILL_SIZE + PADDING);
+					int item_size = SCALE1(MENU_ITEM_SIZE);
+					int item_extra_y = item_space_y - item_size;
+					int item_space_x = screen->w - SCALE1(PADDING + MENU_MARGIN_X + MENU_MARGIN_X + PADDING);
+					// extra left margin for the first item in order to properly center all of them in the 
+					// available space
+					int item_inset_x = (item_space_x - SCALE1(QUICK_SWITCHER_COUNT * MENU_ITEM_SIZE + (QUICK_SWITCHER_COUNT - 1) * MENU_ITEM_MARGIN)) / 2;
 
 					// primary
-					ox = SCALE1(PADDING + MENU_MARGIN_X);
-					oy = SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + MENU_MARGIN_Y);
+					ox = SCALE1(PADDING + MENU_MARGIN_X) + item_inset_x;
+					oy = SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + MENU_MARGIN_Y) + item_extra_y / 2;
 					// just to keep selection visible.
 					// every display should be able to fit three items, we shift horizontally to accomodate.
 					ox -= qm_shift * (item_size + SCALE1(MENU_ITEM_MARGIN));
@@ -2563,7 +2574,7 @@ int main (int argc, char *argv[]) {
 					// secondary
 					ox = SCALE1(PADDING + MENU_MARGIN_X);
 					ox += (screen->w - SCALE1(PADDING + MENU_MARGIN_X + MENU_MARGIN_X + PADDING) - SCALE1(quickActions->count * PILL_SIZE) - SCALE1((quickActions->count - 1) * MENU_TOGGLE_MARGIN))/2;
-					oy = SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + MENU_MARGIN_Y + MENU_LINE_MARGIN) + item_size;
+					oy = SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + MENU_MARGIN_Y + MENU_LINE_MARGIN) + item_size + item_extra_y / 2;
 					for (int c = 0; c < quickActions->count; c++) {
 						SDL_Rect item_rect = {ox, oy, SCALE1(PILL_SIZE), SCALE1(PILL_SIZE)};
 						Entry *item = quickActions->items[c];

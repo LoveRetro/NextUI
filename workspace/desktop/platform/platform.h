@@ -118,13 +118,15 @@
 #define FIXED_WIDTH		1024
 #define FIXED_HEIGHT	768
 #define MAIN_ROW_COUNT 7
+#define QUICK_SWITCHER_COUNT 3
 #define PADDING 5
 
 // emulate TSP
 //#define FIXED_SCALE 	2
 //#define FIXED_WIDTH		1280
 //#define FIXED_HEIGHT	720
-//#define MAIN_ROW_COUNT 10
+//#define MAIN_ROW_COUNT  10
+//#define QUICK_SWITCHER_COUNT 4
 //#define PADDING 10
 
 #define FIXED_BPP		2
