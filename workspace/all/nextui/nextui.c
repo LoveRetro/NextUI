@@ -574,7 +574,9 @@ static int hasM3u(char* rom_path, char* m3u_path) { // NOTE: rom_path not dir_pa
 static int hasRecents(void) {
 	LOG_info("hasRecents %s\n", RECENT_PATH);
 	int has = 0;
-	
+	RecentArray_free(recents);
+	recents = Array_new();
+
 	Array* parent_paths = Array_new();
 	if (exists(CHANGE_DISC_PATH)) {
 		char sd_path[256];
