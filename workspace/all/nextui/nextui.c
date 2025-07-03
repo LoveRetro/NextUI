@@ -2193,8 +2193,10 @@ int main (int argc, char *argv[]) {
 				if(selected->type != ENTRY_DIP) {
 					currentScreen = SCREEN_GAMELIST;
 					total = top->entries->count;
-					if (total>0) readyResume(top->entries->items[top->selected]);
 					// prevent restoring list state, game list screen currently isnt our nav origin
+					top->selected = 0;
+					top->start = 0;
+					top->end = top->start + MAIN_ROW_COUNT;
 					restore_depth = -1;
 					restore_relative = -1;
 					restore_selected = 0;
