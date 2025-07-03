@@ -2216,6 +2216,10 @@ int PLAT_isOnline(void) {
 	return online;
 }
 
+ConnectionStrength PLAT_connectionStrength(void) {
+	return SIGNAL_STRENGTH_HIGH;
+}
+
 /////////////////////////////////
 // Remove, just for debug
 

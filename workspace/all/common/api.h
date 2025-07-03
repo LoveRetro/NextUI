@@ -623,6 +623,14 @@ int PLAT_pickSampleRate(int requested, int max);
 char* PLAT_getModel(void);
 void PLAT_getOsVersionInfo(char *output_str, size_t max_len);
 int PLAT_isOnline(void);
+typedef enum {
+	SIGNAL_STRENGTH_OFF = -1,
+	SIGNAL_STRENGTH_DISCONNECTED,
+	SIGNAL_STRENGTH_LOW,
+	SIGNAL_STRENGTH_MED,
+	SIGNAL_STRENGTH_HIGH,
+} ConnectionStrength;
+ConnectionStrength PLAT_connectionStrength(void);
 int PLAT_setDateTime(int y, int m, int d, int h, int i, int s);
 
 void PLAT_initLeds(LightSettings *lights);

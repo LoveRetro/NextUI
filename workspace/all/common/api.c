@@ -1443,54 +1443,16 @@ void GFX_assetRect(int asset, SDL_Rect* dst_rect)
 	*dst_rect = asset_rects[asset];
 }
 
-int GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect) {
-	// LOG_info("dst: %p\n", dst);
+void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect) {
 	int x = 0;
 	int y = 0;
 	if (dst_rect) {
 		x = dst_rect->x;
 		y = dst_rect->y;
 	}
-	SDL_Rect rect = asset_rects[ASSET_BATTERY];
-	x += (SCALE1(PILL_SIZE) - (rect.w + FIXED_SCALE)) / 2;
-	y += (SCALE1(PILL_SIZE) - rect.h) / 2;
-	
-	if (pwr.is_charging) {
-		GFX_blitAssetColor(ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR6);
-		GFX_blitAssetColor(ASSET_BATTERY_BOLT, NULL, dst, &(SDL_Rect){x+SCALE1(3),y+SCALE1(2)}, THEME_COLOR6);
-		return rect.w + FIXED_SCALE;
-	}
-	else {
-		int percent = pwr.charge;
-		GFX_blitAssetColor(percent<=10?ASSET_BATTERY_LOW:ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR6);
-		
-		if(CFG_getShowBatteryPercent()) {
-			char percentage[16];
-			sprintf(percentage, "%i", pwr.charge);
-			SDL_Surface *text = TTF_RenderUTF8_Blended(font.micro, percentage, uintToColour(THEME_COLOR6_255));
-			SDL_Rect target = {
-				x + (rect.w - text->w) / 2 + FIXED_SCALE, 
-				y + (rect.h - text->h) / 2 - 1
-			};
-			SDL_BlitSurface(text, NULL, dst, &target);
-			SDL_FreeSurface(text);
-			return asset_rects[ASSET_BATTERY_FILL].w + FIXED_SCALE;
-		}
-		else {
-			rect = asset_rects[ASSET_BATTERY_FILL];
-			SDL_Rect clip = rect;
-			clip.w *= percent;
-			clip.w /= 100;
-			if (clip.w<=0) 
-				return rect.w + FIXED_SCALE;
-			clip.x = rect.w - clip.w;
-			clip.y = 0;
-			
-			GFX_blitAssetColor(percent<=20?ASSET_BATTERY_FILL_LOW:ASSET_BATTERY_FILL, &clip, dst, &(SDL_Rect){x+SCALE1(3)+clip.x,y+SCALE1(2)}, THEME_COLOR6);
-			return rect.w + FIXED_SCALE;
-		}
-	}
+	GFX_blitBatteryAtPosition(dst, x, y);
 }
+
 int GFX_getButtonWidth(char* hint, char* button) {
 	int button_width = 0;
 	int width;
@@ -1594,7 +1556,7 @@ void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_
 	}
 }
 
-static void GFX_blitBatteryAtPosition(SDL_Surface* dst, int x, int y) {
+void GFX_blitBatteryAtPosition(SDL_Surface* dst, int x, int y) {
 	SDL_Rect battery_rect = asset_rects[ASSET_BATTERY];
 	
 	if (pwr.is_charging) {
@@ -1694,7 +1656,8 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 		}
 	}
 	else {
-		int show_wifi = PLAT_isOnline(); // NOOOOO! not every frame!
+		ConnectionStrength strength = PLAT_connectionStrength();
+		int show_wifi = strength > SIGNAL_STRENGTH_OFF;
 		bool show_clock = CFG_getShowClock();
 		SDL_Rect battery_rect = asset_rects[ASSET_BATTERY];
 		
@@ -1753,11 +1716,16 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 			ox += SCALE1(BUTTON_MARGIN);
 			
 			if (show_wifi) {
-				SDL_Rect wifi_rect = asset_rects[ASSET_WIFI];
+                int asset = 
+				strength == SIGNAL_STRENGTH_HIGH ? ASSET_WIFI : 
+				strength == SIGNAL_STRENGTH_MED ? ASSET_WIFI_MED : 
+				strength == SIGNAL_STRENGTH_LOW	? ASSET_WIFI_LOW : 
+					ASSET_WIFI_OFF; // this should use ASSET_WIFI and be greyed out
+			    SDL_Rect wifi_rect = asset_rects[asset];
 				int x = ox;
 				int y = oy + (SCALE1(PILL_SIZE) - wifi_rect.h) / 2;
 				
-				GFX_blitAssetColor(ASSET_WIFI, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR6);
+				GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR6);
 				ox += wifi_rect.w + SCALE1(BUTTON_MARGIN);
 			}
 			

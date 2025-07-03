@@ -216,9 +216,9 @@ void NetworkItem::drawCustomItem(SDL_Surface *surface, const SDL_Rect &dst, cons
 
     // wifi icon
     auto asset =
-        net.rssi > 67 ? ASSET_WIFI :
-        net.rssi > 70 ? ASSET_WIFI_MED
-                      : ASSET_WIFI_LOW;
+        net.rssi >= -60 ? ASSET_WIFI :    // anything above 61
+        net.rssi >= -70 ? ASSET_WIFI_MED  // -61 and below
+                        : ASSET_WIFI_LOW; // -71 and below
     SDL_Rect rect = {0, 0, 12, 12};
     int ix = dst.x + dst.w - SCALE1(OPTION_PADDING + rect.w);
     int y = dst.y + SCALE1(BUTTON_SIZE - rect.h) / 2;
