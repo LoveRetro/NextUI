@@ -2237,8 +2237,6 @@ void PLAT_enableOverlay(int enable) {
 
 ///////////////////////////////
 
-
-static int online = 0;
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	PLAT_getBatteryStatusFine(is_charging, charge);
 
@@ -2254,18 +2252,16 @@ void PLAT_getCPUTemp() {
 	currentcputemp = getInt("/sys/devices/virtual/thermal/thermal_zone0/temp")/1000;
 
 }
+
+static struct WIFI_connection connection = {0};
 void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
-{
-	// *is_charging = 0;
-	// *charge = PWR_LOW_CHARGE;
-	// return;
-	
+{	
 	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
 
 	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
 
-	// // wifi status, just hooking into the regular PWR polling
-	online = WIFI_enabled() && WIFI_connected();
+	// wifi status, just hooking into the regular PWR polling
+	WIFI_connectionInfo(&connection);
 }
 
 void PLAT_enableBacklight(int enable) {
@@ -2497,12 +2493,21 @@ void PLAT_getOsVersionInfo(char* output_str, size_t max_len)
 }
 
 int PLAT_isOnline(void) {
-	return online;
+	return (connection.ssid[0] != '\0');
 }
 
-
-
-
+ConnectionStrength PLAT_connectionStrength(void) {
+	if(connection.rssi == -1)
+		return SIGNAL_STRENGTH_OFF;
+	else if (connection.rssi == 0)
+		return SIGNAL_STRENGTH_DISCONNECTED;
+	else if (connection.rssi >= -60)
+		return SIGNAL_STRENGTH_HIGH;
+	else if (connection.rssi >= -70)
+		return SIGNAL_STRENGTH_MED;
+	else
+		return SIGNAL_STRENGTH_LOW;
+}
 
 void PLAT_chmod(const char *file, int writable)
 {
@@ -3246,7 +3251,7 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 				connection_info->freq = status.freq;
 				connection_info->link_speed = status.link_speed;
 				connection_info->noise = status.noise;
-				connection_info->rssi = status.noise;
+				connection_info->rssi = status.rssi;
 				strcpy(connection_info->ip, status.ip_address);
 				strcpy(connection_info->ssid, status.ssid);
 

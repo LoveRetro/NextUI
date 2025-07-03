@@ -1657,8 +1657,9 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 		}
 	}
 	else {
-		int show_wifi = PLAT_isOnline(); // NOOOOO! not every frame!
-		
+		ConnectionStrength strength = PLAT_connectionStrength();
+		int show_wifi = strength > SIGNAL_STRENGTH_OFF;
+
 		int ww = SCALE1(PILL_SIZE-3);
 		ow = SCALE1(PILL_SIZE);
 		if (show_wifi) ow += ww;
@@ -1691,13 +1692,18 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting) {
 			SCALE1(PILL_SIZE)
 		}, THEME_COLOR2, RGB_WHITE);
 		if (show_wifi) {
-			SDL_Rect rect = asset_rects[ASSET_WIFI];
+			int asset = 
+				strength == SIGNAL_STRENGTH_HIGH ? ASSET_WIFI : 
+				strength == SIGNAL_STRENGTH_MED ? ASSET_WIFI_MED : 
+				strength == SIGNAL_STRENGTH_LOW	? ASSET_WIFI_LOW : 
+					ASSET_WIFI_OFF; // this should use ASSET_WIFI and be greyed out
+			SDL_Rect rect = asset_rects[asset];
 			int x = ox;
 			int y = oy;
 			x += (SCALE1(PILL_SIZE) - rect.w) / 2;
 			y += (SCALE1(PILL_SIZE) - rect.h) / 2;
 			
-			GFX_blitAssetColor(ASSET_WIFI, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR6);
+			GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){x,y}, THEME_COLOR6);
 			ox += ww;
 		}
 		ox += GFX_blitBattery(dst, &(SDL_Rect){ox,oy});
