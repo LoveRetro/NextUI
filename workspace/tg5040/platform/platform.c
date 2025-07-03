@@ -2237,6 +2237,7 @@ void PLAT_enableOverlay(int enable) {
 
 ///////////////////////////////
 
+
 static int online = 0;
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	PLAT_getBatteryStatusFine(is_charging, charge);
@@ -2264,12 +2265,7 @@ void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
 	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
 
 	// // wifi status, just hooking into the regular PWR polling
-	//char status[16];
-	//getFile("/sys/class/net/wlan0/operstate", status,16);
-	//online = prefixMatch("up", status);
-	char status[16];
-	getFile("/sys/class/net/wlan0/operstate", status,16);
-	online = prefixMatch("up", status);
+	online = WIFI_enabled() && WIFI_connected();
 }
 
 void PLAT_enableBacklight(int enable) {
@@ -3095,8 +3091,7 @@ static void wifi_state_handle(struct Manager *w, int event_label)
 bool PLAT_hasWifi() { return true; }
 void PLAT_wifiInit() {
 	LOG_info("Wifi init\n");
-	wifi.enabled = CFG_getWifi();
-	PLAT_wifiEnable(wifi.enabled);
+	PLAT_wifiEnable(CFG_getWifi());
 }
 
 bool PLAT_wifiEnabled() {
