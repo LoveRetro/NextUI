@@ -1705,7 +1705,7 @@ static int had_thumb = 0;
 static int ox;
 static int oy;
 int animationDraw = 1;
-int needDraw = 1;
+int needDraw = 0;
 int folderbgchanged=0;
 int thumbchanged=0;
 
@@ -2120,9 +2120,6 @@ int main (int argc, char *argv[]) {
 
 	int lastScreen = SCREEN_OFF;
 	int currentScreen = CFG_getDefaultView();
-
-	//eofuwefowbefow
-	//Collections/Recents/Games only show correctly if previously populated?
 
 	if(exists(GAME_SWITCHER_PERSIST_PATH)) {
 		// consider this "consumed", dont bring up the switcher next time we regularly exit a game
