@@ -1572,7 +1572,7 @@ void GFX_blitBatteryAtPosition(SDL_Surface* dst, int x, int y) {
 			sprintf(percentage, "%i", pwr.charge);
 			SDL_Surface *text = TTF_RenderUTF8_Blended(font.micro, percentage, uintToColour(THEME_COLOR6_255));
 			SDL_Rect target = {
-				x + (battery_rect.w - text->w) / 2 + FIXED_SCALE, 
+				x + (battery_rect.w - text->w) / 2 + 1, 
 				y + (battery_rect.h - text->h) / 2 - 1
 			};
 			SDL_BlitSurface(text, NULL, dst, &target);
