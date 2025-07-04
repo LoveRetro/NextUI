@@ -2,7 +2,7 @@
 # MinUI.pak
 
 export PLATFORM="desktop"
-export SDCARD_PATH="/Library/Developer/Projects/private/MinUI_FAKESD"
+export SDCARD_PATH="~/nextui/SDCARD"
 export BIOS_PATH="$SDCARD_PATH/Bios"
 export ROMS_PATH="$SDCARD_PATH/Roms"
 export SAVES_PATH="$SDCARD_PATH/Saves"
