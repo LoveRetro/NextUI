@@ -1,6 +1,7 @@
 CORES= a2600
 CORES+= a5200
 CORES+= a7800
+CORES+= handy
 CORES+= c64
 CORES+= c128
 CORES+= fake-08
@@ -42,6 +43,8 @@ a5200_CORE = a5200_libretro.so
 
 a7800_CORE = prosystem_libretro.so
 a7800_REPO = https://github.com/libretro/prosystem-libretro
+
+handy_REPO = https://github.com/libretro/libretro-handy
 
 fbneo_REPO = https://github.com/libretro/FBNeo
 fbneo_CORE = fbneo_libretro.so

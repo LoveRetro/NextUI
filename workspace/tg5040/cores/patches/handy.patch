@@ -1,0 +1,22 @@
+diff --git a/Makefile b/Makefile
+index 088c344..9573f27 100644
+--- a/Makefile
++++ b/Makefile
+@@ -270,6 +270,17 @@ else ifeq ($(platform), gcw0)
+     SHARED := -shared -Wl,--no-undefined -Wl,-version-script=$(LIBRETRO_DIR)/link.T
+     FLAGS += -DDINGUX -fomit-frame-pointer -ffast-math -march=armv5te -mtune=arm926ej-s
+ 
++# target platform tg5040 trimUI brick
++else ifeq ($(platform), tg5040)
++	TARGET := $(TARGET_NAME)_libretro.so
++	CC = $(CROSS_COMPILE)gcc
++	CXX = $(CROSS_COMPILE)g++
++	AR = $(CROSS_COMPILE)ar
++	fpic := -fPIC
++	SHARED := -shared -Wl,--no-undefined -Wl,-version-script=$(LIBRETRO_DIR)/link.T
++	FLAGS += -fomit-frame-pointer -ffast-math -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a
++	HAVE_NEON = 1
++
+ # Nintendo Switch (libnx)
+ else ifeq ($(platform), libnx)
+ 	include $(DEVKITPRO)/libnx/switch_rules

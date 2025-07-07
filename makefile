@@ -124,6 +124,7 @@ cores: # TODO: can't assume every platform will have the same stock cores (platf
 	cp ./workspace/$(PLATFORM)/cores/output/a5200_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/A5200.pak
 	cp ./workspace/$(PLATFORM)/cores/output/prosystem_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/A7800.pak
 	cp ./workspace/$(PLATFORM)/cores/output/stella2014_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/A2600.pak
+	cp ./workspace/$(PLATFORM)/cores/output/handy_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/LYNX.pak
 ifeq ($(PLATFORM), trimuismart)
 	cp ./workspace/miyoomini/cores/output/fake08_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/P8.pak
 else ifeq ($(PLATFORM), m17)
