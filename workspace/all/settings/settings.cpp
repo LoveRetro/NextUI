@@ -80,6 +80,9 @@ int main(int argc, char *argv[])
 {
     try
     {
+        char* device = getenv("DEVICE");
+        bool is_brick = exactMatch("brick", device);
+
         char version[128];
         PLAT_getOsVersionInfo(version, 128);
         LOG_info("This is TrimUI stock OS version %s\n", version);
@@ -280,7 +283,7 @@ int main(int argc, char *argv[])
             new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
         });
 
-        auto muteMenu = new MenuList(MenuItemType::Fixed, "FN Switch",
+        std::vector<AbstractMenuItem*> muteItems = 
         {
             new MenuItem{ListItemType::Generic, "Volume when toggled", "Speaker volume (0-20)", 
             {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}, 
@@ -322,9 +325,30 @@ int main(int argc, char *argv[])
             []() -> std::any  { return GetMutedExposure(); }, [](const std::any &value)
             { SetMutedExposure(std::any_cast<int>(value)); },
             []() { SetMutedExposure(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+        };
+        if(is_brick) {
+            muteItems.push_back(
+                new MenuItem{ListItemType::Generic, "Dpad mode when toggled", "Dpad: default. Joystick: Dpad exclusively acts as analog stick.\nBoth: Dpad and Joystick inputs at the same time.", {0, 1, 2}, {"Dpad", "Joystick", "Both"}, []() -> std::any
+                {
+                    if(!GetMuteDisablesDpad() && !GetMuteEmulatesJoystick()) return 0;
+                    if(!GetMuteDisablesDpad() && GetMuteEmulatesJoystick()) return 1;
+                    return 2; 
+                },
+                [](const std::any &value)
+                { 
+                    int v = std::any_cast<int>(value);
+                    SetMuteDisablesDpad((v == 1)); 
+                    SetMuteEmulatesJoystick((v > 0));
+                },
+                []()
+                { 
+                    SetMuteDisablesDpad(0); 
+                    SetMuteEmulatesJoystick(0);
+                }});
+        }
+        muteItems.push_back(new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu});
 
-            new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
-        });
+        auto muteMenu = new MenuList(MenuItemType::Fixed, "FN Switch", muteItems);
 
         // TODO: check WIFI_supported(), hide menu otherwise
         auto networkMenu = new Wifi::Menu(appQuit);

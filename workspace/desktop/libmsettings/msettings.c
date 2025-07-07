@@ -281,6 +281,8 @@ int GetMutedContrast(void) { return 0; }
 int GetMutedSaturation(void) { return 0; }
 int GetMutedExposure(void) { return 0; }
 int GetMutedVolume(void) { return 0; }
+int GetMuteDisablesDpad(void) { return 0; }
+int GetMuteEmulatesJoystick(void) { return 0; }
 
 void SetMutedBrightness(int value){}
 void SetMutedColortemp(int value){}
@@ -288,6 +290,8 @@ void SetMutedContrast(int value){}
 void SetMutedSaturation(int value){}
 void SetMutedExposure(int value){}
 void SetMutedVolume(int value){}
+void SetMuteDisablesDpad(int value) {}
+void SetMuteEmulatesJoystick(int value) {}
 
 void SetRawBrightness(int value) {}
 void SetRawVolume(int value){}

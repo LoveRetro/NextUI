@@ -48,6 +48,8 @@ int GetMutedContrast(void);
 int GetMutedSaturation(void);
 int GetMutedExposure(void);
 int GetMutedVolume(void);
+int GetMuteDisablesDpad(void);
+int GetMuteEmulatesJoystick(void);
 
 void SetMutedBrightness(int);
 void SetMutedColortemp(int);
@@ -55,5 +57,7 @@ void SetMutedContrast(int);
 void SetMutedSaturation(int);
 void SetMutedExposure(int);
 void SetMutedVolume(int);
+void SetMuteDisablesDpad(int);
+void SetMuteEmulatesJoystick(int);
 
 #endif  // __msettings_h__

@@ -109,10 +109,33 @@ typedef struct SettingsV8 {
 	int jack; 
 } SettingsV8;
 
+typedef struct SettingsV9 {
+	int version; // future proofing
+	int brightness;
+	int colortemperature;
+	int headphones;
+	int speaker;
+	int mute;
+	int contrast;
+	int saturation;
+	int exposure;
+	int toggled_brightness;
+	int toggled_colortemperature;
+	int toggled_contrast;
+	int toggled_saturation;
+	int toggled_exposure;
+	int toggled_volume;
+	int disable_dpad_on_mute;
+	int emulate_joystick_on_mute;
+	int unused[2]; // for future use
+	// NOTE: doesn't really need to be persisted but still needs to be shared
+	int jack; 
+} SettingsV9;
+
 // When incrementing SETTINGS_VERSION, update the Settings typedef and add
 // backwards compatibility to InitSettings!
-#define SETTINGS_VERSION 8
-typedef SettingsV8 Settings;
+#define SETTINGS_VERSION 9
+typedef SettingsV9 Settings;
 static Settings DefaultSettings = {
 	.version = SETTINGS_VERSION,
 	.brightness = SETTINGS_DEFAULT_BRIGHTNESS,
@@ -129,6 +152,8 @@ static Settings DefaultSettings = {
 	.toggled_saturation = SETTINGS_DEFAULT_MUTE_NO_CHANGE,
 	.toggled_exposure = SETTINGS_DEFAULT_MUTE_NO_CHANGE,
 	.toggled_volume = 0, // mute is default
+	.disable_dpad_on_mute = 0,
+	.emulate_joystick_on_mute = 0,
 	.jack = 0,
 };
 static Settings* settings;
@@ -146,6 +171,9 @@ int scaleSaturation(int);
 int scaleExposure(int);
 int scaleVolume(int);
 
+void disableDpad(int);
+void emulateJoystick(int);
+
 int getInt(char* path) {
 	int i = 0;
 	FILE *file = fopen(path, "r");
@@ -154,6 +182,9 @@ int getInt(char* path) {
 		fclose(file);
 	}
 	return i;
+}
+void touch(char* path) {
+	close(open(path, O_RDWR|O_CREAT, 0777));
 }
 int exactMatch(char* str1, char* str2) {
 	if (!str1 || !str2) return 0; // NULL isn't safe here
@@ -200,6 +231,31 @@ void InitSettings(void) {
 			if (fd>=0) {
 				if (version == SETTINGS_VERSION) {
 					read(fd, settings, shm_size);
+				}
+				else if(version==8) {
+					SettingsV8 old;
+					read(fd, &old, sizeof(SettingsV8));
+					// default muted
+					settings->toggled_volume = 0;
+					// muted* -> toggled*
+					settings->toggled_brightness = old.toggled_brightness;
+					settings->toggled_colortemperature = old.toggled_colortemperature;
+					settings->toggled_contrast = old.toggled_contrast;
+					settings->toggled_exposure = old.toggled_exposure;
+					settings->toggled_saturation = old.toggled_saturation;
+					// copy the rest
+					settings->saturation = old.saturation;
+					settings->contrast = old.contrast;
+					settings->exposure = old.exposure;
+					settings->colortemperature = old.colortemperature;
+					settings->brightness = old.brightness;
+					settings->headphones = old.headphones;
+					settings->speaker = old.speaker;
+					settings->mute = old.mute;
+					settings->jack = old.jack;
+					// new
+					settings->disable_dpad_on_mute = 0;
+					settings->emulate_joystick_on_mute = 0;
 				}
 				else if(version==7) {
 					SettingsV7 old;
@@ -381,6 +437,14 @@ int GetMutedVolume(void)
 {
 	return settings->toggled_volume;
 }
+int GetMuteDisablesDpad(void)
+{
+	return settings->disable_dpad_on_mute;
+}
+int GetMuteEmulatesJoystick(void)
+{
+	return settings->emulate_joystick_on_mute;
+}
 
 ///////// Setters exposed in public API
 
@@ -427,7 +491,7 @@ void SetMute(int value) {
 		if (GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawVolume(scaleVolume(GetMutedVolume()));
 		// custom mute mode display settings
-		if (GetMutedBrightness() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		if(GetMutedBrightness() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawBrightness(scaleBrightness(GetMutedBrightness()));
 		if(GetMutedColortemp() != SETTINGS_DEFAULT_MUTE_NO_CHANGE) 
 			SetRawColortemp(scaleColortemp(GetMutedColortemp()));
@@ -437,7 +501,11 @@ void SetMute(int value) {
 			SetRawSaturation(scaleSaturation(GetMutedSaturation()));
 		if(GetMutedExposure() != SETTINGS_DEFAULT_MUTE_NO_CHANGE) 
 			SetRawExposure(scaleExposure(GetMutedExposure()));
-	} 
+		if(is_brick && GetMuteDisablesDpad())
+			disableDpad(1);
+		if(is_brick && GetMuteEmulatesJoystick())
+			emulateJoystick(1);
+	}
 	else {
 		SetVolume(GetVolume());
 		SetBrightness(GetBrightness());
@@ -445,6 +513,10 @@ void SetMute(int value) {
 		SetContrast(GetContrast());
 		SetSaturation(GetSaturation());
 		SetExposure(GetExposure());
+		if(is_brick) {
+			disableDpad(0);
+			emulateJoystick(0);
+		}
 	}
 }
 void SetContrast(int value)
@@ -500,6 +572,43 @@ void SetMutedVolume(int value)
 {
 	settings->toggled_volume = value;
 	SaveSettings();
+}
+
+void SetMuteDisablesDpad(int value)
+{
+	settings->disable_dpad_on_mute = value;
+	SaveSettings();
+}
+void SetMuteEmulatesJoystick(int value)
+{
+	settings->emulate_joystick_on_mute = value;
+	SaveSettings();
+}
+
+///////// trimui_inputd modifiers
+
+#define INPUTD_PATH "/tmp/trimui_inputd"
+#define INPUTD_DPAD_PATH "/tmp/trimui_inputd/input_no_dpad"
+#define INPUTD_JOYSTICK_PATH "/tmp/trimui_inputd/input_dpad_to_joystick"
+
+void disableDpad(int value) {
+	if(value) {
+		mkdir(INPUTD_PATH, 0755);
+		touch(INPUTD_DPAD_PATH);
+	}
+	else {
+		unlink(INPUTD_DPAD_PATH);
+	}
+}
+
+void emulateJoystick(int value) {
+	if(value) {
+		mkdir(INPUTD_PATH, 0755);
+		touch(INPUTD_JOYSTICK_PATH);
+	}
+	else {
+		unlink(INPUTD_JOYSTICK_PATH);
+	}
 }
 
 ///////// Platform specific scaling

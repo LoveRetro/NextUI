@@ -79,7 +79,7 @@ typedef struct
 
 	// Mute switch
 	bool muteLeds;
-	
+
 	// Power
 	uint32_t screenTimeoutSecs;
 	uint32_t suspendTimeoutSecs;
@@ -205,7 +205,6 @@ void CFG_setDefaultView(int view);
 // Quick switcher UI painting on/off
 bool CFG_getShowQuickswitcherUI(void);
 void CFG_setShowQuickswitcherUI(bool on);
-
 
 void CFG_sync(void);
 void CFG_quit(void);
