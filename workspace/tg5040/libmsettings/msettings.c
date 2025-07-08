@@ -236,7 +236,7 @@ void InitSettings(void) {
 					SettingsV8 old;
 					read(fd, &old, sizeof(SettingsV8));
 					// default muted
-					settings->toggled_volume = 0;
+					settings->toggled_volume = old.toggled_volume;
 					// muted* -> toggled*
 					settings->toggled_brightness = old.toggled_brightness;
 					settings->toggled_colortemperature = old.toggled_colortemperature;
