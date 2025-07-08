@@ -127,6 +127,14 @@ typedef struct SettingsV9 {
 	int toggled_volume;
 	int disable_dpad_on_mute;
 	int emulate_joystick_on_mute;
+	int turbo_a;
+	int turbo_b;
+	int turbo_x;
+	int turbo_y;
+	int turbo_l1;
+	int turbo_l2;
+	int turbo_r1;
+	int turbo_r2;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
 	int jack; 
@@ -154,6 +162,14 @@ static Settings DefaultSettings = {
 	.toggled_volume = 0, // mute is default
 	.disable_dpad_on_mute = 0,
 	.emulate_joystick_on_mute = 0,
+	.turbo_a = 0,
+	.turbo_b = 0,
+	.turbo_x = 0,
+	.turbo_y = 0,
+	.turbo_l1 = 0,
+	.turbo_l2 = 0,
+	.turbo_r1 = 0,
+	.turbo_r2 = 0,
 	.jack = 0,
 };
 static Settings* settings;
@@ -173,6 +189,14 @@ int scaleVolume(int);
 
 void disableDpad(int);
 void emulateJoystick(int);
+void turboA(int);
+void turboB(int);
+void turboX(int);
+void turboY(int);
+void turboL1(int);
+void turboL2(int);
+void turboR1(int);
+void turboR2(int);
 
 int getInt(char* path) {
 	int i = 0;
@@ -458,6 +482,38 @@ int GetMuteEmulatesJoystick(void)
 {
 	return settings->emulate_joystick_on_mute;
 }
+int GetMuteTurboA(void)
+{
+	return settings->turbo_a;
+}
+int GetMuteTurboB(void)
+{
+	return settings->turbo_b;
+}
+int GetMuteTurboX(void)
+{
+	return settings->turbo_x;
+}
+int GetMuteTurboY(void)
+{
+	return settings->turbo_y;
+}
+int GetMuteTurboL1(void)
+{
+	return settings->turbo_l1;
+}
+int GetMuteTurboL2(void)
+{
+	return settings->turbo_l2;
+}
+int GetMuteTurboR1(void)
+{
+	return settings->turbo_r1;
+}
+int GetMuteTurboR2(void)
+{
+	return settings->turbo_r2;
+}
 
 ///////// Setters exposed in public API
 
@@ -518,6 +574,22 @@ void SetMute(int value) {
 			disableDpad(1);
 		if(is_brick && GetMuteEmulatesJoystick())
 			emulateJoystick(1);
+		if(GetMuteTurboA())
+			turboA(1);
+		if(GetMuteTurboB())
+			turboB(1);
+		if(GetMuteTurboX())
+			turboX(1);
+		if(GetMuteTurboY())
+			turboY(1);
+		if(GetMuteTurboL1())
+			turboL1(1);
+		if(GetMuteTurboL2())
+			turboL2(1);
+		if(GetMuteTurboR1())
+			turboR1(1);
+		if(GetMuteTurboR2())
+			turboR2(1);
 	}
 	else {
 		SetVolume(GetVolume());
@@ -527,9 +599,27 @@ void SetMute(int value) {
 		SetSaturation(GetSaturation());
 		SetExposure(GetExposure());
 		if(is_brick) {
-			disableDpad(0);
-			emulateJoystick(0);
+			if(GetMuteDisablesDpad())
+				disableDpad(0);
+			if(GetMuteEmulatesJoystick())
+				emulateJoystick(0);
 		}
+		if(GetMuteTurboA())
+			turboA(0);
+		if(GetMuteTurboB())
+			turboB(0);
+		if(GetMuteTurboX())
+			turboX(0);
+		if(GetMuteTurboY())
+			turboY(0);
+		if(GetMuteTurboL1())
+			turboL1(0);
+		if(GetMuteTurboL2())
+			turboL2(0);
+		if(GetMuteTurboR1())
+			turboR1(0);
+		if(GetMuteTurboR2())
+			turboR2(0);
 	}
 }
 void SetContrast(int value)
@@ -598,11 +688,67 @@ void SetMuteEmulatesJoystick(int value)
 	SaveSettings();
 }
 
+void SetMuteTurboA(int value)
+{
+	settings->turbo_a = value;
+	SaveSettings();
+}
+
+void SetMuteTurboB(int value)
+{
+	settings->turbo_b = value;
+	SaveSettings();
+}
+
+void SetMuteTurboX(int value)
+{
+	settings->turbo_x = value;
+	SaveSettings();
+}
+
+void SetMuteTurboY(int value)
+{
+	settings->turbo_y = value;
+	SaveSettings();
+}
+
+void SetMuteTurboL1(int value)
+{
+	settings->turbo_l1 = value;
+	SaveSettings();
+}
+
+void SetMuteTurboL2(int value)
+{
+	settings->turbo_l2 = value;
+	SaveSettings();
+}
+
+void SetMuteTurboR1(int value)
+{
+	settings->turbo_r1 = value;
+	SaveSettings();
+}
+
+void SetMuteTurboR2(int value)
+{
+	settings->turbo_r2 = value;
+	SaveSettings();
+}
+
 ///////// trimui_inputd modifiers
 
 #define INPUTD_PATH "/tmp/trimui_inputd"
 #define INPUTD_DPAD_PATH "/tmp/trimui_inputd/input_no_dpad"
 #define INPUTD_JOYSTICK_PATH "/tmp/trimui_inputd/input_dpad_to_joystick"
+#define INPUTD_TURBO_A_PATH "/tmp/trimui_inputd/turbo_a"
+#define INPUTD_TURBO_B_PATH "/tmp/trimui_inputd/turbo_b"
+#define INPUTD_TURBO_X_PATH "/tmp/trimui_inputd/turbo_x"
+#define INPUTD_TURBO_Y_PATH "/tmp/trimui_inputd/turbo_y"
+#define INPUTD_TURBO_L1_PATH "/tmp/trimui_inputd/turbo_l"
+#define INPUTD_TURBO_L2_PATH "/tmp/trimui_inputd/turbo_l2"
+#define INPUTD_TURBO_R1_PATH "/tmp/trimui_inputd/turbo_r"
+#define INPUTD_TURBO_R2_PATH "/tmp/trimui_inputd/turbo_r2"
 
 void disableDpad(int value) {
 	if(value) {
@@ -621,6 +767,79 @@ void emulateJoystick(int value) {
 	}
 	else {
 		unlink(INPUTD_JOYSTICK_PATH);
+	}
+}
+
+void turboA(int value) {
+	if(value) {
+		mkdir(INPUTD_PATH, 0755);
+		touch(INPUTD_TURBO_A_PATH);
+	}
+	else {
+		unlink(INPUTD_TURBO_A_PATH);
+	}
+}
+void turboB(int value) {
+	if(value) {
+		mkdir(INPUTD_PATH, 0755);
+		touch(INPUTD_TURBO_B_PATH);
+	}
+	else {
+		unlink(INPUTD_TURBO_B_PATH);
+	}
+}
+void turboX(int value) {
+	if(value) {
+		mkdir(INPUTD_PATH, 0755);
+		touch(INPUTD_TURBO_X_PATH);
+	}
+	else {
+		unlink(INPUTD_TURBO_X_PATH);
+	}
+}
+void turboY(int value) {
+	if(value) {
+		mkdir(INPUTD_PATH, 0755);
+		touch(INPUTD_TURBO_Y_PATH);
+	}
+	else {
+		unlink(INPUTD_TURBO_Y_PATH);
+	}
+}
+void turboL1(int value) {
+	if(value) {
+		mkdir(INPUTD_PATH, 0755);
+		touch(INPUTD_TURBO_L1_PATH);
+	}
+	else {
+		unlink(INPUTD_TURBO_L1_PATH);
+	}
+}
+void turboL2(int value) {
+	if(value) {
+		mkdir(INPUTD_PATH, 0755);
+		touch(INPUTD_TURBO_L2_PATH);
+	}
+	else {
+		unlink(INPUTD_TURBO_L2_PATH);
+	}
+}
+void turboR1(int value) {
+	if(value) {
+		mkdir(INPUTD_PATH, 0755);
+		touch(INPUTD_TURBO_R1_PATH);
+	}
+	else {
+		unlink(INPUTD_TURBO_R1_PATH);
+	}
+}
+void turboR2(int value) {
+	if(value) {
+		mkdir(INPUTD_PATH, 0755);
+		touch(INPUTD_TURBO_R2_PATH);
+	}
+	else {
+		unlink(INPUTD_TURBO_R2_PATH);
 	}
 }
 

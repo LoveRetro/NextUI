@@ -325,6 +325,38 @@ int main(int argc, char *argv[])
             []() -> std::any  { return GetMutedExposure(); }, [](const std::any &value)
             { SetMutedExposure(std::any_cast<int>(value)); },
             []() { SetMutedExposure(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+            new MenuItem{ListItemType::Generic, "Turbo fire A", "Enable turbo fire A", {0, 1}, on_off, []() -> std::any
+            { return GetMuteTurboA(); },
+            [](const std::any &value) { SetMuteTurboA(std::any_cast<int>(value));},
+            []() { SetMuteTurboA(0);}},
+            new MenuItem{ListItemType::Generic, "Turbo fire B", "Enable turbo fire B", {0, 1}, on_off, []() -> std::any
+            { return GetMuteTurboB(); },
+            [](const std::any &value) { SetMuteTurboB(std::any_cast<int>(value));},
+            []() { SetMuteTurboB(0);}},
+            new MenuItem{ListItemType::Generic, "Turbo fire X", "Enable turbo fire X", {0, 1}, on_off, []() -> std::any
+            { return GetMuteTurboX(); },
+            [](const std::any &value) { SetMuteTurboX(std::any_cast<int>(value));},
+            []() { SetMuteTurboX(0);}},
+            new MenuItem{ListItemType::Generic, "Turbo fire Y", "Enable turbo fire Y", {0, 1}, on_off, []() -> std::any
+            { return GetMuteTurboY(); },
+            [](const std::any &value) { SetMuteTurboY(std::any_cast<int>(value));},
+            []() { SetMuteTurboY(0);}},
+            new MenuItem{ListItemType::Generic, "Turbo fire L1", "Enable turbo fire L1", {0, 1}, on_off, []() -> std::any
+            { return GetMuteTurboL1(); },
+            [](const std::any &value) { SetMuteTurboL1(std::any_cast<int>(value));},
+            []() { SetMuteTurboL1(0);}},
+            new MenuItem{ListItemType::Generic, "Turbo fire L2", "Enable turbo fire L2", {0, 1}, on_off, []() -> std::any
+            { return GetMuteTurboL2(); },
+            [](const std::any &value) { SetMuteTurboL2(std::any_cast<int>(value));},
+            []() { SetMuteTurboL2(0);}},
+            new MenuItem{ListItemType::Generic, "Turbo fire R1", "Enable turbo fire R1", {0, 1}, on_off, []() -> std::any
+            { return GetMuteTurboR1(); },
+            [](const std::any &value) { SetMuteTurboR1(std::any_cast<int>(value));},
+            []() { SetMuteTurboR1(0);}},
+            new MenuItem{ListItemType::Generic, "Turbo fire R2", "Enable turbo fire R2", {0, 1}, on_off, []() -> std::any
+            { return GetMuteTurboR2(); },
+            [](const std::any &value) { SetMuteTurboR2(std::any_cast<int>(value));},
+            []() { SetMuteTurboR2(0);}},
         };
         if(is_brick) {
             muteItems.push_back(

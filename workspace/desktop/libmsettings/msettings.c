@@ -124,6 +124,14 @@ typedef struct SettingsV9 {
 	int toggled_volume;
 	int disable_dpad_on_mute;
 	int emulate_joystick_on_mute;
+	int turbo_a;
+	int turbo_b;
+	int turbo_x;
+	int turbo_y;
+	int turbo_l1;
+	int turbo_l2;
+	int turbo_r1;
+	int turbo_r2;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
 	int jack; 
@@ -151,6 +159,14 @@ static Settings DefaultSettings = {
 	.toggled_volume = 0, // mute is default
 	.disable_dpad_on_mute = 0,
 	.emulate_joystick_on_mute = 0,
+	.turbo_a = 0,
+	.turbo_b = 0,
+	.turbo_x = 0,
+	.turbo_y = 0,
+	.turbo_l1 = 0,
+	.turbo_l2 = 0,
+	.turbo_r1 = 0,
+	.turbo_r2 = 0,
 	.jack = 0,
 };
 static Settings* msettings;
@@ -344,6 +360,14 @@ int GetMutedExposure(void) { return 0; }
 int GetMutedVolume(void) { return 0; }
 int GetMuteDisablesDpad(void) { return 0; }
 int GetMuteEmulatesJoystick(void) { return 0; }
+int GetMuteTurboA(void) { return 0; }
+int GetMuteTurboB(void) { return 0; }
+int GetMuteTurboX(void) { return 0; }
+int GetMuteTurboY(void) { return 0; }
+int GetMuteTurboL1(void) { return 0; }
+int GetMuteTurboL2(void) { return 0; }
+int GetMuteTurboR1(void) { return 0; }
+int GetMuteTurboR2(void) { return 0; }
 
 void SetMutedBrightness(int value){}
 void SetMutedColortemp(int value){}
@@ -353,6 +377,14 @@ void SetMutedExposure(int value){}
 void SetMutedVolume(int value){}
 void SetMuteDisablesDpad(int value) {}
 void SetMuteEmulatesJoystick(int value) {}
+void SetMuteTurboA(int value) {}
+void SetMuteTurboB(int value) {}
+void SetMuteTurboX(int value) {}
+void SetMuteTurboY(int value) {}
+void SetMuteTurboL1(int value) {}
+void SetMuteTurboL2(int value) {}
+void SetMuteTurboR1(int value) {}
+void SetMuteTurboR2(int value) {}
 
 void SetRawBrightness(int value) {}
 void SetRawVolume(int value){}
