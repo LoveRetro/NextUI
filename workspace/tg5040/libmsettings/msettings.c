@@ -232,105 +232,118 @@ void InitSettings(void) {
 				if (version == SETTINGS_VERSION) {
 					read(fd, settings, shm_size);
 				}
-				else if(version==8) {
-					SettingsV8 old;
-					read(fd, &old, sizeof(SettingsV8));
-					// default muted
-					settings->toggled_volume = old.toggled_volume;
-					// muted* -> toggled*
-					settings->toggled_brightness = old.toggled_brightness;
-					settings->toggled_colortemperature = old.toggled_colortemperature;
-					settings->toggled_contrast = old.toggled_contrast;
-					settings->toggled_exposure = old.toggled_exposure;
-					settings->toggled_saturation = old.toggled_saturation;
-					// copy the rest
-					settings->saturation = old.saturation;
-					settings->contrast = old.contrast;
-					settings->exposure = old.exposure;
-					settings->colortemperature = old.colortemperature;
-					settings->brightness = old.brightness;
-					settings->headphones = old.headphones;
-					settings->speaker = old.speaker;
-					settings->mute = old.mute;
-					settings->jack = old.jack;
-					// new
-					settings->disable_dpad_on_mute = 0;
-					settings->emulate_joystick_on_mute = 0;
-				}
-				else if(version==7) {
-					SettingsV7 old;
-					read(fd, &old, sizeof(SettingsV7));
-					// default muted
-					settings->toggled_volume = 0;
-					// muted* -> toggled*
-					settings->toggled_brightness = old.mutedbrightness;
-					settings->toggled_colortemperature = old.mutedcolortemperature;
-					settings->toggled_contrast = old.mutedcontrast;
-					settings->toggled_exposure = old.mutedexposure;
-					settings->toggled_saturation = old.mutedsaturation;
-					// copy the rest
-					settings->saturation = old.saturation;
-					settings->contrast = old.contrast;
-					settings->exposure = old.exposure;
-					settings->colortemperature = old.colortemperature;
-					settings->brightness = old.brightness;
-					settings->headphones = old.headphones;
-					settings->speaker = old.speaker;
-					settings->mute = old.mute;
-					settings->jack = old.jack;
-				}
-				else if(version==6) {
-					SettingsV6 old;
-					read(fd, &old, sizeof(SettingsV6));
-					// no muted* settings yet, default values used.
-					settings->toggled_brightness = SETTINGS_DEFAULT_MUTE_NO_CHANGE;
-					settings->toggled_colortemperature = SETTINGS_DEFAULT_MUTE_NO_CHANGE;
-					settings->toggled_contrast = SETTINGS_DEFAULT_MUTE_NO_CHANGE;
-					settings->toggled_exposure = SETTINGS_DEFAULT_MUTE_NO_CHANGE;
-					settings->toggled_saturation = SETTINGS_DEFAULT_MUTE_NO_CHANGE;
-					// copy the rest
-					settings->saturation = old.saturation;
-					settings->contrast = old.contrast;
-					settings->exposure = old.exposure;
-					settings->colortemperature = old.colortemperature;
-					settings->brightness = old.brightness;
-					settings->headphones = old.headphones;
-					settings->speaker = old.speaker;
-					settings->mute = old.mute;
-					settings->jack = old.jack;
-				}
-				else if(version==5) {
-					SettingsV5 old;
-					read(fd, &old, sizeof(SettingsV5));
-					// no display settings yet, default values used. 
-					settings->saturation = 0;
-					settings->contrast = 0;
-					settings->exposure = 0;
-					// copy the rest
-					settings->colortemperature = old.colortemperature;
-					settings->brightness = old.brightness;
-					settings->headphones = old.headphones;
-					settings->speaker = old.speaker;
-					settings->mute = old.mute;
-					settings->jack = old.jack;
-				}
-				else if(version==4) {
-					SettingsV4 old;
-					read(fd, &old, sizeof(SettingsV4));
-					// colortemp was 0-20 here
-					settings->colortemperature = old.colortemperature * 2;
-				}
-				else if(version==3) {
-					SettingsV3 old;
-					read(fd, &old, sizeof(SettingsV3));
-					// no colortemp setting yet, default value used. 
-					// copy the rest
-					settings->brightness = old.brightness;
-					settings->headphones = old.headphones;
-					settings->speaker = old.speaker;
-					settings->mute = old.mute;
-					settings->jack = old.jack;
-					settings->colortemperature = 20;
+				else {
+					// initialize with defaults
+					memcpy(settings, &DefaultSettings, shm_size);
+
+					// overwrite with migrated data
+					if(version==8) {
+						printf("Found settings v8.\n");
+						SettingsV8 old;
+						read(fd, &old, sizeof(SettingsV8));
+
+						settings->toggled_volume = old.toggled_volume;
+
+						settings->toggled_brightness = old.toggled_brightness;
+						settings->toggled_colortemperature = old.toggled_colortemperature;
+						settings->toggled_contrast = old.toggled_contrast;
+						settings->toggled_exposure = old.toggled_exposure;
+						settings->toggled_saturation = old.toggled_saturation;
+
+						settings->saturation = old.saturation;
+						settings->contrast = old.contrast;
+						settings->exposure = old.exposure;
+
+						settings->colortemperature = old.colortemperature;
+
+						settings->brightness = old.brightness;
+						settings->headphones = old.headphones;
+						settings->speaker = old.speaker;
+						settings->mute = old.mute;
+						settings->jack = old.jack;
+					}
+					else if(version==7) {
+						printf("Found settings v7.\n");
+						SettingsV7 old;
+						read(fd, &old, sizeof(SettingsV7));
+
+						// muted* -> toggled*
+						settings->toggled_brightness = old.mutedbrightness;
+						settings->toggled_colortemperature = old.mutedcolortemperature;
+						settings->toggled_contrast = old.mutedcontrast;
+						settings->toggled_exposure = old.mutedexposure;
+						settings->toggled_saturation = old.mutedsaturation;
+
+						settings->saturation = old.saturation;
+						settings->contrast = old.contrast;
+						settings->exposure = old.exposure;
+
+						settings->colortemperature = old.colortemperature;
+
+						settings->brightness = old.brightness;
+						settings->headphones = old.headphones;
+						settings->speaker = old.speaker;
+						settings->mute = old.mute;
+						settings->jack = old.jack;
+					}
+					else if(version==6) {
+						printf("Found settings v6.\n");
+						SettingsV6 old;
+						read(fd, &old, sizeof(SettingsV6));
+
+						settings->saturation = old.saturation;
+						settings->contrast = old.contrast;
+						settings->exposure = old.exposure;
+
+						settings->colortemperature = old.colortemperature;
+
+						settings->brightness = old.brightness;
+						settings->headphones = old.headphones;
+						settings->speaker = old.speaker;
+						settings->mute = old.mute;
+						settings->jack = old.jack;
+					}
+					else if(version==5) {
+						printf("Found settings v5.\n");
+						SettingsV5 old;
+						read(fd, &old, sizeof(SettingsV5));
+
+						settings->colortemperature = old.colortemperature;
+
+						settings->brightness = old.brightness;
+						settings->headphones = old.headphones;
+						settings->speaker = old.speaker;
+						settings->mute = old.mute;
+						settings->jack = old.jack;
+					}
+					else if(version==4) {
+						printf("Found settings v4.\n");
+						SettingsV4 old;
+						read(fd, &old, sizeof(SettingsV4));
+
+						// colortemp was 0-20 here
+						settings->colortemperature = old.colortemperature * 2;
+
+						settings->brightness = old.brightness;
+						settings->headphones = old.headphones;
+						settings->speaker = old.speaker;
+						settings->mute = old.mute;
+						settings->jack = old.jack;
+					}
+					else if(version==3) {
+						printf("Found settings v3.\n");
+						SettingsV3 old;
+						read(fd, &old, sizeof(SettingsV3));
+
+						settings->brightness = old.brightness;
+						settings->headphones = old.headphones;
+						settings->speaker = old.speaker;
+						settings->mute = old.mute;
+						settings->jack = old.jack;
+					}
+					else {
+						printf("Found unsupported settings version: %i.\n", version);
+					}
 				}
 				
 				close(fd);
