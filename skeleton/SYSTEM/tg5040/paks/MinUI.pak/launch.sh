@@ -103,6 +103,9 @@ fi
 # start stock gpio input daemon
 trimui_inputd &
 
+# fixes FN Editor (uses touch to create files w/o checking dir exists)
+mkdir /tmp/trimui_inputd
+
 echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
 CPU_SPEED_PERF=2000000
