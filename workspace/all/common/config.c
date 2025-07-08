@@ -35,6 +35,7 @@ void CFG_defaults(NextUISettings *cfg)
         .color7_255 = CFG_DEFAULT_COLOR7,
         .thumbRadius = CFG_DEFAULT_THUMBRADIUS,
         .gameArtWidth = CFG_DEFAULT_GAMEARTWIDTH,
+        .showFolderNamesAtRoot = CFG_DEFAULT_SHOWFOLDERNAMESATROOT,
 
         .showClock = CFG_DEFAULT_SHOWCLOCK,
         .clock24h = CFG_DEFAULT_CLOCK24H,
@@ -165,6 +166,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "gameart=%i", &temp_value) == 1)
             {
                 CFG_setShowGameArt((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "showfoldernamesatroot=%i", &temp_value) == 1)
+            {
+                CFG_setShowFolderNamesAtRoot((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "screentimeout=%i", &temp_value) == 1)
@@ -496,6 +502,15 @@ void CFG_setGameArtWidth(double zeroToOne)
     settings.gameArtWidth = clampd(zeroToOne, 0.0, 1.0);
 }
 
+bool CFG_getShowFolderNamesAtRoot(void)
+{
+    return settings.showFolderNamesAtRoot;
+}
+
+void CFG_setShowFolderNamesAtRoot(bool show)
+{
+    settings.showFolderNamesAtRoot = show;
+}
 bool CFG_getWifi(void)
 {
     return settings.wifi;
@@ -592,6 +607,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getShowGameArt());
     }
+    else if (strcmp(key, "showfoldernamesatroot") == 0)
+    {
+        sprintf(value, "%i", CFG_getShowFolderNamesAtRoot());
+    }
     else if (strcmp(key, "screentimeout") == 0)
     {
         sprintf(value, "%i", CFG_getScreenTimeoutSecs());
@@ -679,6 +698,7 @@ void CFG_sync(void)
     fprintf(file, "menutransitions=%i\n", settings.showMenuTransitions);
     fprintf(file, "recents=%i\n", settings.showRecents);
     fprintf(file, "gameart=%i\n", settings.showGameArt);
+    fprintf(file, "showfoldernamesatroot=%i\n", settings.showFolderNamesAtRoot);
     fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
     fprintf(file, "suspendTimeout=%i\n", settings.suspendTimeoutSecs);
     fprintf(file, "switcherscale=%i\n", settings.gameSwitcherScaling);
@@ -714,6 +734,7 @@ void CFG_print(void)
     printf("\t\"menutransitions\": %i,\n", settings.showMenuTransitions);
     printf("\t\"recents\": %i,\n", settings.showRecents);
     printf("\t\"gameart\": %i,\n", settings.showGameArt);
+    printf("\t\"showfoldernamesatroot\": %i,\n", settings.showFolderNamesAtRoot);
     printf("\t\"screentimeout\": %i,\n", settings.screenTimeoutSecs);
     printf("\t\"suspendTimeout\": %i,\n", settings.suspendTimeoutSecs);
     printf("\t\"switcherscale\": %i,\n", settings.gameSwitcherScaling);
