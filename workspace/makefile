@@ -20,9 +20,9 @@ ifeq ($(PLATFORM), desktop)
 	cd ./$(PLATFORM) && make early # eg. other libs
 	cd ./all/nextui/ && make
 	cd ./all/minarch/ && make
+	cd ./all/libbatmondb/ && make
 	cd ./all/battery/ && make
 	cd ./all/clock/ && make
-	cd ./all/libbatmondb/ && make
 	cd ./all/batmon/ && make
 	cd ./all/libgametimedb/ && make
 	cd ./all/gametimectl/ && make
