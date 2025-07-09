@@ -642,6 +642,10 @@ void PLAT_setLedInbrightness(LightSettings *led);
 void PLAT_setLedEffectSpeed(LightSettings *led);
 void PLAT_setLedEffectCycles(LightSettings *led);
 
+bool PLAT_canTurbo(void);
+int PLAT_toggleTurbo(int btn_id);
+void PLAT_clearTurbo();
+
 ///////////////////
 
 #define MAX_TIMEZONES 500

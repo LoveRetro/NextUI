@@ -2868,6 +2868,66 @@ void PLAT_setLedColor(LightSettings *led)
 
 //////////////////////////////////////////////
 
+bool PLAT_canTurbo(void) { return true; }
+
+#define INPUTD_PATH "/tmp/trimui_inputd"
+
+typedef struct TurboBtnPath {
+	int brn_id;
+	char *path;
+} TurboBtnPath;
+
+static TurboBtnPath turbo_mapping[] = {
+    {BTN_ID_A, INPUTD_PATH "/turbo_a"},
+    {BTN_ID_B, INPUTD_PATH "/turbo_b"},
+    {BTN_ID_X, INPUTD_PATH "/turbo_x"},
+    {BTN_ID_Y, INPUTD_PATH "/turbo_y"},
+    {BTN_ID_L1, INPUTD_PATH "/turbo_l"},
+    {BTN_ID_L2, INPUTD_PATH "/turbo_l2"},
+    {BTN_ID_R1, INPUTD_PATH "/turbo_r"},
+    {BTN_ID_R2, INPUTD_PATH "/turbo_r2"},
+	{0, NULL}
+};
+
+int toggle_file(const char *path) {
+    if (access(path, F_OK) == 0) {
+        unlink(path);
+        return 0;
+    } else {
+        int fd = open(path, O_CREAT | O_WRONLY, 0644);
+        if (fd >= 0) {
+            close(fd);
+            return 1;
+        }
+        return -1; // error
+    }
+}
+
+int PLAT_toggleTurbo(int btn_id)
+{
+	// avoid extra file IO on each call
+	static int initialized = 0;
+	if (!initialized) {
+		mkdir(INPUTD_PATH, 0755);
+		initialized = 1;
+	}
+
+	for (int i = 0; turbo_mapping[i].path; i++) {
+		if (turbo_mapping[i].brn_id == btn_id) {
+			return toggle_file(turbo_mapping[i].path);
+		}
+	}
+	return 0;
+}
+
+void PLAT_clearTurbo() {
+	for (int i = 0; turbo_mapping[i].path; i++) {
+		unlink(turbo_mapping[i].path);
+	}
+}
+
+//////////////////////////////////////////////
+
 int PLAT_setDateTime(int y, int m, int d, int h, int i, int s) {
 	char cmd[512];
 	sprintf(cmd, "date -s '%d-%d-%d %d:%d:%d'; hwclock -u -w", y,m,d,h,i,s);

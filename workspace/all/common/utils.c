@@ -418,6 +418,15 @@ int exists(char* path) {
 void touch(char* path) {
 	close(open(path, O_RDWR|O_CREAT, 0777));
 }
+int toggle(char *path) {
+    if (access(path, F_OK) == 0) {
+        unlink(path);
+        return 0;
+    } else {
+        touch(path);
+        return 1;
+    }
+}
 void putFile(char* path, char* contents) {
 	FILE* file = fopen(path, "w");
 	if (file) {

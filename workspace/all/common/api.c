@@ -3275,6 +3275,12 @@ void LEDS_initLeds() {
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
+FALLBACK_IMPLEMENTATION bool PLAT_canTurbo(void) { return false; }
+FALLBACK_IMPLEMENTATION int PLAT_toggleTurbo(int btn_id) { return 0; }
+FALLBACK_IMPLEMENTATION void PLAT_clearTurbo() {}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
 FALLBACK_IMPLEMENTATION FILE *PLAT_OpenSettings(const char *filename)
 {
     char diskfilename[256];

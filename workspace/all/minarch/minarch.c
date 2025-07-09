@@ -1249,6 +1249,16 @@ enum {
 	SHORTCUT_TOGGLE_FF,
 	SHORTCUT_HOLD_FF,
 	SHORTCUT_GAMESWITCHER,
+	// Trimui only
+	SHORTCUT_TOGGLE_TURBO_A,
+	SHORTCUT_TOGGLE_TURBO_B,
+	SHORTCUT_TOGGLE_TURBO_X,
+	SHORTCUT_TOGGLE_TURBO_Y,
+	SHORTCUT_TOGGLE_TURBO_L,
+	SHORTCUT_TOGGLE_TURBO_L2,
+	SHORTCUT_TOGGLE_TURBO_R,
+	SHORTCUT_TOGGLE_TURBO_R2,
+	// 
 	SHORTCUT_COUNT,
 };
 
@@ -1800,6 +1810,16 @@ static struct Config {
 		[SHORTCUT_TOGGLE_FF]			= {"Toggle FF",			-1, BTN_ID_NONE, 0},
 		[SHORTCUT_HOLD_FF]				= {"Hold FF",			-1, BTN_ID_NONE, 0},
 		[SHORTCUT_GAMESWITCHER]			= {"Game Switcher",		-1, BTN_ID_NONE, 0},
+		// Trimui only
+		[SHORTCUT_TOGGLE_TURBO_A]		= {"Toggle Turbo A",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_B]		= {"Toggle Turbo B",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_X]		= {"Toggle Turbo X",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_Y]		= {"Toggle Turbo Y",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_L]		= {"Toggle Turbo L",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_L2]		= {"Toggle Turbo L2",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_R]		= {"Toggle Turbo R",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_R2]		= {"Toggle Turbo R2",	-1, BTN_ID_NONE, 0},
+		// -----
 		{NULL}
 	},
 };
@@ -3043,6 +3063,26 @@ static void input_poll_callback(void) {
 				if (PAD_justPressed(btn) || (!toggled_ff_on && PAD_justReleased(btn))) {
 					fast_forward = setFastForward(PAD_isPressed(btn));
 					if (mapping->mod) ignore_menu = 1; // very unlikely but just in case
+				}
+			}
+			// Trimui only
+			else if (PLAT_canTurbo() && i>=SHORTCUT_TOGGLE_TURBO_A && i<=SHORTCUT_TOGGLE_TURBO_R2) {
+				if (PAD_justPressed(btn)) {
+					switch(i) {
+						case SHORTCUT_TOGGLE_TURBO_A:  PLAT_toggleTurbo(BTN_ID_A); break;
+						case SHORTCUT_TOGGLE_TURBO_B:  PLAT_toggleTurbo(BTN_ID_B); break;
+						case SHORTCUT_TOGGLE_TURBO_X:  PLAT_toggleTurbo(BTN_ID_X); break;
+						case SHORTCUT_TOGGLE_TURBO_Y:  PLAT_toggleTurbo(BTN_ID_Y); break;
+						case SHORTCUT_TOGGLE_TURBO_L:  PLAT_toggleTurbo(BTN_ID_L1); break;
+						case SHORTCUT_TOGGLE_TURBO_L2: PLAT_toggleTurbo(BTN_ID_L2); break;
+						case SHORTCUT_TOGGLE_TURBO_R:  PLAT_toggleTurbo(BTN_ID_R1); break;
+						case SHORTCUT_TOGGLE_TURBO_R2: PLAT_toggleTurbo(BTN_ID_R2); break;
+						default: break;
+					}
+					break;
+				}
+				else if (PAD_justReleased(btn)) {
+					break;
 				}
 			}
 			else if (PAD_justPressed(btn)) {
@@ -6918,11 +6958,12 @@ int main(int argc , char* argv[]) {
 	screen = converted;
 	SDL_FreeSurface(rawSurface);
 	free(pixels); 
-	GFX_animateSurfaceOpacity(converted, 0, 0, cw, ch,
-							  255, 0, CFG_getMenuTransitions() ? 200 : 20, 1);
+	GFX_animateSurfaceOpacity(converted, 0, 0, cw, ch, 255, 0, CFG_getMenuTransitions() ? 200 : 20, 1);
 	SDL_FreeSurface(converted); 
 	
 	if(rgbaData) free(rgbaData);
+
+	PLAT_clearTurbo();
 
 	Menu_quit();
 	QuitSettings();
