@@ -7,8 +7,8 @@ endif
 TARGET = keymon
 
 CC = $(CROSS_COMPILE)gcc
-CFLAGS	= -Os -lmsettings -lpthread -lrt -ldl -Wl,--gc-sections -s
-CFLAGS  += -I. -I../../all/common -I../platform/ -I$(PREFIX_LOCAL)/include -DPLATFORM=\"$(UNION_PLATFORM)\"
+CFLAGS	= -Os -lmsettings -lpthread -lrt -ldl -Wl,--gc-sections -s -Xlinker --verbose
+CFLAGS  += -I. -I../../all/common -I../platform/ -I$(PREFIX_LOCAL)/include -L$(PREFIX_LOCAL)/lib -DPLATFORM=\"$(UNION_PLATFORM)\"
 
 all:
 	$(CC) $(TARGET).c -o $(TARGET).elf $(CFLAGS)
