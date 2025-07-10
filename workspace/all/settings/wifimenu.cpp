@@ -19,7 +19,12 @@ Menu::Menu(const int &globalQuit) : MenuList(MenuItemType::Fixed, "Network", {})
                               std::bind(&Menu::getWifToggleState, this),
                               std::bind(&Menu::setWifiToggleState, this, std::placeholders::_1),
                               std::bind(&Menu::resetWifiToggleState, this));
+    diagItem = new MenuItem(ListItemType::Generic, "WiFi diagnostics", "Enable/disable WiFi logging", {false, true}, {"Off", "On"},
+                              std::bind(&Menu::getWifDiagnosticsState, this),
+                              std::bind(&Menu::setWifiDiagnosticsState, this, std::placeholders::_1),
+                              std::bind(&Menu::resetWifiDiagnosticsState, this));
     items.push_back(toggleItem);
+    items.push_back(diagItem);
 
     // best effort layout based on the platform defines, user should really call performLayout manually
     MenuList::performLayout((SDL_Rect){0, 0, FIXED_WIDTH, FIXED_HEIGHT});
@@ -58,6 +63,21 @@ void Menu::setWifiToggleState(const std::any &on)
 }
 
 void Menu::resetWifiToggleState()
+{
+    //
+}
+
+std::any Menu::getWifDiagnosticsState() const
+{
+    return WIFI_diagnosticsEnabled();
+}
+
+void Menu::setWifiDiagnosticsState(const std::any &on)
+{
+    WIFI_diagnosticsEnable(std::any_cast<bool>(on));
+}
+
+void Menu::resetWifiDiagnosticsState()
 {
     //
 }
@@ -116,6 +136,7 @@ void Menu::updater()
                 WriteLock w(itemLock);
                 items.clear();
                 items.push_back(toggleItem);
+                items.push_back(diagItem);
                 layout_called = false;
 
                 for (auto &[s, r] : scanSsids)
@@ -154,6 +175,7 @@ void Menu::updater()
             WriteLock w(itemLock);
             items.clear();
             items.push_back(toggleItem);
+            items.push_back(diagItem);
             layout_called = false;
             workerDirty = true;
             pollSecs = 15;

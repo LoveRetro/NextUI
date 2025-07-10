@@ -93,6 +93,7 @@ typedef struct
 
 	// Network
 	bool wifi;
+	bool wifiDiagnostics;
 
 } NextUISettings;
 
@@ -124,6 +125,7 @@ typedef struct
 #define CFG_DEFAULT_WIFI false
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
 #define CFG_DEFAULT_SHOWQUICKWITCHERUI true
+#define CFG_DEFAULT_WIFI_DIAG false
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
@@ -205,6 +207,9 @@ void CFG_setDefaultView(int view);
 // Quick switcher UI painting on/off
 bool CFG_getShowQuickswitcherUI(void);
 void CFG_setShowQuickswitcherUI(bool on);
+// WiFi diagnostic logging on/off
+bool CFG_getWifiDiagnostics(void);
+void CFG_setWifiDiagnostics(bool on);
 
 void CFG_sync(void);
 void CFG_quit(void);

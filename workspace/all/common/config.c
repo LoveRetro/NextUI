@@ -58,6 +58,7 @@ void CFG_defaults(NextUISettings *cfg)
         .stateFormat = CFG_DEFAULT_STATEFORMAT,
 
         .wifi = CFG_DEFAULT_WIFI,
+        .wifiDiagnostics = CFG_DEFAULT_WIFI_DIAG,
 };
 
     *cfg = defaults;
@@ -225,6 +226,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "quickSwitcherUi=%i", &temp_value) == 1)
             {
                 CFG_setShowQuickswitcherUI(temp_value);
+                continue;
+            }
+            if (sscanf(line, "wifiDiagnostics=%i", &temp_value) == 1)
+            {
+                CFG_setWifiDiagnostics(temp_value);
                 continue;
             }
         }
@@ -526,6 +532,16 @@ void CFG_setShowQuickswitcherUI(bool on)
     settings.showQuickSwitcherUi = on;
 }
 
+bool CFG_getWifiDiagnostics(void)
+{
+    return settings.wifiDiagnostics;
+}
+
+void CFG_setWifiDiagnostics(bool on)
+{
+    settings.wifiDiagnostics = on;
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -636,6 +652,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getShowQuickswitcherUI()));
     }
+    else if (strcmp(key, "wifiDiagnostics") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getWifiDiagnostics()));
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -691,6 +711,7 @@ void CFG_sync(void)
     fprintf(file, "wifi=%i\n", settings.wifi);
     fprintf(file, "defaultView=%i\n", settings.defaultView);
     fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
+    fprintf(file, "wifiDiagnostics=%i\n", settings.wifiDiagnostics);
 
     fclose(file);
 }
@@ -726,6 +747,7 @@ void CFG_print(void)
     printf("\t\"wifi\": %i,\n", settings.wifi);
     printf("\t\"defaultView\": %i,\n", settings.defaultView);
     printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
+    printf("\t\"wifiDiagnostics\": %i,\n", settings.wifiDiagnostics);
 
     // meta, not a real setting
     if (settings.font == 1)

@@ -3155,7 +3155,8 @@ static void wifi_state_handle(struct Manager *w, int event_label)
 
 bool PLAT_hasWifi() { return true; }
 void PLAT_wifiInit() {
-	LOG_debug("Wifi init\n");
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+		"Wifi init\n");
 	PLAT_wifiEnable(CFG_getWifi());
 }
 
@@ -3199,7 +3200,8 @@ void PLAT_wifiEnable(bool on) {
 		}
 	}
 	else if(wifi.interface) {
-		LOG_debug("turning wifi off...\n");
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"turning wifi off...\n");
 
 		// Honestly, I'd rather not do this but it seems to keep the  questionable wifi implementation
 		// on Trimui from randomly reconnecting automatically
@@ -3238,7 +3240,8 @@ int PLAT_wifiScan(struct WIFI_network *networks, int max)
 		return -1;
 	}
 
-	LOG_debug("%s\n", results);
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+		"%s\n", results);
 
 	// Results will be in this form:
 	//[INFO] bssid / frequency / signal level / flags / ssid
@@ -3292,11 +3295,13 @@ bool PLAT_wifiConnected()
 		int ssid_len = sizeof(ssid);
 		int ret = wifi.interface->is_ap_connected(ssid, &ssid_len);
 		if(ret >= 0 && ssid[0] != '\0') {
-			LOG_debug("is_ap_connected: yes - %s\n", ssid);
+			LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+				"is_ap_connected: yes - %s\n", ssid);
 			return true;
 		}
 		else {
-			LOG_debug("is_ap_connected: %d\n",ret);
+			LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+				"is_ap_connected: %d\n",ret);
 		}
 	}
 	return false;
@@ -3325,8 +3330,10 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 			else {
 				LOG_error("Failed to get Wifi connection info\n");
 			}
-			LOG_debug("Connected AP: %s\n", connection_info->ssid);
-			LOG_debug("IP address: %s\n", connection_info->ip);
+			LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+				"Connected AP: %s\n", connection_info->ssid);
+			LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+				"IP address: %s\n", connection_info->ip);
 		}
 		else {
 			connection_info->freq = -1;
@@ -3335,7 +3342,8 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 			connection_info->rssi = -1;
 			*connection_info->ip = '\0';
 			*connection_info->ssid = '\0';
-			LOG_debug("PLAT_wifiConnection: Not connected\n", connection_info->ssid);
+			LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+				"PLAT_wifiConnection: Not connected\n", connection_info->ssid);
 		}
 
 		return 0;
@@ -3360,7 +3368,8 @@ bool PLAT_wifiHasCredentials(char *ssid, WifiSecurityType sec)
 	int ret = wifi.interface->get_netid(ssid, (tKEY_MGMT)sec, net_id, &id_len);
 
 	if (ret == 0) {
-		LOG_debug("Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
 		return true;
 	}
 	return false;
@@ -3379,7 +3388,8 @@ void PLAT_wifiForget(char *ssid, WifiSecurityType sec)
 	}
 
 	int ret = wifi.interface->remove_network(ssid, (tKEY_MGMT)sec);
-	LOG_debug("wifi clear_network returned %d for %s with sectype %d\n", ret, ssid, sec);
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi clear_network returned %d for %s with sectype %d\n", ret, ssid, sec);
 }
 
 void PLAT_wifiConnect(char *ssid, WifiSecurityType sec)
@@ -3395,7 +3405,8 @@ void PLAT_wifiConnect(char *ssid, WifiSecurityType sec)
 		return;
 	}
 
-	LOG_debug("Attempting to connect to SSID %s\n", ssid);
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"Attempting to connect to SSID %s\n", ssid);
 
 	char net_id[10]="";
     int id_len = sizeof(net_id);
@@ -3405,15 +3416,19 @@ void PLAT_wifiConnect(char *ssid, WifiSecurityType sec)
 		return;
 	}
 	else {
-		LOG_debug("Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
 	}
 
 	ret = wifi.interface->connect_ap_with_netid(net_id, 42);
-	LOG_debug("wifi connect_ap_with_netid %s returned %d\n", net_id, ret);
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi connect_ap_with_netid %s returned %d\n", net_id, ret);
 	if (aw_wifi_get_wifi_state() == NETWORK_CONNECTED)
-		LOG_debug("wifi connected.\n");
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi connected.\n");
 	else
-		LOG_debug("wifi connection failed.\n");
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi connection failed.\n");
 }
 
 void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass)
@@ -3431,9 +3446,11 @@ void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pa
 	int ret = wifi.interface->connect_ap_key_mgmt(ssid, (tKEY_MGMT)sec, pass, 42);
 	LOG_info("wifi connect_ap returned %d\n", ret);
 	if (aw_wifi_get_wifi_state() == NETWORK_CONNECTED)
-		LOG_debug("wifi connected.\n");
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi connected.\n");
 	else
-		LOG_debug("wifi connection failed.\n");
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi connection failed.\n");
 }
 
 void PLAT_wifiDisconnect()
@@ -3444,5 +3461,16 @@ void PLAT_wifiDisconnect()
 	}
 
 	int ret = wifi.interface->disconnect_ap(42);
-	LOG_debug("wifi disconnect_ap returned %d\n", ret);
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+		"wifi disconnect_ap returned %d\n", ret);
+}
+
+bool PLAT_wifiDiagnosticsEnabled() 
+{
+	return CFG_getWifiDiagnostics();
+}
+
+void PLAT_wifiDiagnosticsEnable(bool on) 
+{
+	CFG_setWifiDiagnostics(on);
 }

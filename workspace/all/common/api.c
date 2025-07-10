@@ -3331,3 +3331,5 @@ FALLBACK_IMPLEMENTATION void PLAT_wifiForget(char *ssid, WifiSecurityType sec) {
 FALLBACK_IMPLEMENTATION void PLAT_wifiConnect(char *ssid, WifiSecurityType sec) {}
 FALLBACK_IMPLEMENTATION void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass) {}
 FALLBACK_IMPLEMENTATION void PLAT_wifiDisconnect() {}
+FALLBACK_IMPLEMENTATION bool PLAT_wifiDiagnosticsEnabled() { return false; }
+FALLBACK_IMPLEMENTATION void PLAT_wifiDiagnosticsEnable(bool on) {}
