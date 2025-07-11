@@ -18,7 +18,7 @@ install:
 	-mkdir -p $(PREFIX)/bin
 	-mkdir -p $(PREFIX)/lib
 	-mkdir -p $(PREFIX)/include
-	cp wifid_cmd.h $(PREFIX)/include
+	cp -f wifid_cmd.h $(PREFIX)/include
 	cp -f wifi_daemon $(PREFIX)/bin
 	cp -f libwifid.so $(PREFIX)/lib
 

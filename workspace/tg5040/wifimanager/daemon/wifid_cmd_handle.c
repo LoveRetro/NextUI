@@ -86,6 +86,29 @@ int aw_wifid_get_status(struct wifi_status *sptr)
 	return ret ;
 }
 
+int aw_wifid_get_connection(struct connection_status *sptr)
+{
+	struct da_requst req = {
+		.command = DA_COMMAND_CONNECTION_INFO,
+		.ssid = {0},
+		.pwd = {0},
+	};
+	struct client cli = {
+		.enable_pipe = true,
+	};
+
+	int ret = -1;
+
+	if(handle_command(&req,&cli) < 0)
+		return -1;
+
+	if(cli.enable_pipe){
+		ret = read_command_message(cli.pipe_fd,(char*)sptr,sizeof(struct connection_status));
+	}
+	handle_command_free(&cli);
+	return ret ;
+}
+
 int aw_wifid_connect_ap(const char *ssid, const char *passwd,enum cn_event *ptrEvent)
 {
 

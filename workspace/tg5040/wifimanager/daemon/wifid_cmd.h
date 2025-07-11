@@ -27,7 +27,8 @@ int aw_wifid_connect_ap(const char *ssid, const char *passwd,enum cn_event *ptrE
 int aw_wifid_get_scan_results(char *results,int len);
 int aw_wifid_list_networks(char *reply, size_t len);
 int aw_wifid_get_status(struct wifi_status *sptr);
-int aw_wifid_remove_networks(char *pssid,int len);
+int aw_wifid_get_connection(struct connection_status *sptr);
+int aw_wifid_remove_networks(char *pssid, int len);
 const char* connect_event_txt(enum cn_event event);
 void aw_wifid_open(void);
 void aw_wifid_close(void);

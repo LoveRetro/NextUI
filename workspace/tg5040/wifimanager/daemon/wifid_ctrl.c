@@ -141,11 +141,11 @@ static void wifid_connect(const struct da_requst *r, const aw_wifi_interface_t *
 			int id_len = sizeof(net_id);
 			int ret = p_wifi_interface->get_netid(r->ssid, WIFIMG_WPA2_PSK, net_id, &id_len);
 			if(ret == 0)
-			// connect with stored credentials
-			p_wifi_interface->connect_ap_with_netid(net_id, fd);
+				// connect with stored credentials
+				p_wifi_interface->connect_ap_with_netid(net_id, fd);
 			else 
-			// try empty password
-			p_wifi_interface->connect_ap(r->ssid,r->pwd,fd);
+				// try empty password
+				p_wifi_interface->connect_ap(r->ssid,r->pwd,fd);
 		}
 	}
 	else {
@@ -222,6 +222,36 @@ code_failed:
 end:
 	send(fd, &status, sizeof(status), MSG_NOSIGNAL);
 	wmg_printf(MSG_DEBUG,"ctl cmd: status end -+- \n");
+}
+
+static void wifid_connection_info(const struct da_requst *r, const aw_wifi_interface_t *p_wifi_interface,int fd)
+{
+	enum cmd_status status = DA_CMD_SUCCESS;
+	struct connection_status s = {
+		.ssid = {'\0'},
+		.ip_address = {'\0'},
+		.freq = -1,
+		.rssi = -1,
+		.link_speed = -1,
+		.noise = -1,
+	};
+
+	wmg_printf(MSG_DEBUG,"ctl cmd: info start -+- \n");
+
+	if(NULL == p_wifi_interface)
+		goto code_failed;
+
+	if(p_wifi_interface->get_connection_info(&s) < 0)
+		goto code_failed;
+
+	if(msg_pipe_write((char*)&s,sizeof(s)) >= 0)
+		goto end;
+
+code_failed:
+	status = DA_CODE_FAILED;
+end:
+	send(fd, &status, sizeof(status), MSG_NOSIGNAL);
+	wmg_printf(MSG_DEBUG,"ctl cmd: info end -+- \n");
 }
 
 static void wifid_scan(const struct da_requst *r, const aw_wifi_interface_t *p_wifi_interface,int fd)
@@ -353,6 +383,7 @@ void ctl_loop(const aw_wifi_interface_t *p_wifi_interface)
 		[DA_COMMAND_LIST_NETWOTK] = wifid_list_network,
 		[DA_COMMAND_MSG_TRANSPORT] = wifid_msg_transport,
 		[DA_COMMAND_NET_STATUS] = wifid_net_status,
+		[DA_COMMAND_CONNECTION_INFO] = wifid_connection_info,
 	};
 
 	wmg_printf(MSG_INFO,"Starting controller loop\n");

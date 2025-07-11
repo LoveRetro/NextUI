@@ -2253,8 +2253,7 @@ void PLAT_getCPUTemp() {
 
 }
 
-//static struct WIFI_connection connection = {0};
-static int online = 0;
+static struct WIFI_connection connection = {0};
 void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
 {	
 	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
@@ -2262,10 +2261,7 @@ void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
 	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
 
 	// wifi status, just hooking into the regular PWR polling
-	//WIFI_connectionInfo(&connection);
-	char status[16];
-	getFile("/sys/class/net/wlan0/operstate", status,16);
-	online = prefixMatch("up", status);
+	WIFI_connectionInfo(&connection);
 }
 
 void PLAT_enableBacklight(int enable) {
@@ -2497,27 +2493,20 @@ void PLAT_getOsVersionInfo(char* output_str, size_t max_len)
 }
 
 int PLAT_isOnline(void) {
-	//return (connection.ssid[0] != '\0');
-	return online;
+	return (connection.ssid[0] != '\0');
 }
 
 ConnectionStrength PLAT_connectionStrength(void) {
-	//if(connection.rssi == -1)
-	//	return SIGNAL_STRENGTH_OFF;
-	//else if (connection.rssi == 0)
-	//	return SIGNAL_STRENGTH_DISCONNECTED;
-	//else if (connection.rssi >= -60)
-	//	return SIGNAL_STRENGTH_HIGH;
-	//else if (connection.rssi >= -70)
-	//	return SIGNAL_STRENGTH_MED;
-	//else
-	//	return SIGNAL_STRENGTH_LOW;
-	if(CFG_getWifi()) {
-		return online ? SIGNAL_STRENGTH_HIGH 
-			: SIGNAL_STRENGTH_DISCONNECTED;
-	}
-	else
+	if(connection.rssi == -1)
 		return SIGNAL_STRENGTH_OFF;
+	else if (connection.rssi == 0)
+		return SIGNAL_STRENGTH_DISCONNECTED;
+	else if (connection.rssi >= -60)
+		return SIGNAL_STRENGTH_HIGH;
+	else if (connection.rssi >= -70)
+		return SIGNAL_STRENGTH_MED;
+	else
+		return SIGNAL_STRENGTH_LOW;
 }
 
 void PLAT_chmod(const char *file, int writable)
@@ -3286,6 +3275,14 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 	if(!CFG_getWifi()) {
 		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
 			"PLAT_wifiConnection: wifi is currently disabled.\n");
+		
+		connection_info->freq = -1;
+		connection_info->link_speed = -1;
+		connection_info->noise = -1;
+		connection_info->rssi = -1;
+		*connection_info->ip = '\0';
+		*connection_info->ssid = '\0';
+
 		return -1;
 	}
 
@@ -3295,33 +3292,40 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 	};
 	int ret = aw_wifid_get_status(&status);
 	if(ret < 0) {
-		//LOG_error("PLAT_wifiConnection: failed to get wifi status (%i).\n", ret);
+		LOG_error("PLAT_wifiConnection: failed to get wifi status (%i).\n", ret);
 		return -1;
 	}
 
 	if(status.state == NETWORK_CONNECTED) {
-		strcpy(connection_info->ssid, status.ssid);
-		// can we get this from the daemon?
-		connection_info->freq = 2500;
-		connection_info->link_speed = 42;
-		connection_info->noise = 0;
-		connection_info->rssi = 69;
-		//connection_info->ip = "127.0.0.1";
-
+		connection_status conn;
+		if(aw_wifid_get_connection(&conn) >= 0) {
+			connection_info->freq = conn.freq;
+			connection_info->link_speed = conn.link_speed;
+			connection_info->noise = conn.noise;
+			connection_info->rssi = conn.rssi;
+			strcpy(connection_info->ip, conn.ip_address);
+			//strcpy(connection_info->ssid, conn.ssid);
+		
+			// aw_wifid_get_connection returns garbage SSID sometimes
+			strcpy(connection_info->ssid, status.ssid);
+		}
+		else {
+			LOG_error("Failed to get Wifi connection info\n");
+		}
 		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
 			"Connected AP: %s\n", connection_info->ssid);
 		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
 			"IP address: %s\n", connection_info->ip);
 	}
 	else {
-			connection_info->freq = -1;
-			connection_info->link_speed = -1;
-			connection_info->noise = -1;
-			connection_info->rssi = -1;
-			*connection_info->ip = '\0';
-			*connection_info->ssid = '\0';
-			LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
-				"PLAT_wifiConnection: Not connected\n", connection_info->ssid);
+		connection_info->freq = -1;
+		connection_info->link_speed = -1;
+		connection_info->noise = -1;
+		connection_info->rssi = -1;
+		*connection_info->ip = '\0';
+		*connection_info->ssid = '\0';
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"PLAT_wifiConnection: Not connected\n", connection_info->ssid);
 	}
 
 	return 0;
@@ -3467,9 +3471,9 @@ bool PLAT_wifiDiagnosticsEnabled()
 
 void PLAT_wifiDiagnosticsEnable(bool on) 
 {
-	//wmg_set_debug_level(on);
+	wmg_set_debug_level(on);
 	//wmg_set_debug_level(2);
-	wmg_set_debug_level(3); // debug
+	//wmg_set_debug_level(3); // debug
 	CFG_setWifiDiagnostics(on);
 }
 
