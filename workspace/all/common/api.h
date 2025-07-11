@@ -740,7 +740,7 @@ void PLAT_wifiDiagnosticsEnable(bool on);
 #define WIFI_forget PLAT_wifiForget
 #define WIFI_connect PLAT_wifiConnect
 #define WIFI_connectPass PLAT_wifiConnectPass
-//#define WIFI_disconnect PLAT_wifiDisconnect
+#define WIFI_disconnect PLAT_wifiDisconnect
 #define WIFI_diagnosticsEnabled PLAT_wifiDiagnosticsEnabled
 #define WIFI_diagnosticsEnable PLAT_wifiDiagnosticsEnable
 

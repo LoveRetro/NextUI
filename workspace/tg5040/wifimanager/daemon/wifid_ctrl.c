@@ -132,7 +132,25 @@ static void wifid_connect(const struct da_requst *r, const aw_wifi_interface_t *
 	if(NULL == p_wifi_interface)
 		goto code_failed;
 
-	p_wifi_interface->connect_ap(r->ssid,r->pwd,fd);
+	if(r->ssid[0] != '\0') {
+		if(r->pwd[0] != '\0') {
+			p_wifi_interface->connect_ap(r->ssid,r->pwd,fd);
+		}
+		else {
+			char net_id[10]="";
+			int id_len = sizeof(net_id);
+			int ret = p_wifi_interface->get_netid(r->ssid, WIFIMG_WPA2_PSK, net_id, &id_len);
+			if(ret == 0)
+			// connect with stored credentials
+			p_wifi_interface->connect_ap_with_netid(net_id, fd);
+			else 
+			// try empty password
+			p_wifi_interface->connect_ap(r->ssid,r->pwd,fd);
+		}
+	}
+	else {
+		p_wifi_interface->disconnect_ap(fd);
+	}
 
 	if(aw_wifi_get_wifi_state() == NETWORK_CONNECTED){
 		event = DA_CONNECTED;

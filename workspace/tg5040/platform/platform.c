@@ -3162,65 +3162,99 @@ void PLAT_wifiEnable(bool on) {
 
 int PLAT_wifiScan(struct WIFI_network *networks, int max)
 {
-	if(!CFG_getWifi()) {
-		LOG_error("PLAT_wifiScan: wifi is currently disabled.\n");
-		return -1;
-	}
+    if(!CFG_getWifi()) {
+        LOG_error("PLAT_wifiScan: wifi is currently disabled.\n");
+        return -1;
+    }
 
-	char results[SCAN_MAX];
-	int ret = aw_wifid_get_scan_results(results, SCAN_MAX);
-	if (ret < 0)
-	{
-		//LOG_error("PLAT_wifiScan: failed to get wifi scan results (%i).\n", ret);
-		return -1;
-	}
-
-	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
-		"%s\n", results);
+    char results[SCAN_MAX];
+    int ret = aw_wifid_get_scan_results(results, SCAN_MAX);
+    if (ret < 0) {
+        //LOG_error("PLAT_wifiScan: failed to get wifi scan results (%i).\n", ret);
+        return -1;
+    }
+    results[SCAN_MAX - 1] = '\0'; // ensure null termination
 
 	// Results will be in this form:
 	//[INFO] bssid / frequency / signal level / flags / ssid
 	//04:b4:fe:32:f9:73	2462	-63	[WPA2-PSK-CCMP][WPS][ESS]	frynet
 	//04:b4:fe:32:e4:50	2437	-56	[WPA2-PSK-CCMP][WPS][ESS]	frynet
 
-	// Parse the results string into a list of WIFI_network elements
-	char *line = strtok(results, "\n");
-	// skip the first line which only has the column headers
-	line = strtok(NULL, "\n");
-	int count = 0;
-	while(line != NULL && count < max) {
-		struct WIFI_network *network = &networks[count];
-		network->bssid[0] = '\0';
-		network->ssid[0] = '\0';
-		network->freq = -1;
-		network->rssi = -1;
-		network->security = SECURITY_NONE;
+    LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG,
+             "%s\n", results);
 
-		char features[128];
-		sscanf(line, "%17[0-9a-fA-F:]\t%d\t%d\t%127[^\t]\t%127[^\n]", network->bssid, &network->freq, &network->rssi,
-			   features, network->ssid);
-		
-		line = strtok(NULL, "\n");
-		
-		// skip over "hidden" networks with empty SSID. We would need to adapt wifimgr classes
-		// to properly support them, I dont think anyone will miss them.
-		if(!network->ssid || !network->ssid[0]) {
-			LOG_warn("Ignoring network %s with empty SSID\n", network->bssid);
-		}
-		else {
-			if(containsString(features,"WPA2-PSK"))
-				network->security = SECURITY_WPA2_PSK;
-			else if(containsString(features,"WPA-PSK"))
-				network->security = SECURITY_WPA_PSK;
-			else if(containsString(features,"WEP"))
-				network->security = SECURITY_WEP;
-			else if(containsString(features,"EAP"))
-				network->security = SECURITY_UNSUPPORTED;
-			
-			count++;
-		}
-	}
-	return count;
+    const char *current = results;
+
+    // Skip header line
+    const char *next = strchr(current, '\n');
+    if (!next) {
+        LOG_warn("PLAT_wifiScan: no scan results lines found.\n");
+        return 0;
+    }
+    current = next + 1;
+
+    int count = 0;
+    char line[512];  // buffer for each line
+
+    while (current && *current && count < max) {
+        next = strchr(current, '\n');
+        size_t len = next ? (size_t)(next - current) : strlen(current);
+        if (len >= sizeof(line)) {
+            LOG_warn("PLAT_wifiScan: line too long, truncating.\n");
+            len = sizeof(line) - 1;
+        }
+
+        strncpy(line, current, len);
+        line[len] = '\0';
+
+        // Parse line with sscanf
+        char features[128];
+        struct WIFI_network *network = &networks[count];
+
+        // Initialize fields
+        network->bssid[0] = '\0';
+        network->ssid[0] = '\0';
+        network->freq = -1;
+        network->rssi = -1;
+        network->security = SECURITY_NONE;
+
+        int parsed = sscanf(line, "%17[0-9a-fA-F:]\t%d\t%d\t%127[^\t]\t%127[^\n]",
+                            network->bssid, &network->freq, &network->rssi,
+                            features, network->ssid);
+
+        if (parsed != 5) {
+            LOG_warn("PLAT_wifiScan: malformed line skipped (parsed %d fields): '%s'\n", parsed, line);
+            current = next ? next + 1 : NULL;
+            continue;
+        }
+
+        // Trim trailing whitespace from SSID (optional)
+        size_t ssid_len = strlen(network->ssid);
+        while (ssid_len > 0 && (network->ssid[ssid_len - 1] == ' ' || network->ssid[ssid_len - 1] == '\t')) {
+            network->ssid[ssid_len - 1] = '\0';
+            ssid_len--;
+        }
+
+        if (network->ssid[0] == '\0') {
+            LOG_warn("Ignoring network %s with empty SSID\n", network->bssid);
+            current = next ? next + 1 : NULL;
+            continue;
+        }
+
+        if (containsString(features, "WPA2-PSK"))
+            network->security = SECURITY_WPA2_PSK;
+        else if (containsString(features, "WPA-PSK"))
+            network->security = SECURITY_WPA_PSK;
+        else if (containsString(features, "WEP"))
+            network->security = SECURITY_WEP;
+        else if (containsString(features, "EAP"))
+            network->security = SECURITY_UNSUPPORTED;
+
+        count++;
+        current = next ? next + 1 : NULL;
+    }
+
+    return count;
 }
 
 bool PLAT_wifiConnected()
@@ -3421,10 +3455,10 @@ void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pa
 			"PLAT_wifiConnectPass: connecting ap failed:%s\n", connect_event_txt(event));
 }
 
-//void PLAT_wifiDisconnect()
-//{
-//	// TODO, is this actively used or can we get rid of it?
-//}
+void PLAT_wifiDisconnect()
+{
+	PLAT_wifiConnectPass(NULL, SECURITY_WPA2_PSK, NULL);
+}
 
 bool PLAT_wifiDiagnosticsEnabled() 
 {
@@ -3433,7 +3467,9 @@ bool PLAT_wifiDiagnosticsEnabled()
 
 void PLAT_wifiDiagnosticsEnable(bool on) 
 {
-	wmg_set_debug_level(on);
+	//wmg_set_debug_level(on);
+	//wmg_set_debug_level(2);
+	wmg_set_debug_level(3); // debug
 	CFG_setWifiDiagnostics(on);
 }
 
@@ -3779,17 +3815,17 @@ void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pa
 			"wifi connection failed.\n");
 }
 
-//void PLAT_wifiDisconnect()
-//{
-//	if(wifi.interface == NULL) {
-//		LOG_error("failed to get wifi interface.\n");
-//		return;
-//	}
-//
-//	int ret = wifi.interface->disconnect_ap(42);
-//	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
-//		"wifi disconnect_ap returned %d\n", ret);
-//}
+void PLAT_wifiDisconnect()
+{
+	if(wifi.interface == NULL) {
+		LOG_error("failed to get wifi interface.\n");
+		return;
+	}
+
+	int ret = wifi.interface->disconnect_ap(42);
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+		"wifi disconnect_ap returned %d\n", ret);
+}
 
 bool PLAT_wifiDiagnosticsEnabled() 
 {
