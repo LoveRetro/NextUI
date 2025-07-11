@@ -163,7 +163,7 @@ void aw_wifid_open(void)
 {
 	if (get_process_state("wifi_daemon",11) == -1){
 		wmg_printf(MSG_DEBUG,"opening wifi daemon......\n");
-		system("/etc/init.d/wifi_daemon start");
+		system("/mnt/SDCARD/.system/tg5040/bin/wifi_daemon &");
 		sleep(2);
 	} else {
 		wmg_printf(MSG_INFO,"Wifi daemon is already open\n");
@@ -173,6 +173,6 @@ void aw_wifid_open(void)
 void aw_wifid_close(void)
 {
 	wmg_printf(MSG_DEBUG,"closing wifi daemon......\n");
-	system("/etc/init.d/wifi_daemon stop");
+	system("killall -q wifi_daemon");
 	sleep(1);
 }

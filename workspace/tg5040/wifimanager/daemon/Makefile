@@ -15,20 +15,22 @@ INCLUDES += -I ../core/include \
 			-I .
 
 install:
-	-@mkdir -p $(PREFIX)/bin
-	-@mkdir -p $(PREFIX)/lib
-	-@mkdir -p $(PREFIX)/include
-	@cp wifid_cmd.h $(PREFIX)/include
+	-mkdir -p $(PREFIX)/bin
+	-mkdir -p $(PREFIX)/lib
+	-mkdir -p $(PREFIX)/include
+	cp wifid_cmd.h $(PREFIX)/include
+	cp -f wifi_daemon $(PREFIX)/bin
+	cp -f libwifid.so $(PREFIX)/lib
 
 wifi_daemon: wifi_daemon.c wifid_ctrl.c
 	$(CC) -o $@ $^ $(CFLAGS) $(INCLUDES) $(LDFLAGS) -L$(PREFIX)/lib -lwifimg
-	@cp -f wifi_daemon $(PREFIX)/bin
+#	cp -f wifi_daemon $(PREFIX)/bin
 
 libwifid.so: wifid_cmd_handle.c wifid_cmd_iface.c
 	$(CC) -fPIC -shared $(INCLUDES) $(LDFLAGS) $^ -o $@ $(LIBS)
-	@cp $@ $(PREFIX)/lib
+#	cp $@ $(PREFIX)/lib
 
 ####################################################################
-all: install wifi_daemon libwifid.so
+all: wifi_daemon libwifid.so install
 clean:
-	rm -rf  wifi_daemon wifi
+	rm -rf  wifi_daemon libwifid

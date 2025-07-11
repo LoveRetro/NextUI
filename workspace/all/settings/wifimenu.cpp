@@ -148,15 +148,16 @@ void Menu::updater()
                         connected = true;
 
                     MenuList *options;
-                    if (connected)
-                        options = new MenuList(MenuItemType::List, "Options",
-                                               {
-                                                   new MenuItem{ListItemType::Button, "Disconnect", "Disconnect from this network.",
-                                                                [&](AbstractMenuItem &item) -> InputReactionHint
-                                                                { WIFI_disconnect(); workerDirty = true; return Exit; }},
-                                                   new ForgetItem(r, workerDirty)
-                                               });
-                    else if (hasCredentials)
+                    //if (connected)
+                    //    options = new MenuList(MenuItemType::List, "Options",
+                    //                           {
+                    //                               new MenuItem{ListItemType::Button, "Disconnect", "Disconnect from this network.",
+                    //                                            [&](AbstractMenuItem &item) -> InputReactionHint
+                    //                                            { WIFI_disconnect(); workerDirty = true; return Exit; }},
+                    //                               new ForgetItem(r, workerDirty)
+                    //                           });
+                    //else 
+                    if (hasCredentials)
                         options = new MenuList(MenuItemType::List, "Options", { new ConnectKnownItem(r, workerDirty), new ForgetItem(r, workerDirty) });
                     else
                         options = new MenuList(MenuItemType::List, "Options", { new ConnectNewItem(r, workerDirty) });

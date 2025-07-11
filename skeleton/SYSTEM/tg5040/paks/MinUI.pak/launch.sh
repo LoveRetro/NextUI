@@ -135,12 +135,11 @@ if [ "$wifion" -eq 0 ]; then
 	killall -9 udhcpc
 	# i guess this could theoretically conserve battery
 	rfkill block wifi
-	# probably unnecessary
-	# /etc/init.d/wpa_supplicant stop # shauninman: not sure this is working
-else
+else 
 	rfkill unblock wifi
-	ifconfig wlan0 up
-	(( udhcpc -i wlan0 &)&)
+#	ifconfig wlan0 up
+#	(( udhcpc -i wlan0 &)&)
+	wifi_daemon &
 fi
 
 keymon.elf & # &> $SDCARD_PATH/keymon.txt &
