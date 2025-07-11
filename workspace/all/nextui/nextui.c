@@ -839,7 +839,7 @@ static Array* getQuickToggles(void) {
 		Array_push(entries, store);
 
 	// quick actions
-	if(WIFI_supported())
+	if(false && WIFI_supported())
 		Array_push(entries, Entry_new("Wifi", ENTRY_DIP));
 	if(PLAT_supportsDeepSleep() && !simple_mode)
 		Array_push(entries, Entry_new("Sleep", ENTRY_DIP));
@@ -2103,7 +2103,7 @@ int main (int argc, char *argv[]) {
 	PAD_init();
 	// LOG_info("- input init: %lu\n", SDL_GetTicks() - main_begin);
 	VIB_init();
-	WIFI_init();
+	//WIFI_init();
 	PWR_init();
 	if (!HAS_POWER_BUTTON && !simple_mode) PWR_disableSleep();
 	// LOG_info("- power init: %lu\n", SDL_GetTicks() - main_begin);

@@ -2253,7 +2253,8 @@ void PLAT_getCPUTemp() {
 
 }
 
-static struct WIFI_connection connection = {0};
+//static struct WIFI_connection connection = {0};
+static int online = 0;
 void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
 {	
 	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
@@ -2261,7 +2262,10 @@ void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
 	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
 
 	// wifi status, just hooking into the regular PWR polling
-	WIFI_connectionInfo(&connection);
+	//WIFI_connectionInfo(&connection);
+	char status[16];
+	getFile("/sys/class/net/wlan0/operstate", status,16);
+	online = prefixMatch("up", status);
 }
 
 void PLAT_enableBacklight(int enable) {
@@ -2493,20 +2497,27 @@ void PLAT_getOsVersionInfo(char* output_str, size_t max_len)
 }
 
 int PLAT_isOnline(void) {
-	return (connection.ssid[0] != '\0');
+	//return (connection.ssid[0] != '\0');
+	return online;
 }
 
 ConnectionStrength PLAT_connectionStrength(void) {
-	if(connection.rssi == -1)
-		return SIGNAL_STRENGTH_OFF;
-	else if (connection.rssi == 0)
-		return SIGNAL_STRENGTH_DISCONNECTED;
-	else if (connection.rssi >= -60)
-		return SIGNAL_STRENGTH_HIGH;
-	else if (connection.rssi >= -70)
-		return SIGNAL_STRENGTH_MED;
+	//if(connection.rssi == -1)
+	//	return SIGNAL_STRENGTH_OFF;
+	//else if (connection.rssi == 0)
+	//	return SIGNAL_STRENGTH_DISCONNECTED;
+	//else if (connection.rssi >= -60)
+	//	return SIGNAL_STRENGTH_HIGH;
+	//else if (connection.rssi >= -70)
+	//	return SIGNAL_STRENGTH_MED;
+	//else
+	//	return SIGNAL_STRENGTH_LOW;
+	if(CFG_getWifi()) {
+		return online ? SIGNAL_STRENGTH_HIGH 
+			: SIGNAL_STRENGTH_DISCONNECTED;
+	}
 	else
-		return SIGNAL_STRENGTH_LOW;
+		return SIGNAL_STRENGTH_OFF;
 }
 
 void PLAT_chmod(const char *file, int writable)
