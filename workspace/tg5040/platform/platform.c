@@ -2253,8 +2253,16 @@ void PLAT_getCPUTemp() {
 
 }
 
-static struct WIFI_connection connection = {0};
-void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
+static struct WIFI_connection connection = {
+	.freq = -1,
+	.link_speed = -1,
+	.noise = -1,
+	.rssi = -1,
+	.ip = {0},
+	.ssid = {0},
+};
+
+void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
 {	
 	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
 
@@ -3126,27 +3134,32 @@ void PLAT_wifiEnable(bool on) {
 		// This shouldnt be needed, but we cant really rely on nobody else messing with this stuff. 
 		// Make sure supplicant is up and rfkill doesnt block.
 		system("rfkill unblock wifi");
-		//system("ifconfig wlan0 down");
-		system("/etc/init.d/wpa_supplicant enable");
-		system("/etc/init.d/wpa_supplicant start&");
+		
+		int ret = system("pidof wpa_supplicant > /dev/null 2>&1");
+		if (ret != 0) {
+			system("/etc/init.d/wpa_supplicant enable");
+			system("/etc/init.d/wpa_supplicant start &");
+		}
 
 		aw_wifid_open();
+
+		// Keep config in sync
+		CFG_setWifi(on);
 	}
 	else {
 		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
 			"turning wifi off...\n");
+
+		// Keep config in sync
+		CFG_setWifi(on);
 
 		aw_wifid_close();
 
 		// Honestly, I'd rather not do this but it seems to keep the questionable wifi implementation
 		// on Trimui from randomly reconnecting automatically
 		system("rfkill block wifi");
-		//system("ifconfig wlan0 up");
-		system("/etc/init.d/wpa_supplicant stop&");
+		//system("/etc/init.d/wpa_supplicant stop&");
 	}
-
-	// Keep config in sync
-	CFG_setWifi(on);
 }
 
 int PLAT_wifiScan(struct WIFI_network *networks, int max)
@@ -3270,19 +3283,22 @@ bool PLAT_wifiConnected()
 	return status.state == NETWORK_CONNECTED;
 }
 
+static inline void connection_reset(struct WIFI_connection *connection_info)
+{
+	connection_info->freq = -1;
+	connection_info->link_speed = -1;
+	connection_info->noise = -1;
+	connection_info->rssi = -1;
+	*connection_info->ip = '\0';
+	*connection_info->ssid = '\0';
+}
+
 int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 {
 	if(!CFG_getWifi()) {
 		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
 			"PLAT_wifiConnection: wifi is currently disabled.\n");
-		
-		connection_info->freq = -1;
-		connection_info->link_speed = -1;
-		connection_info->noise = -1;
-		connection_info->rssi = -1;
-		*connection_info->ip = '\0';
-		*connection_info->ssid = '\0';
-
+		connection_reset(connection_info);
 		return -1;
 	}
 
@@ -3310,6 +3326,7 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 			strcpy(connection_info->ssid, status.ssid);
 		}
 		else {
+			connection_reset(connection_info);
 			LOG_error("Failed to get Wifi connection info\n");
 		}
 		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
@@ -3318,12 +3335,7 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 			"IP address: %s\n", connection_info->ip);
 	}
 	else {
-		connection_info->freq = -1;
-		connection_info->link_speed = -1;
-		connection_info->noise = -1;
-		connection_info->rssi = -1;
-		*connection_info->ip = '\0';
-		*connection_info->ssid = '\0';
+		connection_reset(connection_info);
 		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
 			"PLAT_wifiConnection: Not connected\n", connection_info->ssid);
 	}
@@ -3471,9 +3483,7 @@ bool PLAT_wifiDiagnosticsEnabled()
 
 void PLAT_wifiDiagnosticsEnable(bool on) 
 {
-	wmg_set_debug_level(on);
-	//wmg_set_debug_level(2);
-	//wmg_set_debug_level(3); // debug
+	wmg_set_debug_level(on ? 4 : 2);
 	CFG_setWifiDiagnostics(on);
 }
 

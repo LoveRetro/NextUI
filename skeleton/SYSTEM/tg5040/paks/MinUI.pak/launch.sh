@@ -137,8 +137,6 @@ if [ "$wifion" -eq 0 ]; then
 	rfkill block wifi
 else 
 	rfkill unblock wifi
-#	ifconfig wlan0 up
-#	(( udhcpc -i wlan0 &)&)
 	wifi_daemon &
 fi
 
