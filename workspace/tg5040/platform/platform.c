@@ -3310,6 +3310,7 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 	int ret = aw_wifid_get_status(&status);
 	if(ret < 0) {
 		LOG_error("PLAT_wifiConnection: failed to get wifi status (%i).\n", ret);
+		connection_reset(connection_info);
 		return -1;
 	}
 
