@@ -2254,6 +2254,7 @@ void PLAT_getCPUTemp() {
 }
 
 static struct WIFI_connection connection = {
+	.valid = false,
 	.freq = -1,
 	.link_speed = -1,
 	.noise = -1,
@@ -2267,7 +2268,6 @@ void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
 	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
 
 	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
-
 	// wifi status, just hooking into the regular PWR polling
 	WIFI_connectionInfo(&connection);
 }
@@ -2501,7 +2501,7 @@ void PLAT_getOsVersionInfo(char* output_str, size_t max_len)
 }
 
 int PLAT_isOnline(void) {
-	return (connection.ssid[0] != '\0');
+	return (connection.valid && connection.ssid[0] != '\0');
 }
 
 ConnectionStrength PLAT_connectionStrength(void) {
@@ -3286,6 +3286,7 @@ bool PLAT_wifiConnected()
 
 static inline void connection_reset(struct WIFI_connection *connection_info)
 {
+	connection_info->valid = false;
 	connection_info->freq = -1;
 	connection_info->link_speed = -1;
 	connection_info->noise = -1;
@@ -3317,13 +3318,14 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 	if(status.state == NETWORK_CONNECTED) {
 		connection_status conn;
 		if(aw_wifid_get_connection(&conn) >= 0) {
+			connection_info->valid = true;
 			connection_info->freq = conn.freq;
 			connection_info->link_speed = conn.link_speed;
 			connection_info->noise = conn.noise;
 			connection_info->rssi = conn.rssi;
 			strcpy(connection_info->ip, conn.ip_address);
 			//strcpy(connection_info->ssid, conn.ssid);
-		
+			
 			// aw_wifid_get_connection returns garbage SSID sometimes
 			strcpy(connection_info->ssid, status.ssid);
 		}

@@ -689,6 +689,7 @@ struct WIFI_network {
 };
 
 struct WIFI_connection {
+	bool valid;
 	char ssid[SSID_MAX];
 	char ip[32];
 	int freq;

@@ -125,8 +125,12 @@ void Menu::updater()
                 }
             }
 
+            if(!connection.valid)
+                LOG_warn("connection info invalid.\n");
+
             // something changed?
             if (!menuOpen &&
+                connection.valid && 
                 (prevSsid != std::string(connection.ssid) 
                 || !key_compare(prevScan, scanSsids)))
             {
