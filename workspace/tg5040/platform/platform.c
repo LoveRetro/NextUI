@@ -3139,6 +3139,7 @@ void PLAT_wifiEnable(bool on) {
 		if (ret != 0) {
 			system("/etc/init.d/wpa_supplicant enable");
 			system("/etc/init.d/wpa_supplicant start &");
+			ms_sleep(500);
 		}
 
 		aw_wifid_open();
