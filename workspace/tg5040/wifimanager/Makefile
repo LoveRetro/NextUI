@@ -28,4 +28,16 @@ wifimanager:
 		CONFIG_IPV6="$(CONFIG_IPV6)" \
 		all
 
-all: wifimanager
+daemon: wifimanager
+	make -C $(PKG_BUILD_DIR)/daemon/ \
+		ARCH="$(TARGET_ARCH)" \
+		AR="$(TARGET_AR)" \
+		CC="$(TARGET_CC)" \
+		CXX="$(TARGET_CXX)" \
+		CFLAGS="$(TARGET_CFLAGS)" \
+		LDFLAGS="$(TARGET_LDFLAGS)" \
+		CONFIG_PREFIX="$(PKG_INSTALL_DIR)" \
+		CONFIG_IPV6="$(CONFIG_IPV6)" \
+		all
+
+all: wifimanager daemon

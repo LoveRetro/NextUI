@@ -10,6 +10,8 @@ namespace Wifi
         const int &globalQuit;
         // wifi on/off
         MenuItem *toggleItem;
+        // diagnostics on/off
+        MenuItem *diagItem;
 
         std::thread worker;
         bool quit = false;
@@ -25,6 +27,10 @@ namespace Wifi
         std::any getWifToggleState() const;
         void setWifiToggleState(const std::any &on);
         void resetWifiToggleState();
+        
+        std::any getWifDiagnosticsState() const;
+        void setWifiDiagnosticsState(const std::any &on);
+        void resetWifiDiagnosticsState();
 
         void updater();
     };

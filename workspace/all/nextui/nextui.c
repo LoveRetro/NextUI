@@ -2596,7 +2596,7 @@ int main (int argc, char *argv[]) {
 
 						int asset = ASSET_WIFI;
 						if (!strcmp(item->name,"Wifi"))
-							asset = is_online ? ASSET_WIFI_OFF : ASSET_WIFI;
+							asset = CFG_getWifi() ? ASSET_WIFI_OFF : ASSET_WIFI;
 						else if (!strcmp(item->name,"Sleep"))
 							asset = ASSET_SUSPEND;
 						else if (!strcmp(item->name,"Reboot"))

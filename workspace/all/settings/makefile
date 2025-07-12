@@ -33,7 +33,7 @@ CFLAGS += -fpermissive
 LDFLAGS +=  -lmsettings
 ifeq ($(PLATFORM), tg5040)
 CFLAGS += -DHAS_WIFIMG
-LDFLAGS +=  -lwifimg
+LDFLAGS +=  -lwifimg -lwifid
 endif
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf

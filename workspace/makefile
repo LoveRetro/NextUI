@@ -31,7 +31,7 @@ ifeq ($(PLATFORM), desktop)
 	cd ./all/nextval/ && make
 	cd ./all/settings/ && make
 else 
-	cd ./$(PLATFORM)/wifimanager && make
+	cd ./$(PLATFORM)/wifimanager && make all
 	cd ./$(PLATFORM)/libmsettings && make
 	cd ./$(PLATFORM) && make early # eg. other libs
 	cd ./$(PLATFORM)/keymon && make

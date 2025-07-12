@@ -2253,8 +2253,16 @@ void PLAT_getCPUTemp() {
 
 }
 
-static struct WIFI_connection connection = {0};
-void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
+static struct WIFI_connection connection = {
+	.freq = -1,
+	.link_speed = -1,
+	.noise = -1,
+	.rssi = -1,
+	.ip = {0},
+	.ssid = {0},
+};
+
+void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
 {	
 	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
 
@@ -3100,9 +3108,391 @@ bool PLAT_supportSSH() { return true; }
 
 /////////////////////////
 
-#include <wifi_intf.h>
-#include "wmg_debug.h"
-#include "wifi_udhcpc.h"
+bool PLAT_hasWifi() { return true; }
+
+void PLAT_wifiInit() {
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+		"Wifi init\n");
+	PLAT_wifiEnable(CFG_getWifi());
+}
+
+bool PLAT_wifiEnabled() {
+	return CFG_getWifi();
+}
+
+#define WIFI_DAEMON
+#ifdef WIFI_DAEMON
+#	include "wmg_debug.h"
+#	include "wifid_cmd.h"
+
+void PLAT_wifiEnable(bool on) {
+	if (on)
+	{
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"turning wifi on...\n");
+
+		// This shouldnt be needed, but we cant really rely on nobody else messing with this stuff. 
+		// Make sure supplicant is up and rfkill doesnt block.
+		system("rfkill unblock wifi");
+		
+		int ret = system("pidof wpa_supplicant > /dev/null 2>&1");
+		if (ret != 0) {
+			system("/etc/init.d/wpa_supplicant enable");
+			system("/etc/init.d/wpa_supplicant start &");
+			ms_sleep(500);
+		}
+
+		aw_wifid_open();
+
+		// Keep config in sync
+		CFG_setWifi(on);
+	}
+	else {
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"turning wifi off...\n");
+
+		// Keep config in sync
+		CFG_setWifi(on);
+
+		aw_wifid_close();
+
+		// Honestly, I'd rather not do this but it seems to keep the questionable wifi implementation
+		// on Trimui from randomly reconnecting automatically
+		system("rfkill block wifi");
+		//system("/etc/init.d/wpa_supplicant stop&");
+	}
+}
+
+int PLAT_wifiScan(struct WIFI_network *networks, int max)
+{
+    if(!CFG_getWifi()) {
+        LOG_error("PLAT_wifiScan: wifi is currently disabled.\n");
+        return -1;
+    }
+
+    char results[SCAN_MAX];
+    int ret = aw_wifid_get_scan_results(results, SCAN_MAX);
+    if (ret < 0) {
+        //LOG_error("PLAT_wifiScan: failed to get wifi scan results (%i).\n", ret);
+        return -1;
+    }
+    results[SCAN_MAX - 1] = '\0'; // ensure null termination
+
+	// Results will be in this form:
+	//[INFO] bssid / frequency / signal level / flags / ssid
+	//04:b4:fe:32:f9:73	2462	-63	[WPA2-PSK-CCMP][WPS][ESS]	frynet
+	//04:b4:fe:32:e4:50	2437	-56	[WPA2-PSK-CCMP][WPS][ESS]	frynet
+
+    LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG,
+             "%s\n", results);
+
+    const char *current = results;
+
+    // Skip header line
+    const char *next = strchr(current, '\n');
+    if (!next) {
+        LOG_warn("PLAT_wifiScan: no scan results lines found.\n");
+        return 0;
+    }
+    current = next + 1;
+
+    int count = 0;
+    char line[512];  // buffer for each line
+
+    while (current && *current && count < max) {
+        next = strchr(current, '\n');
+        size_t len = next ? (size_t)(next - current) : strlen(current);
+        if (len >= sizeof(line)) {
+            LOG_warn("PLAT_wifiScan: line too long, truncating.\n");
+            len = sizeof(line) - 1;
+        }
+
+        strncpy(line, current, len);
+        line[len] = '\0';
+
+        // Parse line with sscanf
+        char features[128];
+        struct WIFI_network *network = &networks[count];
+
+        // Initialize fields
+        network->bssid[0] = '\0';
+        network->ssid[0] = '\0';
+        network->freq = -1;
+        network->rssi = -1;
+        network->security = SECURITY_NONE;
+
+        int parsed = sscanf(line, "%17[0-9a-fA-F:]\t%d\t%d\t%127[^\t]\t%127[^\n]",
+                            network->bssid, &network->freq, &network->rssi,
+                            features, network->ssid);
+
+        if (parsed != 5) {
+            LOG_warn("PLAT_wifiScan: malformed line skipped (parsed %d fields): '%s'\n", parsed, line);
+            current = next ? next + 1 : NULL;
+            continue;
+        }
+
+        // Trim trailing whitespace from SSID (optional)
+        size_t ssid_len = strlen(network->ssid);
+        while (ssid_len > 0 && (network->ssid[ssid_len - 1] == ' ' || network->ssid[ssid_len - 1] == '\t')) {
+            network->ssid[ssid_len - 1] = '\0';
+            ssid_len--;
+        }
+
+        if (network->ssid[0] == '\0') {
+            LOG_warn("Ignoring network %s with empty SSID\n", network->bssid);
+            current = next ? next + 1 : NULL;
+            continue;
+        }
+
+        if (containsString(features, "WPA2-PSK"))
+            network->security = SECURITY_WPA2_PSK;
+        else if (containsString(features, "WPA-PSK"))
+            network->security = SECURITY_WPA_PSK;
+        else if (containsString(features, "WEP"))
+            network->security = SECURITY_WEP;
+        else if (containsString(features, "EAP"))
+            network->security = SECURITY_UNSUPPORTED;
+
+        count++;
+        current = next ? next + 1 : NULL;
+    }
+
+    return count;
+}
+
+bool PLAT_wifiConnected()
+{
+	if(!CFG_getWifi()) {
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"PLAT_wifiConnected: wifi is currently disabled.\n");
+		return false;
+	}
+
+	struct wifi_status status = {
+		.state = STATE_UNKNOWN,
+		.ssid = {'\0'},
+	};
+	int ret = aw_wifid_get_status(&status);
+	if(ret < 0) {
+		LOG_error("PLAT_wifiConnected: failed to get wifi status (%i).\n", ret);
+		return false;
+	}
+
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+		"PLAT_wifiConnected: wifi state is %s\n", wmg_state_txt(status.state));
+
+	return status.state == NETWORK_CONNECTED;
+}
+
+static inline void connection_reset(struct WIFI_connection *connection_info)
+{
+	connection_info->freq = -1;
+	connection_info->link_speed = -1;
+	connection_info->noise = -1;
+	connection_info->rssi = -1;
+	*connection_info->ip = '\0';
+	*connection_info->ssid = '\0';
+}
+
+int PLAT_wifiConnection(struct WIFI_connection *connection_info)
+{
+	if(!CFG_getWifi()) {
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"PLAT_wifiConnection: wifi is currently disabled.\n");
+		connection_reset(connection_info);
+		return -1;
+	}
+
+	struct wifi_status status = {
+		.state = STATE_UNKNOWN,
+		.ssid = {'\0'},
+	};
+	int ret = aw_wifid_get_status(&status);
+	if(ret < 0) {
+		LOG_error("PLAT_wifiConnection: failed to get wifi status (%i).\n", ret);
+		return -1;
+	}
+
+	if(status.state == NETWORK_CONNECTED) {
+		connection_status conn;
+		if(aw_wifid_get_connection(&conn) >= 0) {
+			connection_info->freq = conn.freq;
+			connection_info->link_speed = conn.link_speed;
+			connection_info->noise = conn.noise;
+			connection_info->rssi = conn.rssi;
+			strcpy(connection_info->ip, conn.ip_address);
+			//strcpy(connection_info->ssid, conn.ssid);
+		
+			// aw_wifid_get_connection returns garbage SSID sometimes
+			strcpy(connection_info->ssid, status.ssid);
+		}
+		else {
+			connection_reset(connection_info);
+			LOG_error("Failed to get Wifi connection info\n");
+		}
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"Connected AP: %s\n", connection_info->ssid);
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"IP address: %s\n", connection_info->ip);
+	}
+	else {
+		connection_reset(connection_info);
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"PLAT_wifiConnection: Not connected\n", connection_info->ssid);
+	}
+
+	return 0;
+}
+
+bool PLAT_wifiHasCredentials(char *ssid, WifiSecurityType sec)
+{
+    // Validate input SSID (reject tabs/newlines)
+    for (int i = 0; ssid[i]; ++i) {
+        if (ssid[i] == '\t' || ssid[i] == '\n') {
+            LOG_warn("PLAT_wifiHasCredentials: SSID contains invalid control characters.\n");
+            return false;
+        }
+    }
+
+    if (!CFG_getWifi()) {
+        LOG_error("PLAT_wifiHasCredentials: wifi is currently disabled.\n");
+        return false;
+    }
+
+    char list_net_results[LIST_NETWORK_MAX];
+    int ret = aw_wifid_list_networks(list_net_results, LIST_NETWORK_MAX);
+    if (ret < 0) {
+        LOG_error("PLAT_wifiHasCredentials: failed to get wifi network list (%i).\n", ret);
+        return false;
+    }
+
+    // Ensure null termination just in case aw_wifid_list_networks doesn't guarantee it
+    list_net_results[LIST_NETWORK_MAX - 1] = '\0';
+
+    LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG,
+             "LIST:\n%s\n", list_net_results);
+
+    const char *current = list_net_results;
+
+    // Skip header line
+    const char *next = strchr(current, '\n');
+    if (!next) {
+        LOG_warn("PLAT_wifiHasCredentials: network list has no data lines.\n");
+        return false;
+    }
+    current = next + 1;
+
+    char line[256];
+
+    while (current && *current) {
+        next = strchr(current, '\n');
+        size_t len = next ? (size_t)(next - current) : strlen(current);
+        if (len >= sizeof(line)) {
+            LOG_warn("PLAT_wifiHasCredentials: line too long, truncating.\n");
+            len = sizeof(line) - 1;
+        }
+
+        // Copy line safely and null-terminate
+        strncpy(line, current, len);
+        line[len] = '\0';
+
+        LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG,
+             "Parsing line: '%s'\n", line);
+
+        // Tokenize line by tabs
+        char *saveptr = NULL;
+        char *token_id    = strtok_r(line, "\t", &saveptr);
+        char *token_ssid  = strtok_r(NULL, "\t", &saveptr);
+        char *token_bssid = strtok_r(NULL, "\t", &saveptr);
+        char *token_flags = strtok_r(NULL, "\t", &saveptr);
+        char *extra       = strtok_r(NULL, "\t", &saveptr);
+
+        // Check mandatory fields: id, ssid, bssid must be present
+        if (!(token_id && token_ssid && token_bssid)) {
+            LOG_warn("PLAT_wifiHasCredentials: Malformed line skipped (missing required fields): '%s'\n", line);
+            current = next ? next + 1 : NULL;
+            continue;
+        }
+        // token_flags may be NULL (no flags)
+        // extra must be NULL (no extra tokens)
+        if (extra != NULL) {
+            LOG_warn("PLAT_wifiHasCredentials: Malformed line skipped (too many fields): '%s'\n", line);
+            current = next ? next + 1 : NULL;
+            continue;
+        }
+
+        if (strcmp(token_ssid, ssid) == 0) {
+            return true;
+        }
+
+        current = next ? next + 1 : NULL;
+    }
+
+    return false;
+}
+
+void PLAT_wifiForget(char *ssid, WifiSecurityType sec)
+{
+	if(!CFG_getWifi()) {
+		LOG_error("PLAT_wifiForget: wifi is currently disabled.\n");
+		return;
+	}
+
+	aw_wifid_remove_networks(ssid,strlen(ssid));
+}
+
+void PLAT_wifiConnect(char *ssid, WifiSecurityType sec)
+{
+	PLAT_wifiConnectPass(ssid, sec, NULL);
+}
+
+void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass)
+{
+	if(!CFG_getWifi()) {
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"PLAT_wifiConnectPass: wifi is currently disabled.\n");
+		return;
+	}
+
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+		"Attempting to connect to SSID %s with password\n", ssid);
+	
+	enum cn_event event = DA_UNKNOWN;
+	int ret = aw_wifid_connect_ap(ssid,pass,&event);
+	if(ret < 0) {
+		LOG_error("PLAT_wifiConnectPass: failed to connect to wifi (%i, %i).\n", ret, event);
+		return;
+	}
+
+	if(event == DA_CONNECTED)
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"PLAT_wifiConnectPass: connected ap successfully\n");
+	else
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"PLAT_wifiConnectPass: connecting ap failed:%s\n", connect_event_txt(event));
+}
+
+void PLAT_wifiDisconnect()
+{
+	PLAT_wifiConnectPass(NULL, SECURITY_WPA2_PSK, NULL);
+}
+
+bool PLAT_wifiDiagnosticsEnabled() 
+{
+	return CFG_getWifiDiagnostics();
+}
+
+void PLAT_wifiDiagnosticsEnable(bool on) 
+{
+	wmg_set_debug_level(on ? 4 : 2);
+	CFG_setWifiDiagnostics(on);
+}
+
+#else 
+#	include <wifi_intf.h>
+#	include "wmg_debug.h"
+#	include "wifid_cmd.h"
+#	include "wifi_udhcpc.h"
 
 static struct WIFI_Context {
 	const aw_wifi_interface_t *interface;
@@ -3114,57 +3504,45 @@ static struct WIFI_Context {
 	.lastEvent = STATE_UNKNOWN,
 	.enabled = false,
 	.connected = false};
-
-static void wifi_state_handle(struct Manager *w, int event_label)
-{
-    LOG_info("WMG: event_label 0x%x\n", event_label);
-
-	wifi.lastEvent = w->StaEvt.state;
-	switch (w->StaEvt.state)
+	
+	static void wifi_state_handle(struct Manager *w, int event_label)
 	{
-		 case CONNECTING:
-		 {
-			LOG_info("WMG: Connecting to the network......\n");
-			break;
-		 }
-		 case CONNECTED:
-		 {
-			LOG_info("WMG: Connected to the AP\n");
-			start_udhcpc();
-			wifi.connected = true;
-			break;
-		 }
-		 case OBTAINING_IP:
-		 {
-			LOG_info("WMG: Getting ip address......\n");
-			break;
-		 }
-		 case NETWORK_CONNECTED:
-		 {
-			LOG_info("WMG: Successful network connection\n");
-			break;
-		 }
-		case DISCONNECTED:
+		LOG_info("WMG: event_label 0x%x\n", event_label);
+		
+		wifi.lastEvent = w->StaEvt.state;
+		switch (w->StaEvt.state)
 		{
-			wifi.connected = false;
-			LOG_info("WMG: Disconnected,the reason:%s\n", wmg_event_txt(w->StaEvt.event));
-			break;
+			case CONNECTING:
+			{
+				LOG_info("WMG: Connecting to the network......\n");
+				break;
+			}
+			case CONNECTED:
+			{
+				LOG_info("WMG: Connected to the AP\n");
+				start_udhcpc();
+				wifi.connected = true;
+				break;
+			}
+			case OBTAINING_IP:
+			{
+				LOG_info("WMG: Getting ip address......\n");
+				break;
+			}
+			case NETWORK_CONNECTED:
+			{
+				LOG_info("WMG: Successful network connection\n");
+				break;
+			}
+			case DISCONNECTED:
+			{
+				wifi.connected = false;
+				LOG_info("WMG: Disconnected,the reason:%s\n", wmg_event_txt(w->StaEvt.event));
+				break;
+			}
 		}
-    }
-}
-
-bool PLAT_hasWifi() { return true; }
-void PLAT_wifiInit() {
-	LOG_debug("Wifi init\n");
-	PLAT_wifiEnable(CFG_getWifi());
-}
-
-bool PLAT_wifiEnabled() {
-	// less efficient, more accurate: check "$(cat /sys/class/net/wlan0/flags 2>/dev/null)" != "0x1003"
-	// if we can be reasonably sure that nobody killed wifi and bypassed our code:
-	return wifi.enabled;
-}
-
+	}
+	
 #define MAX_CONNECTION_ATTEMPTS 5
 
 void PLAT_wifiEnable(bool on) {
@@ -3199,7 +3577,8 @@ void PLAT_wifiEnable(bool on) {
 		}
 	}
 	else if(wifi.interface) {
-		LOG_debug("turning wifi off...\n");
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"turning wifi off...\n");
 
 		// Honestly, I'd rather not do this but it seems to keep the  questionable wifi implementation
 		// on Trimui from randomly reconnecting automatically
@@ -3238,7 +3617,8 @@ int PLAT_wifiScan(struct WIFI_network *networks, int max)
 		return -1;
 	}
 
-	LOG_debug("%s\n", results);
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+		"%s\n", results);
 
 	// Results will be in this form:
 	//[INFO] bssid / frequency / signal level / flags / ssid
@@ -3292,11 +3672,13 @@ bool PLAT_wifiConnected()
 		int ssid_len = sizeof(ssid);
 		int ret = wifi.interface->is_ap_connected(ssid, &ssid_len);
 		if(ret >= 0 && ssid[0] != '\0') {
-			LOG_debug("is_ap_connected: yes - %s\n", ssid);
+			LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+				"is_ap_connected: yes - %s\n", ssid);
 			return true;
 		}
 		else {
-			LOG_debug("is_ap_connected: %d\n",ret);
+			LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+				"is_ap_connected: %d\n",ret);
 		}
 	}
 	return false;
@@ -3325,8 +3707,10 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 			else {
 				LOG_error("Failed to get Wifi connection info\n");
 			}
-			LOG_debug("Connected AP: %s\n", connection_info->ssid);
-			LOG_debug("IP address: %s\n", connection_info->ip);
+			LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+				"Connected AP: %s\n", connection_info->ssid);
+			LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+				"IP address: %s\n", connection_info->ip);
 		}
 		else {
 			connection_info->freq = -1;
@@ -3335,7 +3719,8 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 			connection_info->rssi = -1;
 			*connection_info->ip = '\0';
 			*connection_info->ssid = '\0';
-			LOG_debug("PLAT_wifiConnection: Not connected\n", connection_info->ssid);
+			LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+				"PLAT_wifiConnection: Not connected\n", connection_info->ssid);
 		}
 
 		return 0;
@@ -3360,7 +3745,8 @@ bool PLAT_wifiHasCredentials(char *ssid, WifiSecurityType sec)
 	int ret = wifi.interface->get_netid(ssid, (tKEY_MGMT)sec, net_id, &id_len);
 
 	if (ret == 0) {
-		LOG_debug("Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
 		return true;
 	}
 	return false;
@@ -3379,7 +3765,8 @@ void PLAT_wifiForget(char *ssid, WifiSecurityType sec)
 	}
 
 	int ret = wifi.interface->remove_network(ssid, (tKEY_MGMT)sec);
-	LOG_debug("wifi clear_network returned %d for %s with sectype %d\n", ret, ssid, sec);
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi clear_network returned %d for %s with sectype %d\n", ret, ssid, sec);
 }
 
 void PLAT_wifiConnect(char *ssid, WifiSecurityType sec)
@@ -3395,7 +3782,8 @@ void PLAT_wifiConnect(char *ssid, WifiSecurityType sec)
 		return;
 	}
 
-	LOG_debug("Attempting to connect to SSID %s\n", ssid);
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"Attempting to connect to SSID %s\n", ssid);
 
 	char net_id[10]="";
     int id_len = sizeof(net_id);
@@ -3405,15 +3793,19 @@ void PLAT_wifiConnect(char *ssid, WifiSecurityType sec)
 		return;
 	}
 	else {
-		LOG_debug("Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
 	}
 
 	ret = wifi.interface->connect_ap_with_netid(net_id, 42);
-	LOG_debug("wifi connect_ap_with_netid %s returned %d\n", net_id, ret);
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi connect_ap_with_netid %s returned %d\n", net_id, ret);
 	if (aw_wifi_get_wifi_state() == NETWORK_CONNECTED)
-		LOG_debug("wifi connected.\n");
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi connected.\n");
 	else
-		LOG_debug("wifi connection failed.\n");
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi connection failed.\n");
 }
 
 void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass)
@@ -3431,9 +3823,11 @@ void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pa
 	int ret = wifi.interface->connect_ap_key_mgmt(ssid, (tKEY_MGMT)sec, pass, 42);
 	LOG_info("wifi connect_ap returned %d\n", ret);
 	if (aw_wifi_get_wifi_state() == NETWORK_CONNECTED)
-		LOG_debug("wifi connected.\n");
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi connected.\n");
 	else
-		LOG_debug("wifi connection failed.\n");
+		LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+			"wifi connection failed.\n");
 }
 
 void PLAT_wifiDisconnect()
@@ -3444,5 +3838,17 @@ void PLAT_wifiDisconnect()
 	}
 
 	int ret = wifi.interface->disconnect_ap(42);
-	LOG_debug("wifi disconnect_ap returned %d\n", ret);
+	LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, 
+		"wifi disconnect_ap returned %d\n", ret);
 }
+
+bool PLAT_wifiDiagnosticsEnabled() 
+{
+	return CFG_getWifiDiagnostics();
+}
+
+void PLAT_wifiDiagnosticsEnable(bool on) 
+{
+	CFG_setWifiDiagnostics(on);
+}
+#endif

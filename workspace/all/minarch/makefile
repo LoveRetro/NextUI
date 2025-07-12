@@ -39,6 +39,10 @@ else
 LDFLAGS	 +=  -Llibretro-common -lsrm -lzip
 CFLAGS   += -DHAS_SRM
 endif
+ifeq ($(PLATFORM), tg5040)
+CFLAGS += -DHAS_WIFIMG
+LDFLAGS +=  -lwifimg -lwifid
+endif
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 # CFLAGS  += -fsanitize=address -fno-common
 # LDFLAGS += -lasan

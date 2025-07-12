@@ -724,6 +724,10 @@ void PLAT_wifiConnect(char *ssid, WifiSecurityType sec);
 void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass);
 // disconnect from any active network
 void PLAT_wifiDisconnect();
+// enable wifi diagnostic logging
+bool PLAT_wifiDiagnosticsEnabled();
+// returns true if diagnostic logging is enabled
+void PLAT_wifiDiagnosticsEnable(bool on);
 
 #define WIFI_init PLAT_wifiInit
 #define WIFI_supported PLAT_hasWifi
@@ -737,5 +741,7 @@ void PLAT_wifiDisconnect();
 #define WIFI_connect PLAT_wifiConnect
 #define WIFI_connectPass PLAT_wifiConnectPass
 #define WIFI_disconnect PLAT_wifiDisconnect
+#define WIFI_diagnosticsEnabled PLAT_wifiDiagnosticsEnabled
+#define WIFI_diagnosticsEnable PLAT_wifiDiagnosticsEnable
 
 #endif
