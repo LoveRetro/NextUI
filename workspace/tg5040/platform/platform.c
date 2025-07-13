@@ -2274,16 +2274,19 @@ static inline void connection_reset(struct WIFI_connection *connection_info)
 	*connection_info->ssid = '\0';
 }
 
-void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
-{	
-	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
-
-	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
+void PLAT_updateNetworkStatus()
+{
 	// wifi status, just hooking into the regular PWR polling
 	if(WIFI_enabled())
 		WIFI_connectionInfo(&connection);
 	else
 		connection_reset(&connection);
+}
+
+void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
+{	
+	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
+	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
 }
 
 void PLAT_enableBacklight(int enable) {

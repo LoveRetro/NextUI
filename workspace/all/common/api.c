@@ -159,6 +159,9 @@ static struct PWR_Context {
 	int charge;
 	int should_warn;
 
+	int update_secs;
+	int poll_network_status;
+
 	SDL_Surface* overlay;
 } pwr = {0};
 
@@ -2781,12 +2784,23 @@ static void PWR_updateBatteryStatus(void) {
 	}
 }
 
+static void PWR_updateNetworkStatus(void) {
+	if(pwr.poll_network_status)
+		PLAT_updateNetworkStatus();
+}
+
+void PWR_updateFrequency(int secs, int updateWifi)
+{
+	pwr.update_secs = secs;
+	pwr.poll_network_status = updateWifi;
+}
+
 static void* PWR_monitorBattery(void *arg) {
 	while(1) {
-		// TODO: the frequency of checking could depend on whether 
-		// we're in game (less frequent) or menu (more frequent)
-		sleep(5);
+		struct PWR_Context* pwr_ctx = (struct PWR_Context*) arg;
+		sleep(pwr_ctx->update_secs);
 		PWR_updateBatteryStatus();
+		PWR_updateNetworkStatus();
 	}
 	return NULL;
 }
@@ -2802,14 +2816,17 @@ void PWR_init(void) {
 	
 	pwr.should_warn = 0;
 	pwr.charge = PWR_LOW_CHARGE;
-	
+
+	pwr.update_secs = 5;
+	pwr.poll_network_status = 1;
+
 	if (CFG_getHaptics()) {
 		VIB_singlePulse(VIB_bootStrength, VIB_bootDuration_ms);
 	}
 	PWR_initOverlay();
 	PWR_updateBatteryStatus();
 
-	pthread_create(&pwr.battery_pt, NULL, &PWR_monitorBattery, NULL);
+	pthread_create(&pwr.battery_pt, NULL, &PWR_monitorBattery, &pwr);
 	pwr.initialized = 1;
 }
 void PWR_quit(void) {

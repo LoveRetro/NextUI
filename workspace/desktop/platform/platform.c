@@ -2167,6 +2167,11 @@ void PLAT_enableOverlay(int enable) {
 ///////////////////////////////
 
 static int online = 1;
+void PLAT_updateNetworkStatus()
+{
+	online = 1;
+}
+
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	PLAT_getBatteryStatusFine(is_charging, charge);
 }

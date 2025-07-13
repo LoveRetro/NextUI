@@ -6809,6 +6809,8 @@ static void limitFF(void) {
 	last_time = now;
 }
 
+#define PWR_UPDATE_FREQ 5
+#define PWR_UPDATE_FREQ_INGAME 60
 
 int main(int argc , char* argv[]) {
 	LOG_info("MinArch\n");
@@ -6887,6 +6889,8 @@ int main(int argc , char* argv[]) {
 
 	PWR_warn(1);
 	PWR_disableAutosleep();
+	// we dont need five second updates while ingame, and wifi status isnt displayed either
+	PWR_updateFrequency(PWR_UPDATE_FREQ, 0); 
 
 	// force a vsync immediately before loop
 	// for better frame pacing?
@@ -6936,8 +6940,9 @@ int main(int argc , char* argv[]) {
 
 		
 		if (show_menu) {
-
+			PWR_updateFrequency(PWR_UPDATE_FREQ,1);
 			Menu_loop();
+			PWR_updateFrequency(PWR_UPDATE_FREQ_INGAME,0);
 			has_pending_opt_change = config.core.changed;
 			resetFPSCounter();
 			chooseSyncRef();

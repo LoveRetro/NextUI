@@ -445,6 +445,7 @@ void PWR_warn(int enable);
 
 int PWR_ignoreSettingInput(int btn, int show_setting);
 void PWR_update(int* dirty, int* show_setting, PWR_callback_t before_sleep, PWR_callback_t after_sleep);
+void PWR_updateFrequency(int secs, int updateWifi);
 
 void PWR_disablePowerOff(void);
 void PWR_powerOff(int reboot);
@@ -623,6 +624,7 @@ int PLAT_pickSampleRate(int requested, int max);
 
 char* PLAT_getModel(void);
 void PLAT_getOsVersionInfo(char *output_str, size_t max_len);
+void PLAT_updateNetworkStatus();
 int PLAT_isOnline(void);
 typedef enum {
 	SIGNAL_STRENGTH_OFF = -1,
