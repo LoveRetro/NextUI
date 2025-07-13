@@ -2263,13 +2263,27 @@ static struct WIFI_connection connection = {
 	.ssid = {0},
 };
 
+static inline void connection_reset(struct WIFI_connection *connection_info)
+{
+	connection_info->valid = false;
+	connection_info->freq = -1;
+	connection_info->link_speed = -1;
+	connection_info->noise = -1;
+	connection_info->rssi = -1;
+	*connection_info->ip = '\0';
+	*connection_info->ssid = '\0';
+}
+
 void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
 {	
 	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
 
 	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
 	// wifi status, just hooking into the regular PWR polling
-	WIFI_connectionInfo(&connection);
+	if(WIFI_enabled())
+		WIFI_connectionInfo(&connection);
+	else
+		connection_reset(&connection);
 }
 
 void PLAT_enableBacklight(int enable) {
@@ -2505,7 +2519,7 @@ int PLAT_isOnline(void) {
 }
 
 ConnectionStrength PLAT_connectionStrength(void) {
-	if(connection.rssi == -1)
+	if(!WIFI_enabled() || !connection.valid || connection.rssi == -1)
 		return SIGNAL_STRENGTH_OFF;
 	else if (connection.rssi == 0)
 		return SIGNAL_STRENGTH_DISCONNECTED;
@@ -3282,17 +3296,6 @@ bool PLAT_wifiConnected()
 		"PLAT_wifiConnected: wifi state is %s\n", wmg_state_txt(status.state));
 
 	return status.state == NETWORK_CONNECTED;
-}
-
-static inline void connection_reset(struct WIFI_connection *connection_info)
-{
-	connection_info->valid = false;
-	connection_info->freq = -1;
-	connection_info->link_speed = -1;
-	connection_info->noise = -1;
-	connection_info->rssi = -1;
-	*connection_info->ip = '\0';
-	*connection_info->ssid = '\0';
 }
 
 int PLAT_wifiConnection(struct WIFI_connection *connection_info)

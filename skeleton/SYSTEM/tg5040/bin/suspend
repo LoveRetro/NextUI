@@ -69,7 +69,7 @@ after() {
 
 	if [ -n "$wifid_running" ]; then
 		>&2 echo "Starting wifi_daemon..."
-		(/mnt/SDCARD/.system/tg5040/bin/wifi_daemon &)
+		/mnt/SDCARD/.system/tg5040/bin/wifi_daemon &
 	fi
 }
 
