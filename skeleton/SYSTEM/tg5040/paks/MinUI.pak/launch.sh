@@ -137,7 +137,7 @@ if [ "$wifion" -eq 0 ]; then
 	rfkill block wifi
 else 
 	rfkill unblock wifi
-	wifi_daemon &
+	wifi_daemon -s &
 fi
 
 keymon.elf & # &> $SDCARD_PATH/keymon.txt &
