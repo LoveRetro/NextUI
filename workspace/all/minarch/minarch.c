@@ -6810,7 +6810,7 @@ static void limitFF(void) {
 }
 
 #define PWR_UPDATE_FREQ 5
-#define PWR_UPDATE_FREQ_INGAME 60
+#define PWR_UPDATE_FREQ_INGAME 20
 
 int main(int argc , char* argv[]) {
 	LOG_info("MinArch\n");
