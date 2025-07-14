@@ -105,6 +105,8 @@ int main(int argc, char *argv[])
         char timezones[MAX_TIMEZONES][MAX_TZ_LENGTH];
         int tz_count = 0;
         TIME_getTimezones(timezones, &tz_count);
+
+        int was_online = PLAT_isOnline();
         
         std::vector<std::any> tz_values;
         std::vector<std::string> tz_labels;
@@ -454,6 +456,10 @@ int main(int argc, char *argv[])
             ctx.menu->handleInput(ctx.dirty, appQuit);
 
             PWR_update(&ctx.dirty, &ctx.show_setting, nullptr, nullptr);
+
+            int is_online = PLAT_isOnline();
+            if (was_online!=is_online) ctx.dirty = 1;
+            was_online = is_online;
 
             if (ctx.dirty)
             {
