@@ -27,7 +27,7 @@ namespace Wifi
         std::any getWifToggleState() const;
         void setWifiToggleState(const std::any &on);
         void resetWifiToggleState();
-        
+
         std::any getWifDiagnosticsState() const;
         void setWifiDiagnosticsState(const std::any &on);
         void resetWifiDiagnosticsState();

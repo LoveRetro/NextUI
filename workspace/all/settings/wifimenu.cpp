@@ -103,7 +103,8 @@ void Menu::updater()
         {
             // scan for available networks and add a menu item for each
             WIFI_connection connection;
-            WIFI_connectionInfo(&connection);
+            if(WIFI_connectionInfo(&connection) < 0)
+                continue; // try again in a bit
 
             // grab list and compare it to previous result
             // only relayout the menu if changes happended
