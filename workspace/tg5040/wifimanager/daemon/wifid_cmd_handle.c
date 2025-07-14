@@ -54,11 +54,14 @@ int aw_wifid_get_scan_results(char *results,int len)
 		.enable_pipe = true,
 	};
 
-	int ret = -1;
-	if(handle_command(&req,&cli) < 0)
-		return -1;
-	if(cli.enable_pipe)
+	int ret = handle_command(&req, &cli);
+	if (ret < 0)
+		goto end;
+
+	if (cli.enable_pipe)
 		ret = read_command_message(cli.pipe_fd,results,len);
+
+end:
 	handle_command_free(&cli);
 	return ret ;
 }
@@ -74,14 +77,14 @@ int aw_wifid_get_status(struct wifi_status *sptr)
 		.enable_pipe = true,
 	};
 
-	int ret = -1;
-
-	if(handle_command(&req,&cli) < 0)
-		return -1;
-
-	if(cli.enable_pipe){
+	int ret = handle_command(&req, &cli);
+	if (ret < 0)
+		goto end;
+		
+	if(cli.enable_pipe)
 		ret = read_command_message(cli.pipe_fd,(char*)sptr,sizeof(struct wifi_status));
-	}
+
+end:
 	handle_command_free(&cli);
 	return ret ;
 }
@@ -97,14 +100,14 @@ int aw_wifid_get_connection(struct connection_status *sptr)
 		.enable_pipe = true,
 	};
 
-	int ret = -1;
+	int ret = handle_command(&req, &cli);
+	if (ret < 0)
+		goto end;
 
-	if(handle_command(&req,&cli) < 0)
-		return -1;
-
-	if(cli.enable_pipe){
+	if(cli.enable_pipe)
 		ret = read_command_message(cli.pipe_fd,(char*)sptr,sizeof(struct connection_status));
-	}
+
+end:
 	handle_command_free(&cli);
 	return ret ;
 }
@@ -121,22 +124,20 @@ int aw_wifid_connect_ap(const char *ssid, const char *passwd,enum cn_event *ptrE
 		.enable_pipe = true,
 	};
 
-	int ret = -1;
-
-	if (NULL != ssid){
+	if (NULL != ssid)
 		strncpy(req.ssid,ssid,strlen(ssid));
-	}
 
-	if (NULL != passwd){
+	if (NULL != passwd)
 		strncpy(req.pwd,passwd,strlen(passwd));
-	}
 
-	if(handle_command(&req,&cli) < 0)
-		return -1;
+	int ret = handle_command(&req, &cli);
+	if (ret < 0)
+		goto end;
 
-	if(cli.enable_pipe){
+	if(cli.enable_pipe)
 		ret = read_command_message(cli.pipe_fd,(char*)ptrEvent,sizeof(enum cn_event));
-	}
+	
+end:
 	handle_command_free(&cli);
 	return ret;
 }
@@ -152,15 +153,16 @@ int aw_wifid_remove_networks(char *pssid,int len)
 		.enable_pipe = false,
 	};
 
-	if (NULL != pssid){
+	if (NULL != pssid)
 		strncpy(req.ssid,pssid,len);
-	}
 
-	if(handle_command(&req,&cli) < 0)
-		return -1;
+	int ret = handle_command(&req, &cli);
+	if (ret < 0)
+		goto end;
 
+end:
 	handle_command_free(&cli);
-	return 0 ;
+	return ret;
 }
 
 int aw_wifid_list_networks(char *reply, size_t len)
@@ -173,13 +175,16 @@ int aw_wifid_list_networks(char *reply, size_t len)
 	struct client cli = {
 		.enable_pipe = true,
 	};
-	int ret = -1;
-	if(handle_command(&req,&cli) < 0)
-		return -1;
+
+	int ret = handle_command(&req, &cli);
+	if (ret < 0)
+		goto end;
+
 	ret = read_command_message(cli.pipe_fd,reply,len);
+
+end:
 	handle_command_free(&cli);
 	return ret ;
-
 }
 
 void aw_wifid_open(void)
