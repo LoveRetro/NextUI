@@ -3497,6 +3497,29 @@ void PLAT_wifiDiagnosticsEnable(bool on)
 	CFG_setWifiDiagnostics(on);
 }
 
+// I've tried lots of things, but wifi_daemon simply doesnt want to cooperate
+// through a sleep cycle. Just shut it down, it comes back instantaneously.
+// If you feel like sinking more time into it, please increase this counter.
+// Days spent on Allwinner wifi bugs: 8
+static int enableWifi = false;
+void PLAT_wifiPreSleep()
+{
+	if (WIFI_enabled())
+	{
+		enableWifi = true;
+		WIFI_enable(false);
+	}
+}
+
+void PLAT_wifiPostSleep()
+{
+	if (WIFI_supported() && enableWifi)
+	{
+		WIFI_enable(true);
+		enableWifi = false;
+	}
+}
+
 #else 
 #	include <wifi_intf.h>
 #	include "wmg_debug.h"

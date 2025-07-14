@@ -32,12 +32,6 @@ before() {
 		killall -15 bluealsa || true
 	fi
 
-	if pgrep wifi_daemon; then
-		wifid_running=1
-		>&2 echo "Stopping wifi_daemon..."
-		killall -q wifi_daemon || true
-	fi
-
 	>&2 echo "Blocking wireless..."
 	rfkill block wifi || true
 }
@@ -66,11 +60,6 @@ after() {
 
 	>&2 echo "Unblocking wireless..."
 	rfkill unblock wifi || true
-
-	if [ -n "$wifid_running" ]; then
-		>&2 echo "Starting wifi_daemon..."
-		/mnt/SDCARD/.system/tg5040/bin/wifi_daemon -s &
-	fi
 }
 
 before

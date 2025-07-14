@@ -731,6 +731,9 @@ void PLAT_wifiDisconnect();
 bool PLAT_wifiDiagnosticsEnabled();
 // returns true if diagnostic logging is enabled
 void PLAT_wifiDiagnosticsEnable(bool on);
+// handles platform steps for wifi before/after entering sleep
+void PLAT_wifiPreSleep();
+void PLAT_wifiPostSleep();
 
 #define WIFI_init PLAT_wifiInit
 #define WIFI_supported PLAT_hasWifi
@@ -746,5 +749,7 @@ void PLAT_wifiDiagnosticsEnable(bool on);
 #define WIFI_disconnect PLAT_wifiDisconnect
 #define WIFI_diagnosticsEnabled PLAT_wifiDiagnosticsEnabled
 #define WIFI_diagnosticsEnable PLAT_wifiDiagnosticsEnable
+#define WIFI_aboutToSleep PLAT_wifiPreSleep
+#define WIFI_wokeFromSleep PLAT_wifiPostSleep
 
 #endif

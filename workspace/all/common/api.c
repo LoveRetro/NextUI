@@ -3024,7 +3024,10 @@ void PWR_powerOff(int reboot) {
 	}
 }
 
-static void PWR_enterSleep(void) {
+
+
+static void PWR_enterSleep(void)
+{
 	SDL_PauseAudio(1);
 	LEDS_setIndicator(2,0,5);
 	if (GetHDMI()) {
@@ -3042,6 +3045,7 @@ static void PWR_enterSleep(void) {
 	system("killall -STOP batmon.elf");
 
 	PWR_updateFrequency(-1, false);
+	WIFI_aboutToSleep();
 
 	sync();
 }
@@ -3053,6 +3057,7 @@ static void PWR_exitSleep(void) {
 	}
 	
 	PWR_updateFrequency(-1, true);
+	WIFI_wokeFromSleep();
 
 	system("killall -CONT keymon.elf");
 	system("killall -CONT batmon.elf");
@@ -3356,3 +3361,5 @@ FALLBACK_IMPLEMENTATION void PLAT_wifiConnectPass(const char *ssid, WifiSecurity
 FALLBACK_IMPLEMENTATION void PLAT_wifiDisconnect() {}
 FALLBACK_IMPLEMENTATION bool PLAT_wifiDiagnosticsEnabled() { return false; }
 FALLBACK_IMPLEMENTATION void PLAT_wifiDiagnosticsEnable(bool on) {}
+FALLBACK_IMPLEMENTATION void PLAT_wifiPreSleep() {}
+FALLBACK_IMPLEMENTATION void PLAT_wifiPostSleep() {}
