@@ -2791,7 +2791,8 @@ static void PWR_updateNetworkStatus(void) {
 
 void PWR_updateFrequency(int secs, int updateWifi)
 {
-	pwr.update_secs = secs;
+	if(secs > 0)
+		pwr.update_secs = secs;
 	pwr.poll_network_status = updateWifi;
 }
 
@@ -3039,7 +3040,9 @@ static void PWR_enterSleep(void) {
 	}
 	system("killall -STOP keymon.elf");
 	system("killall -STOP batmon.elf");
-	
+
+	PWR_updateFrequency(-1, false);
+
 	sync();
 }
 static void PWR_exitSleep(void) {
@@ -3048,6 +3051,9 @@ static void PWR_exitSleep(void) {
 	if(pwr.is_charging) {
 		LED_setIndicator(2,0xFF0000,-1,2);
 	}
+	
+	PWR_updateFrequency(-1, true);
+
 	system("killall -CONT keymon.elf");
 	system("killall -CONT batmon.elf");
 	if (GetHDMI()) {
