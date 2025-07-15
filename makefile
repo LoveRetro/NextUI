@@ -34,6 +34,12 @@ RELEASE_BASE=NextUI-$(RELEASE_TIME)$(RELEASE_BETA)
 RELEASE_DOT:=$(shell find ./releases/. -regex ".*/${RELEASE_BASE}-[0-9]+-base\.zip" | wc -l | sed 's/ //g')
 RELEASE_NAME ?= $(RELEASE_BASE)-$(RELEASE_DOT)
 
+# Extra paks to ship
+VENDOR_DEST := ./build/VENDOR/Tools
+PACKAGE_URLS := \
+	https://github.com/UncleJunVIP/nextui-pak-store/releases/latest/download/Pak.Store.pakz
+	# add more URLs as needed
+
 ###########################################################
 
 .PHONY: build
@@ -228,10 +234,28 @@ package: tidy
 	
 	cd ./build/PAYLOAD && zip -r MinUI.zip .system .tmp_update Tools
 	mv ./build/PAYLOAD/MinUI.zip ./build/BASE
+
+	# Fetch, rename, and stage vendored .pakz files
+	mkdir -p $(VENDOR_DEST)
+	@for url in $(PACKAGE_URLS); do \
+		echo "Fetching $$url..."; \
+		orig=$$(basename $$url); \
+		name=$$(echo "$$orig" | tr '[:upper:]' '[:lower:]'); \
+		base=$$(echo "$$name" | sed -E 's/\.[^.]+$$//'); \
+		ext=$$(echo "$$name" | sed -E 's/^.*(\.[^.]+)$$/\1/'); \
+		safe_base=$$(echo "$$base" | sed 's/[^a-z0-9]/_/g'); \
+		newname="nextui.$$safe_base$$ext"; \
+		echo " -> saving as $(VENDOR_DEST)/$$newname"; \
+		curl -Ls -o "$(VENDOR_DEST)/$$newname" "$$url"; \
+	done
+
+	# Move renamed .pakz files into base folder
+	mkdir -p ./build/BASE
+	mv $(VENDOR_DEST)/* ./build/BASE/
 	
 	# TODO: can I just add everything in BASE to zip?
 	# cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves miyoo miyoo354 trimui rg35xx rg35xxplus gkdpixel miyoo355 magicx em_ui.sh MinUI.zip README.txt
-	cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves Shaders trimui em_ui.sh MinUI.zip README.txt
+	cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves Shaders trimui em_ui.sh MinUI.zip *.pakz README.txt
 	cd ./build/EXTRAS && zip -r ../../releases/$(RELEASE_NAME)-extras.zip Bios Emus Roms Saves Shaders Tools README.txt
 	echo "$(RELEASE_VERSION)" > ./build/latest.txt
 
