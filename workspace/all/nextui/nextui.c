@@ -871,7 +871,7 @@ static Array* getRoot(void) {
 	Array_yoink(root, entries);
 
 	// Add tools if applicable
-    if (hasTools() && !simple_mode) {
+    if (hasTools() && CFG_getShowTools() && !simple_mode) {
 		char tools_path[256];
 		snprintf(tools_path, sizeof(tools_path), "%s/Tools/%s", SDCARD_PATH, PLATFORM);
         Array_push(root, Entry_new(tools_path, ENTRY_DIR));

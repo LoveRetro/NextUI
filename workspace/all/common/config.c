@@ -42,6 +42,7 @@ void CFG_defaults(NextUISettings *cfg)
         .showMenuAnimations = CFG_DEFAULT_SHOWMENUANIMATIONS,
         .showMenuTransitions = CFG_DEFAULT_SHOWMENUTRANSITIONS,
         .showRecents = CFG_DEFAULT_SHOWRECENTS,
+        .showTools = CFG_DEFAULT_SHOWTOOLS,
         .showGameArt = CFG_DEFAULT_SHOWGAMEART,
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
         .defaultView = CFG_DEFAULT_VIEW,
@@ -161,6 +162,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "recents=%i", &temp_value) == 1)
             {
                 CFG_setShowRecents((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "tools=%i", &temp_value) == 1)
+            {
+                CFG_setShowTools((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "gameart=%i", &temp_value) == 1)
@@ -422,6 +428,16 @@ void CFG_setShowRecents(bool show)
     settings.showRecents = show;
 }
 
+bool CFG_getShowTools(void)
+{
+    return settings.showTools;
+}
+
+void CFG_setShowTools(bool show)
+{
+    settings.showTools = show;
+}
+
 bool CFG_getShowGameArt(void)
 {
     return settings.showGameArt;
@@ -604,6 +620,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getShowRecents());
     }
+    else if (strcmp(key, "tools") == 0)
+    {
+        sprintf(value, "%i", CFG_getShowTools());
+    }
     else if (strcmp(key, "gameart") == 0)
     {
         sprintf(value, "%i", CFG_getShowGameArt());
@@ -698,6 +718,7 @@ void CFG_sync(void)
     fprintf(file, "menuanim=%i\n", settings.showMenuAnimations);
     fprintf(file, "menutransitions=%i\n", settings.showMenuTransitions);
     fprintf(file, "recents=%i\n", settings.showRecents);
+    fprintf(file, "tools=%i\n", settings.showTools);
     fprintf(file, "gameart=%i\n", settings.showGameArt);
     fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
     fprintf(file, "suspendTimeout=%i\n", settings.suspendTimeoutSecs);
@@ -734,6 +755,7 @@ void CFG_print(void)
     printf("\t\"menuanim\": %i,\n", settings.showMenuAnimations);
     printf("\t\"menutransitions\": %i,\n", settings.showMenuTransitions);
     printf("\t\"recents\": %i,\n", settings.showRecents);
+    printf("\t\"tools\": %i,\n", settings.showTools);
     printf("\t\"gameart\": %i,\n", settings.showGameArt);
     printf("\t\"screentimeout\": %i,\n", settings.screenTimeoutSecs);
     printf("\t\"suspendTimeout\": %i,\n", settings.suspendTimeoutSecs);

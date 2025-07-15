@@ -171,10 +171,14 @@ int main(int argc, char *argv[])
                 []() -> std::any{ return (int)(CFG_getGameArtWidth() * 100); }, 
                 [](const std::any &value) { CFG_setGameArtWidth((double)std::any_cast<int>(value) / 100.0); },
                 []() { CFG_setGameArtWidth(CFG_DEFAULT_GAMEARTWIDTH);}},
-                new MenuItem{ListItemType::Generic, "Show recents", "Show \"Recently Played\" menu entry.\nThis also disables Game Switcher.", {false, true}, on_off, 
+                new MenuItem{ListItemType::Generic, "Show Recents", "Show \"Recently Played\" menu entry in game list.", {false, true}, on_off, 
                 []() -> std::any { return CFG_getShowRecents(); },
                 [](const std::any &value) { CFG_setShowRecents(std::any_cast<bool>(value)); },
                 []() { CFG_setShowRecents(CFG_DEFAULT_SHOWRECENTS);}},
+                new MenuItem{ListItemType::Generic, "Show Tools", "Show \"Tools\" menu entry in game list.", {false, true}, on_off, 
+                []() -> std::any { return CFG_getShowTools(); },
+                [](const std::any &value) { CFG_setShowTools(std::any_cast<bool>(value)); },
+                []() { CFG_setShowTools(CFG_DEFAULT_SHOWTOOLS);}},
                 new MenuItem{ListItemType::Generic, "Show game art", "Show game artwork in the main menu", {false, true}, on_off, []() -> std::any
                 { return CFG_getShowGameArt(); },
                 [](const std::any &value)

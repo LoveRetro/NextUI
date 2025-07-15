@@ -72,6 +72,7 @@ typedef struct
 	bool showMenuAnimations;
 	bool showMenuTransitions;
 	bool showRecents;
+	bool showTools;
 	bool showGameArt;
 	bool romsUseFolderBackground;
 	bool showQuickSwitcherUi;
@@ -126,6 +127,7 @@ typedef struct
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
 #define CFG_DEFAULT_SHOWQUICKWITCHERUI true
 #define CFG_DEFAULT_WIFI_DIAG false
+#define CFG_DEFAULT_SHOWTOOLS true
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
@@ -170,6 +172,9 @@ void CFG_setThumbnailRadius(int radius);
 // Show/hide recently played in the main menu.
 bool CFG_getShowRecents(void);
 void CFG_setShowRecents(bool show);
+// Show/hide tools folder in the main menu.
+bool CFG_getShowTools(void);
+void CFG_setShowTools(bool show);
 // Show/hide game art in the main menu.
 bool CFG_getShowGameArt(void);
 void CFG_setShowGameArt(bool show);
