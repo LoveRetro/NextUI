@@ -852,7 +852,8 @@ static Array* getQuickToggles(void) {
 static Array* getRoot(void) {
     Array* root = Array_new();
 
-    if (CFG_getShowRecents() && hasRecents()) Array_push(root, Entry_new(FAUX_RECENT_PATH, ENTRY_DIR));
+    if (hasRecents() && CFG_getShowRecents()) 
+		Array_push(root, Entry_new(FAUX_RECENT_PATH, ENTRY_DIR));
 
 	Array *entries = getRoms();
 
