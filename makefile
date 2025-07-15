@@ -36,8 +36,9 @@ RELEASE_NAME ?= $(RELEASE_BASE)-$(RELEASE_DOT)
 
 # Extra paks to ship
 VENDOR_DEST := ./build/VENDOR/Tools
-PACKAGE_URLS := \
-	https://github.com/UncleJunVIP/nextui-pak-store/releases/latest/download/Pak.Store.pakz
+PACKAGE_URL_MAPPINGS := \
+	"https://github.com/UncleJunVIP/nextui-pak-store/releases/latest/download/Pak.Store.pakz nextui.pak_store.pakz" \
+	"https://github.com/LanderN/nextui-updater-pak/releases/latest/download/nextui-updater-pak.zip nextui.updater.pakz"
 	# add more URLs as needed
 
 ###########################################################
@@ -235,18 +236,13 @@ package: tidy
 	cd ./build/PAYLOAD && zip -r MinUI.zip .system .tmp_update Tools
 	mv ./build/PAYLOAD/MinUI.zip ./build/BASE
 
-	# Fetch, rename, and stage vendored .pakz files
+	# Fetch, rename, and stage vendored packages
 	mkdir -p $(VENDOR_DEST)
-	@for url in $(PACKAGE_URLS); do \
-		echo "Fetching $$url..."; \
-		orig=$$(basename $$url); \
-		name=$$(echo "$$orig" | tr '[:upper:]' '[:lower:]'); \
-		base=$$(echo "$$name" | sed -E 's/\.[^.]+$$//'); \
-		ext=$$(echo "$$name" | sed -E 's/^.*(\.[^.]+)$$/\1/'); \
-		safe_base=$$(echo "$$base" | sed 's/[^a-z0-9]/_/g'); \
-		newname="nextui.$$safe_base$$ext"; \
-		echo " -> saving as $(VENDOR_DEST)/$$newname"; \
-		curl -Ls -o "$(VENDOR_DEST)/$$newname" "$$url"; \
+	@for entry in $(PACKAGE_URL_MAPPINGS); do \
+		url=$$(echo $$entry | awk '{print $$1}'); \
+		target=$$(echo $$entry | awk '{print $$2}'); \
+		echo "Downloading $$url → $(VENDOR_DEST)/$$target"; \
+		curl -Ls -o "$(VENDOR_DEST)/$$target" "$$url"; \
 	done
 
 	# Move renamed .pakz files into base folder
