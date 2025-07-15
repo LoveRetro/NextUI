@@ -6379,10 +6379,6 @@ static void Menu_loop(void) {
 		screen = GFX_resize(DEVICE_WIDTH,DEVICE_HEIGHT,DEVICE_PITCH);
 	}
 
-	char act[PATH_MAX];
-	sprintf(act, "gametimectl.elf stop '%s' &", replaceString2(game.path, "'", "'\\''"));
-	system(act);
-
 	SRAM_write();
 	RTC_write();
 	PWR_warn(0);
@@ -6705,10 +6701,6 @@ static void Menu_loop(void) {
 		if (rumble_strength) VIB_setStrength(rumble_strength);
 		
 		if (!HAS_POWER_BUTTON) PWR_disableSleep();
-
-		char act[PATH_MAX];
-		sprintf(act, "gametimectl.elf start '%s' &", replaceString2(game.path, "'", "'\\''"));
-		system(act);
 	}
 	else if (exists(NOUI_PATH)) PWR_powerOff(0); // TODO: won't work with threaded core, only check this once per launch
 	
