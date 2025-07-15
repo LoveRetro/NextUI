@@ -808,7 +808,7 @@ static Array* getQuickEntries(void) {
 	Array* entries = Array_new();
 
 	// We assume Menu_init was already called and populated this
-	if (CFG_getShowRecents() && recents->count)
+	if (recents && recents->count)
 		Array_push(entries, Entry_newNamed(FAUX_RECENT_PATH, ENTRY_DIR, "Recents"));
 
 	if (hasCollections())
