@@ -32,6 +32,8 @@ ifeq ($(PLATFORM), desktop)
 	cd ./all/settings/ && make
 else 
 	cd ./$(PLATFORM)/rfkill && make all
+	cd ./$(PLATFORM)/btmanager && make all
+	cd ./$(PLATFORM)/btdaemon && make all
 	cd ./$(PLATFORM)/wifimanager && make all
 	cd ./$(PLATFORM)/libmsettings && make
 	cd ./$(PLATFORM) && make early # eg. other libs
@@ -72,6 +74,8 @@ clean:
 ifneq ($(PLATFORM), desktop)
 	cd ./$(PLATFORM)/rfkill && make clean
 	cd ./$(PLATFORM)/wifimanager && make clean
+	cd ./$(PLATFORM)/btdaemon && make clean
+	cd ./$(PLATFORM)/btmanager && make clean
 	cd ./$(PLATFORM)/keymon && make clean
 	cd ./all/syncsettings/ && make clean
 	cd ./all/ledcontrol/ && make clean

@@ -841,6 +841,8 @@ static Array* getQuickToggles(void) {
 	// quick actions
 	if(WIFI_supported())
 		Array_push(entries, Entry_new("Wifi", ENTRY_DIP));
+	if(BT_supported())
+		Array_push(entries, Entry_new("Bluetooth", ENTRY_DIP));
 	if(PLAT_supportsDeepSleep() && !simple_mode)
 		Array_push(entries, Entry_new("Sleep", ENTRY_DIP));
 	Array_push(entries, Entry_new("Reboot", ENTRY_DIP));
@@ -1470,6 +1472,9 @@ static void toggleQuick(Entry* self)
 	if(!strcmp(self->name, "Wifi")) {
 		WIFI_enable(!WIFI_enabled());
 	}
+	else if(!strcmp(self->name, "Bluetooth")) {
+		BT_enable(!BT_enabled());
+	}
 	else if(!strcmp(self->name, "Sleep")) {
 		PWR_sleep();
 	}
@@ -1938,24 +1943,24 @@ void animcallback(finishedTask *task) {
 		pilltargetY = +screen->w; // move offscreen
 		if(task->done) {
 			pilltargetY = task->targetY;
-		pilltargetTextY = task->targetTextY;
-		SDL_Color text_color = uintToColour(THEME_COLOR5_255);
-		SDL_Surface *tmp = TTF_RenderUTF8_Blended(font.large, task->entry_name, text_color);
+			pilltargetTextY = task->targetTextY;
+			SDL_Color text_color = uintToColour(THEME_COLOR5_255);
+			SDL_Surface *tmp = TTF_RenderUTF8_Blended(font.large, task->entry_name, text_color);
 
-		SDL_Surface *converted = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA8888, 0);
-		SDL_FreeSurface(tmp); // tmp no longer needed
+			SDL_Surface *converted = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA8888, 0);
+			SDL_FreeSurface(tmp); // tmp no longer needed
 
-		SDL_Rect crop_rect = { 0, 0, task->move_w - SCALE1(BUTTON_PADDING * 2), converted->h };
-		SDL_Surface *cropped = SDL_CreateRGBSurfaceWithFormat(
-			0, crop_rect.w, crop_rect.h, 32, SDL_PIXELFORMAT_RGBA8888
-		);
-		if (!cropped) {
+			SDL_Rect crop_rect = { 0, 0, task->move_w - SCALE1(BUTTON_PADDING * 2), converted->h };
+			SDL_Surface *cropped = SDL_CreateRGBSurfaceWithFormat(
+				0, crop_rect.w, crop_rect.h, 32, SDL_PIXELFORMAT_RGBA8888
+			);
+			if (!cropped) {
+				SDL_FreeSurface(converted);
+			}
+
+			SDL_SetSurfaceBlendMode(converted, SDL_BLENDMODE_NONE); 
+			SDL_BlitSurface(converted, &crop_rect, cropped, NULL);
 			SDL_FreeSurface(converted);
-		}
-
-		SDL_SetSurfaceBlendMode(converted, SDL_BLENDMODE_NONE); 
-		SDL_BlitSurface(converted, &crop_rect, cropped, NULL);
-		SDL_FreeSurface(converted);
 
 			globalText = cropped;
 		}
@@ -2145,6 +2150,7 @@ int main (int argc, char *argv[]) {
 
 	int show_setting = 0; // 1=brightness,2=volume
 	int was_online = PLAT_isOnline();
+    int had_bt = PLAT_btIsConnected();
 
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
@@ -2179,10 +2185,17 @@ int main (int argc, char *argv[]) {
 		PWR_update(&dirty, &show_setting, NULL, NULL);
 		
 		int is_online = PLAT_isOnline();
-		if (was_online!=is_online) dirty = 1;
+		if (was_online!=is_online) 
+			dirty = 1;
 		was_online = is_online;
+
+        int has_bt = PLAT_btIsConnected();
+        if (had_bt != has_bt)
+            dirty = 1;
+        had_bt = has_bt;
+
 		int gsanimdir = ANIM_NONE;
-		
+
 		if (currentScreen == SCREEN_QUICKMENU) {
 			int qm_total = qm_row == 0 ? quick->count : quickActions->count;
 
@@ -2486,7 +2499,8 @@ int main (int argc, char *argv[]) {
 				char newBgPath[MAX_PATH];
 				char fallbackBgPath[MAX_PATH];
 				sprintf(newBgPath, SDCARD_PATH "/.media/quick_%s%s.png", current->name, 
-					!strcmp(current->name,"Wifi") && CFG_getWifi() ? "_off" : ""); // wifi or wifi_off, based on state
+					!strcmp(current->name,"Wifi") && CFG_getWifi() || 							// wifi or wifi_off, based on state
+					!strcmp(current->name,"Bluetooth") && CFG_getBluetooth() ? "_off" : "");	// bluetooth or bluetooth_off, based on state
 				sprintf(fallbackBgPath, SDCARD_PATH "/.media/quick.png");
 				
 				// background
@@ -2601,6 +2615,8 @@ int main (int argc, char *argv[]) {
 						int asset = ASSET_WIFI;
 						if (!strcmp(item->name,"Wifi"))
 							asset = CFG_getWifi() ? ASSET_WIFI_OFF : ASSET_WIFI;
+						else if (!strcmp(item->name,"Bluetooth"))
+							asset = CFG_getBluetooth() ? ASSET_BLUETOOTH_OFF : ASSET_BLUETOOTH;
 						else if (!strcmp(item->name,"Sleep"))
 							asset = ASSET_SUSPEND;
 						else if (!strcmp(item->name,"Reboot"))

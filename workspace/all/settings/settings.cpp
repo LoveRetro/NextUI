@@ -11,6 +11,7 @@ extern "C"
 #include <sstream>
 #include <regex>
 #include "wifimenu.hpp"
+#include "btmenu.hpp"
 #include "keyboardprompt.hpp"
 
 static int appQuit = false;
@@ -125,6 +126,8 @@ int main(int argc, char *argv[])
         PWR_init();
         TIME_init();
         WIFI_init();
+        // This will briefly tear down existing connections
+        BT_init();
 
         signal(SIGINT, sigHandler);
         signal(SIGTERM, sigHandler);
@@ -134,6 +137,7 @@ int main(int argc, char *argv[])
         TIME_getTimezones(timezones, &tz_count);
 
         int was_online = PLAT_isOnline();
+        int had_bt = PLAT_btIsConnected();
         
         std::vector<std::any> tz_values;
         std::vector<std::string> tz_labels;
@@ -418,6 +422,9 @@ int main(int argc, char *argv[])
         // TODO: check WIFI_supported(), hide menu otherwise
         auto networkMenu = new Wifi::Menu(appQuit);
 
+        // TODO: check BT_supported(), hide menu otherwise
+        auto btMenu = new Bluetooth::Menu(appQuit, ctx.dirty);
+
         auto aboutMenu = new MenuList(MenuItemType::Fixed, "About",
         {
             new StaticMenuItem{ListItemType::Generic, "NextUI version", "", 
@@ -455,13 +462,9 @@ int main(int argc, char *argv[])
             new MenuItem{ListItemType::Generic, "System", "", {}, {}, nullptr, nullptr, DeferToSubmenu, systemMenu},
             new MenuItem{ListItemType::Generic, "FN switch", "FN switch settings", {}, {}, nullptr, nullptr, DeferToSubmenu, muteMenu},
             new MenuItem{ListItemType::Generic, "Network", "", {}, {}, nullptr, nullptr, DeferToSubmenu, networkMenu},
+            new MenuItem{ListItemType::Generic, "Bluetooth", "", {}, {}, nullptr, nullptr, DeferToSubmenu, btMenu},
             new MenuItem{ListItemType::Generic, "About", "", {}, {}, nullptr, nullptr, DeferToSubmenu, aboutMenu},
         });
-
-        //ctx.menu = new KeyboardPrompt("test", [](MenuItem &itm) -> InputReactionHint
-        //                              {   
-        //    LOG_info("Keyboard text: %s\n", itm.getName().c_str());
-        //    return NoOp; });
 
         const bool showTitle = false;
         const bool showIndicator = true;
@@ -498,8 +501,14 @@ int main(int argc, char *argv[])
             PWR_update(&ctx.dirty, &ctx.show_setting, nullptr, nullptr);
 
             int is_online = PLAT_isOnline();
-            if (was_online!=is_online) ctx.dirty = 1;
+            if (was_online!=is_online) 
+                ctx.dirty = 1;
             was_online = is_online;
+
+            int has_bt = PLAT_btIsConnected();
+            if (had_bt != has_bt)
+                ctx.dirty = 1;
+            had_bt = has_bt;
 
             if (ctx.dirty)
             {
@@ -565,6 +574,7 @@ int main(int argc, char *argv[])
         QuitSettings();
         PWR_quit();
         PAD_quit();
+        BT_quit();
         GFX_quit();
 
         return EXIT_SUCCESS;
@@ -575,6 +585,7 @@ int main(int argc, char *argv[])
         QuitSettings();
         PWR_quit();
         PAD_quit();
+        BT_quit();
         GFX_quit();
 
         return EXIT_FAILURE;

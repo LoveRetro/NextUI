@@ -12,7 +12,7 @@ TARGET=msettings
 
 CC = $(CROSS_COMPILE)gcc
 
-CFLAGS = -g
+#CFLAGS = -g
 #LDFLAGS = -ldl -lrt -s
 LDFLAGS = -ldl
 

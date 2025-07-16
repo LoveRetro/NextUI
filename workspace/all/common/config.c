@@ -60,6 +60,8 @@ void CFG_defaults(NextUISettings *cfg)
 
         .wifi = CFG_DEFAULT_WIFI,
         .wifiDiagnostics = CFG_DEFAULT_WIFI_DIAG,
+        .bluetooth = CFG_DEFAULT_BLUETOOTH,
+        .bluetoothDiagnostics = CFG_DEFAULT_BLUETOOTH_DIAG,
 };
 
     *cfg = defaults;
@@ -239,6 +241,16 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 CFG_setWifiDiagnostics(temp_value);
                 continue;
             }
+            if (sscanf(line, "bluetooth=%i", &temp_value) == 1)
+            {
+                CFG_setBluetooth(temp_value);
+                continue;
+            }
+            if (sscanf(line, "btDiagnostics=%i", &temp_value) == 1)
+            {
+                CFG_setBluetoothDiagnostics(temp_value);
+                continue;
+            }
         }
         fclose(file);
     }
@@ -346,6 +358,7 @@ uint32_t CFG_getScreenTimeoutSecs(void)
 void CFG_setScreenTimeoutSecs(uint32_t secs)
 {
     settings.screenTimeoutSecs = secs;
+    CFG_sync();
 }
 
 uint32_t CFG_getSuspendTimeoutSecs(void)
@@ -356,6 +369,7 @@ uint32_t CFG_getSuspendTimeoutSecs(void)
 void CFG_setSuspendTimeoutSecs(uint32_t secs)
 {
     settings.suspendTimeoutSecs = secs;
+    CFG_sync();
 }
 
 bool CFG_getShowClock(void)
@@ -366,6 +380,7 @@ bool CFG_getShowClock(void)
 void CFG_setShowClock(bool show)
 {
     settings.showClock = show;
+    CFG_sync();
 }
 
 bool CFG_getClock24H(void)
@@ -376,6 +391,7 @@ bool CFG_getClock24H(void)
 void CFG_setClock24H(bool is24)
 {
     settings.clock24h = is24;
+    CFG_sync();
 }
 
 bool CFG_getShowBatteryPercent(void)
@@ -386,6 +402,7 @@ bool CFG_getShowBatteryPercent(void)
 void CFG_setShowBatteryPercent(bool show)
 {
     settings.showBatteryPercent = show;
+    CFG_sync();
 }
 
 bool CFG_getMenuAnimations(void)
@@ -396,6 +413,7 @@ bool CFG_getMenuAnimations(void)
 void CFG_setMenuAnimations(bool show)
 {
     settings.showMenuAnimations = show;
+    CFG_sync();
 }
 
 bool CFG_getMenuTransitions(void)
@@ -406,6 +424,7 @@ bool CFG_getMenuTransitions(void)
 void CFG_setMenuTransitions(bool show)
 {
     settings.showMenuTransitions = show;
+    CFG_sync();
 }
 
 int CFG_getThumbnailRadius(void)
@@ -416,6 +435,7 @@ int CFG_getThumbnailRadius(void)
 void CFG_setThumbnailRadius(int radius)
 {
     settings.thumbRadius = clamp(radius, 0, 24);
+    CFG_sync();
 }
 
 bool CFG_getShowRecents(void)
@@ -426,6 +446,7 @@ bool CFG_getShowRecents(void)
 void CFG_setShowRecents(bool show)
 {
     settings.showRecents = show;
+    CFG_sync();
 }
 
 bool CFG_getShowTools(void)
@@ -436,6 +457,7 @@ bool CFG_getShowTools(void)
 void CFG_setShowTools(bool show)
 {
     settings.showTools = show;
+    CFG_sync();
 }
 
 bool CFG_getShowGameArt(void)
@@ -446,6 +468,7 @@ bool CFG_getShowGameArt(void)
 void CFG_setShowGameArt(bool show)
 {
     settings.showGameArt = show;
+    CFG_sync();
 }
 
 bool CFG_getRomsUseFolderBackground(void)
@@ -456,6 +479,7 @@ bool CFG_getRomsUseFolderBackground(void)
 void CFG_setRomsUseFolderBackground(bool folder)
 {
     settings.romsUseFolderBackground = folder;
+    CFG_sync();
 }
 
 int CFG_getGameSwitcherScaling(void)
@@ -466,6 +490,7 @@ int CFG_getGameSwitcherScaling(void)
 void CFG_setGameSwitcherScaling(int enumValue)
 {
     settings.gameSwitcherScaling = clamp(enumValue, 0, GFX_SCALE_NUM_OPTIONS);
+    CFG_sync();
 }
 
 bool CFG_getHaptics(void)
@@ -476,6 +501,7 @@ bool CFG_getHaptics(void)
 void CFG_setHaptics(bool enable)
 {
     settings.haptics = enable;
+    CFG_sync();
 }
 
 int CFG_getSaveFormat(void)
@@ -486,6 +512,7 @@ int CFG_getSaveFormat(void)
 void CFG_setSaveFormat(int f)
 {
     settings.saveFormat = f;
+    CFG_sync();
 }
 
 int CFG_getStateFormat(void)
@@ -496,6 +523,7 @@ int CFG_getStateFormat(void)
 void CFG_setStateFormat(int f)
 {
     settings.stateFormat = f;
+    CFG_sync();
 }
 
 bool CFG_getMuteLEDs(void)
@@ -506,6 +534,7 @@ bool CFG_getMuteLEDs(void)
 void CFG_setMuteLEDs(bool on)
 {
     settings.muteLeds = on;
+    CFG_sync();
 }
 
 double CFG_getGameArtWidth(void)
@@ -516,6 +545,7 @@ double CFG_getGameArtWidth(void)
 void CFG_setGameArtWidth(double zeroToOne)
 {
     settings.gameArtWidth = clampd(zeroToOne, 0.0, 1.0);
+    CFG_sync();
 }
 
 bool CFG_getWifi(void)
@@ -526,6 +556,7 @@ bool CFG_getWifi(void)
 void CFG_setWifi(bool on)
 {
     settings.wifi = on;
+    CFG_sync();
 }
 
 int CFG_getDefaultView(void)
@@ -536,6 +567,7 @@ int CFG_getDefaultView(void)
 void CFG_setDefaultView(int view)
 {
     settings.defaultView = view;
+    CFG_sync();
 }
 
 bool CFG_getShowQuickswitcherUI(void)
@@ -546,6 +578,7 @@ bool CFG_getShowQuickswitcherUI(void)
 void CFG_setShowQuickswitcherUI(bool on)
 {
     settings.showQuickSwitcherUi = on;
+    CFG_sync();
 }
 
 bool CFG_getWifiDiagnostics(void)
@@ -556,6 +589,29 @@ bool CFG_getWifiDiagnostics(void)
 void CFG_setWifiDiagnostics(bool on)
 {
     settings.wifiDiagnostics = on;
+    CFG_sync();
+}
+
+bool CFG_getBluetooth(void)
+{
+    return settings.bluetooth;
+}
+
+void CFG_setBluetooth(bool on)
+{
+    settings.bluetooth = on;
+    CFG_sync();
+}
+
+bool CFG_getBluetoothDiagnostics(void)
+{
+    return settings.bluetoothDiagnostics;
+}
+
+void CFG_setBluetoothDiagnostics(bool on)
+{
+    settings.bluetoothDiagnostics = on;
+    CFG_sync();
 }
 
 void CFG_get(const char *key, char *value)
@@ -676,6 +732,14 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getWifiDiagnostics()));
     }
+    else if (strcmp(key, "bluetooth") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getBluetooth()));
+    }
+    else if (strcmp(key, "btDiagnostics") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getBluetoothDiagnostics()));
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -733,6 +797,8 @@ void CFG_sync(void)
     fprintf(file, "defaultView=%i\n", settings.defaultView);
     fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
     fprintf(file, "wifiDiagnostics=%i\n", settings.wifiDiagnostics);
+    fprintf(file, "bluetooth=%i\n", settings.bluetooth);
+    fprintf(file, "btDiagnostics=%i\n", settings.bluetoothDiagnostics);
 
     fclose(file);
 }
@@ -770,6 +836,8 @@ void CFG_print(void)
     printf("\t\"defaultView\": %i,\n", settings.defaultView);
     printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
     printf("\t\"wifiDiagnostics\": %i,\n", settings.wifiDiagnostics);
+    printf("\t\"bluetooth\": %i,\n", settings.bluetooth);
+    printf("\t\"btDiagnostics\": %i,\n", settings.bluetoothDiagnostics);
 
     // meta, not a real setting
     if (settings.font == 1)

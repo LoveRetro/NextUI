@@ -95,6 +95,8 @@ typedef struct
 	// Network
 	bool wifi;
 	bool wifiDiagnostics;
+	bool bluetooth;
+	bool bluetoothDiagnostics;
 
 } NextUISettings;
 
@@ -128,6 +130,8 @@ typedef struct
 #define CFG_DEFAULT_SHOWQUICKWITCHERUI true
 #define CFG_DEFAULT_WIFI_DIAG false
 #define CFG_DEFAULT_SHOWTOOLS true
+#define CFG_DEFAULT_BLUETOOTH false
+#define CFG_DEFAULT_BLUETOOTH_DIAG false
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
@@ -215,6 +219,12 @@ void CFG_setShowQuickswitcherUI(bool on);
 // WiFi diagnostic logging on/off
 bool CFG_getWifiDiagnostics(void);
 void CFG_setWifiDiagnostics(bool on);
+// Bluetooth on/off (if available)
+bool CFG_getBluetooth(void);
+void CFG_setBluetooth(bool on);
+// BT diagnostic logging on/off
+bool CFG_getBluetoothDiagnostics(void);
+void CFG_setBluetoothDiagnostics(bool on);
 
 void CFG_sync(void);
 void CFG_quit(void);

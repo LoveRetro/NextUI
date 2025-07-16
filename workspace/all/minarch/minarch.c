@@ -2323,10 +2323,6 @@ static void Config_readOptions(void) {
 	Config_readOptionsString(config.system_cfg);
 	Config_readOptionsString(config.default_cfg);
 	Config_readOptionsString(config.user_cfg);
-
-
-
-	// screen_scaling = SCALE_NATIVE; // TODO: tmp
 }
 static void Config_readControls(void) {
 	Config_readControlsString(config.default_cfg);
@@ -4539,7 +4535,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	renderer.src = (void*)data;
 	renderer.dst = screen->pixels;
 
-	SDL_PauseAudio(0);
+	SND_pauseAudio(false); // why?
 	GFX_blitRenderer(&renderer);
 
 	screen_flip(screen);
@@ -6252,7 +6248,7 @@ SDL_Thread* screenshotsavethread;
 static void Menu_saveState(void) {
 	// LOG_info("Menu_saveState\n");
 	if(quit) {
-		SDL_PauseAudio(1);
+		SND_pauseAudio(true);
 	}
 	Menu_updateState();
 	
@@ -6804,8 +6800,45 @@ static void limitFF(void) {
 #define PWR_UPDATE_FREQ 5
 #define PWR_UPDATE_FREQ_INGAME 20
 
+// We need to do this on the audio thread (aka main thread currently)
+static bool resetAudio = false;
+
+void onBluetoothAudioChanged(bool bluetooth, int watch_event)
+{
+	switch (watch_event)
+	{
+	case DIRWATCH_CREATE: LOG_info("callback reason: DIRWATCH_CREATE\n"); break;
+	case DIRWATCH_DELETE: LOG_info("callback reason: DIRWATCH_DELETE\n"); break;
+	case FILEWATCH_MODIFY: LOG_info("callback reason: FILEWATCH_MODIFY\n"); break;
+	case FILEWATCH_DELETE: LOG_info("callback reason: FILEWATCH_DELETE\n"); break;
+	case FILEWATCH_CLOSE_WRITE: LOG_info("callback reason: FILEWATCH_CLOSE_WRITE\n"); break;
+	}
+
+	resetAudio = true;
+
+	// FIXME: This shouldnt be necessary, alsa should just read .asoundrc for the changed defult device.
+	if(bluetooth)
+		SDL_setenv("AUDIODEV", "bluealsa", 1);
+	else
+		SDL_setenv("AUDIODEV", "default", 1);
+
+	if(bluetooth && !exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
+		LOG_error("asoundrc is not there yet!!!\n");
+	else if(!bluetooth && exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
+		LOG_error("asoundrc is not deleted yet!!!\n");
+}
+
 int main(int argc , char* argv[]) {
 	LOG_info("MinArch\n");
+
+	static char asoundpath[MAX_PATH];
+	sprintf(asoundpath, "%s/.asoundrc", getenv("HOME"));
+	LOG_info("minarch: need asoundrc at %s\n", asoundpath);
+	if(exists(asoundpath))
+		LOG_info("asoundrc exists at %s\n", asoundpath);
+	else 
+		LOG_info("asoundrc does not exist at %s\n", asoundpath);
+
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
 
@@ -6827,8 +6860,6 @@ int main(int argc , char* argv[]) {
 	
 	LOG_info("rom_path: %s\n", rom_path);
 	
-
-	
 	screen = GFX_init(MODE_MENU);
 
 	// initialize default shaders
@@ -6842,7 +6873,8 @@ int main(int argc , char* argv[]) {
 	
 	VIB_init();
 	PWR_init();
-	if (!HAS_POWER_BUTTON) PWR_disableSleep();
+	if (!HAS_POWER_BUTTON)
+		PWR_disableSleep();
 	MSG_init();
 	IMG_Init(IMG_INIT_PNG);
 	Core_open(core_path, tag_name);
@@ -6860,7 +6892,7 @@ int main(int argc , char* argv[]) {
 	Config_init();
 	Config_readOptions(); // cores with boot logo option (eg. gb) need to load options early
 	setOverclock(overclock);
-
+	
 	Core_init();
 
 	// TODO: find a better place to do this
@@ -6872,8 +6904,9 @@ int main(int argc , char* argv[]) {
 	Input_init(NULL);
 	Config_readOptions(); // but others load and report options later (eg. nes)
 	Config_readControls(); // restore controls (after the core has reported its defaults)
-	
+
 	SND_init(core.sample_rate, core.fps);
+	BT_registerDeviceWatcher(onBluetoothAudioChanged);
 	InitSettings(); // after we initialize audio
 	Menu_init();
 	State_resume();
@@ -6941,7 +6974,13 @@ int main(int argc , char* argv[]) {
 			// this is not needed
 			// SND_resetAudio(core.sample_rate, core.fps);
 		}
-	
+
+		if (resetAudio) {
+			resetAudio = false;
+			LOG_info("Resetting audio device config! (new state: BT %s)\n", SDL_getenv("AUDIODEV"));
+			SND_resetAudio(core.sample_rate, core.fps);
+		}
+
 		hdmimon();
 	}
 	int cw, ch;
@@ -6976,8 +7015,10 @@ finish:
 	MSG_quit();
 	PWR_quit();
 	VIB_quit();
+	BT_removeDeviceWatcher();
 	// already happens on Core_unload
 	SND_quit();
+	BT_quit();
 	PAD_quit();
 	GFX_quit();
 	SDL_WaitThread(screenshotsavethread, NULL);

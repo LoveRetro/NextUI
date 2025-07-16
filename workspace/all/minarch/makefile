@@ -40,8 +40,9 @@ LDFLAGS	 +=  -Llibretro-common -lsrm -lzip
 CFLAGS   += -DHAS_SRM
 endif
 ifeq ($(PLATFORM), tg5040)
-CFLAGS += -DHAS_WIFIMG
+CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
 LDFLAGS +=  -lwifimg -lwifid
+LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -lasound -ljson-c
 endif
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 # CFLAGS  += -fsanitize=address -fno-common
@@ -55,11 +56,11 @@ BUILD_HASH!=cat ../../hash.txt
 CFLAGS += -DBUILD_DATE=\"${BUILD_DATE}\" -DBUILD_HASH=\"${BUILD_HASH}\"
 
 ifeq ($(PLATFORM), desktop)
-all: libretro-common $(PREFIX_LOCAL)/include/msettings.h
+all: clean libretro-common $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 else
-all: libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
+all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	cp /usr/lib/aarch64-linux-gnu/libsamplerate.so.0 build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.

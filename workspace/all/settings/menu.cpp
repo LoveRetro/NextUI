@@ -347,6 +347,37 @@ bool MenuList::selectPrev()
     return true;
 }
 
+std::string MenuList::getSelectedItemName() const
+{
+    if(items.empty())
+        return "";
+
+    int selected_row = scope.selected - scope.start;
+    return items.at(selected_row)->getName();
+}
+
+bool MenuList::selectByName(const std::string &name)
+{
+    if(name.empty())
+        return false;
+
+    int toSelect = -1;
+    for (int i = 0; i < items.size() && toSelect < 0; i++)
+        if(items.at(i)->getName() == name)
+            toSelect = i;
+    //LOG_info("Found element %s (%d) at pos %d\n", name.c_str(), scope.selected - scope.start, toSelect);
+    if (toSelect >= 0)
+    {
+        performLayout((SDL_Rect){0, 0, FIXED_WIDTH, FIXED_HEIGHT});
+        while(toSelect > 0) {
+            selectNext();
+            toSelect--;
+        }
+        return true;
+    }
+    return false;
+}
+
 // returns true if the input was handled
 InputReactionHint MenuList::handleInput(int &dirty, int &quit)
 {

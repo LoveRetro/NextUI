@@ -654,6 +654,7 @@ int main(int argc, char *argv[])
     int dirty = 1;
     int show_setting = 0;
     int was_online = PLAT_isOnline();
+    int had_bt = PLAT_btIsConnected();
     while (!quit)
     {
         uint32_t frame_start = SDL_GetTicks();
@@ -712,6 +713,11 @@ int main(int argc, char *argv[])
         if (was_online != is_online)
             dirty = 1;
         was_online = is_online;
+
+        int has_bt = PLAT_btIsConnected();
+        if (had_bt != has_bt)
+            dirty = 1;
+        had_bt = has_bt;
 
         if (dirty)
         {

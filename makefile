@@ -47,6 +47,9 @@ PACKAGE_URL_MAPPINGS := \
 
 export MAKEFLAGS=--no-print-directory
 
+deploy: setup $(PLATFORMS) special package
+	adb push ./build/BASE/MinUI.zip /mnt/SDCARD && adb shell reboot
+
 all: setup $(PLATFORMS) special package done
 	
 shell:
