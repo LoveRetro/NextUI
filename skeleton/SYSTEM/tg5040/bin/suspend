@@ -31,9 +31,6 @@ before() {
 		/etc/bluetooth/bluetoothd stop || true
 		killall -15 bluealsa || true
 	fi
-
-	>&2 echo "Blocking wireless..."
-	rfkill block wifi || true
 }
 
 after() {
@@ -57,9 +54,6 @@ after() {
 		/etc/bluetooth/bluetoothd start || true
 		/usr/bin/bluetoothctl power on || true
 	fi
-
-	>&2 echo "Unblocking wireless..."
-	rfkill unblock wifi || true
 }
 
 before

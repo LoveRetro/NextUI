@@ -3500,7 +3500,7 @@ void PLAT_wifiDiagnosticsEnable(bool on)
 // I've tried lots of things, but wifi_daemon simply doesnt want to cooperate
 // through a sleep cycle. Just shut it down, it comes back instantaneously.
 // If you feel like sinking more time into it, please increase this counter.
-// Days spent on Allwinner wifi bugs: 8
+// Days spent on Allwinner wifi bugs: 10
 static int enableWifi = false;
 void PLAT_wifiPreSleep()
 {
@@ -3508,6 +3508,11 @@ void PLAT_wifiPreSleep()
 	{
 		enableWifi = true;
 		WIFI_enable(false);
+
+		// We have some issues entering deep sleep without this.
+		system("/etc/init.d/wpa_supplicant stop");
+		system("ifconfig wlan0 down");
+		system("rfkill block wifi");
 	}
 }
 
@@ -3515,6 +3520,8 @@ void PLAT_wifiPostSleep()
 {
 	if (WIFI_supported() && enableWifi)
 	{
+		system("rfkill unblock wifi");
+
 		WIFI_enable(true);
 		enableWifi = false;
 	}
