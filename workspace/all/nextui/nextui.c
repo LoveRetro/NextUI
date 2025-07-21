@@ -1934,9 +1934,10 @@ int pilltargetTextY =0;
 void animcallback(finishedTask *task) {
 	SDL_LockMutex(animMutex);
 	pillRect = task->dst; 
-	pilltargetY = +screen->w; // move offscreen
-	if(task->done) {
-		pilltargetY = task->targetY;
+	if(pillRect.w > 0 && pillRect.h > 0) {
+		pilltargetY = +screen->w; // move offscreen
+		if(task->done) {
+			pilltargetY = task->targetY;
 		pilltargetTextY = task->targetTextY;
 		SDL_Color text_color = uintToColour(THEME_COLOR5_255);
 		SDL_Surface *tmp = TTF_RenderUTF8_Blended(font.large, task->entry_name, text_color);
@@ -1956,9 +1957,10 @@ void animcallback(finishedTask *task) {
 		SDL_BlitSurface(converted, &crop_rect, cropped, NULL);
 		SDL_FreeSurface(converted);
 
-		globalText = cropped;
+			globalText = cropped;
+		}
+		needDraw = 1;
 	}
-	needDraw = 1;
 	SDL_UnlockMutex(animMutex);
 	animationDraw = 1;
 }
@@ -2872,7 +2874,7 @@ int main (int argc, char *argv[]) {
 						Entry* entry = top->entries->items[i];
 						char* entry_name = entry->name;
 						char* entry_unique = entry->unique;
-						int available_width = (had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_MARGIN)) - SCALE1(PADDING * 2);
+						int available_width = MAX(0,(had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_MARGIN)) - SCALE1(PADDING * 2));
 						if (i == top->start && !(had_thumb)) available_width -= ow;
 						trimSortingMeta(&entry_name);
 
