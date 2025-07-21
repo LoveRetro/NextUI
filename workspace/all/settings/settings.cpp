@@ -9,6 +9,7 @@ extern "C"
 
 #include <fstream>
 #include <sstream>
+#include <regex>
 #include "wifimenu.hpp"
 #include "keyboardprompt.hpp"
 
@@ -76,6 +77,30 @@ static const std::vector<std::string> on_off = {"Off", "On"};
 static const std::vector<std::string> scaling_strings = {"Fullscreen", "Fit", "Fill"};
 static const std::vector<std::any> scaling = {(int)GFX_SCALE_FULLSCREEN, (int)GFX_SCALE_FIT, (int)GFX_SCALE_FILL};
 
+namespace {
+    std::string execCommand(const char* cmd) {
+        std::array<char, 128> buffer;
+        std::string result;
+        
+        std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+        if (!pipe) throw std::runtime_error("popen() failed!");
+
+        while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+            result += buffer.data();
+        }
+
+        return result;
+    }
+
+    std::string extractBusyBoxVersion(const std::string& output) {
+        std::regex versionRegex(R"(BusyBox\s+v[0-9]+\.[0-9]+\.[0-9]+.*)");
+        std::smatch match;
+        if (std::regex_search(output, match, versionRegex)) {
+            return match.str(0);
+        }
+        return "";
+    }
+}
 int main(int argc, char *argv[])
 {
     try
@@ -409,6 +434,15 @@ int main(int argc, char *argv[])
                 char osver[128];
                 PLAT_getOsVersionInfo(osver, 128);
                 return std::string(osver); }
+            },
+            new StaticMenuItem{ListItemType::Generic, "Busybox version", "", 
+            []() -> std::any { 
+                std::string output = execCommand("cat --help");
+                std::string version = extractBusyBoxVersion(output);
+
+                if (!version.empty())
+                    return version;
+                return std::string("BusyBox version not found."); }
             },
         });
 
