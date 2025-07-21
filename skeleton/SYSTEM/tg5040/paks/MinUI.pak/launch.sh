@@ -112,7 +112,7 @@ CPU_SPEED_PERF=2000000
 echo $CPU_SPEED_PERF > $CPU_PATH
 
 # bt handling (todo, off for now)
-rfkill block bluetooth
+rfkill.elf block bluetooth
 killall MtpDaemon # I dont think we need to micro manage this one
 
 # BT handling
@@ -134,9 +134,9 @@ if [ "$wifion" -eq 0 ]; then
 	# do we really care that much about a stray DHCP service running?
 	killall -9 udhcpc
 	# i guess this could theoretically conserve battery
-	rfkill block wifi
+	rfkill.elf block wifi
 else 
-	rfkill unblock wifi
+	rfkill.elf unblock wifi
 	wifi_daemon &
 fi
 

@@ -3020,6 +3020,12 @@ void PWR_powerOff(int reboot) {
 		GFX_blitMessage(font.large, msg, gfx.screen,&(SDL_Rect){0,0,gfx.screen->w,gfx.screen->h}); //, NULL);
 		GFX_flip(gfx.screen);
 
+		system("killall -STOP keymon.elf");
+		system("killall -STOP batmon.elf");
+
+		PWR_updateFrequency(-1, false);
+		WIFI_aboutToSleep();
+
 		PLAT_powerOff(reboot);
 	}
 }

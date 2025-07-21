@@ -31,6 +31,7 @@ ifeq ($(PLATFORM), desktop)
 	cd ./all/nextval/ && make
 	cd ./all/settings/ && make
 else 
+	cd ./$(PLATFORM)/rfkill && make all
 	cd ./$(PLATFORM)/wifimanager && make all
 	cd ./$(PLATFORM)/libmsettings && make
 	cd ./$(PLATFORM) && make early # eg. other libs
@@ -69,6 +70,7 @@ endif
 
 clean:
 ifneq ($(PLATFORM), desktop)
+	cd ./$(PLATFORM)/rfkill && make clean
 	cd ./$(PLATFORM)/wifimanager && make clean
 	cd ./$(PLATFORM)/keymon && make clean
 	cd ./all/syncsettings/ && make clean

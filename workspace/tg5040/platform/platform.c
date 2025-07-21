@@ -3150,7 +3150,7 @@ void PLAT_wifiEnable(bool on) {
 
 		// This shouldnt be needed, but we cant really rely on nobody else messing with this stuff. 
 		// Make sure supplicant is up and rfkill doesnt block.
-		system("rfkill unblock wifi");
+		system("rfkill.elf unblock wifi");
 		
 		int ret = system("pidof wpa_supplicant > /dev/null 2>&1");
 		if (ret != 0) {
@@ -3175,7 +3175,7 @@ void PLAT_wifiEnable(bool on) {
 
 		// Honestly, I'd rather not do this but it seems to keep the questionable wifi implementation
 		// on Trimui from randomly reconnecting automatically
-		system("rfkill block wifi");
+		system("rfkill.elf block wifi");
 		//system("/etc/init.d/wpa_supplicant stop&");
 	}
 }
@@ -3512,7 +3512,7 @@ void PLAT_wifiPreSleep()
 		// We have some issues entering deep sleep without this.
 		system("/etc/init.d/wpa_supplicant stop");
 		system("ifconfig wlan0 down");
-		system("rfkill block wifi");
+		system("rfkill.elf block wifi");
 	}
 }
 
@@ -3520,7 +3520,7 @@ void PLAT_wifiPostSleep()
 {
 	if (WIFI_supported() && enableWifi)
 	{
-		system("rfkill unblock wifi");
+		system("rfkill.elf unblock wifi");
 
 		WIFI_enable(true);
 		enableWifi = false;
@@ -3594,7 +3594,7 @@ void PLAT_wifiEnable(bool on) {
 		
 		// This shouldnt be needed, but we cant really rely on nobody else messing with this stuff. 
 		// Make sure supplicant is up and rfkill doesnt block.
-		system("rfkill unblock wifi");
+		system("rfkill.elf unblock wifi");
 		//system("ifconfig wlan0 down");
 		system("/etc/init.d/wpa_supplicant enable");
 		system("/etc/init.d/wpa_supplicant start&");
@@ -3621,7 +3621,7 @@ void PLAT_wifiEnable(bool on) {
 
 		// Honestly, I'd rather not do this but it seems to keep the  questionable wifi implementation
 		// on Trimui from randomly reconnecting automatically
-		system("rfkill block wifi");
+		system("rfkill.elf block wifi");
 		//system("ifconfig wlan0 up");
 		system("/etc/init.d/wpa_supplicant stop&");
 
