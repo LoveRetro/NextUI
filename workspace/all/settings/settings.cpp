@@ -81,8 +81,10 @@ namespace {
     std::string execCommand(const char* cmd) {
         std::array<char, 128> buffer;
         std::string result;
-        
-        std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+
+        // Redirect stderr to stdout using 2>&1
+        std::string fullCmd = std::string(cmd) + " 2>&1";
+        std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(fullCmd.c_str(), "r"), pclose);
         if (!pipe) throw std::runtime_error("popen() failed!");
 
         while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
@@ -93,7 +95,7 @@ namespace {
     }
 
     std::string extractBusyBoxVersion(const std::string& output) {
-        std::regex versionRegex(R"(BusyBox\s+v[0-9]+\.[0-9]+\.[0-9]+.*)");
+        std::regex versionRegex(R"(BusyBox\s+v[\d.]+.*)");
         std::smatch match;
         if (std::regex_search(output, match, versionRegex)) {
             return match.str(0);
