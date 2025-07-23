@@ -3502,12 +3502,14 @@ void PLAT_wifiDiagnosticsEnable(bool on)
 // If you feel like sinking more time into it, please increase this counter.
 // Days spent on Allwinner wifi bugs: 10
 static int enableWifi = false;
-void PLAT_wifiPreSleep()
+void PLAT_wifiPreSleep(int full_suspend)
 {
 	if (WIFI_enabled())
 	{
 		enableWifi = true;
 		WIFI_enable(false);
+		if(!full_suspend)
+			CFG_setWifi(enableWifi);
 
 		// We have some issues entering deep sleep without this.
 		system("/etc/init.d/wpa_supplicant stop");

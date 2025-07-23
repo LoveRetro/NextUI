@@ -3024,7 +3024,7 @@ void PWR_powerOff(int reboot) {
 		system("killall -STOP batmon.elf");
 
 		PWR_updateFrequency(-1, false);
-		WIFI_aboutToSleep();
+		WIFI_aboutToSleep(false);
 
 		PLAT_powerOff(reboot);
 	}
@@ -3051,7 +3051,7 @@ static void PWR_enterSleep(void)
 	system("killall -STOP batmon.elf");
 
 	PWR_updateFrequency(-1, false);
-	WIFI_aboutToSleep();
+	WIFI_aboutToSleep(true);
 
 	sync();
 }
@@ -3367,5 +3367,5 @@ FALLBACK_IMPLEMENTATION void PLAT_wifiConnectPass(const char *ssid, WifiSecurity
 FALLBACK_IMPLEMENTATION void PLAT_wifiDisconnect() {}
 FALLBACK_IMPLEMENTATION bool PLAT_wifiDiagnosticsEnabled() { return false; }
 FALLBACK_IMPLEMENTATION void PLAT_wifiDiagnosticsEnable(bool on) {}
-FALLBACK_IMPLEMENTATION void PLAT_wifiPreSleep() {}
+FALLBACK_IMPLEMENTATION void PLAT_wifiPreSleep(int suspend) {}
 FALLBACK_IMPLEMENTATION void PLAT_wifiPostSleep() {}
