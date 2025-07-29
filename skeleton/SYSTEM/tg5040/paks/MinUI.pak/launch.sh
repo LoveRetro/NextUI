@@ -127,17 +127,11 @@ killall MtpDaemon # I dont think we need to micro manage this one
 # wifi handling
 # on by default, disable based on systemval setting
 wifion=$(nextval.elf wifi | sed -n 's/.*"wifi": \([0-9]*\).*/\1/p')
+cp -f $SYSTEM_PATH/etc/wifi/wifi_init.sh /etc/wifi/wifi_init.sh
 if [ "$wifion" -eq 0 ]; then
-	ifconfig wlan0 down
-	killall -15 wpa_supplicant
-	# this is pretty dumb, it also kills DHCP for e.g. USB-C ethernet adapters
-	# do we really care that much about a stray DHCP service running?
-	killall -9 udhcpc
-	# i guess this could theoretically conserve battery
-	rfkill.elf block wifi
+	/etc/wifi/wifi_init.sh stop > /dev/null 2>&1 &
 else 
-	rfkill.elf unblock wifi
-	wifi_daemon &
+	/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
 fi
 
 keymon.elf & # &> $SDCARD_PATH/keymon.txt &

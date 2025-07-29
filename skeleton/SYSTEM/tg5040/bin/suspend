@@ -2,6 +2,9 @@
 set -euo pipefail
 exec 0<&-
 
+logfile="/mnt/SDCARD/.userdata/tg5040/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
+exec >> "$logfile" 2>&1
+
 wifid_running=
 hciattach_running=
 bluetoothd_running=
@@ -10,11 +13,6 @@ asound_state_dir=/tmp/asound-suspend
 
 before() {
 	>&2 echo "Preparing for suspend..."
-
-    # for f in $(find /sys/devices/platform/soc/7081400.s_twi/i2c-6/6-0034/ -name wakeup); do
-    #     echo "Disabling wakeup in $f"
-    #     echo disabled > "$f"
-    # done
 
 	>&2 echo "Saving mixer state..."
 	mkdir -p "$asound_state_dir"
@@ -31,19 +29,22 @@ before() {
 		/etc/bluetooth/bluetoothd stop || true
 		killall -15 bluealsa || true
 	fi
+
+	if pgrep wpa_supplicant; then
+		wifid_running=1
+		>&2 echo "Stopping wifi_daemon..."
+		killall -15 wifi_daemon || true
+		/etc/wifi/wifi_init.sh stop || true
+	fi
 }
 
 after() {
 	>&2 echo "Resumed from suspend."
 
-    # for f in $(find /sys/devices/platform/soc/7081400.s_twi/i2c-6/6-0034/ -name wakeup); do
-    #     echo "Enabling wakeup in $f"
-    #     echo enabled > "$f"
-    # done
-
-	>&2 echo "Restoring mixer state..."
-	alsactl --file "$asound_state_dir/asound.state.post" store || true
-	alsactl --file "$asound_state_dir/asound.state.pre" restore || true
+	if [ -n "$wifid_running" ]; then
+		>&2 echo "Starting wpa_supplicant..."
+		/etc/wifi/wifi_init.sh start || true
+	fi
 
 	if [ -n "$hciattach_running" ]; then
 		>&2 echo "Starting hciattach..."
@@ -54,6 +55,10 @@ after() {
 		/etc/bluetooth/bluetoothd start || true
 		/usr/bin/bluetoothctl power on || true
 	fi
+
+	>&2 echo "Restoring mixer state..."
+	alsactl --file "$asound_state_dir/asound.state.post" store || true
+	alsactl --file "$asound_state_dir/asound.state.pre" restore || true
 }
 
 before
@@ -63,4 +68,4 @@ before
 echo mem >/sys/power/state
 
 # Resume services in background to reduce UI latency
-after
+after &

@@ -3507,14 +3507,6 @@ void PLAT_wifiPreSleep(int full_suspend)
 	if (WIFI_enabled())
 	{
 		enableWifi = true;
-		WIFI_enable(false);
-		if(!full_suspend)
-			CFG_setWifi(enableWifi);
-
-		// We have some issues entering deep sleep without this.
-		system("/etc/init.d/wpa_supplicant stop");
-		system("ifconfig wlan0 down");
-		system("rfkill.elf block wifi");
 	}
 }
 
@@ -3522,9 +3514,7 @@ void PLAT_wifiPostSleep()
 {
 	if (WIFI_supported() && enableWifi)
 	{
-		system("rfkill.elf unblock wifi");
-
-		WIFI_enable(true);
+		aw_wifid_open();
 		enableWifi = false;
 	}
 }
