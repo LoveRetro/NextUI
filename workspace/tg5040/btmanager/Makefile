@@ -64,9 +64,12 @@ bluez:
 	cp /usr/bin/bluealsa-aplay build/.update_bluez/usr/bin/
 	cp /etc/dbus-1/system.d/bluealsa.conf build/.update_bluez/etc/dbus-1/system.d/bluealsa.conf
 	cp /usr/share/alsa/alsa.conf.d/20-bluealsa.conf build/.update_bluez/usr/share/alsa/alsa.conf.d/20-bluealsa.conf
-	# remove
-	# cp /lib/aarch64-linux-gnu/libncurses.so.6 build/.update_bluez/usr/lib/
-	# cp /lib/aarch64-linux-gnu/libtinfo.so.6 build/.update_bluez/usr/lib/
+	# sbc
+	cp /usr/lib/libsbc.so.1.3.1 build/.update_bluez/usr/lib/
+	cp /usr/lib/libsbc.so.1.3.1 build/.update_bluez/usr/lib64/
+	cp /usr/bin/sbcinfo build/.update_bluez/usr/bin/
+	cp /usr/bin/sbcdec build/.update_bluez/usr/bin/
+	cp /usr/bin/sbcenc build/.update_bluez/usr/bin/
 	# script
 	cp support/upgrade_bluez.sh build/post_install.sh
 	# zip 

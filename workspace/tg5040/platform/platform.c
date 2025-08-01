@@ -3642,23 +3642,8 @@ static void bt_test_gap_connected_changed_cb(btmg_bt_device_t *device)
 	// TODO: check for device class and call SDL_OpenJoystick if its a gamepad/HID device
 	if(device->connected == false) {
 		bt_manager_set_discovery_mode(BTMG_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
-		//if (GET_MAJOR_CLASS(device->r_class) == 0x04)
-		//{ // Audio/Video
-		//	///delete_asoundrc_bt(); // called by bt_daemon
-		//}
-		//else if (GET_MAJOR_CLASS(device->r_class) == 0x05) { // Peripheral
-		//	//PAD_reload(); // called from event handling
-		//}
 	}
 	else {
-		//if (GET_MAJOR_CLASS(device->r_class) == 0x04)
-		//{ // Audio/Video
-		//	//write_asoundrc_bt(device->remote_address); // called by bt_daemon
-		//}
-		//else if (GET_MAJOR_CLASS(device->r_class) == 0x05) { // Peripheral
-		//	//PAD_update(); // called from event handling
-		//}
-
 		// not sure why this isnt handled over btmgr interface, but we need it
 		char act[256];
 		sprintf(act, "bluetoothctl trust %s", device->remote_address);

@@ -30,7 +30,7 @@ cp /usr/bin/btattach /mnt/SDCARD/btmgr_backup/usr/bin/
 cp /usr/bin/bluetoothd /mnt/SDCARD/btmgr_backup/usr/bin/
 cp /usr/bin/obexd /mnt/SDCARD/btmgr_backup/usr/bin/
 cp /usr/lib/libbluetooth.so.3.19.2 /mnt/SDCARD/btmgr_backup/usr/lib/
-cp /usr/lib/libbluetooth.so.3.19.2 /mnt/SDCARD/btmgr_backup/usr/lib64/
+cp /usr/lib64/libbluetooth.so.3.19.2 /mnt/SDCARD/btmgr_backup/usr/lib64/
 cp /etc/dbus-1/system.d/bluetooth.conf /mnt/SDCARD/btmgr_backup/etc/dbus-1/system.d/
 cp /etc/dbus-1/system.d/bluetooth-mesh.conf /mnt/SDCARD/btmgr_backup/etc/dbus-1/system.d/
 cp /etc/dbus-1/system.d/bluetooth-mesh-adapter.conf /mnt/SDCARD/btmgr_backup/etc/dbus-1/system.d/
@@ -44,6 +44,13 @@ cp /usr/bin/bluealsa /mnt/SDCARD/btmgr_backup/usr/bin/
 cp /usr/bin/bluealsa-aplay /mnt/SDCARD/btmgr_backup/usr/bin/
 # cp /etc/dbus-1/system.d/bluealsa.conf /mnt/SDCARD/btmgr_backup/etc/dbus-1/system.d/
 cp /usr/share/alsa/alsa.conf.d/20-bluealsa.conf /mnt/SDCARD/btmgr_backup/usr/share/alsa/alsa.conf.d/
+
+# sbc
+cp /usr/lib/libsbc.so.1.2.1 /mnt/SDCARD/btmgr_backup/usr/lib/
+cp /usr/lib64/libsbc.so.1.2.1 /mnt/SDCARD/btmgr_backup/usr/lib64/
+cp /usr/bin/sbcinfo /mnt/SDCARD/btmgr_backup/usr/bin/
+cp /usr/bin/sbcdec /mnt/SDCARD/btmgr_backup/usr/bin/
+cp /usr/bin/sbcenc /mnt/SDCARD/btmgr_backup/usr/bin/
 
 # compress backup and clean up
 backupfile="/mnt/SDCARD/btmgr_$(date +%Y%m%d_%H%M%S).zip"
@@ -74,20 +81,31 @@ mv ./usr/lib64/libbluetooth.so.3.19.15 /usr/lib64/
 #mv ./etc/dbus-1/system.d/bluetooth-mesh-adapter.conf /etc/dbus-1/system.d/
 
 # bluealsa
-mv ./usr/lib/alsa-lib/libasound_module_ctl_bluealsa.so /usr/lib/alsa-lib/libasound_module_ctl_bluealsa.so
-mv ./usr/lib/alsa-lib/libasound_module_pcm_bluealsa.so /usr/lib/alsa-lib/libasound_module_pcm_bluealsa.so
-mv ./usr/lib64/alsa-lib/libasound_module_ctl_bluealsa.so /usr/lib64/alsa-lib/libasound_module_ctl_bluealsa.so
-mv ./usr/lib64/alsa-lib/libasound_module_pcm_bluealsa.so /usr/lib64/alsa-lib/libasound_module_pcm_bluealsa.so
+mv ./usr/lib/alsa-lib/libasound_module_ctl_bluealsa.so /usr/lib/alsa-lib/
+mv ./usr/lib/alsa-lib/libasound_module_pcm_bluealsa.so /usr/lib/alsa-lib/
+mv ./usr/lib64/alsa-lib/libasound_module_ctl_bluealsa.so /usr/lib64/alsa-lib/
+mv ./usr/lib64/alsa-lib/libasound_module_pcm_bluealsa.so /usr/lib64/alsa-lib/
 mv ./usr/bin/bluealsa /usr/bin/
 mv ./usr/bin/bluealsa-aplay /usr/bin/
 mv ./etc/dbus-1/system.d/bluealsa.conf /etc/dbus-1/system.d/
 mv ./usr/share/alsa/alsa.conf.d/20-bluealsa.conf /usr/share/alsa/alsa.conf.d/
+
+# sbc
+mv ./usr/lib/libsbc.so.1.3.1 /usr/lib/
+mv ./usr/lib64/libsbc.so.1.3.1 /usr/lib64/
+mv ./usr/bin/sbcinfo build/.update_bluez/usr/bin/
+mv ./usr/bin/sbcdec build/.update_bluez/usr/bin/
+mv ./usr/bin/sbcenc build/.update_bluez/usr/bin/
 
 # symlinks
 cd /usr/lib/ && ln -s -f libbluetooth.so.3.19.15 libbluetooth.so.3
 cd /usr/lib/ && ln -s -f libbluetooth.so.3.19.15 libbluetooth.so
 cd /usr/lib64/ && ln -s -f libbluetooth.so.3.19.15 libbluetooth.so.3
 cd /usr/lib64/ && ln -s -f libbluetooth.so.3.19.15 libbluetooth.so
+cd /usr/lib/ && ln -s -f libsbc.so.1.3.1 libsbc.so.1
+cd /usr/lib/ && ln -s -f libsbc.so.1.3.1 libsbc.so
+cd /usr/lib/64 && ln -s -f libsbc.so.1.3.1 libsbc.so.1
+cd /usr/lib/64 && ln -s -f libsbc.so.1.3.1 libsbc.so
 
 # clean up
 rm -rf $BLUEZ_PATH
