@@ -4786,7 +4786,10 @@ void Core_reset(void) {
 	core.reset();
 }
 void Core_unload(void) {
-	SND_quit();
+	// Disabling this is a dumb hack for bluetooth, we should really be using 
+	// bluealsa with --keep-alive=-1 - but SDL wont reconnect the stream on next start.
+	// Reenable as soon as we have a more recent SDL available, if ever.
+	//SND_quit();
 }
 void Core_quit(void) {
 	if (core.initialized) {
@@ -7016,8 +7019,10 @@ finish:
 	PWR_quit();
 	VIB_quit();
 	BT_removeDeviceWatcher();
-	// already happens on Core_unload
-	SND_quit();
+	// Disabling this is a dumb hack for bluetooth, we should really be using 
+	// bluealsa with --keep-alive=-1 - but SDL wont reconnect the stream on next start.
+	// Reenable as soon as we have a more recent SDL available, if ever.
+	//SND_quit();
 	PAD_quit();
 	GFX_quit();
 	SDL_WaitThread(screenshotsavethread, NULL);

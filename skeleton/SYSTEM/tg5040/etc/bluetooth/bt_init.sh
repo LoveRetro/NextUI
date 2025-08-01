@@ -42,6 +42,7 @@ start() {
 
 	a=`ps | grep bluealsa | grep -v grep`
 	[ -z "$a" ] && {
+		# bluealsa -p a2dp-source --keep-alive=-1 &
 		bluealsa -p a2dp-source &
 		sleep 1
     }
