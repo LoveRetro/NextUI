@@ -2134,7 +2134,7 @@ static void SND_audioCallback(void *userdata, uint8_t *stream, int len)
 	len /= (sizeof(int16_t) * 2);
 
 	// Lock the mutex before accessing shared resources
-
+	pthread_mutex_lock(&audio_mutex);
 	while (snd.frame_out != snd.frame_in && len > 0)
 	{
 
@@ -2154,13 +2154,14 @@ static void SND_audioCallback(void *userdata, uint8_t *stream, int len)
 		//*out++ = (int16_t)left;
 		//*out++ = (int16_t)right;
 
-		pthread_mutex_lock(&audio_mutex);
+		
 		snd.frame_out += 1;
 		len -= 1;
 		if (snd.frame_out >= snd.frame_count)
 			snd.frame_out = 0;
-		pthread_mutex_unlock(&audio_mutex);
+		
 	}
+	pthread_mutex_unlock(&audio_mutex);
 
 	if (len > 0)
 	{
