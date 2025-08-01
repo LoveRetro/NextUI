@@ -7017,8 +7017,9 @@ finish:
 	VIB_quit();
 	BT_removeDeviceWatcher();
 	// already happens on Core_unload
-	SND_quit();
-	BT_quit();
+	// SND_quit();
+	// Dont quit bluetooth it will disconnect audio device
+	// BT_quit();
 	PAD_quit();
 	GFX_quit();
 	SDL_WaitThread(screenshotsavethread, NULL);
