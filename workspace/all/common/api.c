@@ -2687,12 +2687,12 @@ void SND_quit(void)
 	}
 
 	SND_pauseAudio(true);
-	if(BT_isConnected()) {
-#if defined(USE_SDL2)
-		SDL_CloseAudioDevice(snd.device_id);
-#else
-		SDL_CloseAudio();
-#endif
+	if(!BT_isConnected()) {
+	#if defined(USE_SDL2)
+			SDL_CloseAudioDevice(snd.device_id);
+	#else
+			SDL_CloseAudio();
+	#endif
 
 		SDL_QuitSubSystem(SDL_INIT_AUDIO);
 		if(SDL_WasInit(SDL_INIT_AUDIO))
