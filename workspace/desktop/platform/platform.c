@@ -688,7 +688,8 @@ void PLAT_quitVideo(void) {
 	SDL_DestroyRenderer(vid.renderer);
 	SDL_DestroyWindow(vid.window);
 
-	SDL_Quit();
+	// Don't SDL Quit here cause it will quit all subsystems!!
+	// SDL_Quit();
 	system("cat /dev/zero > /dev/fb0 2>/dev/null");
 }
 

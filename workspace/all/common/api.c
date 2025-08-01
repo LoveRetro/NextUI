@@ -2631,7 +2631,12 @@ void SND_init(double sample_rate, double frame_rate)
 	SDL_AudioSpec spec_in;
 	SDL_AudioSpec spec_out;
 
-	spec_in.freq = PLAT_pickSampleRate(sample_rate, MAX_SAMPLE_RATE);
+	if(BT_isConnected()) {
+		spec_in.freq = 44100;
+	} else {
+		spec_in.freq = PLAT_pickSampleRate(sample_rate, MAX_SAMPLE_RATE);
+	}
+	
 	spec_in.format = AUDIO_S16;
 	spec_in.channels = 2;
 	spec_in.samples = SAMPLES;
@@ -2682,19 +2687,19 @@ void SND_quit(void)
 	}
 
 	SND_pauseAudio(true);
-
+	if(BT_isConnected()) {
 #if defined(USE_SDL2)
-	SDL_CloseAudioDevice(snd.device_id);
+		SDL_CloseAudioDevice(snd.device_id);
 #else
-	SDL_CloseAudio();
+		SDL_CloseAudio();
 #endif
 
-	SDL_QuitSubSystem(SDL_INIT_AUDIO);
-	if(SDL_WasInit(SDL_INIT_AUDIO))
-		LOG_error("SND_quit: failed to quit audio!!\n");
-	LOG_debug("SND_quit: quit audio!!\n");
-	snd.initialized = 0;
-
+		SDL_QuitSubSystem(SDL_INIT_AUDIO);
+		if(SDL_WasInit(SDL_INIT_AUDIO))
+			LOG_error("SND_quit: failed to quit audio!!\n");
+		LOG_debug("SND_quit: quit audio!!\n");
+		snd.initialized = 0;
+	}
 	if (snd.buffer)
 	{
 		free(snd.buffer);

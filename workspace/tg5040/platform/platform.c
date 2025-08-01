@@ -827,7 +827,8 @@ void PLAT_quitVideo(void) {
 	SDL_DestroyRenderer(vid.renderer);
 	SDL_DestroyWindow(vid.window);
 
-	SDL_Quit();
+	// Don't SDL Quit here cause it will quit all subsystems!!
+	// SDL_Quit();
 	system("cat /dev/zero > /dev/fb0 2>/dev/null");
 }
 
@@ -3833,7 +3834,7 @@ static void bt_test_a2dp_sink_connection_state_cb(const char *bd_addr, btmg_a2dp
 
 	if (state == BTMG_A2DP_SINK_DISCONNECTED) {
 		btlog("A2DP sink disconnected with device: %s", bd_addr);
-		bt_manager_set_discovery_mode(BTMG_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
+		// bt_manager_set_discovery_mode(BTMG_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
 	} else if (state == BTMG_A2DP_SINK_CONNECTING) {
 		btlog("A2DP sink connecting with device: %s", bd_addr);
 	} else if (state == BTMG_A2DP_SINK_CONNECTED) {
@@ -3858,7 +3859,7 @@ static void bt_test_a2dp_source_connection_state_cb(const char *bd_addr, btmg_a2
 {
 	if (state == BTMG_A2DP_SOURCE_DISCONNECTED) {
 		btlog("A2DP source disconnected with device: %s\n", bd_addr);
-		bt_manager_set_discovery_mode(BTMG_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
+		// bt_manager_set_discovery_mode(BTMG_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
 	} else if (state == BTMG_A2DP_SOURCE_CONNECTING) {
 		btlog("A2DP source connecting with device: %s\n", bd_addr);
 	} else if (state == BTMG_A2DP_SOURCE_CONNECTED) {

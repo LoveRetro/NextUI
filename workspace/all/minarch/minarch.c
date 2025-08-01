@@ -4786,7 +4786,7 @@ void Core_reset(void) {
 	core.reset();
 }
 void Core_unload(void) {
-	SND_quit();
+
 }
 void Core_quit(void) {
 	if (core.initialized) {
