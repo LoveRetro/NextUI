@@ -115,6 +115,8 @@ echo $CPU_SPEED_PERF > $CPU_PATH
 bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')
 # somehow trimui deploys aic?
 cp -f $SYSTEM_PATH/etc/bluetooth/bt_init.sh /etc/bluetooth/bt_init.sh
+# start fresh, will be populated on the next connect
+rm -f $USERDATA_PATH/.asoundrc
 if [ "$bluetoothon" -eq 0 ]; then
 	/etc/bluetooth/bt_init.sh stop > /dev/null 2>&1 &
 else
