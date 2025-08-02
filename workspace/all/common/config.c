@@ -62,6 +62,7 @@ void CFG_defaults(NextUISettings *cfg)
         .wifiDiagnostics = CFG_DEFAULT_WIFI_DIAG,
         .bluetooth = CFG_DEFAULT_BLUETOOTH,
         .bluetoothDiagnostics = CFG_DEFAULT_BLUETOOTH_DIAG,
+        .bluetoothSamplerateLimit = CFG_DEFAULT_BLUETOOTH_MAXRATE,
 };
 
     *cfg = defaults;
@@ -249,6 +250,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "btDiagnostics=%i", &temp_value) == 1)
             {
                 CFG_setBluetoothDiagnostics(temp_value);
+                continue;
+            }
+            if (sscanf(line, "btMaxRate=%i", &temp_value) == 1)
+            {
+                CFG_setBluetoothSamplingrateLimit(temp_value);
                 continue;
             }
         }
@@ -614,6 +620,17 @@ void CFG_setBluetoothDiagnostics(bool on)
     CFG_sync();
 }
 
+int CFG_getBluetoothSamplingrateLimit(void)
+{
+    return settings.bluetoothSamplerateLimit;
+}
+
+void CFG_setBluetoothSamplingrateLimit(int value)
+{
+    settings.bluetoothSamplerateLimit = value;
+    CFG_sync();
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -740,6 +757,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getBluetoothDiagnostics()));
     }
+    else if (strcmp(key, "btMaxRate") == 0)
+    {
+        sprintf(value, "%i", CFG_getBluetoothSamplingrateLimit());
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -799,6 +820,7 @@ void CFG_sync(void)
     fprintf(file, "wifiDiagnostics=%i\n", settings.wifiDiagnostics);
     fprintf(file, "bluetooth=%i\n", settings.bluetooth);
     fprintf(file, "btDiagnostics=%i\n", settings.bluetoothDiagnostics);
+    fprintf(file, "btMaxRate=%i\n", settings.bluetoothSamplerateLimit);
 
     fclose(file);
 }
@@ -838,6 +860,7 @@ void CFG_print(void)
     printf("\t\"wifiDiagnostics\": %i,\n", settings.wifiDiagnostics);
     printf("\t\"bluetooth\": %i,\n", settings.bluetooth);
     printf("\t\"btDiagnostics\": %i,\n", settings.bluetoothDiagnostics);
+    printf("\t\"btMaxRate\": %i,\n", settings.bluetoothSamplerateLimit);
 
     // meta, not a real setting
     if (settings.font == 1)

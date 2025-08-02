@@ -13,6 +13,8 @@ namespace Bluetooth
         MenuItem *toggleItem;
         // diagnostics on/off
         MenuItem *diagItem;
+        // max sample rate
+        MenuItem *rateItem;
 
         std::thread worker;
         bool quit = false;
@@ -32,6 +34,10 @@ namespace Bluetooth
         std::any getBtDiagnosticsState() const;
         void setBtDiagnosticsState(const std::any &on);
         void resetBtDiagnosticsState();
+
+        std::any getSamplerateMaximum() const;
+        void setSamplerateMaximum(const std::any &on);
+        void resetSamplerateMaximum();
 
         void updater();
     };

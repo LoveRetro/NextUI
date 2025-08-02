@@ -97,6 +97,7 @@ typedef struct
 	bool wifiDiagnostics;
 	bool bluetooth;
 	bool bluetoothDiagnostics;
+	int bluetoothSamplerateLimit;
 
 } NextUISettings;
 
@@ -132,6 +133,7 @@ typedef struct
 #define CFG_DEFAULT_SHOWTOOLS true
 #define CFG_DEFAULT_BLUETOOTH false
 #define CFG_DEFAULT_BLUETOOTH_DIAG false
+#define CFG_DEFAULT_BLUETOOTH_MAXRATE 48000
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
@@ -225,6 +227,9 @@ void CFG_setBluetooth(bool on);
 // BT diagnostic logging on/off
 bool CFG_getBluetoothDiagnostics(void);
 void CFG_setBluetoothDiagnostics(bool on);
+// BT maximum sample rate to request
+int CFG_getBluetoothSamplingrateLimit(void);
+void CFG_setBluetoothSamplingrateLimit(int value);
 
 void CFG_sync(void);
 void CFG_quit(void);

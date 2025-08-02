@@ -23,8 +23,13 @@ Menu::Menu(const int &globalQuit, int &globalDirty) : MenuList(MenuItemType::Fix
                               std::bind(&Menu::getBtDiagnosticsState, this),
                               std::bind(&Menu::setBtDiagnosticsState, this, std::placeholders::_1),
                               std::bind(&Menu::resetBtDiagnosticsState, this));
+    rateItem = new MenuItem(ListItemType::Generic, "Maximmum sampling rate", "44100 Hz: better compatibility\n48000 Hz: better quality", {44100, 48000}, {"44100 Hz", "48000 Hz"},
+                              std::bind(&Menu::getSamplerateMaximum, this),
+                              std::bind(&Menu::setSamplerateMaximum, this, std::placeholders::_1),
+                              std::bind(&Menu::resetSamplerateMaximum, this));
     items.push_back(toggleItem);
     items.push_back(diagItem);
+    items.push_back(rateItem);
 
     // best effort layout based on the platform defines, user should really call performLayout manually
     MenuList::performLayout((SDL_Rect){0, 0, FIXED_WIDTH, FIXED_HEIGHT});
@@ -80,6 +85,21 @@ void Menu::setBtDiagnosticsState(const std::any &on)
 void Menu::resetBtDiagnosticsState()
 {
     //
+}
+
+std::any Menu::getSamplerateMaximum() const
+{
+    return CFG_getBluetoothSamplingrateLimit();
+}
+
+void Menu::setSamplerateMaximum(const std::any &value)
+{
+    CFG_setBluetoothSamplingrateLimit(std::any_cast<int>(value));
+}
+
+void Menu::resetSamplerateMaximum()
+{
+    CFG_setBluetoothSamplingrateLimit(CFG_DEFAULT_BLUETOOTH_MAXRATE);
 }
 
 template <typename Map>
@@ -142,6 +162,7 @@ void Menu::updater()
                     items.clear();
                     items.push_back(toggleItem);
                     items.push_back(diagItem);
+                    items.push_back(rateItem);
                     layout_called = false;
 
                     for (auto &[s, r] : scanMap)
@@ -190,6 +211,7 @@ void Menu::updater()
             items.clear();
             items.push_back(toggleItem);
             items.push_back(diagItem);
+            items.push_back(rateItem);
             layout_called = false;
             selectionDirty = true;
             pollSecs = 15;
