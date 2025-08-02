@@ -2128,45 +2128,25 @@ static void SND_audioCallback(void *userdata, uint8_t *stream, int len)
 	if (!snd.initialized)
 		LOG_error("Calling callback without audio device\n");
 
-	// BT_isConnected is too inhefficient for this
-	// float vol = BT_enabled() && BT_isConnected() ? BT_getVolume()/100.f : GetVolume()/20.0f;
 	int16_t *out = (int16_t *)stream;
 	len /= (sizeof(int16_t) * 2);
 
-	// Lock the mutex before accessing shared resources
-
+	pthread_mutex_lock(&audio_mutex);
 	while (snd.frame_out != snd.frame_in && len > 0)
 	{
-
 		*out++ = snd.buffer[snd.frame_out].left;
 		*out++ = snd.buffer[snd.frame_out].right;
-
-		//// Apply volume control to left channel
-		// int left = (int)(snd.buffer[snd.frame_out].left * vol);
-		// if (left > 32767) left = 32767;
-		// if (left < -32768) left = -32768;
-		//
-		//// Apply volume control to right channel
-		// int right = (int)(snd.buffer[snd.frame_out].right * vol);
-		// if (right > 32767) right = 32767;
-		// if (right < -32768) right = -32768;
-
-		//*out++ = (int16_t)left;
-		//*out++ = (int16_t)right;
-
-		pthread_mutex_lock(&audio_mutex);
 		snd.frame_out += 1;
 		len -= 1;
 		if (snd.frame_out >= snd.frame_count)
 			snd.frame_out = 0;
-		pthread_mutex_unlock(&audio_mutex);
 	}
+	pthread_mutex_unlock(&audio_mutex);
 
 	if (len > 0)
-	{
 		memset(out, 0, len * (sizeof(int16_t) * 2));
-	}
 }
+
 static void SND_resizeBuffer(void)
 { // plat_sound_resize_buffer
 
