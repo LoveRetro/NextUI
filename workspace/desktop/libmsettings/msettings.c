@@ -399,6 +399,9 @@ void SetVolume(int value) {}
 int GetJack(void) { return 0; }
 void SetJack(int value) {}
 
+int GetBluetooth(void) { return 0; }
+void SetBluetooth(int value) {}
+
 int GetHDMI(void) { return 0; }
 void SetHDMI(int value) {}
 

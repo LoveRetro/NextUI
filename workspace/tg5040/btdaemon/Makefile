@@ -14,14 +14,19 @@ CCXX= $(CROSS_COMPILE)g++
 
 CXXFLAGS = -Wall -O2 -I$(PREFIX)/include/dbus-1.0 -I$(PREFIX)/lib/dbus-1.0/include
 LDFLAGS = -L$(PREFIX)/lib -ldbus-1
+CXXFLAGS += -I$(PREFIX_LOCAL)/include
+LDFLAGS += -L$(PREFIX_LOCAL)/lib -lmsettings
 
 SRCS = bt_daemon.cpp
 OBJS = $(SRCS:.cpp=.o)
 
-all: $(TARGET)
+all: $(PREFIX_LOCAL)/include/msettings.h $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS)
+
+$(PREFIX_LOCAL)/include/msettings.h:
+	cd ../libmsettings && make
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@

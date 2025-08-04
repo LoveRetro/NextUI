@@ -108,6 +108,9 @@ CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
 CPU_SPEED_PERF=2000000
 echo $CPU_SPEED_PERF > $CPU_PATH
 
+keymon.elf & # &> $SDCARD_PATH/keymon.txt &
+batmon.elf & # &> $SDCARD_PATH/batmon.txt &
+
 #killall MtpDaemon # I dont think we need to micro manage this one
 
 # BT handling
@@ -134,9 +137,6 @@ else
 	/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
 	#wifi_daemon -s &
 fi
-
-keymon.elf & # &> $SDCARD_PATH/keymon.txt &
-batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 
 #######################################
 

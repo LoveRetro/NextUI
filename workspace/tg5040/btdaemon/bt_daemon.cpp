@@ -14,6 +14,11 @@
 #include <sys/types.h>
 #include <syslog.h>
 
+extern "C"
+{
+#include "msettings.h"
+}
+
 #define AUDIO_FILE "/mnt/SDCARD/.userdata/tg5040/.asoundrc"
 #define UUID_A2DP "0000110b-0000-1000-8000-00805f9b34fb"
 
@@ -36,14 +41,21 @@ void writeAudioFile(const std::string& mac) {
         log("Failed to write audio config file");
         return;
     }
-    f << "pcm.!default {\n"
+    f << "defaults.bluealsa.device \"" << mac << "\"\n\n"
+      << "pcm.!default {\n"
       << "    type plug\n"
       << "    slave.pcm {\n"
       << "        type bluealsa\n"
+      //<< "        interface \"hci0\"\n"
+      << "        device \"" << mac << "\"\n"
+      << "        profile \"a2dp\"\n"
+      << "        delay 0\n"
+      //<< "        delay 1000\n"
       << "    }\n"
       << "}\n"
       << "ctl.!default {\n"
       << "    type bluealsa\n"
+      //<< "    interface \"hci0\"\n"
       << "}\n";
 
     f.flush(); // flush C++ stream buffer
@@ -126,6 +138,7 @@ void handleDeviceConnected(DBusConnection* conn, const std::string& path) {
     if (hasUUID(conn, path, UUID_A2DP)) {
         log("Audio device connected: " + mac);
         writeAudioFile(mac);
+        SetBluetooth(1);
     } else {
         log("Non-audio device connected: " + mac);
     }
@@ -136,6 +149,7 @@ void handleDeviceDisconnected(DBusConnection* conn, const std::string& path) {
     if (hasUUID(conn, path, UUID_A2DP)) {
         log("Audio device disconnected: " + mac);
         clearAudioFile();
+        SetBluetooth(0);
     }
 }
 
@@ -148,6 +162,10 @@ int main(int argc, char* argv[]) {
         use_syslog = true;
         openlog("bt_daemon", LOG_PID | LOG_CONS, LOG_USER);
     }
+
+    InitSettings();
+    // This will be updated as soon as something connects
+    SetBluetooth(0);
 
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
