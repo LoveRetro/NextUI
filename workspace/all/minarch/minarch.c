@@ -4534,8 +4534,6 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 
 	renderer.src = (void*)data;
 	renderer.dst = screen->pixels;
-
-	SND_pauseAudio(false); // why?
 	GFX_blitRenderer(&renderer);
 
 	screen_flip(screen);
@@ -6250,9 +6248,6 @@ int save_screenshot_thread(void* data) {
 SDL_Thread* screenshotsavethread;
 static void Menu_saveState(void) {
 	// LOG_info("Menu_saveState\n");
-	if(quit) {
-		SND_pauseAudio(true);
-	}
 	Menu_updateState();
 	
 	if (menu.total_discs) {
@@ -6947,6 +6942,7 @@ int main(int argc , char* argv[]) {
 	applyShaderSettings();
 	// release config when all is loaded
 	Config_free();
+
 	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
 	while (!quit) {
 		GFX_startFrame();
@@ -6969,13 +6965,13 @@ int main(int argc , char* argv[]) {
 		
 		if (show_menu) {
 			PWR_updateFrequency(PWR_UPDATE_FREQ,1);
+			SND_pauseAudio(true);
 			Menu_loop();
 			PWR_updateFrequency(PWR_UPDATE_FREQ_INGAME,0);
+			SND_pauseAudio(false);
 			has_pending_opt_change = config.core.changed;
 			resetFPSCounter();
 			chooseSyncRef();
-			// this is not needed
-			// SND_resetAudio(core.sample_rate, core.fps);
 		}
 
 		if (resetAudio) {
