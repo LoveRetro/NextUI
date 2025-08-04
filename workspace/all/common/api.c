@@ -2373,6 +2373,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	}
 	currentbufferfree = remaining_space;
 
+	// let audio buffer fill a little first and then unpause audio so no underruns occur
 	if (currentbufferfree < snd.frame_count * 0.7f) {
 		if (snd.paused) {
 			SND_pauseAudio(false);
@@ -2500,7 +2501,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	}
 	// printf("    actual free: %g\n", remaining_space);
 	currentbufferfree = remaining_space;
-
+	// let audio buffer fill a little first and then unpause audio so no underruns occur
 	if (currentbufferfree < snd.frame_count * 0.7f) {
 		if (snd.paused) {
 			SND_pauseAudio(false);
