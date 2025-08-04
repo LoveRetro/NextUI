@@ -80,6 +80,11 @@ static int DEVICE_PITCH = 0; // FIXED_PITCH;
 
 GFX_Renderer renderer;
 
+size_t max_state_size = 0;
+uint8_t *base_state;
+uint8_t *runahead_state;
+int doRunAhead = 0;
+
 ///////////////////////////////////////
 
 static struct Core {
@@ -3006,6 +3011,7 @@ static int setFastForward(int enable) {
 
 static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
 static int ignore_menu = 0;
+static int runahead_buttons = 0;
 static void input_poll_callback(void) {
 	PAD_poll();
 
@@ -3144,15 +3150,22 @@ static void input_poll_callback(void) {
 				case BTN_DPAD_LEFT: 	btn = BTN_LEFT; break;
 				case BTN_DPAD_RIGHT: 	btn = BTN_RIGHT; break;
 			}
+			
 		}
 		if (PAD_isPressed(btn) && (!mapping->mod || PAD_isPressed(BTN_MENU))) {
 			buttons |= 1 << mapping->retro;
 			if (mapping->mod) ignore_menu = 1;
 		}
+		if(PAD_anyJustPressed()) {
+			doRunAhead = 1;
+		} 
+ 		runahead_buttons = buttons; 
 		//  && !PWR_ignoreSettingInput(btn, show_setting)
 	}
 	
 	// if (buttons) LOG_info("buttons: %i\n", buttons);
+	
+	
 }
 static int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) {
 	if (port==0 && device==RETRO_DEVICE_JOYPAD && index==0) {
@@ -3237,6 +3250,7 @@ static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uin
 	VIB_setStrength(strength);
 	return 1;
 }
+
 static bool environment_callback(unsigned cmd, void *data) { // copied from picoarch initially
 	// LOG_info("environment_callback: %i\n", cmd);
 	
@@ -4447,9 +4461,12 @@ void applyCircleReveal(uint32_t **data, size_t pitch, unsigned width, unsigned h
     *data = temp_buffer;
 }
 
+
+
 static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch) {
 	// return;
 	
+
 	Special_render();
 	
 	// static int tmp_frameskip = 0;
@@ -4549,7 +4566,7 @@ static Uint32* rgbaData = NULL;
 static size_t rgbaDataSize = 0;
 
 static void video_refresh_callback(const void* data, unsigned width, unsigned height, size_t pitch) {
-
+		
 	// I need to check quit here because sometimes quit is true but callback is still called by the core after and it still runs one more frame and it looks ugly :D
 	if(!quit) {
 		if (!rgbaData || rgbaDataSize != width * height) {
@@ -4638,7 +4655,8 @@ static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) {
 	}
 	else return frames;
 	// return frames;
-};
+} 
+
 
 ///////////////////////////////////////
 
@@ -4647,6 +4665,15 @@ void Core_getName(char* in_name, char* out_name) {
 	char* tmp = strrchr(out_name, '_');
 	tmp[0] = '\0';
 }
+
+void (*set_video_refresh_callback)(retro_video_refresh_t);
+void (*set_audio_sample_callback)(retro_audio_sample_t);
+void (*set_audio_sample_batch_callback)(retro_audio_sample_batch_t);
+void (*set_input_state_callback)(retro_input_state_t);
+
+
+
+
 void Core_open(const char* core_path, const char* tag_name) {
 	LOG_info("Core_open\n");
 	core.handle = dlopen(core_path, RTLD_LAZY);
@@ -4673,11 +4700,9 @@ void Core_open(const char* core_path, const char* tag_name) {
 	core.get_memory_size = dlsym(core.handle, "retro_get_memory_size");
 	
 	void (*set_environment_callback)(retro_environment_t);
-	void (*set_video_refresh_callback)(retro_video_refresh_t);
-	void (*set_audio_sample_callback)(retro_audio_sample_t);
-	void (*set_audio_sample_batch_callback)(retro_audio_sample_batch_t);
+
 	void (*set_input_poll_callback)(retro_input_poll_t);
-	void (*set_input_state_callback)(retro_input_state_t);
+
 	
 	set_environment_callback = dlsym(core.handle, "retro_set_environment");
 	set_video_refresh_callback = dlsym(core.handle, "retro_set_video_refresh");
@@ -4685,7 +4710,9 @@ void Core_open(const char* core_path, const char* tag_name) {
 	set_audio_sample_batch_callback = dlsym(core.handle, "retro_set_audio_sample_batch");
 	set_input_poll_callback = dlsym(core.handle, "retro_set_input_poll");
 	set_input_state_callback = dlsym(core.handle, "retro_set_input_state");
-	
+
+
+
 	struct retro_system_info info = {};
 	core.get_system_info(&info);
 	
@@ -4718,6 +4745,7 @@ void Core_open(const char* core_path, const char* tag_name) {
 	set_audio_sample_batch_callback(audio_sample_batch_callback);
 	set_input_poll_callback(input_poll_callback);
 	set_input_state_callback(input_state_callback);
+
 }
 void Core_init(void) {
 	LOG_info("Core_init\n");
@@ -6831,6 +6859,20 @@ void onBluetoothAudioChanged(bool bluetooth, int watch_event)
 		LOG_error("asoundrc is not deleted yet!!!\n");
 }
 
+int16_t dummy_buffer[4096];
+
+static void fakeAudioCall(int16_t left, int16_t right) {}
+size_t fakeBatchCall(const int16_t *data, size_t frames) {
+	memcpy(dummy_buffer, data, frames * sizeof(int16_t) * 2);  // Stereo
+	return frames;
+}
+static void fakeVideoCall(const void *data, unsigned width, unsigned height, size_t pitch) {}
+static int16_t fake_input_callback(unsigned port, unsigned device, unsigned index, unsigned id) {
+    int bit = 1 << id;
+    return (runahead_buttons & bit) ? 1 : 0;
+}
+
+
 int main(int argc , char* argv[]) {
 	LOG_info("MinArch\n");
 
@@ -6948,13 +6990,44 @@ int main(int argc , char* argv[]) {
 	// release config when all is loaded
 	Config_free();
 	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
+
+	max_state_size = core.serialize_size();
+	base_state = malloc(max_state_size);
+	int runAheadFrames = 1;  // How many frames to run ahead
 	while (!quit) {
 		GFX_startFrame();
-	
-		core.run();
+		if(doRunAhead) {
+			retro_video_refresh_t saved_video = video_refresh_callback;
+			retro_audio_sample_t saved_audio = audio_sample_callback;
+			retro_audio_sample_batch_t saved_batch = audio_sample_batch_callback;
+			retro_input_state_t saved_input = input_state_callback;
+
+			core.serialize(base_state, max_state_size);
+
+			set_video_refresh_callback(fakeVideoCall);
+			set_audio_sample_callback(fakeAudioCall);
+			set_audio_sample_batch_callback(fakeBatchCall);
+			set_input_state_callback(fake_input_callback);
+
+			core.unserialize(base_state, max_state_size); 
+
+			for (int i = 0; i < runAheadFrames; i++) {
+				core.run();
+			}
+
+			set_video_refresh_callback(saved_video);
+			set_audio_sample_callback(saved_audio);
+			set_audio_sample_batch_callback(saved_batch);
+			set_input_state_callback(saved_input);
+
+			core.unserialize(base_state, max_state_size);
+			doRunAhead = 0;
+		}
+		core.run();  // Visible frame, synced to real time via your FPS limiter
+
 		limitFF();
 		trackFPS();
-		
+
 
 		if (has_pending_opt_change) {
 			has_pending_opt_change = 0;
