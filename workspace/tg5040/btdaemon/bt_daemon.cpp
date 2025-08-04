@@ -36,21 +36,14 @@ void writeAudioFile(const std::string& mac) {
         log("Failed to write audio config file");
         return;
     }
-    f << "defaults.bluealsa.device \"" << mac << "\"\n\n"
-      << "pcm.!default {\n"
+    f << "pcm.!default {\n"
       << "    type plug\n"
       << "    slave.pcm {\n"
       << "        type bluealsa\n"
-      //<< "        interface \"hci0\"\n"
-      << "        device \"" << mac << "\"\n"
-      << "        profile \"a2dp\"\n"
-      << "        delay 0\n"
-      //<< "        delay 1000\n"
       << "    }\n"
       << "}\n"
       << "ctl.!default {\n"
       << "    type bluealsa\n"
-      //<< "    interface \"hci0\"\n"
       << "}\n";
 
     f.flush(); // flush C++ stream buffer
