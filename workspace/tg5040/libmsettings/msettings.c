@@ -1130,7 +1130,7 @@ void SetRawVolume(int val) { // 0-100
 
 		// Setting just 'digital volume' to 0 still plays audio quietly. Also set DAC volume to 0
 		if (val == 0) system("amixer sset 'DAC volume' 0 &> /dev/null");
-		else system("amixer sset 'DAC volume' 255 &> /dev/null"); // 160=0dB=max for 'DAC volume'
+		else system("amixer sset 'DAC volume' 160 &> /dev/null"); // 160=0dB=max for 'DAC volume'
 	}
 
 	// TODO: unfortunately doing it this way creating a linker nightmare
