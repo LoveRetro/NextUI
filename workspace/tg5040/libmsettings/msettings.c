@@ -384,7 +384,6 @@ void InitSettings(void) {
 		
 		// these shouldn't be persisted
 		// settings->jack = 0;
-		// settings->hdmi = 0;
 		settings->mute = 0;
 	}
 	// printf("brightness: %i\nspeaker: %i \n", settings->brightness, settings->speaker);
@@ -431,11 +430,11 @@ int GetVolume(void) { // 0-20
 int GetJack(void) {
 	return settings->jack;
 }
-int GetHDMI(void) {	
-	// printf("GetHDMI() %i\n", settings->hdmi); fflush(stdout);
-	// return settings->hdmi;
+
+int GetHDMI(void) { 
 	return 0;
-}
+};
+
 int GetMute(void) {
 	return settings->mute;
 }
@@ -531,7 +530,6 @@ void SetColortemp(int value) {
 void SetVolume(int value) { // 0-20
 	if (settings->mute) 
 		return SetRawVolume(scaleVolume(GetMutedVolume()));
-	// if (settings->hdmi) return;
 	
 	if (settings->jack) settings->headphones = value;
 	else settings->speaker = value;
@@ -546,15 +544,9 @@ void SetJack(int value) {
 	settings->jack = value;
 	SetVolume(GetVolume());
 }
-void SetHDMI(int value) {
-	// printf("SetHDMI(%i)\n", value); fflush(stdout);
-	
-	// if (settings->hdmi!=value) system("/usr/lib/autostart/common/055-hdmi-check");
-	
-	// settings->hdmi = value;
-	// if (value) SetRawVolume(100); // max
-	// else SetVolume(GetVolume()); // restore
-}
+
+void SetHDMI(int value){};
+
 void SetMute(int value) {
 	settings->mute = value;
 	if (settings->mute) {
@@ -991,8 +983,6 @@ int scaleExposure(int value) {
 
 #define DISP_LCD_SET_BRIGHTNESS  0x102
 void SetRawBrightness(int val) { // 0 - 255
-	// if (settings->hdmi) return;
-	
 	printf("SetRawBrightness(%i)\n", val); fflush(stdout);
 
     int fd = open("/dev/disp", O_RDWR);
@@ -1003,8 +993,6 @@ void SetRawBrightness(int val) { // 0 - 255
 	}
 }
 void SetRawColortemp(int val) { // 0 - 255
-	// if (settings->hdmi) return;
-	
 	printf("SetRawColortemp(%i)\n", val); fflush(stdout);
 
 	FILE *fd = fopen("/sys/class/disp/disp/attr/color_temperature", "w");
@@ -1052,8 +1040,6 @@ void SetRawVolume(int val) { // 0-100
 }
 
 void SetRawContrast(int val){
-	// if (settings->hdmi) return;
-	
 	printf("SetRawContrast(%i)\n", val); fflush(stdout);
 
 	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_contrast", "w");
@@ -1063,8 +1049,6 @@ void SetRawContrast(int val){
 	}
 }
 void SetRawSaturation(int val){
-	// if (settings->hdmi) return;
-
 	printf("SetRawSaturation(%i)\n", val); fflush(stdout);
 
 	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_saturation", "w");
@@ -1074,8 +1058,6 @@ void SetRawSaturation(int val){
 	}
 }
 void SetRawExposure(int val){
-	// if (settings->hdmi) return;
-
 	printf("SetRawExposure(%i)\n", val); fflush(stdout);
 
 	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_bright", "w");
