@@ -4620,7 +4620,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 
 static void audio_sample_callback(int16_t left, int16_t right) {
 	if (!fast_forward || ff_audio) {
-		if (use_core_fps) {
+		if (use_core_fps || fast_forward) {
 			SND_batchSamples_fixed_rate(&(const SND_Frame){left,right}, 1);
 		}
 		else {
@@ -4630,7 +4630,7 @@ static void audio_sample_callback(int16_t left, int16_t right) {
 }
 static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) { 
 	if (!fast_forward || ff_audio) {
-		if (use_core_fps) {
+		if (use_core_fps || fast_forward) {
 			return SND_batchSamples_fixed_rate((const SND_Frame*)data, frames);
 		}
 		else {

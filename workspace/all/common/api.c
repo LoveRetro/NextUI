@@ -2547,6 +2547,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 		ratio = 0.995;
 		break;
 	case SND_FF_VERY_LATE:
+		return 0;
 		ratio = 0.980;
 		break;
 	default:
