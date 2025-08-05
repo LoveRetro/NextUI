@@ -172,7 +172,6 @@ static struct PWR_Context
 static struct SND_Context
 {
 	int initialized;
-	bool paused;
 	double frame_rate;
 
 	int sample_rate_in;
@@ -2311,7 +2310,7 @@ float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, 
 	// lets say hovering around 2000 means 2000 samples queue, about 4 frames, so at 17ms(60fps) thats  68ms delay right?
 	// Should have payed attention when my math teacher was talking dammit
 	// Also I chose 3 for pow, but idk if that really the best nr, anyone good in maths looking at my code?
-	float adjustment = 0.00000000001f + (0.005f - 0.00000000001f) * pow(normalizedDistance, 3);
+	float adjustment = 0.00001f + (0.005f - 0.00001f) * pow(normalizedDistance, 3);
 
 	if (remaining_space < midpoint)
 	{
@@ -2374,20 +2373,14 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 
 	// let audio buffer fill a little first and then unpause audio so no underruns occur
 	if (currentbufferfree < snd.frame_count * 0.6f) {
-		if (snd.paused) {
-			SND_pauseAudio(false);
-		}
+		SND_pauseAudio(false);
 	} else if (currentbufferfree > snd.frame_count * 0.99f) { // if for some reason buffer drops below threshold again, pause it (like psx core can stop sending audio in between scenes or after fast forward etc)
-		if (!snd.paused) {
-			SND_pauseAudio(true);
-		}
+		SND_pauseAudio(true);
 	} 
 
 
 	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000.0f;
 	currentbufferms = tempdelay;
-
-	float tempratio = 1.0f;
 
 	// do some checks
 	if (current_fps <= 0.0f || !isfinite(current_fps))
@@ -2405,13 +2398,19 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	{
 		bufferadjustment = 0.0f;
 	}
-	float safe_ratio = snd.frame_rate / current_fps;
+
+	// use current_fps only once to detect final fps, because fps detection can fluctuate a little and impacts ratio adjustment unnesecary
+	static double detected_fps = 0.0;
+	if(current_fps > detected_fps)
+		detected_fps = current_fps;
+
+	float safe_ratio = snd.frame_rate / detected_fps;
 	if (!isfinite(safe_ratio))
 	{
 		safe_ratio = 1.0f;
 	}
 
-	ratio = tempratio * safe_ratio + bufferadjustment;
+	ratio = safe_ratio + bufferadjustment;
 
 	if (!isfinite(ratio))
 	{
@@ -2498,13 +2497,9 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	currentbufferfree = remaining_space;
 	// let audio buffer fill up a little before playing audio, so no underruns occur. Target fill rate of buffer is about 50% so start playing when about 40% full
 	if (currentbufferfree < snd.frame_count * 0.6f) {
-		if (snd.paused) {
-			SND_pauseAudio(false);
-		}
+		SND_pauseAudio(false);
 	} else if (currentbufferfree > snd.frame_count * 0.99f) { // if for some reason buffer drops below 1% again, pause audio again (like psx core can stop sending audio in between scenes or after fast forward etc)
-		if (!snd.paused) {
-			SND_pauseAudio(true);
-		}
+		SND_pauseAudio(true);
 	} 
 
 	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000;
@@ -2712,7 +2707,6 @@ void SND_pauseAudio(bool paused)
 #else
 	SDL_PauseAudio(paused);
 #endif
-snd.paused = paused;
 }
 
 ///////////////////////////////
