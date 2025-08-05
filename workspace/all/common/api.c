@@ -2377,7 +2377,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 		if (snd.paused) {
 			SND_pauseAudio(false);
 		}
-	} else if (currentbufferfree > snd.frame_count * 0.9f) { // if for some reason buffer drops below threshold again, pause it (like psx core can stop sending audio in between scenes or after fast forward etc)
+	} else if (currentbufferfree > snd.frame_count * 0.99f) { // if for some reason buffer drops below threshold again, pause it (like psx core can stop sending audio in between scenes or after fast forward etc)
 		if (!snd.paused) {
 			SND_pauseAudio(true);
 		}
