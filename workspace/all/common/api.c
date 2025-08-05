@@ -2496,7 +2496,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	}
 	// printf("    actual free: %g\n", remaining_space);
 	currentbufferfree = remaining_space;
-	// if audio is paused let buffer first fill up to the target range and then start playing
+	// let audio buffer fill up a little before playing audio, so no underruns occur. Target fill rate of buffer is about 50% so start playing when about 40% full
 	if (currentbufferfree < snd.frame_count * 0.6f) {
 		if (snd.paused) {
 			SND_pauseAudio(false);
