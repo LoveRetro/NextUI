@@ -2290,11 +2290,28 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 #define ROLLING_AVERAGE_WINDOW_SIZE 120
 static float adjustment_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
 static int adjustment_index = 0;
+static float remaining_space_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
+static int remaining_space_index = 0;
+int currentbuffertarget = 0;
+int avgbufferfree = 0;
 
 float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, float targetbuffer_under, int batchsize)
 {
 
+	// this is just to show average remaining space in debug window could be removed later
+	remaining_space_history[remaining_space_index] = remaining_space;
+	remaining_space_index = (remaining_space_index + 1) % ROLLING_AVERAGE_WINDOW_SIZE;
+	float avgspace = 0.0f;
+	for (int i = 0; i < ROLLING_AVERAGE_WINDOW_SIZE; ++i)
+	{
+		avgspace += remaining_space_history[i];
+	}
+	avgspace /= ROLLING_AVERAGE_WINDOW_SIZE;
+	avgbufferfree = avgspace;
+	// end debug part
+
 	float midpoint = (targetbuffer_over + targetbuffer_under) / 2.0f;
+	currentbuffertarget = midpoint;
 
 	float normalizedDistance;
 	if (remaining_space < midpoint)
@@ -2310,7 +2327,7 @@ float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, 
 	// lets say hovering around 2000 means 2000 samples queue, about 4 frames, so at 17ms(60fps) thats  68ms delay right?
 	// Should have payed attention when my math teacher was talking dammit
 	// Also I chose 3 for pow, but idk if that really the best nr, anyone good in maths looking at my code?
-	float adjustment = 0.00001f + (0.005f - 0.00001f) * pow(normalizedDistance, 3);
+	float adjustment = 0.001f + (0.01f - 0.001f) * pow(normalizedDistance, 3);
 
 	if (remaining_space < midpoint)
 	{
@@ -2392,19 +2409,14 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 		snd.frame_rate = 60.0f;
 	}
 
-	float bufferadjustment = calculateBufferAdjustment(remaining_space, snd.frame_count*0.2, snd.frame_count*0.7, frame_count);
+	float bufferadjustment = calculateBufferAdjustment(remaining_space, snd.frame_count*0.2, snd.frame_count*0.8, frame_count);
 
 	if (!isfinite(bufferadjustment))
 	{
 		bufferadjustment = 0.0f;
 	}
 
-	// use current_fps only once to detect final fps, because fps detection can fluctuate a little and impacts ratio adjustment unnesecary
-	static double detected_fps = 0.0;
-	if(current_fps > detected_fps)
-		detected_fps = current_fps;
-
-	float safe_ratio = snd.frame_rate / detected_fps;
+	float safe_ratio = snd.frame_rate / current_fps;
 	if (!isfinite(safe_ratio))
 	{
 		safe_ratio = 1.0f;

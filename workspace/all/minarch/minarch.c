@@ -4500,8 +4500,8 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,currentsampleratein,currentsamplerateout);
 		blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
 		
-		sprintf(debug_text, "%.03f/%i/%.0f/%i", currentratio,
-				currentbuffersize,currentbufferms, currentbufferfree);
+		sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", currentratio,
+				currentbuffersize,currentbufferms, currentbufferfree, currentbuffertarget,avgbufferfree);
 		blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
 					height);
 
