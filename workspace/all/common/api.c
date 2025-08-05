@@ -2496,12 +2496,12 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	}
 	// printf("    actual free: %g\n", remaining_space);
 	currentbufferfree = remaining_space;
-	// let audio buffer fill a little first and then unpause audio so no underruns occur
+	// if audio is paused let buffer first fill up to the target range and then start playing
 	if (currentbufferfree < snd.frame_count * 0.6f) {
 		if (snd.paused) {
 			SND_pauseAudio(false);
 		}
-	} else if (currentbufferfree > snd.frame_count * 0.9f) { // if for some reason buffer drops below threshold again, pause it (like psx core can stop sending audio in between scenes or after fast forward etc)
+	} else if (currentbufferfree > snd.frame_count * 0.9f) { // if for some reason buffer drops below 10% again, pause audio again (like psx core can stop sending audio in between scenes or after fast forward etc)
 		if (!snd.paused) {
 			SND_pauseAudio(true);
 		}
