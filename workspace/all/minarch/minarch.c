@@ -3000,6 +3000,9 @@ static void Menu_saveState(void);
 static void Menu_loadState(void);
 
 static int setFastForward(int enable) {
+	if(!ff_audio) {
+		SND_pauseAudio(true);
+	}
 	fast_forward = enable;
 	return enable;
 }
@@ -4635,7 +4638,6 @@ static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) {
 		}
 	}
 	else return frames;
-	// return frames;
 };
 
 ///////////////////////////////////////

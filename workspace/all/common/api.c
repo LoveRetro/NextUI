@@ -2288,7 +2288,7 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 	return resampled;
 }
 
-#define ROLLING_AVERAGE_WINDOW_SIZE 5
+#define ROLLING_AVERAGE_WINDOW_SIZE 60
 static float adjustment_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
 static int adjustment_index = 0;
 
@@ -2311,7 +2311,7 @@ float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, 
 	// lets say hovering around 2000 means 2000 samples queue, about 4 frames, so at 17ms(60fps) thats  68ms delay right?
 	// Should have payed attention when my math teacher was talking dammit
 	// Also I chose 3 for pow, but idk if that really the best nr, anyone good in maths looking at my code?
-	float adjustment = 0.000001f + (0.005f - 0.000001f) * pow(normalizedDistance, 6);
+	float adjustment = 0.000001f + (0.005f - 0.000001f) * pow(normalizedDistance, 3);
 
 	if (remaining_space < midpoint)
 	{
@@ -2395,7 +2395,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 		snd.frame_rate = 60.0f;
 	}
 
-	float bufferadjustment = calculateBufferAdjustment(remaining_space, snd.frame_count * 0.3f, snd.frame_count*0.8f, frame_count);
+	float bufferadjustment = calculateBufferAdjustment(remaining_space, snd.frame_count*0.2, snd.frame_count*0.8, frame_count);
 
 	if (!isfinite(bufferadjustment))
 	{
