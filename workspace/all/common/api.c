@@ -2501,7 +2501,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 		if (snd.paused) {
 			SND_pauseAudio(false);
 		}
-	} else if (currentbufferfree > snd.frame_count * 0.9f) { // if for some reason buffer drops below 10% again, pause audio again (like psx core can stop sending audio in between scenes or after fast forward etc)
+	} else if (currentbufferfree > snd.frame_count * 0.99f) { // if for some reason buffer drops below 1% again, pause audio again (like psx core can stop sending audio in between scenes or after fast forward etc)
 		if (!snd.paused) {
 			SND_pauseAudio(true);
 		}
@@ -2654,7 +2654,7 @@ void SND_init(double sample_rate, double frame_rate)
 
 	LOG_info("We now have audio device #%d\n", snd.device_id);
 
-	snd.frame_count = ((float)spec_out.freq / SCREEN_FPS) * 12; // buffer size based on sample rate out (times 12 samples headroom)
+	snd.frame_count = ((float)spec_out.freq / SCREEN_FPS) * 8; // buffer size based on sample rate out (times 12 samples headroom)
 	currentbuffersize = snd.frame_count;
 	snd.sample_rate_in = sample_rate;
 	snd.sample_rate_out = spec_out.freq;
