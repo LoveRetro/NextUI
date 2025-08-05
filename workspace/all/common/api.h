@@ -83,6 +83,8 @@ extern float currentratio;
 extern int currentbufferfree;
 extern int avgbufferfree;
 extern int currentbuffertarget;
+extern int inputresampleframescountdebug;
+extern int outputresampleframescountdebug;
 extern int currentframecount;
 extern double currentfps;
 extern double currentreqfps;

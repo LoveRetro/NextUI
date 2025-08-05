@@ -2184,11 +2184,14 @@ void SND_setQuality(int quality)
 	soundQuality = qualityLevels[quality];
 	resetSrcState = 1;
 }
+int inputresampleframescountdebug;
+int outputresampleframescountdebug;
 ResampledFrames resample_audio(const SND_Frame *input_frames,
 							   int input_frame_count, int input_sample_rate,
 							   int output_sample_rate, double ratio)
 {
 
+	inputresampleframescountdebug = input_frame_count;
 	int error;
 	static double previous_ratio = 1.0;
 	static SRC_STATE *src_state = NULL;
@@ -2255,6 +2258,7 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 	}
 
 	int output_frame_count = src_data.output_frames_gen;
+	outputresampleframescountdebug = output_frame_count;
 
 	SND_Frame *output_frames = (SND_Frame *)malloc(output_frame_count * sizeof(SND_Frame));
 	if (!output_frames)
