@@ -3000,9 +3000,6 @@ static void Menu_saveState(void);
 static void Menu_loadState(void);
 
 static int setFastForward(int enable) {
-	if(!ff_audio) {
-		SND_pauseAudio(true);
-	}
 	fast_forward = enable;
 	return enable;
 }
@@ -6967,10 +6964,8 @@ int main(int argc , char* argv[]) {
 		
 		if (show_menu) {
 			PWR_updateFrequency(PWR_UPDATE_FREQ,1);
-			SND_pauseAudio(true);
 			Menu_loop();
 			PWR_updateFrequency(PWR_UPDATE_FREQ_INGAME,0);
-			SND_pauseAudio(false);
 			has_pending_opt_change = config.core.changed;
 			resetFPSCounter();
 			chooseSyncRef();

@@ -2288,7 +2288,7 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 	return resampled;
 }
 
-#define ROLLING_AVERAGE_WINDOW_SIZE 60
+#define ROLLING_AVERAGE_WINDOW_SIZE 120
 static float adjustment_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
 static int adjustment_index = 0;
 
@@ -2311,7 +2311,7 @@ float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, 
 	// lets say hovering around 2000 means 2000 samples queue, about 4 frames, so at 17ms(60fps) thats  68ms delay right?
 	// Should have payed attention when my math teacher was talking dammit
 	// Also I chose 3 for pow, but idk if that really the best nr, anyone good in maths looking at my code?
-	float adjustment = 0.000001f + (0.005f - 0.000001f) * pow(normalizedDistance, 3);
+	float adjustment = 0.00000000001f + (0.005f - 0.00000000001f) * pow(normalizedDistance, 3);
 
 	if (remaining_space < midpoint)
 	{
@@ -2328,7 +2328,6 @@ float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, 
 		rolling_average += adjustment_history[i];
 	}
 	rolling_average /= ROLLING_AVERAGE_WINDOW_SIZE;
-
 	return rolling_average;
 }
 
@@ -2339,13 +2338,13 @@ static int unwritten_frame_count = 0;
 float currentratio = 0.0;
 int currentbufferfree = 0;
 int currentframecount = 0;
-static double ratio = 1.0;
 
 size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 {
 	int framecount = (int)frame_count;
 	int consumed = 0;
 	int total_consumed_frames = 0;
+	double ratio = 1.0;
 
 	if (snd.frame_count <= 0)
 	{
@@ -2374,11 +2373,16 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	currentbufferfree = remaining_space;
 
 	// let audio buffer fill a little first and then unpause audio so no underruns occur
-	if (currentbufferfree < snd.frame_count * 0.7f) {
+	if (currentbufferfree < snd.frame_count * 0.6f) {
 		if (snd.paused) {
 			SND_pauseAudio(false);
 		}
+	} else if (currentbufferfree > snd.frame_count * 0.9f) { // if for some reason buffer drops below threshold again, pause it (like psx core can stop sending audio in between scenes or after fast forward etc)
+		if (!snd.paused) {
+			SND_pauseAudio(true);
+		}
 	} 
+
 
 	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000.0f;
 	currentbufferms = tempdelay;
@@ -2406,18 +2410,8 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	{
 		safe_ratio = 1.0f;
 	}
-	float target_ratio = tempratio * safe_ratio + bufferadjustment;
-	if (!isfinite(target_ratio))
-	{
-		target_ratio = 1.0f;
-	}
-	if (!isfinite(ratio))
-	{
-		ratio = 1.0;
-	}
 
-	// add some interpolation so the audio hardware has some time to recover itself no need to immediately react with big drops!
-	ratio = 0.999 * ratio + 0.001 * target_ratio;
+	ratio = tempratio * safe_ratio + bufferadjustment;
 
 	if (!isfinite(ratio))
 	{
@@ -2480,6 +2474,7 @@ enum
 size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 {
 	static int current_mode = SND_FF_ON_TIME;
+	double ratio = 1.0;
 
 	int framecount = (int)frame_count;
 
@@ -2502,9 +2497,13 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	// printf("    actual free: %g\n", remaining_space);
 	currentbufferfree = remaining_space;
 	// let audio buffer fill a little first and then unpause audio so no underruns occur
-	if (currentbufferfree < snd.frame_count * 0.7f) {
+	if (currentbufferfree < snd.frame_count * 0.6f) {
 		if (snd.paused) {
 			SND_pauseAudio(false);
+		}
+	} else if (currentbufferfree > snd.frame_count * 0.9f) { // if for some reason buffer drops below threshold again, pause it (like psx core can stop sending audio in between scenes or after fast forward etc)
+		if (!snd.paused) {
+			SND_pauseAudio(true);
 		}
 	} 
 
@@ -2547,9 +2546,10 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 		ratio = 0.995;
 		break;
 	case SND_FF_VERY_LATE:
+		// just drop the audio if its too late cause its never gonna catch up in fast forward
 		return 0;
-		ratio = 0.980;
-		break;
+		// ratio = 0.980;
+		// break;
 	default:
 		ratio = 1.0;
 	}
@@ -2654,7 +2654,7 @@ void SND_init(double sample_rate, double frame_rate)
 
 	LOG_info("We now have audio device #%d\n", snd.device_id);
 
-	snd.frame_count = ((float)spec_out.freq / SCREEN_FPS) * 8; // buffer size based on sample rate out (with 6 frames headroom), ideally you want to use actual FPS but don't know it at this point yet
+	snd.frame_count = ((float)spec_out.freq / SCREEN_FPS) * 12; // buffer size based on sample rate out (times 12 samples headroom)
 	currentbuffersize = snd.frame_count;
 	snd.sample_rate_in = sample_rate;
 	snd.sample_rate_out = spec_out.freq;
