@@ -172,7 +172,6 @@ static struct PWR_Context
 static struct SND_Context
 {
 	int initialized;
-	bool paused;
 	double frame_rate;
 
 	int sample_rate_in;
@@ -2291,11 +2290,28 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 #define ROLLING_AVERAGE_WINDOW_SIZE 120
 static float adjustment_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
 static int adjustment_index = 0;
+static float remaining_space_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
+static int remaining_space_index = 0;
+int currentbuffertarget = 0;
+int avgbufferfree = 0;
 
 float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, float targetbuffer_under, int batchsize)
 {
 
+	// this is just to show average remaining space in debug window could be removed later
+	remaining_space_history[remaining_space_index] = remaining_space;
+	remaining_space_index = (remaining_space_index + 1) % ROLLING_AVERAGE_WINDOW_SIZE;
+	float avgspace = 0.0f;
+	for (int i = 0; i < ROLLING_AVERAGE_WINDOW_SIZE; ++i)
+	{
+		avgspace += remaining_space_history[i];
+	}
+	avgspace /= ROLLING_AVERAGE_WINDOW_SIZE;
+	avgbufferfree = avgspace;
+	// end debug part
+
 	float midpoint = (targetbuffer_over + targetbuffer_under) / 2.0f;
+	currentbuffertarget = midpoint;
 
 	float normalizedDistance;
 	if (remaining_space < midpoint)
@@ -2311,7 +2327,7 @@ float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, 
 	// lets say hovering around 2000 means 2000 samples queue, about 4 frames, so at 17ms(60fps) thats  68ms delay right?
 	// Should have payed attention when my math teacher was talking dammit
 	// Also I chose 3 for pow, but idk if that really the best nr, anyone good in maths looking at my code?
-	float adjustment = 0.00000000001f + (0.005f - 0.00000000001f) * pow(normalizedDistance, 3);
+	float adjustment = 0.001f + (0.01f - 0.001f) * pow(normalizedDistance, 3);
 
 	if (remaining_space < midpoint)
 	{
@@ -2374,20 +2390,14 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 
 	// let audio buffer fill a little first and then unpause audio so no underruns occur
 	if (currentbufferfree < snd.frame_count * 0.6f) {
-		if (snd.paused) {
-			SND_pauseAudio(false);
-		}
+		SND_pauseAudio(false);
 	} else if (currentbufferfree > snd.frame_count * 0.99f) { // if for some reason buffer drops below threshold again, pause it (like psx core can stop sending audio in between scenes or after fast forward etc)
-		if (!snd.paused) {
-			SND_pauseAudio(true);
-		}
+		SND_pauseAudio(true);
 	} 
 
 
 	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000.0f;
 	currentbufferms = tempdelay;
-
-	float tempratio = 1.0f;
 
 	// do some checks
 	if (current_fps <= 0.0f || !isfinite(current_fps))
@@ -2405,13 +2415,14 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	{
 		bufferadjustment = 0.0f;
 	}
+
 	float safe_ratio = snd.frame_rate / current_fps;
 	if (!isfinite(safe_ratio))
 	{
 		safe_ratio = 1.0f;
 	}
 
-	ratio = tempratio * safe_ratio + bufferadjustment;
+	ratio = safe_ratio + bufferadjustment;
 
 	if (!isfinite(ratio))
 	{
@@ -2498,13 +2509,9 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	currentbufferfree = remaining_space;
 	// let audio buffer fill up a little before playing audio, so no underruns occur. Target fill rate of buffer is about 50% so start playing when about 40% full
 	if (currentbufferfree < snd.frame_count * 0.6f) {
-		if (snd.paused) {
-			SND_pauseAudio(false);
-		}
+		SND_pauseAudio(false);
 	} else if (currentbufferfree > snd.frame_count * 0.99f) { // if for some reason buffer drops below 1% again, pause audio again (like psx core can stop sending audio in between scenes or after fast forward etc)
-		if (!snd.paused) {
-			SND_pauseAudio(true);
-		}
+		SND_pauseAudio(true);
 	} 
 
 	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000;
@@ -2712,7 +2719,6 @@ void SND_pauseAudio(bool paused)
 #else
 	SDL_PauseAudio(paused);
 #endif
-snd.paused = paused;
 }
 
 ///////////////////////////////

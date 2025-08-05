@@ -81,6 +81,8 @@ extern SDL_Color ALT_BUTTON_TEXT_COLOR;
 // to a structure or something.
 extern float currentratio;
 extern int currentbufferfree;
+extern int avgbufferfree;
+extern int currentbuffertarget;
 extern int currentframecount;
 extern double currentfps;
 extern double currentreqfps;
