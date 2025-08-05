@@ -194,6 +194,7 @@ static int _;
 static double current_fps = SCREEN_FPS;
 static int fps_counter = 0;
 double currentfps = 0.0;
+double currentavgfps = 0.0;
 double currentreqfps = 0.0;
 int currentcpuspeed = 0;
 double currentcpuse = 0;
@@ -2420,11 +2421,33 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 		bufferadjustment = 0.0f;
 	}
 
-	float safe_ratio = snd.frame_rate / current_fps;
+
+	#define AVGFPSWINDOW 240
+	static float avgfps_history[AVGFPSWINDOW] = {0.0f};
+	static int avgfps_index = 0;
+
+	avgfps_history[avgfps_index] = current_fps;
+	avgfps_index = (avgfps_index + 1) % AVGFPSWINDOW;
+
+	float avgfps = 0.0f;
+
+	if(SDL_GetTicks() > 5000) {
+		for (int i = 0; i < AVGFPSWINDOW; ++i)
+		{
+			avgfps += avgfps_history[i];
+		}
+		avgfps /= AVGFPSWINDOW;
+		currentavgfps = avgfps;
+	} else {
+		avgfps = current_fps;
+	}
+	float safe_ratio = snd.frame_rate / avgfps;
 	if (!isfinite(safe_ratio))
 	{
 		safe_ratio = 1.0f;
 	}
+
+
 
 	ratio = safe_ratio + bufferadjustment;
 

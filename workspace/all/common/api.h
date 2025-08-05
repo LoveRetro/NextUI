@@ -87,6 +87,7 @@ extern int inputresampleframescountdebug;
 extern int outputresampleframescountdebug;
 extern int currentframecount;
 extern double currentfps;
+extern double currentavgfps;
 extern double currentreqfps;
 extern float currentbufferms;
 extern int currentbuffersize;
