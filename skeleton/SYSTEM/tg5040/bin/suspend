@@ -45,9 +45,9 @@ after() {
 		/etc/bluetooth/bt_init.sh start || true
 	fi
 
-	>&2 echo "Restoring mixer state..."
-	alsactl --file "$asound_state_dir/asound.state.post" store || true
-	alsactl --file "$asound_state_dir/asound.state.pre" restore || true
+	# >&2 echo "Restoring mixer state..."
+	# alsactl --file "$asound_state_dir/asound.state.post" store || true
+	# alsactl --file "$asound_state_dir/asound.state.pre" restore || true
 }
 
 before
