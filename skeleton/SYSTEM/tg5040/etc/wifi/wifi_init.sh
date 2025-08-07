@@ -1,7 +1,7 @@
 #!/bin/sh
 
 start() {
-	echo "disable_scan_offload=0" > /etc/wifi/wpa_supplicant_overlay.conf
+	echo "disable_scan_offload=1" > /etc/wifi/wpa_supplicant_overlay.conf
 	rfkill.elf unblock wifi
 
 	/etc/init.d/wpa_supplicant start
