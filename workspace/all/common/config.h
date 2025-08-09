@@ -74,6 +74,7 @@ typedef struct
 	bool showRecents;
 	bool showTools;
 	bool showGameArt;
+	bool showFolderNamesAtRoot;
 	bool romsUseFolderBackground;
 	bool showQuickSwitcherUi;
 	int defaultView;
@@ -117,6 +118,7 @@ typedef struct
 #define CFG_DEFAULT_SHOWMENUTRANSITIONS true
 #define CFG_DEFAULT_SHOWRECENTS true
 #define CFG_DEFAULT_SHOWGAMEART true
+#define CFG_DEFAULT_SHOWFOLDERNAMESATROOT true
 #define CFG_DEFAULT_GAMESWITCHERSCALING GFX_SCALE_FULLSCREEN
 #define CFG_DEFAULT_SCREENTIMEOUTSECS 60
 #define CFG_DEFAULT_SUSPENDTIMEOUTSECS 30
@@ -209,6 +211,9 @@ void CFG_setMuteLEDs(bool);
 // Set game art width percentage.
 double CFG_getGameArtWidth(void);
 void CFG_setGameArtWidth(double zeroToOne);
+// Show/hide folder names at root directory.
+bool CFG_getShowFolderNamesAtRoot(void);
+void CFG_setShowFolderNamesAtRoot(bool show);
 // WiFi on/off (if available)
 bool CFG_getWifi(void);
 void CFG_setWifi(bool on);
