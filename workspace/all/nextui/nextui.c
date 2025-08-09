@@ -2165,6 +2165,7 @@ int main (int argc, char *argv[]) {
 	float targetY;
 	float previousY;
 	int is_scrolling = 0;
+	bool list_show_entry_names = true;
 
 	char folderBgPath[1024];
 	folderbgbmp = NULL;
@@ -2825,7 +2826,15 @@ int main (int argc, char *argv[]) {
 				if (dot) *dot = '\0'; 
 
 				static int lastType = -1;
-		
+
+				// this is only a choice on the root folder
+				list_show_entry_names = stack->count > 1 || CFG_getShowFolderNamesAtRoot();
+
+				// load folder background
+				char defaultBgPath[512];
+				snprintf(defaultBgPath, sizeof(defaultBgPath), SDCARD_PATH "/bg.png");
+
+
 				if(((entry->type == ENTRY_DIR || entry->type == ENTRY_ROM) && CFG_getRomsUseFolderBackground())) {
 					char *newBg = entry->type == ENTRY_DIR ? entry->path:rompath;
 					if((strcmp(newBg, folderBgPath) != 0 || lastType != entry->type) && sizeof(folderBgPath) != 1) {
@@ -2837,14 +2846,20 @@ int main (int argc, char *argv[]) {
 						else if (entry->type == ENTRY_ROM)
 							snprintf(tmppath, sizeof(tmppath), "%s/.media/bglist.png", folderBgPath);
 						if(!exists(tmppath)) {
-							snprintf(tmppath, sizeof(tmppath), SDCARD_PATH "/bg.png", folderBgPath);
+							// Safeguard: If no background is available, still render the text to leave the user a way out
+							list_show_entry_names = true;
+							snprintf(tmppath, sizeof(tmppath), defaultBgPath, folderBgPath);
 						}
 						startLoadFolderBackground(tmppath, onBackgroundLoaded, NULL);
 					}
 				} 
-				else if(strcmp(SDCARD_PATH "/bg.png", folderBgPath) != 0) {
-					strncpy(folderBgPath, SDCARD_PATH "/bg.png", sizeof(folderBgPath) - 1);
-					startLoadFolderBackground(SDCARD_PATH "/bg.png", onBackgroundLoaded, NULL);
+				else if(strcmp(defaultBgPath, folderBgPath) != 0 && exists(defaultBgPath)) {
+					strncpy(folderBgPath, defaultBgPath, sizeof(folderBgPath) - 1);
+					startLoadFolderBackground(defaultBgPath, onBackgroundLoaded, NULL);
+				}
+				else {
+					// Safeguard: If no background is available, still render the text to leave the user a way out
+					list_show_entry_names = true;
 				}
 				// load game thumbnails
 				if (total > 0) {
@@ -2889,7 +2904,7 @@ int main (int argc, char *argv[]) {
 				}
 
 				// list
-				if (total > 0) {
+				if (total > 0 && list_show_entry_names) {
 					selected_row = top->selected - top->start;
 					previousY = remember_row * PILL_SIZE;
 					targetY = selected_row * PILL_SIZE;
@@ -2906,7 +2921,7 @@ int main (int argc, char *argv[]) {
 						
 						char display_name[256];
 						int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name,display_name, available_width, SCALE1(BUTTON_PADDING * 2));
-						
+
 						int max_width = MIN(available_width, text_width);
 					
 						SDL_Color text_color = uintToColour(THEME_COLOR4_255);
@@ -2922,7 +2937,7 @@ int main (int argc, char *argv[]) {
 							is_scrolling = GFX_resetScrollText(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
 							bool is_scrolling = remember_depth == stack->count;
 							SDL_LockMutex(animMutex);
-							if(globalpill) SDL_FreeSurface(globalpill);
+							if(globalpill) { SDL_FreeSurface(globalpill); globalpill=NULL; }
 							globalpill = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888);
 							GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){0,0, max_width, SCALE1(PILL_SIZE)});
 							globallpillW =  max_width;
@@ -2939,10 +2954,9 @@ int main (int argc, char *argv[]) {
 							task->frames = is_scrolling && CFG_getMenuAnimations() ? 3:0;
 							task->entry_name = notext ? " ":entry_name;
 							animPill(task);
-						} 
+						}
 						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
 						SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)) + text_offset_y };
-				
 						SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
 						SDL_BlitSurface(text, &text_rect, screen, &dest_rect);
 						SDL_FreeSurface(text_unique); // Free after use
@@ -3042,8 +3056,10 @@ int main (int argc, char *argv[]) {
 				GFX_clearLayers(LAYER_SCROLLTEXT);
 				
 				SDL_LockMutex(animMutex);
-				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
-				// GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
+				if (list_show_entry_names) {
+					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
+					// GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
+				}
 				SDL_UnlockMutex(animMutex);
 			}
 			if(!startgame) // dont flip if game gonna start
@@ -3093,9 +3109,10 @@ int main (int argc, char *argv[]) {
 			}
 			SDL_UnlockMutex(thumbMutex);
 			SDL_LockMutex(animMutex);
-			if(animationDraw) {
+			if (animationDraw) {
 				GFX_clearLayers(LAYER_TRANSITION);
-				GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
+				if (list_show_entry_names)
+					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
 				animationDraw = 0;
 			}
 			SDL_UnlockMutex(animMutex);
@@ -3120,22 +3137,26 @@ int main (int argc, char *argv[]) {
 					int text_offset_y = (SCALE1(PILL_SIZE) - TTF_FontHeight(font.large) + 1) >> 1;
 				
 					GFX_clearLayers(LAYER_SCROLLTEXT);
-					GFX_scrollTextTexture(
-						font.large,
-						entry_text,
-						SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + remember_row * PILL_SIZE) + text_offset_y,
-						max_width - SCALE1(BUTTON_PADDING * 2),
-						0,
-						text_color,
-						1
-					);
-				} 
+					if (list_show_entry_names) {
+						GFX_scrollTextTexture(
+							font.large,
+							entry_text,
+							SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + remember_row * PILL_SIZE) + text_offset_y,
+							max_width - SCALE1(BUTTON_PADDING * 2),
+							0,
+							text_color,
+							1
+						);
+					}
+				}
 				else {
 					GFX_clearLayers(LAYER_TRANSITION);
 					GFX_clearLayers(LAYER_SCROLLTEXT);
 					SDL_LockMutex(animMutex);
-					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
-					GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
+					if (list_show_entry_names) {
+						GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
+						GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
+					}
 					SDL_UnlockMutex(animMutex);
 					PLAT_GPU_Flip();
 				} 
