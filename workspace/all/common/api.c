@@ -2419,7 +2419,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	float avgfps = 0.0f;
 	for (int i = 0; i < AVG_FPS_WINDOW; ++i)
 	{
-		avgfps += remaining_space_history[i];
+		avgfps += fps_history[i];
 	}
 	avgfps /= AVG_FPS_WINDOW;
 
