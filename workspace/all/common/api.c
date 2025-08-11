@@ -2355,7 +2355,8 @@ float currentratio = 0.0;
 int currentbufferfree = 0;
 int currentframecount = 0;
 
-static float fps_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
+#define AVG_FPS_WINDOW 1200
+static float fps_history[AVG_FPS_WINDOW] = {0.0f};
 static int fps_index = 0;
 static int samplecounter = 0;
 
@@ -2414,13 +2415,13 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	}
 
 	fps_history[fps_index] = remaining_space;
-	fps_index = (fps_index + 1) % ROLLING_AVERAGE_WINDOW_SIZE;
+	fps_index = (fps_index + 1) % AVG_FPS_WINDOW;
 	float avgfps = 0.0f;
-	for (int i = 0; i < ROLLING_AVERAGE_WINDOW_SIZE; ++i)
+	for (int i = 0; i < AVG_FPS_WINDOW; ++i)
 	{
 		avgfps += remaining_space_history[i];
 	}
-	avgfps /= ROLLING_AVERAGE_WINDOW_SIZE;
+	avgfps /= AVG_FPS_WINDOW;
 
 	float bufferadjustment = calculateBufferAdjustment(remaining_space, snd.frame_count*0.2, snd.frame_count*0.8, frame_count);
 
@@ -2430,7 +2431,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	}
 	
 	float safe_ratio = snd.frame_rate / current_fps;
-	if(samplecounter > ROLLING_AVERAGE_WINDOW_SIZE) {
+	if(samplecounter > AVG_FPS_WINDOW) {
 		float safe_ratio = snd.frame_rate / avgfps;
 	} else samplecounter++;
 	if (!isfinite(safe_ratio))
