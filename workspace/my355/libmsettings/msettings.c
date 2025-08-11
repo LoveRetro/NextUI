@@ -1068,16 +1068,23 @@ int scaleExposure(int value) {
 
 ///////// Platform specific, unscaled accessors
 
+void putFile(char* path, char* contents) {
+	FILE* file = fopen(path, "w");
+	if (file) {
+		fputs(contents, file);
+		fclose(file);
+	}
+}
+void putInt(char* path, int value) {
+	char buffer[8];
+	sprintf(buffer, "%d", value);
+	putFile(path, buffer);
+}
+
 #define DISP_LCD_SET_BRIGHTNESS  0x102
 void SetRawBrightness(int val) { // 0 - 255
 	printf("SetRawBrightness(%i)\n", val); fflush(stdout);
-
-    int fd = open("/dev/disp", O_RDWR);
-	if (fd) {
-	    unsigned long param[4]={0,val,0,0};
-		ioctl(fd, DISP_LCD_SET_BRIGHTNESS, &param);
-		close(fd);
-	}
+	putInt("/sys/class/backlight/backlight/brightness", val);
 }
 void SetRawColortemp(int val) { // 0 - 255
 	printf("SetRawColortemp(%i)\n", val); fflush(stdout);
