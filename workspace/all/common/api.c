@@ -2355,7 +2355,7 @@ float currentratio = 0.0;
 int currentbufferfree = 0;
 int currentframecount = 0;
 
-#define AVG_FPS_WINDOW 3000
+#define AVG_FPS_WINDOW 600
 static float fps_history[AVG_FPS_WINDOW] = {0.0f};
 static int fps_index = 0;
 static int samplecounter = 0;
@@ -2414,7 +2414,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 		snd.frame_rate = 60.0f;
 	}
 
-	fps_history[fps_index] = remaining_space;
+	fps_history[fps_index] = current_fps;
 	fps_index = (fps_index + 1) % AVG_FPS_WINDOW;
 	float avgfps = 0.0f;
 	for (int i = 0; i < AVG_FPS_WINDOW; ++i)
