@@ -2345,7 +2345,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 
     float ratio = base_ratio;
 
-    const float max_adjustment = 0.005f;
+    const float max_adjustment = 0.01f;
 
     if (avg_fill > 0.50f) {
         // Buffer too full speed up playback by decreasing ratio slightly
