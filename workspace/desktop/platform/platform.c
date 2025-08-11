@@ -688,7 +688,7 @@ void PLAT_quitVideo(void) {
 	SDL_DestroyRenderer(vid.renderer);
 	SDL_DestroyWindow(vid.window);
 
-	SDL_Quit();
+	SDL_QuitSubSystem(SDL_INIT_VIDEO);
 	system("cat /dev/zero > /dev/fb0 2>/dev/null");
 }
 
@@ -2167,6 +2167,11 @@ void PLAT_enableOverlay(int enable) {
 ///////////////////////////////
 
 static int online = 1;
+void PLAT_updateNetworkStatus()
+{
+	online = 1;
+}
+
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	PLAT_getBatteryStatusFine(is_charging, charge);
 }
@@ -2181,7 +2186,7 @@ void PLAT_enableBacklight(int enable) {
 	// buh
 }
 
-void PLAT_powerOff(void) {
+void PLAT_powerOff(int reboot) {
 	SND_quit();
 	VIB_quit();
 	PWR_quit();
@@ -2204,7 +2209,7 @@ int PLAT_pickSampleRate(int requested, int max) {
 }
 
 char* PLAT_getModel(void) {
-	return "macOS";
+	return "Desktop";
 }
 
 void PLAT_getOsVersionInfo(char *output_str, size_t max_len)
@@ -2214,6 +2219,10 @@ void PLAT_getOsVersionInfo(char *output_str, size_t max_len)
 
 int PLAT_isOnline(void) {
 	return online;
+}
+
+ConnectionStrength PLAT_connectionStrength(void) {
+	return SIGNAL_STRENGTH_HIGH;
 }
 
 /////////////////////////////////

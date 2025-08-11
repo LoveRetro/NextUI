@@ -18,10 +18,10 @@ LIBS            += -lpthread -ldl -lrt
 SRCS =wifimanager.c wifi_event.c scan.c \
       wifi.c wpa_supplicant_conf.c wifi_udhcpc.c tool.c wmg_debug.c status_info.c
 install:
-	-@mkdir -p $(PREFIX)/lib
-	-@mkdir -p $(PREFIX)/include
-	@cp ./include/*.h $(PREFIX)/include
-	@cp $(target) $(PREFIX)/lib
+	-mkdir -p $(PREFIX)/lib
+	-mkdir -p $(PREFIX)/include
+	cp ./include/*.h $(PREFIX)/include
+	cp $(target) $(PREFIX)/lib
 
 #ifeq ($(CONFIG_IPV6), y)
 #EXT_LDFLAGS=-DCONFIG_IPV6
@@ -49,7 +49,8 @@ install:
 
 $(target): $(SRCS)
 	$(CC) -fPIC -shared $(INCLUDES) $(LDFLAGS) $(EXT_LDFLAGS) $^ -o $@ $(LIBS)
-	@cp $@ $(PREFIX)/lib
+	-mkdir -p $(PREFIX)/lib
+#	cp $@ $(PREFIX)/lib
 
 ####################################################################
 all: $(target) install 

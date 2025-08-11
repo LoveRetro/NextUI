@@ -11,6 +11,7 @@ extern uint32_t THEME_COLOR3_255;
 extern uint32_t THEME_COLOR4_255;
 extern uint32_t THEME_COLOR5_255;
 extern uint32_t THEME_COLOR6_255;
+extern uint32_t THEME_COLOR7_255;
 
 // Read-only interface for minui.c usage
 // Read/Write interface for settings.cpp usage
@@ -33,24 +34,27 @@ enum
 	STATE_FORMAT_SRM_UNCOMRESSED
 };
 
+enum {
+	// actual views
+	SCREEN_GAMELIST,
+	SCREEN_GAMESWITCHER,
+	SCREEN_QUICKMENU,
+	// meta
+	SCREEN_GAME,
+	SCREEN_OFF
+};
+
 typedef struct
 {
 	// Theme
 	int font;
-	//uint32_t color1;
 	uint32_t color1_255; // not screen mapped
-	//uint32_t color2;
 	uint32_t color2_255; // not screen mapped
-	//uint32_t color3;
 	uint32_t color3_255; // not screen mapped
-	//uint32_t color4;
 	uint32_t color4_255; // not screen mapped
-	//uint32_t color5;
 	uint32_t color5_255; // not screen mapped
-	//uint32_t color6;
 	uint32_t color6_255; // not screen mapped
-	//uint32_t backgroundColor;
-	uint32_t backgroundColor_255; // not screen mapped
+	uint32_t color7_255; // not screen mapped
 	int thumbRadius;
 	int gameSwitcherScaling; // enum
 	double gameArtWidth;	 // [0,1] -> 0-100% of screen width
@@ -68,12 +72,15 @@ typedef struct
 	bool showMenuAnimations;
 	bool showMenuTransitions;
 	bool showRecents;
+	bool showTools;
 	bool showGameArt;
 	bool romsUseFolderBackground;
+	bool showQuickSwitcherUi;
+	int defaultView;
 
 	// Mute switch
 	bool muteLeds;
-	
+
 	// Power
 	uint32_t screenTimeoutSecs;
 	uint32_t suspendTimeoutSecs;
@@ -87,6 +94,10 @@ typedef struct
 
 	// Network
 	bool wifi;
+	bool wifiDiagnostics;
+	bool bluetooth;
+	bool bluetoothDiagnostics;
+	int bluetoothSamplerateLimit;
 
 } NextUISettings;
 
@@ -97,7 +108,7 @@ typedef struct
 #define CFG_DEFAULT_COLOR4 0xffffffU
 #define CFG_DEFAULT_COLOR5 0x000000U
 #define CFG_DEFAULT_COLOR6 0xffffffU
-#define CFG_DEFAULT_BACKGROUNDCOLOR 0x000000U
+#define CFG_DEFAULT_COLOR7 0x000000U
 #define CFG_DEFAULT_THUMBRADIUS 20 // unscaled!
 #define CFG_DEFAULT_SHOWCLOCK false
 #define CFG_DEFAULT_CLOCK24H true
@@ -116,6 +127,13 @@ typedef struct
 #define CFG_DEFAULT_MUTELEDS false
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
+#define CFG_DEFAULT_VIEW SCREEN_GAMELIST
+#define CFG_DEFAULT_SHOWQUICKWITCHERUI true
+#define CFG_DEFAULT_WIFI_DIAG false
+#define CFG_DEFAULT_SHOWTOOLS true
+#define CFG_DEFAULT_BLUETOOTH false
+#define CFG_DEFAULT_BLUETOOTH_DIAG false
+#define CFG_DEFAULT_BLUETOOTH_MAXRATE 48000
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
@@ -160,6 +178,9 @@ void CFG_setThumbnailRadius(int radius);
 // Show/hide recently played in the main menu.
 bool CFG_getShowRecents(void);
 void CFG_setShowRecents(bool show);
+// Show/hide tools folder in the main menu.
+bool CFG_getShowTools(void);
+void CFG_setShowTools(bool show);
 // Show/hide game art in the main menu.
 bool CFG_getShowGameArt(void);
 void CFG_setShowGameArt(bool show);
@@ -191,7 +212,24 @@ void CFG_setGameArtWidth(double zeroToOne);
 // WiFi on/off (if available)
 bool CFG_getWifi(void);
 void CFG_setWifi(bool on);
-
+// Default view on boot
+int CFG_getDefaultView(void);
+void CFG_setDefaultView(int view);
+// Quick switcher UI painting on/off
+bool CFG_getShowQuickswitcherUI(void);
+void CFG_setShowQuickswitcherUI(bool on);
+// WiFi diagnostic logging on/off
+bool CFG_getWifiDiagnostics(void);
+void CFG_setWifiDiagnostics(bool on);
+// Bluetooth on/off (if available)
+bool CFG_getBluetooth(void);
+void CFG_setBluetooth(bool on);
+// BT diagnostic logging on/off
+bool CFG_getBluetoothDiagnostics(void);
+void CFG_setBluetoothDiagnostics(bool on);
+// BT maximum sample rate to request
+int CFG_getBluetoothSamplingrateLimit(void);
+void CFG_setBluetoothSamplingrateLimit(int value);
 
 void CFG_sync(void);
 void CFG_quit(void);

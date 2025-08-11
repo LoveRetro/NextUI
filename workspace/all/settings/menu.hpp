@@ -287,6 +287,8 @@ public:
     void performLayout(const SDL_Rect &dst);
     bool selectNext();
     bool selectPrev();
+    std::string getSelectedItemName() const;
+    bool selectByName(const std::string &name);
     void resetAllItems();
 
     // returns true if the input was handled

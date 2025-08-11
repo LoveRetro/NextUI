@@ -1249,6 +1249,16 @@ enum {
 	SHORTCUT_TOGGLE_FF,
 	SHORTCUT_HOLD_FF,
 	SHORTCUT_GAMESWITCHER,
+	// Trimui only
+	SHORTCUT_TOGGLE_TURBO_A,
+	SHORTCUT_TOGGLE_TURBO_B,
+	SHORTCUT_TOGGLE_TURBO_X,
+	SHORTCUT_TOGGLE_TURBO_Y,
+	SHORTCUT_TOGGLE_TURBO_L,
+	SHORTCUT_TOGGLE_TURBO_L2,
+	SHORTCUT_TOGGLE_TURBO_R,
+	SHORTCUT_TOGGLE_TURBO_R2,
+	// 
 	SHORTCUT_COUNT,
 };
 
@@ -1800,6 +1810,16 @@ static struct Config {
 		[SHORTCUT_TOGGLE_FF]			= {"Toggle FF",			-1, BTN_ID_NONE, 0},
 		[SHORTCUT_HOLD_FF]				= {"Hold FF",			-1, BTN_ID_NONE, 0},
 		[SHORTCUT_GAMESWITCHER]			= {"Game Switcher",		-1, BTN_ID_NONE, 0},
+		// Trimui only
+		[SHORTCUT_TOGGLE_TURBO_A]		= {"Toggle Turbo A",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_B]		= {"Toggle Turbo B",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_X]		= {"Toggle Turbo X",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_Y]		= {"Toggle Turbo Y",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_L]		= {"Toggle Turbo L",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_L2]		= {"Toggle Turbo L2",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_R]		= {"Toggle Turbo R",	-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_TURBO_R2]		= {"Toggle Turbo R2",	-1, BTN_ID_NONE, 0},
+		// -----
 		{NULL}
 	},
 };
@@ -2303,10 +2323,6 @@ static void Config_readOptions(void) {
 	Config_readOptionsString(config.system_cfg);
 	Config_readOptionsString(config.default_cfg);
 	Config_readOptionsString(config.user_cfg);
-
-
-
-	// screen_scaling = SCALE_NATIVE; // TODO: tmp
 }
 static void Config_readControls(void) {
 	Config_readControlsString(config.default_cfg);
@@ -3043,6 +3059,26 @@ static void input_poll_callback(void) {
 				if (PAD_justPressed(btn) || (!toggled_ff_on && PAD_justReleased(btn))) {
 					fast_forward = setFastForward(PAD_isPressed(btn));
 					if (mapping->mod) ignore_menu = 1; // very unlikely but just in case
+				}
+			}
+			// Trimui only
+			else if (PLAT_canTurbo() && i>=SHORTCUT_TOGGLE_TURBO_A && i<=SHORTCUT_TOGGLE_TURBO_R2) {
+				if (PAD_justPressed(btn)) {
+					switch(i) {
+						case SHORTCUT_TOGGLE_TURBO_A:  PLAT_toggleTurbo(BTN_ID_A); break;
+						case SHORTCUT_TOGGLE_TURBO_B:  PLAT_toggleTurbo(BTN_ID_B); break;
+						case SHORTCUT_TOGGLE_TURBO_X:  PLAT_toggleTurbo(BTN_ID_X); break;
+						case SHORTCUT_TOGGLE_TURBO_Y:  PLAT_toggleTurbo(BTN_ID_Y); break;
+						case SHORTCUT_TOGGLE_TURBO_L:  PLAT_toggleTurbo(BTN_ID_L1); break;
+						case SHORTCUT_TOGGLE_TURBO_L2: PLAT_toggleTurbo(BTN_ID_L2); break;
+						case SHORTCUT_TOGGLE_TURBO_R:  PLAT_toggleTurbo(BTN_ID_R1); break;
+						case SHORTCUT_TOGGLE_TURBO_R2: PLAT_toggleTurbo(BTN_ID_R2); break;
+						default: break;
+					}
+					break;
+				}
+				else if (PAD_justReleased(btn)) {
+					break;
 				}
 			}
 			else if (PAD_justPressed(btn)) {
@@ -4467,8 +4503,8 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,currentsampleratein,currentsamplerateout);
 		blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
 		
-		sprintf(debug_text, "%.03f/%i/%.0f/%i", currentratio,
-				currentbuffersize,currentbufferms, currentbufferfree);
+		sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", currentratio,
+				currentbuffersize,currentbufferms, currentbufferfree, currentbuffertarget,avgbufferfree);
 		blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
 					height);
 
@@ -4501,8 +4537,6 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 
 	renderer.src = (void*)data;
 	renderer.dst = screen->pixels;
-
-	SDL_PauseAudio(0);
 	GFX_blitRenderer(&renderer);
 
 	screen_flip(screen);
@@ -4586,7 +4620,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 
 static void audio_sample_callback(int16_t left, int16_t right) {
 	if (!fast_forward || ff_audio) {
-		if (use_core_fps) {
+		if (use_core_fps || fast_forward) {
 			SND_batchSamples_fixed_rate(&(const SND_Frame){left,right}, 1);
 		}
 		else {
@@ -4596,7 +4630,7 @@ static void audio_sample_callback(int16_t left, int16_t right) {
 }
 static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) { 
 	if (!fast_forward || ff_audio) {
-		if (use_core_fps) {
+		if (use_core_fps || fast_forward) {
 			return SND_batchSamples_fixed_rate((const SND_Frame*)data, frames);
 		}
 		else {
@@ -4604,7 +4638,6 @@ static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) {
 		}
 	}
 	else return frames;
-	// return frames;
 };
 
 ///////////////////////////////////////
@@ -4753,7 +4786,10 @@ void Core_reset(void) {
 	core.reset();
 }
 void Core_unload(void) {
-	SND_quit();
+	// Disabling this is a dumb hack for bluetooth, we should really be using 
+	// bluealsa with --keep-alive=-1 - but SDL wont reconnect the stream on next start.
+	// Reenable as soon as we have a more recent SDL available, if ever.
+	//SND_quit();
 }
 void Core_quit(void) {
 	if (core.initialized) {
@@ -4881,6 +4917,7 @@ void Menu_beforeSleep() {
 	RTC_write();
 	State_autosave();
 	putFile(AUTO_RESUME_PATH, game.path + strlen(SDCARD_PATH));
+	
 	PWR_setCPUSpeed(CPU_SPEED_MENU);
 }
 void Menu_afterSleep() {
@@ -5384,7 +5421,7 @@ static int OptionSaveChanges_openMenu(MenuList* list, int i) {
 
 static int OptionQuicksave_onConfirm(MenuList* list, int i) {
 	Menu_beforeSleep();
-	PWR_powerOff();
+	PWR_powerOff(0);
 }
 
 static int OptionCheats_optionChanged(MenuList* list, int i) {
@@ -6214,9 +6251,6 @@ int save_screenshot_thread(void* data) {
 SDL_Thread* screenshotsavethread;
 static void Menu_saveState(void) {
 	// LOG_info("Menu_saveState\n");
-	if(quit) {
-		SDL_PauseAudio(1);
-	}
 	Menu_updateState();
 	
 	if (menu.total_discs) {
@@ -6341,10 +6375,6 @@ static void Menu_loop(void) {
 	if (restore_w!=DEVICE_WIDTH || restore_h!=DEVICE_HEIGHT) {
 		screen = GFX_resize(DEVICE_WIDTH,DEVICE_HEIGHT,DEVICE_PITCH);
 	}
-
-	char act[PATH_MAX];
-	sprintf(act, "gametimectl.elf stop '%s' &", replaceString2(game.path, "'", "'\\''"));
-	system(act);
 
 	SRAM_write();
 	RTC_write();
@@ -6668,12 +6698,8 @@ static void Menu_loop(void) {
 		if (rumble_strength) VIB_setStrength(rumble_strength);
 		
 		if (!HAS_POWER_BUTTON) PWR_disableSleep();
-
-		char act[PATH_MAX];
-		sprintf(act, "gametimectl.elf start '%s' &", replaceString2(game.path, "'", "'\\''"));
-		system(act);
 	}
-	else if (exists(NOUI_PATH)) PWR_powerOff(); // TODO: won't work with threaded core, only check this once per launch
+	else if (exists(NOUI_PATH)) PWR_powerOff(0); // TODO: won't work with threaded core, only check this once per launch
 	
 
 	SDL_FreeSurface(backing);
@@ -6772,9 +6798,48 @@ static void limitFF(void) {
 	last_time = now;
 }
 
+#define PWR_UPDATE_FREQ 5
+#define PWR_UPDATE_FREQ_INGAME 20
+
+// We need to do this on the audio thread (aka main thread currently)
+static bool resetAudio = false;
+
+void onBluetoothAudioChanged(bool bluetooth, int watch_event)
+{
+	switch (watch_event)
+	{
+	case DIRWATCH_CREATE: LOG_info("callback reason: DIRWATCH_CREATE\n"); break;
+	case DIRWATCH_DELETE: LOG_info("callback reason: DIRWATCH_DELETE\n"); break;
+	case FILEWATCH_MODIFY: LOG_info("callback reason: FILEWATCH_MODIFY\n"); break;
+	case FILEWATCH_DELETE: LOG_info("callback reason: FILEWATCH_DELETE\n"); break;
+	case FILEWATCH_CLOSE_WRITE: LOG_info("callback reason: FILEWATCH_CLOSE_WRITE\n"); break;
+	}
+
+	resetAudio = true;
+
+	// FIXME: This shouldnt be necessary, alsa should just read .asoundrc for the changed defult device.
+	if(bluetooth)
+		SDL_setenv("AUDIODEV", "bluealsa", 1);
+	else
+		SDL_setenv("AUDIODEV", "default", 1);
+
+	if(bluetooth && !exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
+		LOG_error("asoundrc is not there yet!!!\n");
+	else if(!bluetooth && exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
+		LOG_error("asoundrc is not deleted yet!!!\n");
+}
 
 int main(int argc , char* argv[]) {
 	LOG_info("MinArch\n");
+
+	static char asoundpath[MAX_PATH];
+	sprintf(asoundpath, "%s/.asoundrc", getenv("HOME"));
+	LOG_info("minarch: need asoundrc at %s\n", asoundpath);
+	if(exists(asoundpath))
+		LOG_info("asoundrc exists at %s\n", asoundpath);
+	else 
+		LOG_info("asoundrc does not exist at %s\n", asoundpath);
+
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
 
@@ -6795,8 +6860,6 @@ int main(int argc , char* argv[]) {
 	getEmuName(rom_path, tag_name);
 	
 	LOG_info("rom_path: %s\n", rom_path);
-	
-
 	
 	screen = GFX_init(MODE_MENU);
 
@@ -6825,6 +6888,7 @@ int main(int argc , char* argv[]) {
 	Config_init();
 	Config_readOptions(); // cores with boot logo option (eg. gb) need to load options early
 	setOverclock(overclock);
+	
 	Core_init();
 
 	// TODO: find a better place to do this
@@ -6836,7 +6900,9 @@ int main(int argc , char* argv[]) {
 	Input_init(NULL);
 	Config_readOptions(); // but others load and report options later (eg. nes)
 	Config_readControls(); // restore controls (after the core has reported its defaults)
+
 	SND_init(core.sample_rate, core.fps);
+	BT_registerDeviceWatcher(onBluetoothAudioChanged);
 	InitSettings(); // after we initialize audio
 	Menu_init();
 	State_resume();
@@ -6844,6 +6910,9 @@ int main(int argc , char* argv[]) {
 
 	PWR_warn(1);
 	PWR_disableAutosleep();
+	// we dont need five second updates while ingame, and wifi status isnt displayed either
+	PWR_updateFrequency(PWR_UPDATE_FREQ, 0); 
+
 	// force a vsync immediately before loop
 	// for better frame pacing?
 	GFX_clearAll();
@@ -6870,6 +6939,7 @@ int main(int argc , char* argv[]) {
 	applyShaderSettings();
 	// release config when all is loaded
 	Config_free();
+
 	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
 	while (!quit) {
 		GFX_startFrame();
@@ -6891,15 +6961,20 @@ int main(int argc , char* argv[]) {
 
 		
 		if (show_menu) {
-
+			PWR_updateFrequency(PWR_UPDATE_FREQ,1);
 			Menu_loop();
+			PWR_updateFrequency(PWR_UPDATE_FREQ_INGAME,0);
 			has_pending_opt_change = config.core.changed;
 			resetFPSCounter();
 			chooseSyncRef();
-			// this is not needed
-			// SND_resetAudio(core.sample_rate, core.fps);
 		}
-	
+
+		if (resetAudio) {
+			resetAudio = false;
+			LOG_info("Resetting audio device config! (new state: BT %s)\n", SDL_getenv("AUDIODEV"));
+			SND_resetAudio(core.sample_rate, core.fps);
+		}
+
 		hdmimon();
 	}
 	int cw, ch;
@@ -6913,11 +6988,12 @@ int main(int argc , char* argv[]) {
 	screen = converted;
 	SDL_FreeSurface(rawSurface);
 	free(pixels); 
-	GFX_animateSurfaceOpacity(converted, 0, 0, cw, ch,
-							  255, 0, CFG_getMenuTransitions() ? 200 : 20, 1);
+	GFX_animateSurfaceOpacity(converted, 0, 0, cw, ch, 255, 0, CFG_getMenuTransitions() ? 200 : 20, 1);
 	SDL_FreeSurface(converted); 
 	
 	if(rgbaData) free(rgbaData);
+
+	PLAT_clearTurbo();
 
 	Menu_quit();
 	QuitSettings();
@@ -6933,8 +7009,11 @@ finish:
 	MSG_quit();
 	PWR_quit();
 	VIB_quit();
-	// already happens on Core_unload
-	SND_quit();
+	BT_removeDeviceWatcher();
+	// Disabling this is a dumb hack for bluetooth, we should really be using 
+	// bluealsa with --keep-alive=-1 - but SDL wont reconnect the stream on next start.
+	// Reenable as soon as we have a more recent SDL available, if ever.
+	//SND_quit();
 	PAD_quit();
 	GFX_quit();
 	SDL_WaitThread(screenshotsavethread, NULL);

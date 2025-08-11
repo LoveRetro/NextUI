@@ -19,7 +19,7 @@ SOURCE = $(TARGET).c
 
 CC = $(CROSS_COMPILE)gcc
 CFLAGS   = $(ARCH) -I$(PREFIX_LOCAL)/include -DPLATFORM=\"$(PLATFORM)\"
-LDFLAGS	 = -Os -lmsettings -lrt -ldl -Wl,--gc-sections -s
+LDFLAGS	 = -Os -L$(PREFIX_LOCAL)/lib -lmsettings -lrt -ldl -Wl,--gc-sections -s
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 

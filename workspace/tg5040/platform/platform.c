@@ -69,17 +69,81 @@ static int nrofshaders = 0; // choose between 1 and 3 pipelines, > pipelines = m
 ///////////////////////////////
 
 int is_brick = 0;
-static SDL_Joystick *joystick;
+
+static SDL_Joystick **joysticks = NULL;
+static int num_joysticks = 0;
 void PLAT_initInput(void) {
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
-	
-	SDL_InitSubSystem(SDL_INIT_JOYSTICK);
-	joystick = SDL_JoystickOpen(0);
+	if(SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0)
+		LOG_error("Failed initializing joysticks: %s\n", SDL_GetError());
+	num_joysticks = SDL_NumJoysticks();
+    if (num_joysticks > 0) {
+        joysticks = (SDL_Joystick **)malloc(sizeof(SDL_Joystick *) * num_joysticks);
+        for (int i = 0; i < num_joysticks; i++) {
+			joysticks[i] = SDL_JoystickOpen(i);
+			LOG_info("Opening joystick %d: %s\n", i, SDL_JoystickName(joysticks[i]));
+        }
+    }
 }
+
 void PLAT_quitInput(void) {
-	SDL_JoystickClose(joystick);
+	if (joysticks) {
+        for (int i = 0; i < num_joysticks; i++) {
+            if (SDL_JoystickGetAttached(joysticks[i])) {
+				LOG_info("Closing joystick %d: %s\n", i, SDL_JoystickName(joysticks[i]));
+				SDL_JoystickClose(joysticks[i]);
+			}
+        }
+        free(joysticks);
+        joysticks = NULL;
+        num_joysticks = 0;
+    }
 	SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+}
+
+void PLAT_updateInput(const SDL_Event *event) {
+	switch (event->type) {
+    case SDL_JOYDEVICEADDED: {
+        int device_index = event->jdevice.which;
+        SDL_Joystick *new_joy = SDL_JoystickOpen(device_index);
+        if (new_joy) {
+            joysticks = realloc(joysticks, sizeof(SDL_Joystick *) * (num_joysticks + 1));
+            joysticks[num_joysticks++] = new_joy;
+            LOG_info("Joystick added at index %d: %s\n", device_index, SDL_JoystickName(new_joy));
+        } else {
+            LOG_error("Failed to open added joystick at index %d: %s\n", device_index, SDL_GetError());
+        }
+        break;
+    }
+
+    case SDL_JOYDEVICEREMOVED: {
+        SDL_JoystickID removed_id = event->jdevice.which;
+        for (int i = 0; i < num_joysticks; ++i) {
+            if (SDL_JoystickInstanceID(joysticks[i]) == removed_id) {
+                LOG_info("Joystick removed: %s\n", SDL_JoystickName(joysticks[i]));
+                SDL_JoystickClose(joysticks[i]);
+
+                // Shift down the remaining entries
+                for (int j = i; j < num_joysticks - 1; ++j)
+                    joysticks[j] = joysticks[j + 1];
+                num_joysticks--;
+
+                if (num_joysticks == 0) {
+                    free(joysticks);
+                    joysticks = NULL;
+                } else {
+                    joysticks = realloc(joysticks, sizeof(SDL_Joystick *) * num_joysticks);
+                }
+                break;
+            }
+        }
+        break;
+    }
+
+    default:
+        break;
+    }
 }
 
 ///////////////////////////////
@@ -763,7 +827,7 @@ void PLAT_quitVideo(void) {
 	SDL_DestroyRenderer(vid.renderer);
 	SDL_DestroyWindow(vid.window);
 
-	SDL_Quit();
+	SDL_QuitSubSystem(SDL_INIT_VIDEO);
 	system("cat /dev/zero > /dev/fb0 2>/dev/null");
 }
 
@@ -2235,7 +2299,6 @@ void PLAT_enableOverlay(int enable) {
 
 ///////////////////////////////
 
-static int online = 0;
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	PLAT_getBatteryStatusFine(is_charging, charge);
 
@@ -2251,23 +2314,48 @@ void PLAT_getCPUTemp() {
 	currentcputemp = getInt("/sys/devices/virtual/thermal/thermal_zone0/temp")/1000;
 
 }
-void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
+
+static struct WIFI_connection connection = {
+	.valid = false,
+	.freq = -1,
+	.link_speed = -1,
+	.noise = -1,
+	.rssi = -1,
+	.ip = {0},
+	.ssid = {0},
+};
+
+static inline void connection_reset(struct WIFI_connection *connection_info)
 {
-	// *is_charging = 0;
-	// *charge = PWR_LOW_CHARGE;
-	// return;
+	connection_info->valid = false;
+	connection_info->freq = -1;
+	connection_info->link_speed = -1;
+	connection_info->noise = -1;
+	connection_info->rssi = -1;
+	*connection_info->ip = '\0';
+	*connection_info->ssid = '\0';
+}
+
+static bool bluetoothConnected = false;
+
+void PLAT_updateNetworkStatus()
+{
+	if(WIFI_enabled())
+		WIFI_connectionInfo(&connection);
+	else
+		connection_reset(&connection);
 	
+	if(BT_enabled()) {
+		bluetoothConnected = PLAT_bluetoothConnected();
+	}
+	else
+		bluetoothConnected = false;
+}
+
+void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
+{	
 	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
-
 	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
-
-	// // wifi status, just hooking into the regular PWR polling
-	//char status[16];
-	//getFile("/sys/class/net/wlan0/operstate", status,16);
-	//online = prefixMatch("up", status);
-	char status[16];
-	getFile("/sys/class/net/wlan0/operstate", status,16);
-	online = prefixMatch("up", status);
 }
 
 void PLAT_enableBacklight(int enable) {
@@ -2280,7 +2368,7 @@ void PLAT_enableBacklight(int enable) {
 	}
 }
 
-void PLAT_powerOff(void) {
+void PLAT_powerOff(int reboot) {
 	if (CFG_getHaptics()) {
 		VIB_singlePulse(VIB_bootStrength, VIB_bootDuration_ms);
 	}
@@ -2295,7 +2383,10 @@ void PLAT_powerOff(void) {
 	GFX_quit();
 
 	system("cat /dev/zero > /dev/fb0 2>/dev/null");
-	touch("/tmp/poweroff");
+	if(reboot > 0)
+		touch("/tmp/reboot");
+	else
+		touch("/tmp/poweroff");
 	sync();
 	exit(0);
 }
@@ -2481,6 +2572,10 @@ void PLAT_setRumble(int strength) {
 }
 
 int PLAT_pickSampleRate(int requested, int max) {
+	// bluetooth: allow limiting the maximum to improve compatibility
+	if(PLAT_bluetoothConnected())
+		return MIN(requested, CFG_getBluetoothSamplingrateLimit());
+
 	return MIN(requested, max);
 }
 
@@ -2495,13 +2590,27 @@ void PLAT_getOsVersionInfo(char* output_str, size_t max_len)
 	return getFile("/etc/version", output_str,max_len);
 }
 
-int PLAT_isOnline(void) {
-	return online;
+bool PLAT_btIsConnected(void)
+{
+	return bluetoothConnected;
 }
 
+int PLAT_isOnline(void) {
+	return (connection.valid && connection.ssid[0] != '\0');
+}
 
-
-
+ConnectionStrength PLAT_connectionStrength(void) {
+	if(!WIFI_enabled() || !connection.valid || connection.rssi == -1)
+		return SIGNAL_STRENGTH_OFF;
+	else if (connection.rssi == 0)
+		return SIGNAL_STRENGTH_DISCONNECTED;
+	else if (connection.rssi >= -60)
+		return SIGNAL_STRENGTH_HIGH;
+	else if (connection.rssi >= -70)
+		return SIGNAL_STRENGTH_MED;
+	else
+		return SIGNAL_STRENGTH_LOW;
+}
 
 void PLAT_chmod(const char *file, int writable)
 {
@@ -2531,9 +2640,6 @@ void PLAT_chmod(const char *file, int writable)
         printf("stat error %d %s", writable, file);
     }
 }
-
-
-
 
 void PLAT_initDefaultLeds() {
 	char* device = getenv("DEVICE");
@@ -2862,6 +2968,66 @@ void PLAT_setLedColor(LightSettings *led)
 
 //////////////////////////////////////////////
 
+bool PLAT_canTurbo(void) { return true; }
+
+#define INPUTD_PATH "/tmp/trimui_inputd"
+
+typedef struct TurboBtnPath {
+	int brn_id;
+	char *path;
+} TurboBtnPath;
+
+static TurboBtnPath turbo_mapping[] = {
+    {BTN_ID_A, INPUTD_PATH "/turbo_a"},
+    {BTN_ID_B, INPUTD_PATH "/turbo_b"},
+    {BTN_ID_X, INPUTD_PATH "/turbo_x"},
+    {BTN_ID_Y, INPUTD_PATH "/turbo_y"},
+    {BTN_ID_L1, INPUTD_PATH "/turbo_l"},
+    {BTN_ID_L2, INPUTD_PATH "/turbo_l2"},
+    {BTN_ID_R1, INPUTD_PATH "/turbo_r"},
+    {BTN_ID_R2, INPUTD_PATH "/turbo_r2"},
+	{0, NULL}
+};
+
+int toggle_file(const char *path) {
+    if (access(path, F_OK) == 0) {
+        unlink(path);
+        return 0;
+    } else {
+        int fd = open(path, O_CREAT | O_WRONLY, 0644);
+        if (fd >= 0) {
+            close(fd);
+            return 1;
+        }
+        return -1; // error
+    }
+}
+
+int PLAT_toggleTurbo(int btn_id)
+{
+	// avoid extra file IO on each call
+	static int initialized = 0;
+	if (!initialized) {
+		mkdir(INPUTD_PATH, 0755);
+		initialized = 1;
+	}
+
+	for (int i = 0; turbo_mapping[i].path; i++) {
+		if (turbo_mapping[i].brn_id == btn_id) {
+			return toggle_file(turbo_mapping[i].path);
+		}
+	}
+	return 0;
+}
+
+void PLAT_clearTurbo() {
+	for (int i = 0; turbo_mapping[i].path; i++) {
+		unlink(turbo_mapping[i].path);
+	}
+}
+
+//////////////////////////////////////////////
+
 int PLAT_setDateTime(int y, int m, int d, int h, int i, int s) {
 	char cmd[512];
 	sprintf(cmd, "date -s '%d-%d-%d %d:%d:%d'; hwclock -u -w", y,m,d,h,i,s);
@@ -3034,346 +3200,1229 @@ bool PLAT_supportSSH() { return true; }
 
 /////////////////////////
 
-#include <wifi_intf.h>
-#include "wmg_debug.h"
-#include "wifi_udhcpc.h"
-
-static struct WIFI_Context {
-	const aw_wifi_interface_t *interface;
-	int lastEvent;
-	bool enabled;
-	bool connected;
-} wifi = {
-	.interface = NULL,
-	.lastEvent = STATE_UNKNOWN,
-	.enabled = false,
-	.connected = false};
-
-static void wifi_state_handle(struct Manager *w, int event_label)
-{
-    LOG_info("WMG: event_label 0x%x\n", event_label);
-
-	wifi.lastEvent = w->StaEvt.state;
-	switch (w->StaEvt.state)
-	{
-		 case CONNECTING:
-		 {
-			LOG_info("WMG: Connecting to the network......\n");
-			break;
-		 }
-		 case CONNECTED:
-		 {
-			LOG_info("WMG: Connected to the AP\n");
-			start_udhcpc();
-			wifi.connected = true;
-			break;
-		 }
-		 case OBTAINING_IP:
-		 {
-			LOG_info("WMG: Getting ip address......\n");
-			break;
-		 }
-		 case NETWORK_CONNECTED:
-		 {
-			LOG_info("WMG: Successful network connection\n");
-			break;
-		 }
-		case DISCONNECTED:
-		{
-			wifi.connected = false;
-			LOG_info("WMG: Disconnected,the reason:%s\n", wmg_event_txt(w->StaEvt.event));
-			break;
-		}
-    }
-}
-
 bool PLAT_hasWifi() { return true; }
+
+#define wifilog(fmt, ...) \
+    LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, fmt, ##__VA_ARGS__)
+
 void PLAT_wifiInit() {
-	LOG_info("Wifi init\n");
-	wifi.enabled = CFG_getWifi();
-	PLAT_wifiEnable(wifi.enabled);
+	wifilog("Wifi init\n");
+	PLAT_wifiEnable(CFG_getWifi());
 }
 
 bool PLAT_wifiEnabled() {
-	// less efficient, more accurate: check "$(cat /sys/class/net/wlan0/flags 2>/dev/null)" != "0x1003"
-	// if we can be reasonably sure that nobody killed wifi and bypassed our code:
-	return wifi.enabled;
+	return CFG_getWifi();
 }
 
-#define MAX_CONNECTION_ATTEMPTS 5
+#include "wmg_debug.h"
+#include "wifid_cmd.h"
 
 void PLAT_wifiEnable(bool on) {
-	if(on) {
-		LOG_info("turning wifi on...\n");
-		
+	if (on)
+	{
+		wifilog("turning wifi on...\n");
+
 		// This shouldnt be needed, but we cant really rely on nobody else messing with this stuff. 
 		// Make sure supplicant is up and rfkill doesnt block.
-		system("rfkill unblock wifi");
-		//system("ifconfig wlan0 down");
-		system("/etc/init.d/wpa_supplicant enable");
-		system("/etc/init.d/wpa_supplicant start&");
+		system("rfkill.elf unblock wifi");
+		
+		int ret = system("pidof wpa_supplicant > /dev/null 2>&1");
+		if (ret != 0) {
+			system("/etc/init.d/wpa_supplicant enable");
+			system("/etc/init.d/wpa_supplicant start &");
+			ms_sleep(500);
+		}
 
-		int event_label = 42;
-		for (int i = 0 ; i<= MAX_CONNECTION_ATTEMPTS ;i++) {
-			wifi.interface = aw_wifi_on(wifi_state_handle, event_label);
-			if(wifi.interface != NULL)
-				break;
-			ms_sleep(1000);
-			LOG_info("connect wpa_supplicant: tried %d times\n", i+1);
-		}
-		if(wifi.interface == NULL) {
-			LOG_error("failed to turn on wifi.\n");
-			wifi.enabled = false;
-		}
-		else {
-			wifi.enabled = true;
-		}
+		aw_wifid_open();
+
+		// Keep config in sync
+		CFG_setWifi(on);
 	}
-	else if(wifi.interface) {
-		LOG_debug("turning wifi off...\n");
+	else {
+		wifilog("turning wifi off...\n");
 
-		// Honestly, I'd rather not do this but it seems to keep the  questionable wifi implementation
+		// Keep config in sync
+		CFG_setWifi(on);
+
+		aw_wifid_close();
+
+		// Honestly, I'd rather not do this but it seems to keep the questionable wifi implementation
 		// on Trimui from randomly reconnecting automatically
-		system("rfkill block wifi");
-		//system("ifconfig wlan0 up");
-		system("/etc/init.d/wpa_supplicant stop&");
-
-		int ret = aw_wifi_off(wifi.interface);
-		if(ret < 0)
-		{
-			LOG_error("Test failed: wifi off error!\n");
-			return;
-		}
-		// only necessary for the wmg_log output (debugging)
-		fflush(stdout);
-
-		wifi.interface = NULL;
-		wifi.enabled = false;
+		system("rfkill.elf block wifi");
+		//system("/etc/init.d/wpa_supplicant stop&");
 	}
-
-	// Keep config in sync
-	CFG_setWifi(wifi.enabled);
 }
 
 int PLAT_wifiScan(struct WIFI_network *networks, int max)
 {
-	if(wifi.interface == NULL) {
-		LOG_info("PLAT_wifiScan: failed to get wifi interface.\n");
-		return -1;
-	}
+    if(!CFG_getWifi()) {
+        LOG_error("PLAT_wifiScan: wifi is currently disabled.\n");
+        return -1;
+    }
 
-	char results[4096];
-	int length = 4096;
-	if(wifi.interface->get_scan_results(results, &length) < 0) {
-		LOG_info("PLAT_wifiScan: failed to get wifi scan results.\n");
-		return -1;
-	}
-
-	LOG_info("%s\n", results);
+    char results[SCAN_MAX];
+    int ret = aw_wifid_get_scan_results(results, SCAN_MAX);
+    if (ret < 0) {
+        //LOG_error("PLAT_wifiScan: failed to get wifi scan results (%i).\n", ret);
+        return -1;
+    }
+    results[SCAN_MAX - 1] = '\0'; // ensure null termination
 
 	// Results will be in this form:
 	//[INFO] bssid / frequency / signal level / flags / ssid
 	//04:b4:fe:32:f9:73	2462	-63	[WPA2-PSK-CCMP][WPS][ESS]	frynet
 	//04:b4:fe:32:e4:50	2437	-56	[WPA2-PSK-CCMP][WPS][ESS]	frynet
 
-	// Parse the results string into a list of WIFI_network elements
-	char *line = strtok(results, "\n");
-	// skip the first line which only has the column headers
-	line = strtok(NULL, "\n");
-	int count = 0;
-	while(line != NULL && count < max) {
-		struct WIFI_network *network = &networks[count];
-		network->bssid[0] = '\0';
-		network->ssid[0] = '\0';
-		network->freq = -1;
-		network->rssi = -1;
-		network->security = SECURITY_NONE;
+    wifilog("%s\n", results);
 
-		char features[128];
-		sscanf(line, "%17[0-9a-fA-F:]\t%d\t%d\t%127[^\t]\t%127[^\n]", network->bssid, &network->freq, &network->rssi,
-			   features, network->ssid);
-		
-		line = strtok(NULL, "\n");
-		
-		// skip over "hidden" networks with empty SSID. We would need to adapt wifimgr classes
-		// to properly support them, I dont think anyone will miss them.
-		if(!network->ssid || !network->ssid[0]) {
-			LOG_info("Ignoring network %s with empty SSID\n", network->bssid);
-		}
-		else {
-			if(containsString(features,"WPA2-PSK"))
-				network->security = SECURITY_WPA2_PSK;
-			else if(containsString(features,"WPA-PSK"))
-				network->security = SECURITY_WPA_PSK;
-			else if(containsString(features,"WEP"))
-				network->security = SECURITY_WEP;
-			else if(containsString(features,"EAP"))
-				network->security = SECURITY_UNSUPPORTED;
-			
-			count++;
-		}
-	}
-	return count;
+    const char *current = results;
+
+    // Skip header line
+    const char *next = strchr(current, '\n');
+    if (!next) {
+        LOG_warn("PLAT_wifiScan: no scan results lines found.\n");
+        return 0;
+    }
+    current = next + 1;
+
+    int count = 0;
+    char line[512];  // buffer for each line
+
+    while (current && *current && count < max) {
+        next = strchr(current, '\n');
+        size_t len = next ? (size_t)(next - current) : strlen(current);
+        if (len >= sizeof(line)) {
+            LOG_warn("PLAT_wifiScan: line too long, truncating.\n");
+            len = sizeof(line) - 1;
+        }
+
+        strncpy(line, current, len);
+        line[len] = '\0';
+
+        // Parse line with sscanf
+        char features[128];
+        struct WIFI_network *network = &networks[count];
+
+        // Initialize fields
+        network->bssid[0] = '\0';
+        network->ssid[0] = '\0';
+        network->freq = -1;
+        network->rssi = -1;
+        network->security = SECURITY_NONE;
+
+        int parsed = sscanf(line, "%17[0-9a-fA-F:]\t%d\t%d\t%127[^\t]\t%127[^\n]",
+                            network->bssid, &network->freq, &network->rssi,
+                            features, network->ssid);
+
+        if (parsed != 5) {
+            LOG_warn("PLAT_wifiScan: malformed line skipped (parsed %d fields): '%s'\n", parsed, line);
+            current = next ? next + 1 : NULL;
+            continue;
+        }
+
+        // Trim trailing whitespace from SSID (optional)
+        size_t ssid_len = strlen(network->ssid);
+        while (ssid_len > 0 && (network->ssid[ssid_len - 1] == ' ' || network->ssid[ssid_len - 1] == '\t')) {
+            network->ssid[ssid_len - 1] = '\0';
+            ssid_len--;
+        }
+
+        if (network->ssid[0] == '\0') {
+            LOG_warn("Ignoring network %s with empty SSID\n", network->bssid);
+            current = next ? next + 1 : NULL;
+            continue;
+        }
+
+        if (containsString(features, "WPA2-PSK"))
+            network->security = SECURITY_WPA2_PSK;
+        else if (containsString(features, "WPA-PSK"))
+            network->security = SECURITY_WPA_PSK;
+        else if (containsString(features, "WEP"))
+            network->security = SECURITY_WEP;
+        else if (containsString(features, "EAP"))
+            network->security = SECURITY_UNSUPPORTED;
+
+        count++;
+        current = next ? next + 1 : NULL;
+    }
+
+    return count;
 }
 
 bool PLAT_wifiConnected()
 {
-	if (wifi.interface) {
-		char ssid[128] = "";
-		int ssid_len = sizeof(ssid);
-		int ret = wifi.interface->is_ap_connected(ssid, &ssid_len);
-		if(ret >= 0 && ssid[0] != '\0') {
-			LOG_info("is_ap_connected: yes - %s\n", ssid);
-			return true;
-		}
-		else {
-			LOG_info("is_ap_connected: %d\n",ret);
-		}
+	if(!CFG_getWifi()) {
+		wifilog("PLAT_wifiConnected: wifi is currently disabled.\n");
+		return false;
 	}
-	return false;
+
+	struct wifi_status status = {
+		.state = STATE_UNKNOWN,
+		.ssid = {'\0'},
+	};
+	int ret = aw_wifid_get_status(&status);
+	if(ret < 0) {
+		LOG_error("PLAT_wifiConnected: failed to get wifi status (%i).\n", ret);
+		return false;
+	}
+
+	wifilog("PLAT_wifiConnected: wifi state is %s\n", wmg_state_txt(status.state));
+
+	return status.state == NETWORK_CONNECTED;
 }
 
 int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 {
-	if (wifi.interface && connection_info) {
-		if(PLAT_wifiConnected()) {
-			connection_status status;
-			if(wifi.interface->get_connection_info(&status) >= 0) {
-				connection_info->freq = status.freq;
-				connection_info->link_speed = status.link_speed;
-				connection_info->noise = status.noise;
-				connection_info->rssi = status.noise;
-				strcpy(connection_info->ip, status.ip_address);
-				strcpy(connection_info->ssid, status.ssid);
+	if(!CFG_getWifi()) {
+		wifilog("PLAT_wifiConnection: wifi is currently disabled.\n");
+		connection_reset(connection_info);
+		return -1;
+	}
 
-				// get_connection_info returns garbage SSID sometimes
-				char ssid[128] = "";
-				int ssid_len = sizeof(ssid);
-				int ret = wifi.interface->is_ap_connected(ssid, &ssid_len);
-				if(ret == 0)
-					strcpy(connection_info->ssid, ssid);
-			}
-			else {
-				LOG_error("Failed to get Wifi connection info\n");
-			}
-			LOG_info("Connected AP: %s\n", connection_info->ssid);
-			LOG_info("IP address: %s\n", connection_info->ip);
+	struct wifi_status status = {
+		.state = STATE_UNKNOWN,
+		.ssid = {'\0'},
+	};
+	int ret = aw_wifid_get_status(&status);
+	if(ret < 0) {
+		LOG_error("PLAT_wifiConnection: failed to get wifi status (%i).\n", ret);
+		connection_reset(connection_info);
+		return -1;
+	}
+
+	if(status.state == NETWORK_CONNECTED) {
+		connection_status conn;
+		if(aw_wifid_get_connection(&conn) >= 0) {
+			connection_info->valid = true;
+			connection_info->freq = conn.freq;
+			connection_info->link_speed = conn.link_speed;
+			connection_info->noise = conn.noise;
+			connection_info->rssi = conn.rssi;
+			strcpy(connection_info->ip, conn.ip_address);
+			//strcpy(connection_info->ssid, conn.ssid);
+			
+			// aw_wifid_get_connection returns garbage SSID sometimes
+			strcpy(connection_info->ssid, status.ssid);
 		}
 		else {
-			connection_info->freq = -1;
-			connection_info->link_speed = -1;
-			connection_info->noise = -1;
-			connection_info->rssi = -1;
-			*connection_info->ip = '\0';
-			*connection_info->ssid = '\0';
-			LOG_info("PLAT_wifiConnection: Not connected\n", connection_info->ssid);
+			connection_reset(connection_info);
+			LOG_error("Failed to get Wifi connection info\n");
 		}
-
-		return 0;
+		wifilog("Connected AP: %s\n", connection_info->ssid);
+		wifilog("IP address: %s\n", connection_info->ip);
 	}
-	return -1;
+	else {
+		connection_reset(connection_info);
+		wifilog("PLAT_wifiConnection: Not connected\n", connection_info->ssid);
+	}
+
+	return 0;
 }
 
 bool PLAT_wifiHasCredentials(char *ssid, WifiSecurityType sec)
 {
-	if(wifi.interface == NULL) {
-		LOG_info("failed to get wifi interface.\n");
-		return false;
-	}
+    // Validate input SSID (reject tabs/newlines)
+    for (int i = 0; ssid[i]; ++i) {
+        if (ssid[i] == '\t' || ssid[i] == '\n') {
+            LOG_warn("PLAT_wifiHasCredentials: SSID contains invalid control characters.\n");
+            return false;
+        }
+    }
 
-	if(sec == SECURITY_UNSUPPORTED){
-		LOG_info("unsupported WifiDecurityType.\n");
-		return false;
-	}
+    if (!CFG_getWifi()) {
+        LOG_error("PLAT_wifiHasCredentials: wifi is currently disabled.\n");
+        return false;
+    }
 
-	char net_id[10]="";
-    int id_len = sizeof(net_id);
-	int ret = wifi.interface->get_netid(ssid, (tKEY_MGMT)sec, net_id, &id_len);
+    char list_net_results[LIST_NETWORK_MAX];
+    int ret = aw_wifid_list_networks(list_net_results, LIST_NETWORK_MAX);
+    if (ret < 0) {
+        LOG_error("PLAT_wifiHasCredentials: failed to get wifi network list (%i).\n", ret);
+        return false;
+    }
 
-	if (ret == 0) {
-		LOG_info("Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
-		return true;
-	}
-	return false;
+    // Ensure null termination just in case aw_wifid_list_networks doesn't guarantee it
+    list_net_results[LIST_NETWORK_MAX - 1] = '\0';
+
+    wifilog("LIST:\n%s\n", list_net_results);
+
+    const char *current = list_net_results;
+
+    // Skip header line
+    const char *next = strchr(current, '\n');
+    if (!next) {
+        LOG_warn("PLAT_wifiHasCredentials: network list has no data lines.\n");
+        return false;
+    }
+    current = next + 1;
+
+    char line[256];
+
+    while (current && *current) {
+        next = strchr(current, '\n');
+        size_t len = next ? (size_t)(next - current) : strlen(current);
+        if (len >= sizeof(line)) {
+            LOG_warn("PLAT_wifiHasCredentials: line too long, truncating.\n");
+            len = sizeof(line) - 1;
+        }
+
+        // Copy line safely and null-terminate
+        strncpy(line, current, len);
+        line[len] = '\0';
+
+        wifilog("Parsing line: '%s'\n", line);
+
+        // Tokenize line by tabs
+        char *saveptr = NULL;
+        char *token_id    = strtok_r(line, "\t", &saveptr);
+        char *token_ssid  = strtok_r(NULL, "\t", &saveptr);
+        char *token_bssid = strtok_r(NULL, "\t", &saveptr);
+        char *token_flags = strtok_r(NULL, "\t", &saveptr);
+        char *extra       = strtok_r(NULL, "\t", &saveptr);
+
+        // Check mandatory fields: id, ssid, bssid must be present
+        if (!(token_id && token_ssid && token_bssid)) {
+            LOG_warn("PLAT_wifiHasCredentials: Malformed line skipped (missing required fields): '%s'\n", line);
+            current = next ? next + 1 : NULL;
+            continue;
+        }
+        // token_flags may be NULL (no flags)
+        // extra must be NULL (no extra tokens)
+        if (extra != NULL) {
+            LOG_warn("PLAT_wifiHasCredentials: Malformed line skipped (too many fields): '%s'\n", line);
+            current = next ? next + 1 : NULL;
+            continue;
+        }
+
+        if (strcmp(token_ssid, ssid) == 0) {
+            return true;
+        }
+
+        current = next ? next + 1 : NULL;
+    }
+
+    return false;
 }
 
 void PLAT_wifiForget(char *ssid, WifiSecurityType sec)
 {
-	if(wifi.interface == NULL) {
-		LOG_info("failed to get wifi interface.\n");
+	if(!CFG_getWifi()) {
+		LOG_error("PLAT_wifiForget: wifi is currently disabled.\n");
 		return;
 	}
 
-	if(sec == SECURITY_UNSUPPORTED){
-		LOG_info("unsupported WifiDecurityType.\n");
-		return;
-	}
-
-	int ret = wifi.interface->remove_network(ssid, (tKEY_MGMT)sec);
-	LOG_info("wifi clear_network returned %d for %s with sectype %d\n", ret, ssid, sec);
+	aw_wifid_remove_networks(ssid,strlen(ssid));
 }
 
 void PLAT_wifiConnect(char *ssid, WifiSecurityType sec)
 {
-	if(wifi.interface == NULL) {
-		LOG_info("failed to get wifi interface.\n");
-		return;
-		 //-1;
-	}
-
-	if(sec == SECURITY_UNSUPPORTED){
-		LOG_info("unsupported WifiDecurityType.\n");
-		return;
-	}
-
-	LOG_info("Attempting to connect to SSID %s\n", ssid);
-
-	char net_id[10]="";
-    int id_len = sizeof(net_id);
-	int ret = wifi.interface->get_netid(ssid, (tKEY_MGMT)sec, net_id, &id_len);
-	if(ret != 0) {
-		LOG_info("netid failed \n");
-		return;
-	}
-	else {
-		LOG_info("Got netid %s for ssid %s sectype %d\n", net_id, ssid, sec);
-	}
-
-	ret = wifi.interface->connect_ap_with_netid(net_id, 42);
-	LOG_info("wifi connect_ap_with_netid %s returned %d\n", net_id, ret);
-	if (aw_wifi_get_wifi_state() == NETWORK_CONNECTED)
-		LOG_info("wifi connected.\n");
-	else
-		LOG_info("wifi connection failed.\n");
+	PLAT_wifiConnectPass(ssid, sec, NULL);
 }
 
 void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass)
 {
-	if(wifi.interface == NULL) {
-		LOG_info("failed to get wifi interface.\n");
+	if(!CFG_getWifi()) {
+		wifilog("PLAT_wifiConnectPass: wifi is currently disabled.\n");
 		return;
 	}
 
-	if(sec == SECURITY_UNSUPPORTED){
-		LOG_info("unsupported WifiDecurityType.\n");
+	wifilog("Attempting to connect to SSID %s with password\n", ssid);
+	
+	enum cn_event event = DA_UNKNOWN;
+	int ret = aw_wifid_connect_ap(ssid,pass,&event);
+	if(ret < 0) {
+		LOG_error("PLAT_wifiConnectPass: failed to connect to wifi (%i, %i).\n", ret, event);
 		return;
 	}
 
-	int ret = wifi.interface->connect_ap_key_mgmt(ssid, (tKEY_MGMT)sec, pass, 42);
-	LOG_info("wifi connect_ap returned %d\n", ret);
-	if (aw_wifi_get_wifi_state() == NETWORK_CONNECTED)
-		LOG_info("wifi connected.\n");
+	if(event == DA_CONNECTED)
+		wifilog("PLAT_wifiConnectPass: connected ap successfully\n");
 	else
-		LOG_info("wifi connection failed.\n");
+		wifilog("PLAT_wifiConnectPass: connecting ap failed:%s\n", connect_event_txt(event));
 }
 
 void PLAT_wifiDisconnect()
 {
-	if(wifi.interface == NULL) {
-		LOG_info("failed to get wifi interface.\n");
+	PLAT_wifiConnectPass(NULL, SECURITY_WPA2_PSK, NULL);
+}
+
+bool PLAT_wifiDiagnosticsEnabled() 
+{
+	return CFG_getWifiDiagnostics();
+}
+
+void PLAT_wifiDiagnosticsEnable(bool on) 
+{
+	wmg_set_debug_level(on ? 4 : 2);
+	CFG_setWifiDiagnostics(on);
+}
+
+/////////////////////////
+
+bool PLAT_hasBluetooth() { return true; }
+bool PLAT_bluetoothEnabled() { return CFG_getBluetooth(); }
+
+#include "bt_dev_list.h"
+#include "bt_log.h"
+#include "bt_manager.h"
+
+// callbacks should be dameonized
+// TODO: can we get away with just implementing those we need?
+dev_list_t *bonded_devices = NULL;
+dev_list_t *discovered_controllers = NULL;
+dev_list_t *discovered_audiodev = NULL;
+
+static bool auto_connect = true;
+
+#define btlog(fmt, ...) \
+    LOG_note(PLAT_bluetoothDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, fmt, ##__VA_ARGS__)
+
+// Utility: Parse BT device class
+
+#define COD_MAJOR_MASK     0x1F00
+#define COD_MINOR_MASK     0x00FC
+#define COD_SERVICE_MASK   0xFFE000
+
+#define GET_MAJOR_CLASS(cod) ((cod & COD_MAJOR_MASK) >> 8)
+#define GET_MINOR_CLASS(cod) ((cod & COD_MINOR_MASK) >> 2)
+#define GET_SERVICE_CLASS(cod) ((cod & COD_SERVICE_MASK) >> 13)
+
+static void bt_test_manager_cb(int event_id)
+{
+	btlog("bt test callback function enter, event_id: %d", event_id);
+}
+
+static void bt_test_adapter_power_state_cb(btmg_adapter_power_state_t state)
+{
+	if (state == BTMG_ADAPTER_TURN_ON_SUCCESSED) {
+		btlog("Turn on bt successfully\n");
+	} else if (state == BTMG_ADAPTER_TURN_ON_FAILED) {
+		btlog("Failed to turn on bt\n");
+	} else if (state == BTMG_ADAPTER_TURN_OFF_SUCCESSED) {
+		btlog("Turn off bt successfully\n");
+	} else if (state == BTMG_ADAPTER_TURN_OFF_FAILED) {
+		btlog("Failed to turn off bt\n");
+	}
+}
+
+static int is_background = 1;
+static void bt_test_status_cb(btmg_state_t status)
+{
+	if (status == BTMG_STATE_OFF) {
+		btlog("BT is off\n");
+	} else if (status == BTMG_STATE_ON) {
+		btlog("BT is ON\n");
+		if(is_background)
+			bt_manager_gap_set_io_capability(BTMG_IO_CAP_NOINPUTNOOUTPUT);
+		else
+			bt_manager_gap_set_io_capability(BTMG_IO_CAP_KEYBOARDDISPLAY);
+		bt_manager_set_discovery_mode(BTMG_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
+	} else if (status == BTMG_STATE_TURNING_ON) {
+		btlog("bt is turnning on.\n");
+	} else if (status == BTMG_STATE_TURNING_OFF) {
+		btlog("bt is turnning off.\n");
+	}
+}
+
+static void bt_test_discovery_status_cb(btmg_discovery_state_t status)
+{
+	if (status == BTMG_DISC_STARTED) {
+		btlog("bt start scanning.\n");
+	} else if (status == BTMG_DISC_STOPPED_AUTO) {
+		btlog("scanning stop automatically\n");
+	} else if (status == BTMG_DISC_START_FAILED) {
+		btlog("start scan failed.\n");
+	} else if (status == BTMG_DISC_STOPPED_BY_USER) {
+		btlog("stop scan by user.\n");
+	}
+}
+
+static void bt_test_gap_connected_changed_cb(btmg_bt_device_t *device)
+{
+	LOG_info("address:%s,name:%s,class:%d,icon:%s,address type:%s,rssi:%d,state:%s\n",device->remote_address,
+			device->remote_name, device->r_class, device->icon, device->address_type, device->rssi, device->connected ? "CONNECTED":"DISCONNECTED");
+	// TODO: check for device class and call SDL_OpenJoystick if its a gamepad/HID device
+	if(device->connected == false) {
+		bt_manager_set_discovery_mode(BTMG_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
+	}
+	else {
+		// not sure why this isnt handled over btmgr interface, but we need it
+		char act[256];
+		sprintf(act, "bluetoothctl trust %s", device->remote_address);
+		system(act);
+	}
+}
+
+static void bt_test_dev_add_cb(btmg_bt_device_t *device)
+{
+	btlog("address:%s,name:%s,class:%d,icon:%s,address type:%s,rssi:%d\n", device->remote_address,
+			device->remote_name, device->r_class, device->icon, device->address_type, device->rssi);
+
+	//print_bt_class(device->r_class);
+
+	{
+		if (GET_MAJOR_CLASS(device->r_class) == 0x04) { // Audio/Video
+			if(!btmg_dev_list_find_device(discovered_audiodev, device->remote_address))
+				btmg_dev_list_add_device(discovered_audiodev, device->remote_name, device->remote_address);
+		}
+		if (GET_MAJOR_CLASS(device->r_class) == 0x05) { // Peripheral
+			if(!btmg_dev_list_find_device(discovered_controllers, device->remote_address))
+				btmg_dev_list_add_device(discovered_controllers, device->remote_name, device->remote_address);
+		}
+	}
+}
+
+static void bt_test_dev_remove_cb(btmg_bt_device_t *device)
+{
+	btlog("address:%s,name:%s,class:%d,address type:%s\n", device->remote_address,
+			device->remote_name, device->r_class,device->address_type);
+
+	{
+		btmg_dev_list_remove_device(discovered_audiodev, device->remote_address);
+		btmg_dev_list_remove_device(discovered_controllers, device->remote_address);
+	}
+}
+
+static void bt_test_update_rssi_cb(const char *address, int rssi)
+{
+	//dev_node_t *dev_node = NULL;
+
+	//pthread_mutex_lock(&discovered_devices_mtx);
+	//dev_node = btmg_dev_list_find_device(discovered_devices, address);
+	//if (dev_node) {
+		// too spammy
+		//LOG_info("address:%s,name:%s,rssi:%d\n", dev_node->dev_addr, dev_node->dev_name, rssi);
+	//}
+	//pthread_mutex_unlock(&discovered_devices_mtx);
+}
+
+static void bt_test_bond_state_cb(btmg_bond_state_t state,const  char *bd_addr,const char *name)
+{
+	btlog("bonded device state:%d, addr:%s, name:%s\n", state, bd_addr, name);
+	
+	{
+		dev_node_t *dev_bonded_node = NULL;
+		dev_bonded_node = btmg_dev_list_find_device(bonded_devices, bd_addr);
+
+		if (state == BTMG_BOND_STATE_BONDED) {
+			if (dev_bonded_node == NULL) {
+				btmg_dev_list_add_device(bonded_devices, name, bd_addr);
+			}
+
+			if(btmg_dev_list_find_device(discovered_audiodev, bd_addr)) {
+				btmg_dev_list_remove_device(discovered_audiodev, bd_addr);
+			}
+
+			if(btmg_dev_list_find_device(discovered_controllers, bd_addr)) {
+				btmg_dev_list_remove_device(discovered_controllers, bd_addr);
+			}
+
+			btlog("Pairing state for %s is BONDED\n", name);
+		} else if (state == BTMG_BOND_STATE_NONE) {
+			if (dev_bonded_node != NULL) {
+				btmg_dev_list_remove_device(bonded_devices, bd_addr);
+			}
+			btlog("Pairing state for %s is BOND NONE\n", name);
+		} else if (state == BTMG_BOND_STATE_BONDING) {
+			btlog("Pairing state for %s is BONDING\n", name);
+		}
+	}
+}
+#define BUFFER_SIZE 17
+static void bt_test_pair_ask(const char *prompt,char *buffer)
+{
+	btlog("%s", prompt);
+	if (fgets(buffer, BUFFER_SIZE, stdin)  == NULL)
+		btlog("cmd fgets error\n");
+}
+
+void bt_test_gap_request_pincode_cb(void *handle,char *device)
+{
+	char buffer[BUFFER_SIZE] = {0};
+
+	btlog("AGENT:Request pincode (%s)\n",device);
+
+	bt_test_pair_ask("Enter PIN Code: ",buffer);
+
+	bt_manager_gap_send_pincode(handle,buffer);
+}
+
+void bt_test_gap_display_pin_code_cb(char *device,char *pincode)
+{
+	btlog("AGENT: Pincode %s\n", pincode);
+}
+
+void bt_test_gap_request_passkey_cb(void *handle,char *device)
+{
+	unsigned long passkey;
+	char buffer[BUFFER_SIZE] = {0};
+
+	btlog("AGENT: Request passkey (%s)\n",device);
+	//bt_test_pair_ask("Enter passkey (1~999999): ",buffer);
+	//passkey = strtoul(buffer, NULL, 10);
+	//if ((passkey > 0) && (passkey < 999999))
+		bt_manager_gap_send_passkey(handle,passkey);
+	//else
+	//	fprintf(stdout, "AGENT: get passkey error\n");
+}
+
+void bt_test_gap_display_passkey_cb(char *device,unsigned int passkey,
+		unsigned int entered)
+{
+	btlog("AGENT: Passkey %06u\n", passkey);
+}
+
+void bt_test_gap_confirm_passkey_cb(void *handle,char *device,unsigned int passkey)
+{
+	char buffer[BUFFER_SIZE] = {0};
+
+	btlog("AGENT: Request confirmation (%s)\nPasskey: %06u\n",
+		device, passkey);
+	//bt_test_pair_ask("Confirm passkey? (yes/no): ",buffer);
+	//if (!strncmp(buffer, "yes", 3))
+		bt_manager_gap_pair_send_empty_response(handle);
+	//else
+	//	bt_manager_gap_send_pair_error(handle,BT_PAIR_REQUEST_REJECTED,"");
+}
+
+void bt_test_gap_authorize_cb(void *handle,char *device)
+{
+
+	char buffer[BUFFER_SIZE] = {0};
+	btlog("AGENT: Request authorization (%s)\n",device);
+
+	bt_test_pair_ask("Authorize? (yes/no): ",buffer);
+
+	//if (!strncmp(buffer, "yes", 3))
+		bt_manager_gap_pair_send_empty_response(handle);
+	//else
+	//	bt_manager_gap_send_pair_error(handle,BT_PAIR_REQUEST_REJECTED,"");
+}
+
+void bt_test_gap_authorize_service_cb(void *handle,char *device,char *uuid)
+{
+	char buffer[BUFFER_SIZE] = {0};
+	btlog("AGENT: Authorize Service (%s, %s)\n", device, uuid);
+	//if(is_background == 0) {
+	//	bt_test_pair_ask("Authorize connection? (yes/no): ",buffer);
+
+	//	if (!strncmp(buffer, "yes", 3))
+			bt_manager_gap_pair_send_empty_response(handle);
+	//	else
+	//		bt_manager_gap_send_pair_error(handle,BT_PAIR_REQUEST_REJECTED,"");
+	//}else {
+	//	bt_manager_gap_pair_send_empty_response(handle);
+	//}
+}
+
+static void bt_test_a2dp_sink_connection_state_cb(const char *bd_addr, btmg_a2dp_sink_connection_state_t state)
+{
+
+	if (state == BTMG_A2DP_SINK_DISCONNECTED) {
+		btlog("A2DP sink disconnected with device: %s", bd_addr);
+		bt_manager_set_discovery_mode(BTMG_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
+	} else if (state == BTMG_A2DP_SINK_CONNECTING) {
+		btlog("A2DP sink connecting with device: %s", bd_addr);
+	} else if (state == BTMG_A2DP_SINK_CONNECTED) {
+		btlog("A2DP sink connected with device: %s", bd_addr);
+	} else if (state == BTMG_A2DP_SINK_DISCONNECTING) {
+		btlog("A2DP sink disconnecting with device: %s", bd_addr);
+	}
+}
+
+static void bt_test_a2dp_sink_audio_state_cb(const char *bd_addr, btmg_a2dp_sink_audio_state_t state)
+{
+	if (state == BTMG_A2DP_SINK_AUDIO_SUSPENDED) {
+		btlog("A2DP sink audio suspended with device: %s", bd_addr);
+	} else if (state == BTMG_A2DP_SINK_AUDIO_STOPPED) {
+		btlog("A2DP sink audio stopped with device: %s", bd_addr);
+	} else if (state == BTMG_A2DP_SINK_AUDIO_STARTED) {
+		btlog("A2DP sink audio started with device: %s", bd_addr);
+	}
+}
+
+static void bt_test_a2dp_source_connection_state_cb(const char *bd_addr, btmg_a2dp_source_connection_state_t state)
+{
+	if (state == BTMG_A2DP_SOURCE_DISCONNECTED) {
+		btlog("A2DP source disconnected with device: %s\n", bd_addr);
+		bt_manager_set_discovery_mode(BTMG_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
+	} else if (state == BTMG_A2DP_SOURCE_CONNECTING) {
+		btlog("A2DP source connecting with device: %s\n", bd_addr);
+	} else if (state == BTMG_A2DP_SOURCE_CONNECTED) {
+		btlog("A2DP source connected with device: %s\n", bd_addr);
+		//write_asoundrc_bt(bd_addr);
+	} else if (state == BTMG_A2DP_SOURCE_DISCONNECTING) {
+		btlog("A2DP source disconnecting with device: %s\n", bd_addr);
+		//delete_asoundrc_bt();
+	} else if (state == BTMG_A2DP_SOURCE_CONNECT_FAILED) {
+		btlog("A2DP source connect with device: %s failed!\n", bd_addr);
+	} else if (state == BTMG_A2DP_SOURCE_DISCONNEC_FAILED) {
+		btlog("A2DP source disconnect with device: %s failed!\n", bd_addr);
+	}
+}
+
+static void bt_test_a2dp_source_audio_state_cb(const char *bd_addr, btmg_a2dp_source_audio_state_t state)
+{
+	if (state == BTMG_A2DP_SOURCE_AUDIO_SUSPENDED) {
+		LOG_info("A2DP source audio suspended with device: %s\n", bd_addr);
+	} else if (state == BTMG_A2DP_SOURCE_AUDIO_STOPPED) {
+		LOG_info("A2DP source audio stopped with device: %s\n", bd_addr);
+	} else if (state == BTMG_A2DP_SOURCE_AUDIO_STARTED) {
+		LOG_info("A2DP source audio started with device: %s\n", bd_addr);
+	}
+}
+
+static void bt_test_avrcp_play_state_cb(const char *bd_addr, btmg_avrcp_play_state_t state)
+{
+	if (state == BTMG_AVRCP_PLAYSTATE_STOPPED) {
+		btlog("BT playing music stopped with device: %s\n", bd_addr);
+	} else if (state == BTMG_AVRCP_PLAYSTATE_PLAYING) {
+		btlog("BT palying music playing with device: %s\n", bd_addr);
+	} else if (state == BTMG_AVRCP_PLAYSTATE_PAUSED) {
+		btlog("BT palying music paused with device: %s\n", bd_addr);
+	} else if (state == BTMG_AVRCP_PLAYSTATE_FWD_SEEK) {
+		btlog("BT palying music FWD SEEK with device: %s\n", bd_addr);
+	} else if (state == BTMG_AVRCP_PLAYSTATE_REV_SEEK) {
+		btlog("BT palying music REV SEEK with device: %s\n", bd_addr);
+	} else if (state == BTMG_AVRCP_PLAYSTATE_FORWARD) {
+		btlog("BT palying music forward with device: %s\n", bd_addr);
+	} else if (state == BTMG_AVRCP_PLAYSTATE_BACKWARD) {
+		btlog("BT palying music backward with device: %s\n", bd_addr);
+	} else if (state == BTMG_AVRCP_PLAYSTATE_ERROR) {
+		btlog("BT palying music ERROR with device: %s\n", bd_addr);
+	}
+}
+
+static void bt_test_avrcp_audio_volume_cb(const char *bd_addr, unsigned int volume)
+{
+	btlog("AVRCP audio volume:%s : %d\n", bd_addr, volume);
+}
+
+void bt_daemon_open(void)
+{
+	int ret = system("pidof bt_daemon > /dev/null 2>&1");
+	if (ret != 0){
+		LOG_debug("opening bt_daemon......\n");
+		system("bt_daemon -s &");
+		//system("/mnt/SDCARD/.system/tg5040/bin/bt_daemon -s &");
+		//sleep(2);
+	} else {
+		LOG_debug("bt_daemon is already open\n");
+	}
+}
+
+void bt_daemon_close(void)
+{
+	LOG_debug("closing bt daemon......\n");
+	system("killall -q bt_daemon");
+	//sleep(1);
+}
+
+/////////////////////////////////
+
+static btmg_callback_t *bt_callback = NULL;
+
+void PLAT_bluetoothInit() {
+	LOG_info("BT init\n");
+
+	if(bt_callback) {
+		LOG_error("BT is already initialized.\n");
+		return;
+	}
+	// Needs to be set before starting bluetooth manager
+	PLAT_bluetoothDiagnosticsEnable(CFG_getBluetoothDiagnostics());
+
+	if(bt_manager_preinit(&bt_callback) != 0) {
+		LOG_error("bt preinit failed!\n");
 		return;
 	}
 
-	int ret = wifi.interface->disconnect_ap(42);
-	LOG_info("wifi disconnect_ap returned %d\n", ret);
+	// Only BT audio here for now
+	//bt_manager_set_enable_default(true);
+	bt_manager_enable_profile(BTMG_A2DP_SOUCE_ENABLE | BTMG_AVRCP_ENABLE);
+
+	bt_callback->btmg_manager_cb.bt_mg_cb = bt_test_manager_cb;
+	bt_callback->btmg_adapter_cb.adapter_power_state_cb = bt_test_adapter_power_state_cb;
+
+	bt_callback->btmg_gap_cb.gap_status_cb = bt_test_status_cb;
+	bt_callback->btmg_gap_cb.gap_disc_status_cb = bt_test_discovery_status_cb;
+	bt_callback->btmg_gap_cb.gap_device_add_cb = bt_test_dev_add_cb;
+	bt_callback->btmg_gap_cb.gap_device_remove_cb = bt_test_dev_remove_cb;
+	bt_callback->btmg_gap_cb.gap_update_rssi_cb =	bt_test_update_rssi_cb;
+	bt_callback->btmg_gap_cb.gap_bond_state_cb = bt_test_bond_state_cb;
+	bt_callback->btmg_gap_cb.gap_connect_changed = bt_test_gap_connected_changed_cb;
+
+	/* bt security callback setting.*/
+	bt_callback->btmg_gap_cb.gap_request_pincode = bt_test_gap_request_pincode_cb;
+	bt_callback->btmg_gap_cb.gap_display_pin_code = bt_test_gap_display_pin_code_cb;
+	bt_callback->btmg_gap_cb.gap_request_passkey = bt_test_gap_request_passkey_cb;
+	bt_callback->btmg_gap_cb.gap_display_passkey = bt_test_gap_display_passkey_cb;
+	bt_callback->btmg_gap_cb.gap_confirm_passkey = bt_test_gap_confirm_passkey_cb;
+	bt_callback->btmg_gap_cb.gap_authorize  = bt_test_gap_authorize_cb;
+	bt_callback->btmg_gap_cb.gap_authorize_service = bt_test_gap_authorize_service_cb;
+
+	/* bt a2dp sink callback*/
+	//bt_callback->btmg_a2dp_sink_cb.a2dp_sink_connection_state_cb = bt_test_a2dp_sink_connection_state_cb;
+	//bt_callback->btmg_a2dp_sink_cb.a2dp_sink_audio_state_cb = bt_test_a2dp_sink_audio_state_cb;
+
+	/* bt a2dp source callback*/
+	bt_callback->btmg_a2dp_source_cb.a2dp_source_connection_state_cb = bt_test_a2dp_source_connection_state_cb;
+	bt_callback->btmg_a2dp_source_cb.a2dp_source_audio_state_cb = bt_test_a2dp_source_audio_state_cb;
+
+	/* bt avrcp callback*/
+	bt_callback->btmg_avrcp_cb.avrcp_audio_volume_cb = bt_test_avrcp_audio_volume_cb;
+
+	if(bt_manager_init(bt_callback) != 0) {
+		LOG_error("bt manager init failed.\n");
+		bt_manager_deinit(bt_callback);
+		return;
+	}
+
+	bonded_devices = btmg_dev_list_new();
+	if(bonded_devices == NULL) {
+		LOG_error("btmg_dev_list_new failed.\n");
+		bt_manager_deinit(bt_callback);
+		return;
+	}
+
+	discovered_audiodev= btmg_dev_list_new();
+	if(discovered_audiodev == NULL) {
+		LOG_error("btmg_dev_list_new failed.\n");
+		bt_manager_deinit(bt_callback);
+		return;
+	}
+
+	discovered_controllers= btmg_dev_list_new();
+	if(discovered_controllers == NULL) {
+		LOG_error("btmg_dev_list_new failed.\n");
+		bt_manager_deinit(bt_callback);
+		return;
+	}
+
+	PLAT_bluetoothEnable(CFG_getBluetooth());
+}
+
+void PLAT_bluetoothDeinit()
+{
+	if(bt_callback) {
+		bt_manager_deinit(bt_callback);
+		btmg_dev_list_free(discovered_audiodev);
+		btmg_dev_list_free(discovered_controllers);
+		btmg_dev_list_free(bonded_devices);
+		bt_callback = NULL;
+	}
+}
+
+void PLAT_bluetoothEnable(bool shouldBeOn) {
+
+	if(bt_callback) {
+		// go through the manager
+		btmg_state_t bt_state = bt_manager_get_state();
+		// dont turn on if BT is already on/urning on or still turning off
+		if(shouldBeOn && bt_state == BTMG_STATE_OFF) {		
+			btlog("turning BT on...\n");
+			system("rfkill.elf unblock bluetooth");
+			if(bt_manager_enable(true) < 0) {
+				LOG_error("bt_manager_enable failed\n");
+				return;
+			}
+			bt_manager_set_name("Trimui Brick (NextUI)");
+			bt_daemon_open();
+		}
+		else if(!shouldBeOn && bt_state == BTMG_STATE_ON ) {
+			btlog("turning BT off...\n");
+			bt_daemon_close();
+			if(bt_manager_enable(false) < 0) {
+				LOG_error("bt_manager_enable failed\n");
+				return;
+			}
+			system("rfkill.elf block bluetooth");
+		}
+	}
+	else {
+		// lightweight
+		if(shouldBeOn) {
+			btlog("turning BT on...\n");
+			//system("rfkill.elf unblock bluetooth");
+			system("/etc/bluetooth/bt_init.sh start &");
+			//bt_daemon_open();
+		}
+		else {
+			btlog("turning BT off...\n");
+			//bt_daemon_close();
+			system("/etc/bluetooth/bt_init.sh stop &");
+			//system("rfkill.elf block bluetooth");
+		}
+	}
+	CFG_setBluetooth(shouldBeOn);
+}
+
+bool PLAT_bluetoothDiagnosticsEnabled() { 
+	return CFG_getBluetoothDiagnostics(); 
+}
+
+void PLAT_bluetoothDiagnosticsEnable(bool on) {
+	bt_manager_set_loglevel(on ? BTMG_LOG_LEVEL_DEBUG : BTMG_LOG_LEVEL_INFO);
+	CFG_setBluetoothDiagnostics(on);
+}
+
+void PLAT_bluetoothDiscovery(int on)
+{
+	btmg_scan_filter_t scan_filter = {0};
+	scan_filter.type = BTMG_SCAN_BR_EDR;
+	scan_filter.rssi = -90;
+
+	if(on) {
+		btlog("Starting BT discovery.\n");
+		bt_manager_discovery_filter(&scan_filter);
+		bt_manager_start_discovery();
+	}
+	else {
+		btlog("Stopping BT discovery.\n");
+		bt_manager_cancel_discovery();
+	}
+}
+
+bool PLAT_bluetoothDiscovering()
+{
+	return bt_manager_is_discovering();
+}
+
+int PLAT_bluetoothScan(struct BT_device *devices, int max)
+{
+	int count = 0;
+	// Append audio devices
+	{
+		dev_node_t *dev_node = NULL;
+		dev_node = discovered_audiodev->head;
+		while (dev_node != NULL && count < max) {
+			btlog("%s %s\n", dev_node->dev_addr, dev_node->dev_name);
+			struct BT_device *device = &devices[count];
+			strcpy(device->addr, dev_node->dev_addr);
+			strcpy(device->name, dev_node->dev_name);
+			device->kind = BLUETOOTH_AUDIO;
+
+			count++;
+			dev_node = dev_node->next;
+		}
+	}
+
+	// Append controllers
+	{
+		dev_node_t *dev_node = NULL;
+		dev_node = discovered_controllers->head;
+		while (dev_node != NULL && count < max) {
+			btlog("%s %s\n", dev_node->dev_addr, dev_node->dev_name);
+			struct BT_device *device = &devices[count];
+			strcpy(device->addr, dev_node->dev_addr);
+			strcpy(device->name, dev_node->dev_name);
+			device->kind = BLUETOOTH_CONTROLLER;
+
+			count++;
+			dev_node = dev_node->next;
+		}
+	}
+
+	//btlog("Scan yielded %d devices\n", count);
+
+	return count;
+}
+
+int PLAT_bluetoothPaired(struct BT_devicePaired *paired, int max)
+{
+	bt_paried_device *devices = NULL;
+	int pairCnt = -1;
+
+	bt_manager_get_paired_devices(&devices,&pairCnt);
+	bt_paried_device *iter = devices;
+	int count = 0;
+	if(iter) {
+		while(iter && count < max) {
+			struct BT_devicePaired *device = &paired[count];
+			strcpy(device->remote_addr, iter->remote_address);
+			strcpy(device->remote_name, iter->remote_name);
+			device->rssi = iter->rssi;
+			device->is_bonded = iter->is_bonded;
+			device->is_connected = iter->is_connected;
+			//device->uuid_len = iter->uuid_length;
+
+			count++;
+			iter = iter->next;
+		}
+		bt_manager_free_paired_devices(devices);
+	}
+	//btlog("Paired %d devices\n", count);
+
+	return count;
+}
+
+void PLAT_bluetoothPair(char *addr)
+{
+	int ret = bt_manager_pair(addr);
+	if (ret)
+		LOG_error("BT pair failed: %d\n", ret);
+}
+
+void PLAT_bluetoothUnpair(char *addr)
+{
+	int ret = bt_manager_unpair(addr);
+	if (ret)
+		LOG_error("BT unpair failed\n");
+}
+
+void PLAT_bluetoothConnect(char *addr)
+{
+	// can we get away wth just calling both?
+	int ret = bt_manager_connect(addr);
+	if (ret)
+		LOG_error("BT connect generic failed: %d\n", ret);
+	LOG_info("BT connect generic returned: %d\n", ret);
+	//int ret = bt_manager_profile_connect(addr, BTMG_A2DP_SINK);
+	//if (ret)
+	//	LOG_error("BT connect A2DP_SINK failed: %d\n", ret);
+
+	//ret = bt_manager_profile_connect(addr, BTMG_AVRCP);
+	//if (ret)
+	//	LOG_error("BT connect AVRCP failed: %d\n", ret);
+
+	//PLAT_bluetoothStreamInit(2, 48000);
+	//PLAT_bluetoothStreamBegin(0);
+}
+
+void PLAT_bluetoothDisconnect(char *addr)
+{
+	// can we get away wth just calling this?
+	int ret = bt_manager_disconnect(addr);
+	if (ret)
+		LOG_error("BT disconnect failed: %d\n", ret);
+	//int ret = bt_manager_profile_disconnect(addr, BTMG_A2DP_SINK);
+	//if (ret)
+	//	LOG_error("BT disconnect BTMG_A2DP_SINK failed: %d\n", ret);
+	//ret = bt_manager_profile_disconnect(addr, BTMG_AVRCP);
+	//if (ret)
+	//	LOG_error("BT disconnect BTMG_AVRCP failed: %d\n", ret);
+}
+
+bool PLAT_bluetoothConnected()
+{
+	//bt_paried_device *devices = NULL;
+	//int pairCnt = -1;
+	//bool connected = false;
+//
+	//bt_manager_get_paired_devices(&devices,&pairCnt);
+	//bt_paried_device *iter = devices;
+	//if(iter) {
+	//	while(iter) {
+	//		if(iter->is_connected) {
+	//			connected = true;
+	//			break;
+	//		}
+//
+	//		iter = iter->next;
+	//	}
+	//	bt_manager_free_paired_devices(devices);
+	//}
+	
+	// no btmgr here!
+
+	FILE *fp;
+    char buffer[256];
+	bool connected = false;
+
+	fp = popen("hcitool con", "r");
+    if (fp == NULL) {
+        perror("Failed to run hcitool");
+        return 1;
+    }
+
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        if (strstr(buffer, "ACL")) {
+            connected = true;
+            break;
+        }
+    }
+
+    pclose(fp);
+
+	return connected;
+}
+
+int PLAT_bluetoothVolume()
+{
+	int vol_value = 0;
+
+	vol_value = bt_manager_get_vol();
+	btlog("get vol:%d\n", vol_value);
+
+	return vol_value;
+}
+
+void PLAT_bluetoothSetVolume(int vol)
+{
+	int vol_value = vol;
+	if (vol_value > 100)
+		vol_value = 100;
+
+	if (vol_value < 0)
+		vol_value = 0;
+
+	bt_manager_vol_changed_noti(vol_value);
+	LOG_debug("set vol:%d\n", vol_value);
+}
+
+// bt_device_watcher.c
+
+#include <sys/inotify.h>
+
+#define WATCHED_DIR_FMT "%s"
+#define WATCHED_FILE ".asoundrc"
+#define EVENT_BUF_LEN (1024 * (sizeof(struct inotify_event) + NAME_MAX + 1))
+
+static pthread_t watcher_thread;
+static int inotify_fd = -1;
+static int dir_watch_fd = -1;
+static int file_watch_fd = -1;
+static volatile int running = 0;
+static void (*callback_fn)(bool exists, int watch_event) = NULL;
+static char watched_dir[MAX_PATH];
+static char watched_file_path[MAX_PATH];
+
+static void add_file_watch() {
+    if (file_watch_fd >= 0) return; // already watching
+
+    file_watch_fd = inotify_add_watch(inotify_fd, watched_file_path,
+                                      IN_MODIFY | IN_CLOSE_WRITE | IN_DELETE_SELF);
+    if (file_watch_fd < 0) {
+        if (errno != ENOENT) // ENOENT means file doesn't exist yet - no error needed
+            LOG_error("PLAT_bluetoothWatchRegister: failed to add file watch: %s\n", strerror(errno));
+    } else {
+        LOG_info("Watching file: %s\n", watched_file_path);
+    }
+}
+
+static void remove_file_watch() {
+    if (file_watch_fd >= 0) {
+        inotify_rm_watch(inotify_fd, file_watch_fd);
+        file_watch_fd = -1;
+        LOG_info("Stopped watching file: %s\n", watched_file_path);
+    }
+}
+
+static void *watcher_thread_func(void *arg) {
+    char buffer[EVENT_BUF_LEN];
+
+    // At start try to watch file if exists
+    add_file_watch();
+
+    while (running) {
+        int length = read(inotify_fd, buffer, EVENT_BUF_LEN);
+        if (length < 0) {
+            if (errno == EAGAIN || errno == EINTR) {
+                sleep(1);
+                continue;
+            }
+            LOG_error("inotify read error: %s\n", strerror(errno));
+            break;
+        }
+
+        for (int i = 0; i < length;) {
+            struct inotify_event *event = (struct inotify_event *)&buffer[i];
+
+            if (event->wd == dir_watch_fd) {
+                if (event->len > 0 && strcmp(event->name, WATCHED_FILE) == 0) {
+                    if (event->mask & IN_CREATE) {
+                        add_file_watch();
+                        if (callback_fn) callback_fn(true, DIRWATCH_CREATE);
+                    }
+					// No need to react to this, we handle it via file watch
+                    //else if (event->mask & IN_DELETE) {
+                    //    remove_file_watch();
+                    //    if (callback_fn) callback_fn(false, DIRWATCH_DELETE);
+                    //}
+                }
+            }
+            else if (event->wd == file_watch_fd) {
+                if (event->mask & (IN_MODIFY | IN_CLOSE_WRITE | IN_DELETE_SELF)) {
+                    if (event->mask & IN_DELETE_SELF) {
+                        remove_file_watch();
+						if (callback_fn) callback_fn(false, FILEWATCH_DELETE);
+                    }
+					// No need to react to this, it usually comes paired with FILEWATCH_MODIFY
+					//else if (event->mask & IN_CLOSE_WRITE) {
+					//	if (callback_fn) callback_fn(true, FILEWATCH_CLOSE_WRITE);
+					//}
+					else if (event->mask & IN_MODIFY) {
+						if (callback_fn) callback_fn(true, FILEWATCH_MODIFY);
+					}
+                }
+            }
+
+            i += sizeof(struct inotify_event) + event->len;
+        }
+    }
+
+    return NULL;
+}
+
+void PLAT_bluetoothWatchRegister(void (*cb)(bool bt_on, int event)) {
+    if (running) return; // Already running
+
+    callback_fn = cb;
+
+    const char *home = getenv("HOME");
+    if (!home) {
+        LOG_error("PLAT_bluetoothWatchRegister: HOME environment variable not set\n");
+        return;
+    }
+
+    snprintf(watched_dir, MAX_PATH, WATCHED_DIR_FMT, home);
+    snprintf(watched_file_path, MAX_PATH, "%s/%s", watched_dir, WATCHED_FILE);
+
+    LOG_info("PLAT_bluetoothWatchRegister: Watching directory %s\n", watched_dir);
+    LOG_info("PLAT_bluetoothWatchRegister: Watching file %s\n", watched_file_path);
+
+    inotify_fd = inotify_init1(IN_NONBLOCK);
+    if (inotify_fd < 0) {
+        LOG_error("PLAT_bluetoothWatchRegister: failed to initialize inotify\n");
+        return;
+    }
+
+    dir_watch_fd = inotify_add_watch(inotify_fd, watched_dir, IN_CREATE | IN_DELETE);
+    if (dir_watch_fd < 0) {
+        LOG_error("PLAT_bluetoothWatchRegister: failed to add directory watch\n");
+        close(inotify_fd);
+        inotify_fd = -1;
+        return;
+    }
+
+    file_watch_fd = -1;
+
+    running = 1;
+    if (pthread_create(&watcher_thread, NULL, watcher_thread_func, NULL) != 0) {
+        LOG_error("PLAT_bluetoothWatchRegister: failed to create thread\n");
+        inotify_rm_watch(inotify_fd, dir_watch_fd);
+        close(inotify_fd);
+        inotify_fd = -1;
+        dir_watch_fd = -1;
+        running = 0;
+    }
+}
+
+void PLAT_bluetoothWatchUnregister(void) {
+    if (!running) return;
+
+    running = 0;
+    pthread_join(watcher_thread, NULL);
+
+    if (file_watch_fd >= 0)
+        inotify_rm_watch(inotify_fd, file_watch_fd);
+    if (dir_watch_fd >= 0)
+        inotify_rm_watch(inotify_fd, dir_watch_fd);
+    if (inotify_fd >= 0)
+        close(inotify_fd);
+
+    inotify_fd = -1;
+    dir_watch_fd = -1;
+    file_watch_fd = -1;
+    callback_fn = NULL;
 }

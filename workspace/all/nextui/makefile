@@ -27,6 +27,11 @@ CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(ARCH) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS	 += -lmsettings
+ifeq ($(PLATFORM), tg5040)
+CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
+LDFLAGS +=  -lwifimg -lwifid
+LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -lasound -ljson-c
+endif
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 

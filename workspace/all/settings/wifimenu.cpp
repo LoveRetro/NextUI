@@ -19,7 +19,12 @@ Menu::Menu(const int &globalQuit) : MenuList(MenuItemType::Fixed, "Network", {})
                               std::bind(&Menu::getWifToggleState, this),
                               std::bind(&Menu::setWifiToggleState, this, std::placeholders::_1),
                               std::bind(&Menu::resetWifiToggleState, this));
+    diagItem = new MenuItem(ListItemType::Generic, "WiFi diagnostics", "Enable/disable WiFi logging", {false, true}, {"Off", "On"},
+                              std::bind(&Menu::getWifDiagnosticsState, this),
+                              std::bind(&Menu::setWifiDiagnosticsState, this, std::placeholders::_1),
+                              std::bind(&Menu::resetWifiDiagnosticsState, this));
     items.push_back(toggleItem);
+    items.push_back(diagItem);
 
     // best effort layout based on the platform defines, user should really call performLayout manually
     MenuList::performLayout((SDL_Rect){0, 0, FIXED_WIDTH, FIXED_HEIGHT});
@@ -62,6 +67,21 @@ void Menu::resetWifiToggleState()
     //
 }
 
+std::any Menu::getWifDiagnosticsState() const
+{
+    return WIFI_diagnosticsEnabled();
+}
+
+void Menu::setWifiDiagnosticsState(const std::any &on)
+{
+    WIFI_diagnosticsEnable(std::any_cast<bool>(on));
+}
+
+void Menu::resetWifiDiagnosticsState()
+{
+    //
+}
+
 template <typename Map>
 bool key_compare(Map const &lhs, Map const &rhs)
 {
@@ -83,7 +103,8 @@ void Menu::updater()
         {
             // scan for available networks and add a menu item for each
             WIFI_connection connection;
-            WIFI_connectionInfo(&connection);
+            if(WIFI_connectionInfo(&connection) < 0)
+                continue; // try again in a bit
 
             // grab list and compare it to previous result
             // only relayout the menu if changes happended
@@ -116,6 +137,7 @@ void Menu::updater()
                 WriteLock w(itemLock);
                 items.clear();
                 items.push_back(toggleItem);
+                items.push_back(diagItem);
                 layout_called = false;
 
                 for (auto &[s, r] : scanSsids)
@@ -135,7 +157,8 @@ void Menu::updater()
                                                                 { WIFI_disconnect(); workerDirty = true; return Exit; }},
                                                    new ForgetItem(r, workerDirty)
                                                });
-                    else if (hasCredentials)
+                    else 
+                    if (hasCredentials)
                         options = new MenuList(MenuItemType::List, "Options", { new ConnectKnownItem(r, workerDirty), new ForgetItem(r, workerDirty) });
                     else
                         options = new MenuList(MenuItemType::List, "Options", { new ConnectNewItem(r, workerDirty) });
@@ -154,6 +177,8 @@ void Menu::updater()
             WriteLock w(itemLock);
             items.clear();
             items.push_back(toggleItem);
+            items.push_back(diagItem);
+            prevScan.clear();
             layout_called = false;
             workerDirty = true;
             pollSecs = 15;
@@ -216,10 +241,10 @@ void NetworkItem::drawCustomItem(SDL_Surface *surface, const SDL_Rect &dst, cons
 
     // wifi icon
     auto asset =
-        net.rssi > 67 ? ASSET_WIFI :
-        net.rssi > 70 ? ASSET_WIFI_MED
-                      : ASSET_WIFI_LOW;
-    SDL_Rect rect = {0, 0, 14, 10};
+        net.rssi >= -60 ? ASSET_WIFI :    // anything above 61
+        net.rssi >= -70 ? ASSET_WIFI_MED  // -61 and below
+                        : ASSET_WIFI_LOW; // -71 and below
+    SDL_Rect rect = {0, 0, 12, 12};
     int ix = dst.x + dst.w - SCALE1(OPTION_PADDING + rect.w);
     int y = dst.y + SCALE1(BUTTON_SIZE - rect.h) / 2;
     SDL_Rect tgt{ix, y};

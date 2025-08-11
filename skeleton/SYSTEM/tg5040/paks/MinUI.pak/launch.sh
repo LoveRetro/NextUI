@@ -14,7 +14,11 @@
 #######################################
 
 if [ -f "/tmp/poweroff" ]; then
-	poweroff
+	poweroff_next
+	exit 0
+fi
+if [ -f "/tmp/reboot" ]; then
+	reboot_next
 	exit 0
 fi
 
@@ -104,40 +108,35 @@ CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
 CPU_SPEED_PERF=2000000
 echo $CPU_SPEED_PERF > $CPU_PATH
 
-# bt handling (todo, off for now)
-rfkill block bluetooth
-killall MtpDaemon # I dont think we need to micro manage this one
+keymon.elf & # &> $SDCARD_PATH/keymon.txt &
+batmon.elf & # &> $SDCARD_PATH/batmon.txt &
+
+#killall MtpDaemon # I dont think we need to micro manage this one
 
 # BT handling
 # on by default, disable based on systemval setting
-#bton=`/usr/trimui/bin/systemval bluetooth`
-#if [ "$bton" != "1" ] ; then
-#	/etc/bluetooth/bluetoothd start
-#	/usr/bin/bluealsa -p a2dp-source&
-#	touch /tmp/bluetooth_ready
-#fi
+bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')
+# somehow trimui deploys aic?
+cp -f $SYSTEM_PATH/etc/bluetooth/bt_init.sh /etc/bluetooth/bt_init.sh
+# start fresh, will be populated on the next connect
+rm -f $USERDATA_PATH/.asoundrc
+if [ "$bluetoothon" -eq 0 ]; then
+	/etc/bluetooth/bt_init.sh stop > /dev/null 2>&1 &
+else
+	/etc/bluetooth/bt_init.sh start > /dev/null 2>&1 &
+	#bt_daemon -s &
+fi
 
 # wifi handling
 # on by default, disable based on systemval setting
 wifion=$(nextval.elf wifi | sed -n 's/.*"wifi": \([0-9]*\).*/\1/p')
+cp -f $SYSTEM_PATH/etc/wifi/wifi_init.sh /etc/wifi/wifi_init.sh
 if [ "$wifion" -eq 0 ]; then
-	ifconfig wlan0 down
-	killall -15 wpa_supplicant
-	# this is pretty dumb, it also kills DHCP for e.g. USB-C ethernet adapters
-	# do we really care that much about a stray DHCP service running?
-	killall -9 udhcpc
-	# i guess this could theoretically conserve battery
-	rfkill block wifi
-	# probably unnecessary
-	# /etc/init.d/wpa_supplicant stop # shauninman: not sure this is working
-else
-	rfkill unblock wifi
-	ifconfig wlan0 up
-	(( udhcpc -i wlan0 &)&)
+	/etc/wifi/wifi_init.sh stop > /dev/null 2>&1 &
+else 
+	/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
+	#wifi_daemon -s &
 fi
-
-keymon.elf & # &> $SDCARD_PATH/keymon.txt &
-batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 
 #######################################
 
@@ -165,9 +164,13 @@ while [ -f $EXEC_PATH ]; do
 	fi
 
 	if [ -f "/tmp/poweroff" ]; then
-		poweroff
+		poweroff_next
+		exit 0
+	fi
+	if [ -f "/tmp/reboot" ]; then
+		reboot_next
 		exit 0
 	fi
 done
 
-poweroff # just in case
+poweroff_next # just in case

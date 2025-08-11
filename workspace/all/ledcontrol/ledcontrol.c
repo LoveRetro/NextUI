@@ -267,6 +267,7 @@ int main(int argc, char *argv[])
 	int dirty = 1;
     int show_setting = 0; // 1=brightness,2=volume,3=colortemp
     int was_online = PLAT_isOnline();
+    int had_bt = PLAT_btIsConnected();
 
     while (!quit)
     {
@@ -278,8 +279,15 @@ int main(int argc, char *argv[])
         PWR_update(&dirty, &show_setting, NULL, NULL);
         
         int is_online = PLAT_isOnline();
-		if (was_online!=is_online) dirty = 1;
+		if (was_online!=is_online) 
+            dirty = 1;
 		was_online = is_online;
+
+        int has_bt = PLAT_btIsConnected();
+        if (had_bt != has_bt)
+            dirty = 1;
+        had_bt = has_bt;
+
         int numOfLights = 3;
         if(is_brick) numOfLights = 4;
 

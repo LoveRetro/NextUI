@@ -64,6 +64,10 @@
 #define MAIN_ROW_COUNT 6 // FIXED_HEIGHT / (PILL_SIZE * FIXED_SCALE) - 2 (floor and subtract 1 if not an integer)
 #endif
 
+#ifndef QUICK_SWITCHER_COUNT
+#define QUICK_SWITCHER_COUNT 3
+#endif
+
 #ifndef PADDING
 #define PADDING 10 // PILL_SIZE / 3 (or non-integer part of the previous calculatiom divided by three)
 #endif
@@ -72,7 +76,7 @@
 #define FONT_MEDIUM 14 	// single char button label
 #define FONT_SMALL 12	// button hint
 #define FONT_TINY 10	// multi char button label
-#define FONT_MICRO 8	// icon overlay text
+#define FONT_MICRO 7	// icon overlay text
 
 #ifndef MAX_LIGHTS
 #define MAX_LIGHTS 0

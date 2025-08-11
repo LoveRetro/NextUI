@@ -20,7 +20,7 @@ int suffixMatch(char* suf, const char* str) {
 	int offset = strlen(str)-len;
 	return (offset>=0 && strncasecmp(suf, str+offset, len)==0);
 }
-int exactMatch(char* str1, char* str2) {
+int exactMatch(const char* str1, const char* str2) {
 	if (!str1 || !str2) return 0; // NULL isn't safe here
 	int len1 = strlen(str1);
 	if (len1!=strlen(str2)) return 0;
@@ -417,6 +417,15 @@ int exists(char* path) {
 }
 void touch(char* path) {
 	close(open(path, O_RDWR|O_CREAT, 0777));
+}
+int toggle(char *path) {
+    if (access(path, F_OK) == 0) {
+        unlink(path);
+        return 0;
+    } else {
+        touch(path);
+        return 1;
+    }
 }
 void putFile(char* path, char* contents) {
 	FILE* file = fopen(path, "w");

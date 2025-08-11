@@ -7,7 +7,7 @@
 
 int prefixMatch(char* pre, const char* str);
 int suffixMatch(char* suf,const char* str);
-int exactMatch(char* str1, char* str2);
+int exactMatch(const char* str1, const char* str2);
 int containsString(char* haystack, char* needle);
 int hide(char* file_name);
 
@@ -35,7 +35,8 @@ void trimSortingMeta(char** str);
 
 int exists(char* path);
 void touch(char* path);
-void putFile(char* path, char* contents);
+int toggle(char *path); // creates or removes file
+void putFile(char *path, char *contents);
 char* allocFile(char* path); // caller must free
 void getFile(char* path, char* buffer, size_t buffer_size);
 void putInt(char* path, int value);
