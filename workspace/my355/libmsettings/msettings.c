@@ -1,4 +1,3 @@
-// tg5040
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,7 +9,6 @@
 #include <sys/stat.h>
 #include <dlfcn.h>
 #include <string.h>
-// #include <tinyalsa/mixer.h>
 
 #include "msettings.h"
 
@@ -107,6 +105,7 @@ typedef struct SettingsV8 {
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
 	int jack; 
+	int hdmi;
 } SettingsV8;
 
 typedef struct SettingsV9 {
@@ -243,6 +242,7 @@ int getInt(char* path) {
 void touch(char* path) {
 	close(open(path, O_RDWR|O_CREAT, 0777));
 }
+
 int exactMatch(char* str1, char* str2) {
 	if (!str1 || !str2) return 0; // NULL isn't safe here
 	int len1 = strlen(str1);
@@ -263,19 +263,16 @@ int peekVersion(const char *filename) {
 static int is_brick = 0;
 
 void InitSettings(void) {	
-	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
-	
 	sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));
 	
 	shm_fd = shm_open(SHM_KEY, O_RDWR | O_CREAT | O_EXCL, 0644); // see if it exists
 	if (shm_fd==-1 && errno==EEXIST) { // already exists
-		// puts("Settings client");
+		puts("Settings client");
 		shm_fd = shm_open(SHM_KEY, O_RDWR, 0644);
 		settings = mmap(NULL, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 	}
 	else { // host
-		// puts("Settings host"); // keymon
+		puts("Settings host"); // should always be keymon
 		is_host = 1;
 		// we created it so set initial size and populate
 		ftruncate(shm_fd, shm_size);
@@ -453,18 +450,24 @@ void InitSettings(void) {
 		
 		// these shouldn't be persisted
 		// settings->jack = 0;
-		settings->mute = 0;
+		// settings->hdmi = 0;
 	}
-	// printf("brightness: %i\nspeaker: %i \n", settings->brightness, settings->speaker);
+	
+	// int jack = JACK_enabled();
+	// int hdmi = HDMI_enabled();
+	// printf("brightness: %i (hdmi: %i)\nspeaker: %i (jack: %i)\n", settings->brightness, hdmi, settings->speaker, jack); fflush(stdout);
+	
+	// // both of these set volume
+	// SetJack(jack);
+	// SetHDMI(hdmi);
+	
+	// char cmd[256];
+	// sprintf(cmd, "amixer sset 'Playback Path' '%s' > /dev/null 2>&1", GetJack() ? "HP" : "SPK");
+	// system(cmd);
 
-	system("amixer");
-	system("amixer sset 'Headphone' 0");	  // 100%
-	system("amixer sset 'digital volume' 0"); // 100%
-	system("amixer sset 'DAC Swap' Off"); // Fix L/R channels
-	// volume is set with 'digital volume'
-
-	// This will implicitly update all other settings based on FN switch state
-	SetMute(settings->mute);
+	// SetVolume(GetVolume());
+	// SetBrightness(GetBrightness());
+	// system("echo $(< " BRIGHTNESS_PATH ")");
 }
 int InitializedSettings(void) {
 	return (settings != NULL);
@@ -481,8 +484,6 @@ static inline void SaveSettings(void) {
 		sync();
 	}
 }
-
-///////// Getters exposed in public API
 
 int GetBrightness(void) { // 0-10
 	return settings->brightness;
@@ -1088,50 +1089,11 @@ void SetRawColortemp(int val) { // 0 - 255
 	}
 }
 void SetRawVolume(int val) { // 0-100
-	if (settings->mute) val = scaleVolume(GetMutedVolume());
+
+	char cmd[256];
+	sprintf(cmd, "amixer sset 'SPK' -M %i%% &> /dev/null", val);
+	system(cmd);
 	
-	// bluetooth: set volkume on the device directly
-	if(GetBluetooth()) {
-		// Get A2DP mixer control name
-		FILE *fp = popen("amixer | grep \"Simple mixer control\" | grep A2DP | head -n1", "r");
-		if (!fp) return;
-
-		char line[256];
-		char control[128] = {0};
-
-		
-		if (fgets(line, sizeof(line), fp)) {
-			// Example line: Simple mixer control 'AirPods Pro A2DP',0
-			char *start = strchr(line, '\'');
-			char *end = strrchr(line, '\'');
-
-			if (start && end && end > start) {
-				size_t len = end - start - 1;
-				if (len < sizeof(control)) {
-					strncpy(control, start + 1, len);
-					control[len] = '\0';
-				}
-			}
-		}
-		pclose(fp);
-
-		if (control[0]) {
-			char cmd[256];
-			//sprintf(cmd, "amixer sset '%s' -M %i%% &> /dev/null", control, val);
-			sprintf(cmd, "amixer sset '%s' -M %i%%", control, val);
-			system(cmd);
-		}
-	}
-	else {
-		// Note: 'digital volume' mapping is reversed
-		char cmd[256];
-		sprintf(cmd, "amixer sset 'digital volume' -M %i%% &> /dev/null", 100-val);
-		system(cmd);
-
-		// Setting just 'digital volume' to 0 still plays audio quietly. Also set DAC volume to 0
-		if (val == 0) system("amixer sset 'DAC volume' 0 &> /dev/null");
-		else system("amixer sset 'DAC volume' 160 &> /dev/null"); // 160=0dB=max for 'DAC volume'
-	}
 
 	// TODO: unfortunately doing it this way creating a linker nightmare
 	// struct mixer *mixer = mixer_open(0);

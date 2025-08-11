@@ -2641,6 +2641,7 @@ void SND_init(double sample_rate, double frame_rate)
 
 #if defined(USE_SDL2)
 	snd.device_id = SDL_OpenAudioDevice(NULL, 0, &spec_in, &spec_out, SDL_AUDIO_ALLOW_ANY_CHANGE);
+	
 	if (snd.device_id <= 0)
 	{
 		LOG_info("SDL_OpenAudioDevice error: %s\n", SDL_GetError());
@@ -2671,7 +2672,7 @@ void SND_init(double sample_rate, double frame_rate)
 	SND_resizeBuffer();
 
 	// start with audiodevice paused so buffer can fill a little, snd_batchsamples will unpause it
-	SND_pauseAudio(true);
+	// SND_pauseAudio(true);
 	LOG_info("sample rate: %i (req) %i (rec) [samples %i]\n", snd.sample_rate_in, snd.sample_rate_out, SAMPLES);
 	snd.initialized = 1;
 

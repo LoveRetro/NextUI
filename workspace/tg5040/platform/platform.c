@@ -3253,101 +3253,106 @@ void PLAT_wifiEnable(bool on) {
 	}
 }
 
-int PLAT_wifiScan(struct WIFI_network *networks, int max)
-{
+int PLAT_wifiScan(struct WIFI_network *networks, int max) {
     if(!CFG_getWifi()) {
         LOG_error("PLAT_wifiScan: wifi is currently disabled.\n");
         return -1;
     }
 
-    char results[SCAN_MAX];
-    int ret = aw_wifid_get_scan_results(results, SCAN_MAX);
-    if (ret < 0) {
-        //LOG_error("PLAT_wifiScan: failed to get wifi scan results (%i).\n", ret);
+    // Trigger scan and wait
+    system("wpa_cli scan > /dev/null 2>&1");
+    ms_sleep(3000);  // Adjust this delay as needed
+
+    FILE *fp = popen("wpa_cli scan_results", "r");
+    if (!fp) {
+        LOG_error("PLAT_wifiScan: failed to run wpa_cli scan_results\n");
         return -1;
     }
-    results[SCAN_MAX - 1] = '\0'; // ensure null termination
 
-	// Results will be in this form:
-	//[INFO] bssid / frequency / signal level / flags / ssid
-	//04:b4:fe:32:f9:73	2462	-63	[WPA2-PSK-CCMP][WPS][ESS]	frynet
-	//04:b4:fe:32:e4:50	2437	-56	[WPA2-PSK-CCMP][WPS][ESS]	frynet
-
-    wifilog("%s\n", results);
-
-    const char *current = results;
+    char line[512];
+    int count = 0;
 
     // Skip header line
-    const char *next = strchr(current, '\n');
-    if (!next) {
-        LOG_warn("PLAT_wifiScan: no scan results lines found.\n");
+    if (!fgets(line, sizeof(line), fp)) {
+        pclose(fp);
         return 0;
     }
-    current = next + 1;
 
-    int count = 0;
-    char line[512];  // buffer for each line
+    while (fgets(line, sizeof(line), fp) && count < max) {
+        struct WIFI_network *net = &networks[count];
+        // Reset fields
+        net->bssid[0] = '\0';
+        net->ssid[0] = '\0';
+        net->freq = -1;
+        net->rssi = -1;
+        net->security = SECURITY_NONE;
 
-    while (current && *current && count < max) {
-        next = strchr(current, '\n');
-        size_t len = next ? (size_t)(next - current) : strlen(current);
-        if (len >= sizeof(line)) {
-            LOG_warn("PLAT_wifiScan: line too long, truncating.\n");
-            len = sizeof(line) - 1;
+        // Parse the line splitting by tab since fields are tab-separated
+        char *fields[5];
+        int i = 0;
+        char *p = line;
+
+        // Extract up to 5 tab-separated fields (bssid, freq, rssi, flags, ssid)
+        while (i < 5 && p) {
+            fields[i++] = p;
+            char *tab = strchr(p, '\t');
+            if (!tab)
+                break;
+            *tab = '\0';
+            p = tab + 1;
         }
 
-        strncpy(line, current, len);
-        line[len] = '\0';
-
-        // Parse line with sscanf
-        char features[128];
-        struct WIFI_network *network = &networks[count];
-
-        // Initialize fields
-        network->bssid[0] = '\0';
-        network->ssid[0] = '\0';
-        network->freq = -1;
-        network->rssi = -1;
-        network->security = SECURITY_NONE;
-
-        int parsed = sscanf(line, "%17[0-9a-fA-F:]\t%d\t%d\t%127[^\t]\t%127[^\n]",
-                            network->bssid, &network->freq, &network->rssi,
-                            features, network->ssid);
-
-        if (parsed != 5) {
-            LOG_warn("PLAT_wifiScan: malformed line skipped (parsed %d fields): '%s'\n", parsed, line);
-            current = next ? next + 1 : NULL;
+        if (i < 5) {
+            // If less than 5 fields, invalid line
             continue;
         }
 
-        // Trim trailing whitespace from SSID (optional)
-        size_t ssid_len = strlen(network->ssid);
-        while (ssid_len > 0 && (network->ssid[ssid_len - 1] == ' ' || network->ssid[ssid_len - 1] == '\t')) {
-            network->ssid[ssid_len - 1] = '\0';
-            ssid_len--;
+        // Assign parsed fields to network struct
+        strncpy(net->bssid, fields[0], sizeof(net->bssid) - 1);
+        net->freq = atoi(fields[1]);
+        net->rssi = atoi(fields[2]);
+
+        // flags field may have trailing whitespace, trim it
+        char *flags = fields[3];
+        size_t len = strlen(flags);
+        while (len > 0 && (flags[len -1] == ' ' || flags[len -1] == '\n' || flags[len -1] == '\r')) {
+            flags[len -1] = '\0';
+            len--;
         }
 
-        if (network->ssid[0] == '\0') {
-            LOG_warn("Ignoring network %s with empty SSID\n", network->bssid);
-            current = next ? next + 1 : NULL;
+        strncpy(net->ssid, fields[4], sizeof(net->ssid) - 1);
+
+        // Trim trailing whitespace from SSID
+        len = strlen(net->ssid);
+        while (len > 0 && (net->ssid[len - 1] == ' ' || net->ssid[len - 1] == '\n' || net->ssid[len - 1] == '\r')) {
+            net->ssid[len - 1] = '\0';
+            len--;
+        }
+
+        if (net->ssid[0] == '\0') {
+            // Ignore networks with empty SSID (hidden SSID)
             continue;
         }
 
-        if (containsString(features, "WPA2-PSK"))
-            network->security = SECURITY_WPA2_PSK;
-        else if (containsString(features, "WPA-PSK"))
-            network->security = SECURITY_WPA_PSK;
-        else if (containsString(features, "WEP"))
-            network->security = SECURITY_WEP;
-        else if (containsString(features, "EAP"))
-            network->security = SECURITY_UNSUPPORTED;
+        // Determine security type
+        if (strstr(flags, "WPA2-PSK"))
+            net->security = SECURITY_WPA2_PSK;
+        else if (strstr(flags, "WPA-PSK"))
+            net->security = SECURITY_WPA_PSK;
+        else if (strstr(flags, "WEP"))
+            net->security = SECURITY_WEP;
+        else if (strstr(flags, "EAP"))
+            net->security = SECURITY_UNSUPPORTED;
+        else
+            net->security = SECURITY_NONE;
 
         count++;
-        current = next ? next + 1 : NULL;
     }
 
+    pclose(fp);
     return count;
 }
+
 
 bool PLAT_wifiConnected()
 {

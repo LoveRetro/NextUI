@@ -16,6 +16,7 @@ export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
 export PATH=$SYSTEM_PATH/bin:/usr/miyoo/bin:/usr/miyoo/sbin:$PATH
 export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/miyoo/lib:$LD_LIBRARY_PATH
 
+echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" > /mnt/SDCARD/librarypath.txt
 #######################################
 
 #headphone jack
@@ -55,13 +56,14 @@ echo $CPU_SPEED_PERF > $CPU_PATH
 #######################################
 
 # wifi handling
-rfkill unblock wifi
-echo 1 > /sys/class/rfkill/rfkill0/state || true
-ifconfig wlan0 up
-(( udhcpc -i wlan0 &)&)
+/etc/init.d/S36load_wifi_modules start
+/etc/init.d/S40network start
+/etc/init.d/S41dhcpcd start
 
+wpa_supplicant -B -i wlan0 -c /userdata/cfg/wpa_supplicant.conf
+dhcpcd wlan0
 
-keymon.elf & # &> $SDCARD_PATH/keymon.txt &
+keymon.elf &> $SDCARD_PATH/keymon.txt &
 batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 
 #######################################
@@ -81,6 +83,8 @@ EXEC_PATH="/tmp/nextui_exec"
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH" && sync
 
+# Enable audio idk why have to do this now
+tinymix set 1 SPK
 
 while [ -f "$EXEC_PATH" ]; do
 	nextui.elf &> $LOGS_PATH/nextui.txt

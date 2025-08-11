@@ -2768,32 +2768,144 @@ bool PLAT_supportSSH() { return true; }
 
 /////////////////////
 
- void PLAT_wifiInit() {}
- bool PLAT_hasWifi() { return true; }
- bool PLAT_wifiEnabled() { return true; }
- void PLAT_wifiEnable(bool on) {}
 
- int PLAT_wifiScan(struct WIFI_network *networks, int max) {
-	for (int i = 0; i < 5; i++) {
-		struct WIFI_network *network = &networks[i];
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
 
-		sprintf(network->ssid, "Network%d", i);
-		strcpy(network->bssid, "01:01:01:01:01:01");
-		network->rssi = (70 / 5) * (i + 1);
-		network->freq = 2400;
-		network->security = i % 2 ? SECURITY_WPA2_PSK : SECURITY_WEP;
-	}
-	return 5;
- }
- bool PLAT_wifiConnected() { return true; }
- int PLAT_wifiConnection(struct WIFI_connection *connection_info) {
-	connection_info->freq = 2400;
-	strcpy(connection_info->ip, "127.0.0.1");
-	strcpy(connection_info->ssid, "Network1");
-	return 0;
- }
- bool PLAT_wifiHasCredentials(char *ssid, WifiSecurityType sec) { return false; }
- void PLAT_wifiForget(char *ssid, WifiSecurityType sec) {}
- void PLAT_wifiConnect(char *ssid, WifiSecurityType sec) {}
- void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass) {}
- void PLAT_wifiDisconnect() {}
+#include "platform.h" // whatever header has struct WIFI_connection etc.
+
+#define wifilog(...) printf(__VA_ARGS__)
+
+// Helper to reset connection struct
+static void connection_reset(struct WIFI_connection *ci) {
+    if (!ci) return;
+    memset(ci, 0, sizeof(*ci));
+    ci->valid = false;
+}
+
+// Forget a network by its ID
+void PLAT_wifiForget(char *ssid, WifiSecurityType sec) {
+    // Example: remove SSID from saved list
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "wpa_cli remove_network %s", ssid);
+    system(cmd);
+}
+
+// Scan for available networks
+int PLAT_wifiScan(struct WIFI_network *networks, int max) {
+    // Example: perform scan and populate `networks`
+    // For now, just return 0 if unimplemented
+    return 0;
+}
+// List scanned networks
+int PLAT_wifiScanResults(struct WIFI_network *networks, int max_networks) {
+    FILE *fp = popen("wpa_cli scan_results", "r");
+    if (!fp) {
+        LOG_error("PLAT_wifiScanResults: failed to run wpa_cli\n");
+        return -1;
+    }
+
+    char line[256];
+    int count = 0;
+    bool skip_header = true;
+    while (fgets(line, sizeof(line), fp) && count < max_networks) {
+        if (skip_header) {
+            // First line is header: bssid / freq / signal / flags / ssid
+            skip_header = false;
+            continue;
+        }
+        char bssid[32], flags[64], ssid[128];
+        int freq, signal;
+        if (sscanf(line, "%31s %d %d %63s %127[^\n]", bssid, &freq, &signal, flags, ssid) >= 4) {
+            strncpy(networks[count].ssid, ssid, sizeof(networks[count].ssid)-1);
+            networks[count].ssid[sizeof(networks[count].ssid)-1] = 0;
+            networks[count].signal = signal;
+            count++;
+        }
+    }
+
+    pclose(fp);
+    return count;
+}
+
+// Connect with password
+void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass) {
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "wpa_cli set_network 0 ssid '\"%s\"'", ssid);
+    system(cmd);
+    snprintf(cmd, sizeof(cmd), "wpa_cli set_network 0 psk '\"%s\"'", pass);
+    system(cmd);
+}
+
+// Connect without password (open network)
+int PLAT_wifiConnectOpen(int net_id) {
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), "wpa_cli set_network %d key_mgmt NONE", net_id);
+    return system(cmd);
+}
+
+// Enable the network
+void PLAT_wifiEnable(bool on) {
+    // Example: enable/disable WiFi here
+    if (on) {
+        system("ip link set wlan0 up");
+    } else {
+        system("ip link set wlan0 down");
+    }
+}
+
+// Disable the network
+int PLAT_wifiDisable(int net_id) {
+    char cmd[64];
+    snprintf(cmd, sizeof(cmd), "wpa_cli disable_network %d", net_id);
+    return system(cmd);
+}
+
+// Check current connection status
+int PLAT_wifiConnection(struct WIFI_connection *connection_info) {
+    if (!connection_info) return -1;
+
+    FILE *fp = popen("wpa_cli status", "r");
+    if (!fp) {
+        LOG_error("PLAT_wifiConnection: failed to get wifi status\n");
+        connection_reset(connection_info);
+        return -1;
+    }
+
+    char line[256];
+    bool connected = false;
+    char ssid[128] = {0};
+    char ip[64] = {0};
+    while (fgets(line, sizeof(line), fp)) {
+        if (strncmp(line, "wpa_state=COMPLETED", 18) == 0) {
+            connected = true;
+        } else if (strncmp(line, "ssid=", 5) == 0) {
+            strncpy(ssid, line + 5, sizeof(ssid) - 1);
+            ssid[strcspn(ssid, "\r\n")] = 0;
+        } else if (strncmp(line, "ip_address=", 11) == 0) {
+            strncpy(ip, line + 11, sizeof(ip) - 1);
+            ip[strcspn(ip, "\r\n")] = 0;
+        }
+    }
+    pclose(fp);
+
+    if (!connected) {
+        connection_reset(connection_info);
+        return 0;
+    }
+
+    connection_info->valid = true;
+    connection_info->freq = -1;
+    connection_info->link_speed = -1;
+    connection_info->noise = -1;
+    connection_info->rssi = -1;
+    strncpy(connection_info->ssid, ssid, sizeof(connection_info->ssid) - 1);
+    strncpy(connection_info->ip, ip, sizeof(connection_info->ip) - 1);
+
+    wifilog("Connected AP: %s\n", connection_info->ssid);
+    wifilog("IP address: %s\n", connection_info->ip);
+
+    return 0;
+}

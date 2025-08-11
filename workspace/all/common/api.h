@@ -700,6 +700,7 @@ struct WIFI_network {
 	int rssi;
 	WifiSecurityType security;
 	bool wps;
+	int signal;
 };
 
 struct WIFI_connection {
