@@ -4490,7 +4490,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	
 	// debug
 	if (show_debug && !isnan(currentratio) && !isnan(currentfps) && !isnan(currentreqfps)  && !isnan(currentbufferms) &&
-	currentbuffersize >= 0  && currentbufferfree >= 0 && SDL_GetTicks() > 5000) {
+	currentbuffersize >= 0  && currentbufferfree >= 0) {
 		int x = 2 + renderer.src_x;
 		int y = 2 + renderer.src_y;
 		char debug_text[250];
