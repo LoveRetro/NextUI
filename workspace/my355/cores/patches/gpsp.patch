@@ -15,7 +15,7 @@ index dc4b60dec7f70a153dbc2eb849cd5acfc90f9d4d..94c7f8dd037284153b6858730a10b6aa
 +	SHARED := -shared -Wl,--version-script=link.T
 +	fpic := -fPIC -DPIC
 +	CFLAGS += -fomit-frame-pointer -ffast-math
-+	CFLAGS += -mcpu=cortex-a55 -mtune=cortex-a55 -march=armv8.2-a 
++	CFLAGS += -mcpu=cortex-a35 -mtune=cortex-a35  
 +	ARCH = arm64
 +	CPU_ARCH := arm64
 +	MMAP_JIT_CACHE = 1

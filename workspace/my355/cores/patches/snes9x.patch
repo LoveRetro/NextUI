@@ -10,7 +10,7 @@ index 466fa6b..ec40f1a
 +else ifneq (,$(findstring my355,$(platform)))
 +   CXX=/usr/bin/aarch64-linux-gnu-gcc
 +   CFLAGS += $(LTO)
-+   CXXFLAGS += $(LTO) -O3 -Ofast -march=armv8-a+simd -mtune=cortex-a53 -ffast-math
++   CXXFLAGS += $(LTO) -O3 -Ofast -march=armv8-a+simd -mtune=cortex-a35 -ffast-math
 +   LDFLAGS += $(LTO) -lstdc++ -flto
 +   TARGET := $(TARGET_NAME)_libretro.so
 +   fpic := -fPIC

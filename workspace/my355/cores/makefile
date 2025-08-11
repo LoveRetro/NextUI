@@ -1,17 +1,29 @@
-CORES+= fake-08
+CORES= a2600
+CORES+= a5200
+CORES+= a7800
+CORES+= handy
+CORES+= c64
+CORES+= c128
+# CORES+= fake-08
 CORES+= fbneo
 CORES+= fceumm
 CORES+= gambatte
 CORES+= gpsp
+CORES+= libretro-cap32
+CORES+= libretro-uae
 CORES+= mednafen_pce_fast
 CORES+= mednafen_supafaust
 CORES+= mednafen_vb
 CORES+= mgba
 CORES+= pcsx_rearmed
+CORES+= pet
 CORES+= picodrive
+CORES+= plus4
 CORES+= pokemini
 CORES+= race
 CORES+= snes9x
+CORES+= vic
+CORES+= prboom
 
 ###############################
 
@@ -23,6 +35,16 @@ CORES+= snes9x
 # *_MAKEFILE=
 # *_BUILD_PATH=
 # *_SUBMODULES=
+
+a2600_REPO = https://github.com/libretro/stella2014-libretro
+a2600_CORE = stella2014_libretro.so
+
+a5200_CORE = a5200_libretro.so
+
+a7800_CORE = prosystem_libretro.so
+a7800_REPO = https://github.com/libretro/prosystem-libretro
+
+handy_REPO = https://github.com/libretro/libretro-handy
 
 fbneo_REPO = https://github.com/libretro/FBNeo
 fbneo_CORE = fbneo_libretro.so

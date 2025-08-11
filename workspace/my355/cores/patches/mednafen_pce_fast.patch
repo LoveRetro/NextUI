@@ -15,7 +15,7 @@ index 5b54403d915e46cb0df8f428355665fbe26e05b4..f72733d9689aa78795ce8b9d777b0ab9
 +   fpic := -fPIC
 +   SHARED := -shared -Wl,--no-undefined -Wl,--version-script=link.T
 +   LDFLAGS += -lrt
-+   FLAGS += -mcpu=cortex-a55 -mtune=cortex-a55 -march=armv8.2-a 
++   FLAGS += -mcpu=cortex-a35 -mtune=cortex-a35  
 +   FLAGS += -fomit-frame-pointer -ffast-math -D_GNU_SOURCE
 +   CXXFLAGS += -std=c++11
 +   CFLAGS += -std=gnu11

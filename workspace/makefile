@@ -30,10 +30,25 @@ ifeq ($(PLATFORM), desktop)
 	cd ./all/minput/ && make
 	cd ./all/nextval/ && make
 	cd ./all/settings/ && make
+else ifeq ($(PLATFORM), my355)
+	cd ./$(PLATFORM)/libmsettings && make
+	cd ./$(PLATFORM) && make early # eg. other libs
+	cd ./all/nextui/ && make
+	cd ./all/minarch/ && make
+	cd ./all/libbatmondb/ && make
+	cd ./all/battery/ && make
+	cd ./all/clock/ && make
+	cd ./all/batmon/ && make
+	cd ./all/libgametimedb/ && make
+	cd ./all/gametimectl/ && make
+	cd ./all/gametime/ && make
+	cd ./all/minput/ && make
+	cd ./all/nextval/ && make
+	cd ./all/settings/ && make
 else 
 	cd ./$(PLATFORM)/rfkill && make all
-	cd ./$(PLATFORM)/btmanager && make all
-	cd ./$(PLATFORM)/btdaemon && make all
+# 	cd ./$(PLATFORM)/btmanager && make all
+# 	cd ./$(PLATFORM)/btdaemon && make all
 	cd ./$(PLATFORM)/wifimanager && make all
 	cd ./$(PLATFORM)/libmsettings && make
 	cd ./$(PLATFORM) && make early # eg. other libs
@@ -72,10 +87,10 @@ endif
 
 clean:
 ifneq ($(PLATFORM), desktop)
-	cd ./$(PLATFORM)/rfkill && make clean
-	cd ./$(PLATFORM)/wifimanager && make clean
-	cd ./$(PLATFORM)/btdaemon && make clean
-	cd ./$(PLATFORM)/btmanager && make clean
+# 	cd ./$(PLATFORM)/rfkill && make clean
+# 	cd ./$(PLATFORM)/wifimanager && make clean
+# 	cd ./$(PLATFORM)/btdaemon && make clean
+# 	cd ./$(PLATFORM)/btmanager && make clean
 	cd ./$(PLATFORM)/keymon && make clean
 	cd ./all/syncsettings/ && make clean
 	cd ./all/ledcontrol/ && make clean

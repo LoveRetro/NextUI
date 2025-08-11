@@ -14,7 +14,7 @@ index 0b7d646c7..2784aa150
 +	CXX=/usr/bin/aarch64-linux-gnu-gcc
 +	fpic := -fPIC
 +	SHARED := -shared -Wl,-no-undefined -Wl,--version-script=$(VERSION_SCRIPT)
-+	PLATFORM_FLAGS := -O3 -Ofast -DNDEBUG=1 -fomit-frame-pointer -ffast-math -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a+simd
++	PLATFORM_FLAGS := -O3 -Ofast -DNDEBUG=1 -fomit-frame-pointer -ffast-math -mtune=cortex-a35 -mcpu=cortex-a35 -march=armv8-a+simd
 +	USE_EXPERIMENTAL_FLAGS = 0
 +	HAVE_NEON = 0
 +	USE_CYCLONE = 0

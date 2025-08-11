@@ -36,10 +36,7 @@ CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
 LDFLAGS +=  -lwifimg -lwifid
 LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -lasound -ljson-c
 endif
-ifeq ($(PLATFORM), my355)
-CFLAGS += -DHAS_WIFIMG
-LDFLAGS +=  -lwifimg
-endif
+
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 

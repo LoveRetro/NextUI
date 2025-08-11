@@ -24,7 +24,7 @@ index 07d5368a8e78a020813732239ec369d83e931ede..009f13b8e61c634de4cb83e97785a10b
 +	CFLAGS += -fPIC
 +	CFLAGS += -DLSB_FIRST -DFAST_ALIGNED_LSB_WORD_ACCESS -DRIGHTSHIFT_IS_SAR
 +	CFLAGS += -std=c99 -fomit-frame-pointer -ffast-math
-+	CFLAGS += -mcpu=cortex-a55 -mtune=cortex-a55 -march=armv8.2-a 
++	CFLAGS += -mcpu=cortex-a35 -mtune=cortex-a35  
 +	LDFLAGS += -flto
 +	OPTIMIZE += -Ofast -DNDEBUG=1
 +	ifeq (,$(DEBUG))

@@ -22,7 +22,7 @@ index 0d1dc08f81a11cef6b3b7238367b1ff27fcf1ead..1f87c76c3242023c4095f0c9087c5276
 +	-fmerge-all-constants -fno-math-errno
 +	CFLAGS += -fPIC -flto
 +	CFLAGS += -fomit-frame-pointer -ffast-math -D__GCW0__
-+	CFLAGS += -mcpu=cortex-a55 -mtune=cortex-a55 -march=armv8.2-a 
++	CFLAGS += -mcpu=cortex-a35 -mtune=cortex-a35  
 +	LDFLAGS += -flto
 +	HAVE_NEON = 1
 +	BUILTIN_GPU = neon
