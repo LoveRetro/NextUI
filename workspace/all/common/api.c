@@ -62,7 +62,6 @@ uint32_t RGB_BLACK;
 uint32_t RGB_LIGHT_GRAY;
 uint32_t RGB_GRAY;
 uint32_t RGB_DARK_GRAY;
-float currentbufferms = 20.0;
 LightSettings lightsDefault[MAX_LIGHTS];
 LightSettings lightsMuted[MAX_LIGHTS];
 LightSettings (*lights)[MAX_LIGHTS] = NULL;
@@ -2287,232 +2286,118 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 	return resampled;
 }
 
-#define ROLLING_AVERAGE_WINDOW_SIZE 120
-static float adjustment_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
-static int adjustment_index = 0;
-static float remaining_space_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
-static int remaining_space_index = 0;
-int currentbuffertarget = 0;
-int avgbufferfree = 0;
-
-float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, float targetbuffer_under, int batchsize)
-{
-
-	// this is just to show average remaining space in debug window could be removed later
-	remaining_space_history[remaining_space_index] = remaining_space;
-	remaining_space_index = (remaining_space_index + 1) % ROLLING_AVERAGE_WINDOW_SIZE;
-	float avgspace = 0.0f;
-	for (int i = 0; i < ROLLING_AVERAGE_WINDOW_SIZE; ++i)
-	{
-		avgspace += remaining_space_history[i];
-	}
-	avgspace /= ROLLING_AVERAGE_WINDOW_SIZE;
-	avgbufferfree = avgspace;
-	// end debug part
-
-	float midpoint = (targetbuffer_over + targetbuffer_under) / 2.0f;
-	currentbuffertarget = midpoint;
-
-	float normalizedDistance;
-	if (remaining_space < midpoint)
-	{
-		normalizedDistance = (midpoint - remaining_space) / (midpoint - targetbuffer_over);
-	}
-	else
-	{
-		normalizedDistance = (remaining_space - midpoint) / (targetbuffer_under - midpoint);
-	}
-	// I make crazy small adjustments, mooore tiny is mooore stable :D But don't come neir the limits cuz imma hit ya with that 0.005 ratio adjustment, pow pow!
-	// I wonder if staying in the middle of 0 to 4000 with 512 samples per batch playing at tiny different speeds each iteration is like the smallest I can get
-	// lets say hovering around 2000 means 2000 samples queue, about 4 frames, so at 17ms(60fps) thats  68ms delay right?
-	// Should have payed attention when my math teacher was talking dammit
-	// Also I chose 3 for pow, but idk if that really the best nr, anyone good in maths looking at my code?
-	float adjustment = 0.001f + (0.01f - 0.001f) * pow(normalizedDistance, 3);
-
-	if (remaining_space < midpoint)
-	{
-		adjustment = -adjustment;
-	}
-
-	adjustment_history[adjustment_index] = adjustment;
-	adjustment_index = (adjustment_index + 1) % ROLLING_AVERAGE_WINDOW_SIZE;
-
-	// Calculate the rolling average
-	float rolling_average = 0.0f;
-	for (int i = 0; i < ROLLING_AVERAGE_WINDOW_SIZE; ++i)
-	{
-		rolling_average += adjustment_history[i];
-	}
-	rolling_average /= ROLLING_AVERAGE_WINDOW_SIZE;
-	return rolling_average;
-}
-
 static SND_Frame tmpbuffer[BATCH_SIZE];
-static SND_Frame *unwritten_frames = NULL;
-static int unwritten_frame_count = 0;
 
 float currentratio = 0.0;
 int currentbufferfree = 0;
+float currentbufferfill = 0.0f;
 int currentframecount = 0;
 
-#define AVG_FPS_WINDOW 600
-static float fps_history[AVG_FPS_WINDOW] = {0.0f};
-static int fps_index = 0;
-static int samplecounter = 0;
+#define QUEUE_SIZE 30
 
-#define QUEUE_THRESHOLD 1024
-#define MAX_QUEUE_SIZE 4096  // some max size bigger than QUEUE_THRESHOLD and BATCH_SIZE
+static float buffer_fill_history[QUEUE_SIZE] = {0};
+static int buffer_fill_history_index = 0;
 
 size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 {
-    // Static queue to accumulate frames
-    static SND_Frame queued_frames[MAX_QUEUE_SIZE];
-    static size_t queued_count = 0;
-
-    int total_consumed_frames = 0;
-    double ratio = 1.0;
-
-    // Append new incoming frames to the queue first
-    size_t space_left = MAX_QUEUE_SIZE - queued_count;
-    size_t to_queue = (frame_count < space_left) ? frame_count : space_left;
-    for (size_t i = 0; i < to_queue; i++) {
-        queued_frames[queued_count++] = frames[i];
-    }
-    // If we can't queue all input frames, they are dropped here (you may want to handle that differently)
-
-    // If we don't have enough queued frames yet, don't process
-    if (queued_count < QUEUE_THRESHOLD) {
-        return 0; // No frames consumed yet (haven't processed the queue)
-    }
-
-    // Now process the queued frames in batches
-    int framecount = (int)queued_count;
-    int consumed = 0;
-
-    // The original setup code (snd.frame_count etc) stays the same
-    if (snd.frame_count <= 0)
-    {
-        snd.frame_count = 4096;
-    }
-
-    if (snd.frame_in < 0 || snd.frame_in >= snd.frame_count)
-    {
-        snd.frame_in = 0;
-    }
-
-    if (snd.frame_out < 0 || snd.frame_out >= snd.frame_count)
-    {
-        snd.frame_out = 0;
-    }
-
-    float remaining_space = 0.0f;
-    if (snd.frame_in >= snd.frame_out)
-    {
+    float remaining_space;
+    if (snd.frame_in >= snd.frame_out) {
         remaining_space = snd.frame_count - (snd.frame_in - snd.frame_out);
-    }
-    else
-    {
+    } else {
         remaining_space = snd.frame_out - snd.frame_in;
     }
     currentbufferfree = remaining_space;
 
-    if (currentbufferfree < snd.frame_count * 0.6f) {
-        SND_pauseAudio(false);
-    } else if (currentbufferfree > snd.frame_count * 0.99f) {
-        SND_pauseAudio(true);
+    float buffer_fill = snd.frame_count - remaining_space;
+    float buffer_fill_ratio = buffer_fill / snd.frame_count;
+    buffer_fill_history[buffer_fill_history_index] = buffer_fill_ratio;
+    buffer_fill_history_index = (buffer_fill_history_index + 1) % QUEUE_SIZE;
+
+    // Calculate average buffer fill ratio
+    float avg_fill = 0.0f;
+    for (int i = 0; i < QUEUE_SIZE; i++) {
+        avg_fill += buffer_fill_history[i];
+    }
+    avg_fill /= QUEUE_SIZE;
+    currentbufferfill = avg_fill;
+
+    // --- Pause/unpause audio based on instant buffer fill thresholds ---
+    if (buffer_fill >= snd.frame_count * 0.4f) {
+        SND_pauseAudio(false); // unpause if buffer >= 40%
+    }
+    if (buffer_fill <= snd.frame_count * 0.01f) {
+        SND_pauseAudio(true);  // pause if buffer very low < 1%
     }
 
-    float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000.0f;
-    currentbufferms = tempdelay;
+    int total_consumed_frames = 0;
 
-    if (current_fps <= 0.0f || !isfinite(current_fps))
-    {
-        current_fps = 0.01f;
+    // --- Sanity checks ---
+    if (snd.frame_count <= 0) snd.frame_count = 4096;
+    if (snd.frame_in < 0 || snd.frame_in >= snd.frame_count) snd.frame_in = 0;
+    if (snd.frame_out < 0 || snd.frame_out >= snd.frame_count) snd.frame_out = 0;
+    if (!isfinite(snd.frame_rate) || snd.frame_rate <= 0.0f) snd.frame_rate = 60.0f;
+    if (current_fps <= 0.0f || !isfinite(current_fps)) current_fps = 0.01f;
+
+    currentfps = current_fps;
+
+    float base_ratio = snd.frame_rate / current_fps;
+    if (!isfinite(base_ratio)) base_ratio = 1.0f;
+
+    float ratio = base_ratio;
+
+    const float max_adjustment = 0.005f;
+
+    if (avg_fill > 0.50f) {
+        // Buffer too full speed up playback by decreasing ratio slightly
+        float overfill_ratio = (avg_fill - 0.50f) / 0.5f; 
+        float adjustment = overfill_ratio * max_adjustment;
+        ratio -= adjustment; 
+    } 
+    else if (avg_fill < 0.30f) {
+        // Buffer low — slow down playback by increasing ratio slightly
+        float underfill_ratio = (0.30f - avg_fill) / 0.30f; 
+        float adjustment = underfill_ratio * max_adjustment;
+        ratio += adjustment; 
     }
-    if (!isfinite(snd.frame_rate) || snd.frame_rate <= 0.0f)
-    {
-        snd.frame_rate = 60.0f;
+    else {
+        float smoothing_factor = 0.05f; // small smoothing
+        ratio = ratio + smoothing_factor * (base_ratio - ratio);
     }
+    if (ratio > 1.5f) ratio = 1.5f;
+    else if (ratio < 0.5f) ratio = 0.5f;
 
-    fps_history[fps_index] = current_fps;
-    fps_index = (fps_index + 1) % AVG_FPS_WINDOW;
-    float avgfps = 0.0f;
-    for (int i = 0; i < AVG_FPS_WINDOW; ++i)
-    {
-        avgfps += fps_history[i];
-    }
-    avgfps /= AVG_FPS_WINDOW;
-    currentfps = avgfps;
+    currentratio = ratio;
 
-    float bufferadjustment = calculateBufferAdjustment(remaining_space, snd.frame_count*0.2, snd.frame_count*0.8, frame_count);
+    int consumed = 0;
+    while (frame_count > 0) {
+        int amount = MIN(BATCH_SIZE, frame_count);
 
-    if (!isfinite(bufferadjustment))
-    {
-        bufferadjustment = 0.0f;
-    }
-
-    float safe_ratio = snd.frame_rate / current_fps;
-    if(samplecounter > AVG_FPS_WINDOW) {
-        safe_ratio = snd.frame_rate / avgfps;
-    } else samplecounter++;
-    if (!isfinite(safe_ratio))
-    {
-        safe_ratio = 1.0f;
-    }
-
-    ratio = safe_ratio + bufferadjustment;
-
-    if (!isfinite(ratio))
-    {
-        ratio = 1.0;
-    }
-
-    if (ratio > 1.5)
-        ratio = 1.5;
-    else if (ratio < 0.5)
-        ratio = 0.5;
-
-    currentratio = (ratio > 0.0) ? ratio : current_fps;
-
-    while (framecount > 0)
-    {
-        int amount = MIN(BATCH_SIZE, framecount);
-
-        // Copy frames to tmpbuffer for resampling
         for (int i = 0; i < amount; i++)
-        {
-            tmpbuffer[i] = queued_frames[consumed + i];
-        }
+            tmpbuffer[i] = frames[consumed + i];
+
         consumed += amount;
-        framecount -= amount;
+        frame_count -= amount;
 
         ResampledFrames resampled = resample_audio(
-            tmpbuffer, amount, snd.sample_rate_in, snd.sample_rate_out, ratio);
+            tmpbuffer, amount,
+            snd.sample_rate_in, snd.sample_rate_out,
+            ratio
+        );
 
-        int written_frames = 0;
-        for (int i = 0; i < resampled.frame_count; i++)
-        {
-            // Check if buffer full (leave one slot free)
+        int written = 0;
+        for (int i = 0; i < resampled.frame_count; i++) {
             if ((snd.frame_in + 1) % snd.frame_count == snd.frame_out)
-            {
-                // Buffer full, break early
-                break;
-            }
+                break; // buffer full
+
             pthread_mutex_lock(&audio_mutex);
             snd.buffer[snd.frame_in] = resampled.frames[i];
             snd.frame_in = (snd.frame_in + 1) % snd.frame_count;
             pthread_mutex_unlock(&audio_mutex);
-            written_frames++;
+            written++;
         }
 
-        total_consumed_frames += written_frames;
+        total_consumed_frames += written;
         free(resampled.frames);
-    }
-
-    // Remove processed frames from queue by shifting remaining frames to front
-    if (consumed > 0) {
-        memmove(queued_frames, queued_frames + consumed, (queued_count - consumed) * sizeof(SND_Frame));
-        queued_count -= consumed;
     }
 
     return total_consumed_frames;
@@ -2556,9 +2441,6 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	} else if (currentbufferfree > snd.frame_count * 0.99f) { // if for some reason buffer drops below 1% again, pause audio again (like psx core can stop sending audio in between scenes or after fast forward etc)
 		SND_pauseAudio(true);
 	} 
-
-	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000;
-	currentbufferms = tempdelay;
 
 	float occupancy = (float)(snd.frame_count - currentbufferfree) / snd.frame_count;
 	switch (current_mode)
@@ -2714,7 +2596,7 @@ void SND_init(double sample_rate, double frame_rate)
 	SND_resizeBuffer();
 
 	// start with audiodevice paused so buffer can fill a little, snd_batchsamples will unpause it
-	SND_pauseAudio(true);
+	// SND_pauseAudio(true);
 	LOG_info("sample rate: %i (req) %i (rec) [samples %i]\n", snd.sample_rate_in, snd.sample_rate_out, SAMPLES);
 	snd.initialized = 1;
 
