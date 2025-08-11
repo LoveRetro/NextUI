@@ -549,7 +549,7 @@ void GFX_flip(SDL_Surface *screen)
 
 	PLAT_flip(screen, 0);
 
-	currentfps = current_fps;
+	// currentfps = current_fps;
 	fps_counter++;
 
 	uint64_t performance_frequency = SDL_GetPerformanceFrequency();
@@ -583,7 +583,7 @@ void GFX_GL_Swap()
 
 	PLAT_GL_Swap();
 
-	currentfps = current_fps;
+	// currentfps = current_fps;
 	fps_counter++;
 
 	uint64_t performance_frequency = SDL_GetPerformanceFrequency();
@@ -2355,7 +2355,7 @@ float currentratio = 0.0;
 int currentbufferfree = 0;
 int currentframecount = 0;
 
-#define AVG_FPS_WINDOW 1200
+#define AVG_FPS_WINDOW 3000
 static float fps_history[AVG_FPS_WINDOW] = {0.0f};
 static int fps_index = 0;
 static int samplecounter = 0;
@@ -2419,9 +2419,10 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	float avgfps = 0.0f;
 	for (int i = 0; i < AVG_FPS_WINDOW; ++i)
 	{
-		avgfps += remaining_space_history[i];
+		avgfps += fps_history[i];
 	}
 	avgfps /= AVG_FPS_WINDOW;
+	currentfps = avgfps;
 
 	float bufferadjustment = calculateBufferAdjustment(remaining_space, snd.frame_count*0.2, snd.frame_count*0.8, frame_count);
 
