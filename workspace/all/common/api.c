@@ -2340,34 +2340,36 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 
     currentfps = current_fps;
 
-    float base_ratio = snd.frame_rate / current_fps;
-    if (!isfinite(base_ratio)) base_ratio = 1.0f;
 
-    float ratio = base_ratio;
+    float ratio = snd.frame_rate / current_fps;
+    if (!isfinite(ratio)) ratio = 1.0f;
 
-    const float max_adjustment = 0.01f;
+	if (avg_fill > 0.50f) {
+		// Buffer too full — speed up playback by decreasing ratio
+		float overfill_ratio = (avg_fill - 0.50f) / 0.5f; // 0 at 50%, 1 at 100%
+		float speedup = overfill_ratio * (3.0f / (float)BATCH_SIZE);
+		ratio -= speedup;  // lower ratio → speed up playback
+	} 
+	else if (avg_fill < 0.30f) {
+		// Buffer low — slow down playback by increasing ratio
+		float underfill_ratio = (0.30f - avg_fill) / 0.30f; // 0 at 30%, 1 at 0%
+		float slowdown = underfill_ratio * (3.0f / (float)BATCH_SIZE);
+		ratio += slowdown; 
+	}
+	else {
+		// Buffer in stable zone, gently nudge ratio toward base ratio
+		float base_ratio = snd.frame_rate / current_fps;
+		float smoothing_factor = 0.05f; // small value, tune this
 
-    if (avg_fill > 0.50f) {
-        // Buffer too full speed up playback by decreasing ratio slightly
-        float overfill_ratio = (avg_fill - 0.50f) / 0.5f; 
-        float adjustment = overfill_ratio * max_adjustment;
-        ratio -= adjustment; 
-    } 
-    else if (avg_fill < 0.30f) {
-        // Buffer low — slow down playback by increasing ratio slightly
-        float underfill_ratio = (0.30f - avg_fill) / 0.30f; 
-        float adjustment = underfill_ratio * max_adjustment;
-        ratio += adjustment; 
-    }
-    else {
-        float smoothing_factor = 0.05f; // small smoothing
-        ratio = ratio + smoothing_factor * (base_ratio - ratio);
-    }
+		ratio = ratio + smoothing_factor * (base_ratio - ratio);
+	}
+
     if (ratio > 1.5f) ratio = 1.5f;
     else if (ratio < 0.5f) ratio = 0.5f;
 
     currentratio = ratio;
 
+    // --- Process frames 
     int consumed = 0;
     while (frame_count > 0) {
         int amount = MIN(BATCH_SIZE, frame_count);
@@ -2402,6 +2404,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 
     return total_consumed_frames;
 }
+
 
 enum
 {
