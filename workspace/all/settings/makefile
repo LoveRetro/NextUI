@@ -26,7 +26,7 @@ CXXSOURCE = $(TARGET).cpp menu.cpp wifimenu.cpp btmenu.cpp keyboardprompt.cpp bu
 
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
-CFLAGS += $(ARCH) -fomit-frame-pointer
+CFLAGS += $(OPT) -fomit-frame-pointer
 CFLAGS += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\"
 CXXFLAGS += $(CFLAGS) -std=c++17
 CFLAGS += -fpermissive

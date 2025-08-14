@@ -25,7 +25,7 @@ INCDIR = -I. -I./libretro-common/include/ -I../common/ -I../../$(PLATFORM)/platf
 SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
 
 CC = $(CROSS_COMPILE)gcc
-CFLAGS  += $(ARCH) -fomit-frame-pointer
+CFLAGS  += $(OPT) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS	 += -lmsettings -lsamplerate
 ifeq ($(PLATFORM), desktop)
