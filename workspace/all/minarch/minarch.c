@@ -4484,7 +4484,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	// eg. true src + cropped src + fixed dst + cropped dst
 	if (renderer.dst_p==0 || width!=renderer.true_w || height!=renderer.true_h) {
 		selectScaler(width, height, pitch);
-		// GFX_clearAll();
+		GFX_clearAll();
 		GFX_resetShaders();
 	}
 	
