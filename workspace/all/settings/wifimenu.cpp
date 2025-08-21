@@ -13,7 +13,7 @@ typedef std::shared_lock<Lock> ReadLock;
 using namespace Wifi;
 using namespace std::placeholders;
 
-Menu::Menu(const int &globalQuit) : MenuList(MenuItemType::Fixed, "Network", {}), globalQuit(globalQuit)
+Menu::Menu(const int &globalQuit, int &globalDirty) : MenuList(MenuItemType::Fixed, "Network", {}), globalQuit(globalQuit), globalDirty(globalDirty)
 {
     toggleItem = new MenuItem(ListItemType::Generic, "WiFi", "Enable/disable WiFi", {false, true}, {"Off", "On"},
                               std::bind(&Menu::getWifToggleState, this),
@@ -43,10 +43,10 @@ Menu::~Menu()
 InputReactionHint Menu::handleInput(int &dirty, int &quit)
 {
     auto ret = MenuList::handleInput(dirty, quit);
-    if (workerDirty)
+    if (selectionDirty)
     {
         dirty = true;
-        workerDirty = false; // handled
+        selectionDirty = false; // handled
         //LOG_info("collected workerDirty\n");
     }
     return ret;
@@ -93,8 +93,7 @@ bool key_compare(Map const &lhs, Map const &rhs)
 void Menu::updater()
 {
     int pollSecs = 15;
-    std::map<std::string, WIFI_network> prevScan;
-    std::string prevSsid;
+
     while (!quit && !globalQuit)
     {
         // TODO: pause when menu is not rendered
@@ -119,56 +118,66 @@ void Menu::updater()
 
             // dont repopulate if any submenu is open
             bool menuOpen = false;
-            for(auto i : items){
-                if(i->isDeferred()){
+            for(auto i : items)
+            {
+                if(i->isDeferred())
+                {
                     menuOpen = true;
                     break;
                 }
             }
 
             // something changed?
-            if (!menuOpen &&
-                (prevSsid != std::string(connection.ssid) 
-                || !key_compare(prevScan, scanSsids)))
+            if (!menuOpen)
             {
-                prevScan = scanSsids;
-                prevSsid = connection.ssid;
+                // remember selection and restore
+                std::string selectedName;
+                bool selectionApplied = false;
 
-                WriteLock w(itemLock);
-                items.clear();
-                items.push_back(toggleItem);
-                items.push_back(diagItem);
-                layout_called = false;
-
-                for (auto &[s, r] : scanSsids)
                 {
-                    bool connected = false;
-                    bool hasCredentials = WIFI_isKnown(r.ssid, r.security);
+                    WriteLock w(itemLock);
+                    selectedName = getSelectedItemName();
+                    items.clear();
+                    items.push_back(toggleItem);
+                    items.push_back(diagItem);
+                    layout_called = false;
 
-                    if (strcmp(connection.ssid, r.ssid) == 0)
-                        connected = true;
+                    for (auto &[s, r] : scanSsids)
+                    {
+                        bool connected = false;
+                        bool hasCredentials = WIFI_isKnown(r.ssid, r.security);
 
-                    MenuList *options;
-                    if (connected)
-                        options = new MenuList(MenuItemType::List, "Options",
-                                               {
-                                                   new MenuItem{ListItemType::Button, "Disconnect", "Disconnect from this network.",
-                                                                [&](AbstractMenuItem &item) -> InputReactionHint
-                                                                { WIFI_disconnect(); workerDirty = true; return Exit; }},
-                                                   new ForgetItem(r, workerDirty)
-                                               });
-                    else 
-                    if (hasCredentials)
-                        options = new MenuList(MenuItemType::List, "Options", { new ConnectKnownItem(r, workerDirty), new ForgetItem(r, workerDirty) });
-                    else
-                        options = new MenuList(MenuItemType::List, "Options", { new ConnectNewItem(r, workerDirty) });
+                        if (strcmp(connection.ssid, r.ssid) == 0)
+                            connected = true;
 
-                    auto itm = new NetworkItem{r, connected, options};
-                    if(connected && !std::string(connection.ip).empty())
-                        itm->setDesc(std::string(r.bssid) + " | " + std::string(connection.ip));
-                    items.push_back(itm);
+                        MenuList *options;
+                        if (connected)
+                            options = new MenuList(MenuItemType::List, "Options",
+                                                {
+                                                    new MenuItem{ListItemType::Button, "Disconnect", "Disconnect from this network.",
+                                                                    [&](AbstractMenuItem &item) -> InputReactionHint
+                                                                    { WIFI_disconnect(); selectionDirty = true; return Exit; }},
+                                                    new ForgetItem(r, selectionDirty)
+                                                });
+                        else 
+                        if (hasCredentials)
+                            options = new MenuList(MenuItemType::List, "Options", { new ConnectKnownItem(r, selectionDirty), new ForgetItem(r, selectionDirty) });
+                        else
+                            options = new MenuList(MenuItemType::List, "Options", { new ConnectNewItem(r, selectionDirty) });
+
+                        auto itm = new NetworkItem{r, connected, options};
+                        if(connected && !std::string(connection.ip).empty())
+                            itm->setDesc(std::string(r.bssid) + " | " + std::string(connection.ip));
+                        items.push_back(itm);
+                    }
                 }
-                workerDirty = true;
+                MenuList::performLayout((SDL_Rect){0, 0, FIXED_WIDTH, FIXED_HEIGHT});
+
+                // Attempt to restore prev selection
+                selectionApplied = selectByName(selectedName);
+                globalDirty |= selectionApplied;
+                // If selection was restored, we already called performLayout internally
+                selectionDirty |= !selectionApplied;
             }
             pollSecs = 2;
         }
@@ -178,16 +187,16 @@ void Menu::updater()
             items.clear();
             items.push_back(toggleItem);
             items.push_back(diagItem);
-            prevScan.clear();
             layout_called = false;
-            workerDirty = true;
+            selectionDirty = true;
             pollSecs = 15;
         }
 
         // reset selection scope (locks internally)
-        if (workerDirty)
+        if (selectionDirty)
         {
             MenuList::performLayout((SDL_Rect){0, 0, FIXED_WIDTH, FIXED_HEIGHT});
+            selectionDirty = false;        
         }
 
         std::this_thread::sleep_for(std::chrono::seconds(pollSecs));
