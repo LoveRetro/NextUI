@@ -420,7 +420,7 @@ int main(int argc, char *argv[])
         auto muteMenu = new MenuList(MenuItemType::Fixed, "FN Switch", muteItems);
 
         // TODO: check WIFI_supported(), hide menu otherwise
-        auto networkMenu = new Wifi::Menu(appQuit);
+        auto networkMenu = new Wifi::Menu(appQuit, ctx.dirty);
 
         // TODO: check BT_supported(), hide menu otherwise
         auto btMenu = new Bluetooth::Menu(appQuit, ctx.dirty);
