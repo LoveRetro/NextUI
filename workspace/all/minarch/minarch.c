@@ -1249,6 +1249,7 @@ enum {
 	SHORTCUT_TOGGLE_FF,
 	SHORTCUT_HOLD_FF,
 	SHORTCUT_GAMESWITCHER,
+	SHORTCUT_SCREENSHOT,
 	// Trimui only
 	SHORTCUT_TOGGLE_TURBO_A,
 	SHORTCUT_TOGGLE_TURBO_B,
@@ -1810,6 +1811,7 @@ static struct Config {
 		[SHORTCUT_TOGGLE_FF]			= {"Toggle FF",			-1, BTN_ID_NONE, 0},
 		[SHORTCUT_HOLD_FF]				= {"Hold FF",			-1, BTN_ID_NONE, 0},
 		[SHORTCUT_GAMESWITCHER]			= {"Game Switcher",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_SCREENSHOT]           = {"Screenshot",        -1, BTN_ID_NONE, 0},
 		// Trimui only
 		[SHORTCUT_TOGGLE_TURBO_A]		= {"Toggle Turbo A",	-1, BTN_ID_NONE, 0},
 		[SHORTCUT_TOGGLE_TURBO_B]		= {"Toggle Turbo B",	-1, BTN_ID_NONE, 0},
@@ -2996,6 +2998,8 @@ static void OptionList_setOptionVisibility(OptionList* list, const char* key, in
 static void Menu_beforeSleep();
 static void Menu_afterSleep();
 
+static void Menu_screenshot(void);
+
 static void Menu_saveState(void);
 static void Menu_loadState(void);
 
@@ -3088,6 +3092,9 @@ static void input_poll_callback(void) {
 						Menu_saveState(); 
 						break;
 					case SHORTCUT_LOAD_STATE: Menu_loadState(); break;
+					case SHORTCUT_SCREENSHOT:
+						Menu_screenshot();
+						break;
 					case SHORTCUT_RESET_GAME: core.reset(); break;
 					case SHORTCUT_SAVE_QUIT:
 						newScreenshot = 1;
@@ -5639,6 +5646,45 @@ static void OptionSaveChanges_updateDesc(void) {
 }
 
 #define OPTION_PADDING 8
+static char* getAlias(char* path, char* alias) {
+	// LOG_info("alias path: %s\n", path);
+	char* tmp;
+	char map_path[256];
+	strcpy(map_path, path);
+	tmp = strrchr(map_path, '/');
+	if (tmp) {
+		tmp += 1;
+		strcpy(tmp, "map.txt");
+		// LOG_info("map_path: %s\n", map_path);
+	}
+	char* file_name = strrchr(path,'/');
+	if (file_name) file_name += 1;
+	// LOG_info("file_name: %s\n", file_name);
+	
+	if (exists(map_path)) {
+		FILE* file = fopen(map_path, "r");
+		if (file) {
+			char line[256];
+			while (fgets(line,256,file)!=NULL) {
+				normalizeNewline(line);
+				trimTrailingNewlines(line);
+				if (strlen(line)==0) continue; // skip empty lines
+			
+				tmp = strchr(line,'\t');
+				if (tmp) {
+					tmp[0] = '\0';
+					char* key = line;
+					char* value = tmp+1;
+					if (exactMatch(file_name,key)) {
+						strcpy(alias, value);
+						break;
+					}
+				}
+			}
+			fclose(file);
+		}
+	}
+}
 
 static int Menu_options(MenuList* list) {
 	MenuItem* items = list->items;
@@ -6246,6 +6292,30 @@ int save_screenshot_thread(void* data) {
     return 0;
 }
 SDL_Thread* screenshotsavethread;
+static void Menu_screenshot(void) {
+	LOG_info("Menu_screenshot\n");
+
+	char rom_name[256];
+	getDisplayName(game.name, rom_name);
+	getAlias(game.path, rom_name);
+
+	time_t now = time(NULL);
+	struct tm *t = localtime(&now);
+	char buffer[100];
+	strftime(buffer, sizeof(buffer), "%Y-%m-%d-%H-%M-%S", t);
+
+	char png_path[256];
+	sprintf(png_path, SDCARD_PATH "/Screenshots/%s.%s.png", rom_name, buffer);
+	int cw, ch;
+	unsigned char* pixels = GFX_GL_screenCapture(&cw, &ch);
+	SaveImageArgs* args = malloc(sizeof(SaveImageArgs));
+	args->pixels = pixels;
+	args->w = cw;
+	args->h = ch;
+	args->path = SDL_strdup(png_path);
+	SDL_WaitThread(screenshotsavethread, NULL);
+	screenshotsavethread = SDL_CreateThread(save_screenshot_thread, "SaveScreenshotThread", args);
+}
 static void Menu_saveState(void) {
 	// LOG_info("Menu_saveState\n");
 	Menu_updateState();
@@ -6298,46 +6368,6 @@ static void Menu_loadState(void) {
 		state_slot = menu.slot;
 		putInt(menu.slot_path, menu.slot);
 		State_read();
-	}
-}
-
-static char* getAlias(char* path, char* alias) {
-	// LOG_info("alias path: %s\n", path);
-	char* tmp;
-	char map_path[256];
-	strcpy(map_path, path);
-	tmp = strrchr(map_path, '/');
-	if (tmp) {
-		tmp += 1;
-		strcpy(tmp, "map.txt");
-		// LOG_info("map_path: %s\n", map_path);
-	}
-	char* file_name = strrchr(path,'/');
-	if (file_name) file_name += 1;
-	// LOG_info("file_name: %s\n", file_name);
-	
-	if (exists(map_path)) {
-		FILE* file = fopen(map_path, "r");
-		if (file) {
-			char line[256];
-			while (fgets(line,256,file)!=NULL) {
-				normalizeNewline(line);
-				trimTrailingNewlines(line);
-				if (strlen(line)==0) continue; // skip empty lines
-			
-				tmp = strchr(line,'\t');
-				if (tmp) {
-					tmp[0] = '\0';
-					char* key = line;
-					char* value = tmp+1;
-					if (exactMatch(file_name,key)) {
-						strcpy(alias, value);
-						break;
-					}
-				}
-			}
-			fclose(file);
-		}
 	}
 }
 
