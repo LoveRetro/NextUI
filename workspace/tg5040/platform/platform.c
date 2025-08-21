@@ -840,11 +840,13 @@ void PLAT_clearAll(void) {
 	// so yeah clear all layers and pull a flip() to make it switch back to SDL before clearing
 	PLAT_clearLayers(0);
 	PLAT_flip(vid.screen,0);
+	PLAT_clearLayers(0);
+	PLAT_flip(vid.screen,0);
 
 	// then do normal SDL clearing stuff
 	PLAT_clearVideo(vid.screen); 
+	SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0); 
 	SDL_RenderClear(vid.renderer);
-
 }
 
 void PLAT_setVsync(int vsync) {
