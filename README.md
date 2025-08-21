@@ -7,7 +7,7 @@
 <hr>
 
 <h4 align="center">
-  <a href="https://nextui.loveretro.games/getting-started/" target="_blank">Installation Guide</a>
+  <a href="https://nextui.loveretro.games/usage/#getting-started" target="_blank">Installation Guide</a>
   ·
   <a href="https://nextui.loveretro.games/docs/" target="_blank">Documentation</a>
   ·
