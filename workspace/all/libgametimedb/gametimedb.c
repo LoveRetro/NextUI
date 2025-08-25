@@ -357,15 +357,14 @@ bool _get_active_rom_path(char *rom_path_out)
         return false;
     }
 
-    if ((ptr = strrchr(cmd, '"')) != NULL) {
+    if ((ptr = strrchr(cmd, '\'')) != NULL) {
         *ptr = '\0';
     }
 
-    if ((ptr = strrchr(cmd, '"')) != NULL) {
+    if ((ptr = strrchr(cmd, '\'')) != NULL) {
         strncpy(rom_path_out, ptr + 1, STR_MAX);
         return true;
     }
-
     return false;
 }
 
@@ -378,7 +377,7 @@ int __db_get_active_closed_activity(sqlite3* game_log_db)
         return ROM_NOT_FOUND;
     }
 
-    //LOG_info("Last closed active rom: %s\n", rom_path);
+    //printf("Last closed active rom: %s\n", rom_path);
 
     if ((rom_id = __db_rom_find_by_file_path(game_log_db, rom_path, false)) == ROM_NOT_FOUND) {
         return ROM_NOT_FOUND;
