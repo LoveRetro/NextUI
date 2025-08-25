@@ -1697,7 +1697,6 @@ void GFX_blitMessage(TTF_Font *font, char *msg, SDL_Surface *dst, SDL_Rect *dst_
 
 	SDL_Surface *text;
 #define TEXT_BOX_MAX_ROWS 16
-#define LINE_HEIGHT 24
 	char *rows[TEXT_BOX_MAX_ROWS];
 	int row_count = 0;
 
@@ -1710,7 +1709,8 @@ void GFX_blitMessage(TTF_Font *font, char *msg, SDL_Surface *dst, SDL_Rect *dst_
 		rows[row_count++] = tmp + 1;
 	}
 
-	int rendered_height = SCALE1(LINE_HEIGHT) * row_count;
+	int line_height = TTF_FontHeight(font);
+	int rendered_height = line_height * row_count;
 	int y = dst_rect->y;
 	y += (dst_rect->h - rendered_height) / 2;
 
@@ -1733,13 +1733,13 @@ void GFX_blitMessage(TTF_Font *font, char *msg, SDL_Surface *dst, SDL_Rect *dst_
 
 		if (len)
 		{
-			text = TTF_RenderUTF8_Blended(font, line, COLOR_WHITE);
+			text = TTF_RenderUTF8_Blended_Wrapped(font, line, COLOR_WHITE, dst_rect->w);
 			int x = dst_rect->x;
 			x += (dst_rect->w - text->w) / 2;
 			SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){x, y});
 			SDL_FreeSurface(text);
 		}
-		y += SCALE1(LINE_HEIGHT);
+		y += line_height;
 	}
 }
 
