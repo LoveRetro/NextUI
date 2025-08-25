@@ -20,8 +20,8 @@ enum cn_event {
 	DA_UNKNOWN,
 };
 
-#define SCAN_MAX 4096
-#define LIST_NETWORK_MAX 4096
+#define SCAN_MAX 16384
+#define LIST_NETWORK_MAX 16384
 
 int aw_wifid_connect_ap(const char *ssid, const char *passwd,enum cn_event *ptrEvent);
 int aw_wifid_get_scan_results(char *results,int len);
