@@ -592,7 +592,7 @@ finish:
 
 static void Cheat_getPath(char* filename) {
 	sprintf(filename, "%s/%s.cht", core.cheats_dir, game.name);
-	LOG_info("Cheat_getPath %s\n", filename);
+	//LOG_info("Cheat_getPath %s\n", filename);
 }
 
 ///////////////////////////////////////
@@ -5494,7 +5494,12 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 		Menu_options(&OptionCheats_menu);
 	}
 	else {
-		Menu_message("No cheat file loaded.", (char*[]){ "B","BACK", NULL });
+		char cheats_path[MAX_PATH] = {0};
+		Cheat_getPath(cheats_path);
+
+		char cheat_text[MAX_PATH + 32] = {0};
+		sprintf(cheat_text, "No cheat file loaded.\n\n%s", cheats_path);
+		Menu_message(cheat_text, (char*[]){ "B","BACK", NULL });
 	}
 	
 	return MENU_CALLBACK_NOP;
