@@ -592,7 +592,7 @@ finish:
 
 static void Cheat_getPath(char* filename) {
 	sprintf(filename, "%s/%s.cht", core.cheats_dir, game.name);
-	LOG_info("Cheat_getPath %s\n", filename);
+	//LOG_info("Cheat_getPath %s\n", filename);
 }
 
 ///////////////////////////////////////
@@ -2730,11 +2730,8 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 				strncpy(item->full, item->desc, len);
 				// item->desc[len-1] = '\0';
 				
-				// these magic numbers are more about chars per line than pixel width 
-				// so it's not going to be relative to the screen size, only the scale
-				// what does that even mean?
-				GFX_wrapText(font.tiny, item->desc, SCALE1(240), 2); // TODO magic number!
-				GFX_wrapText(font.medium, item->full, SCALE1(240), 7); // TODO: magic number!
+				GFX_wrapText(font.tiny, item->desc, DEVICE_WIDTH - SCALE1(2*PADDING), 2);
+				GFX_wrapText(font.medium, item->full, DEVICE_WIDTH - SCALE1(2*PADDING), 16);
 			}
 		
 			for (count=0; def->values[count].value; count++);
@@ -2819,11 +2816,8 @@ static void OptionList_v2_init(const struct retro_core_options_v2 *opt_defs) {
 				item->desc = strdup(def->info);
 				item->full = strdup(item->desc);
 				
-				// these magic numbers are more about chars per line than pixel width 
-				// so it's not going to be relative to the screen size, only the scale
-				// what does that even mean?
-				GFX_wrapText(font.tiny, item->desc, SCALE1(240), 2); // TODO magic number!
-				GFX_wrapText(font.medium, item->full, SCALE1(240), 7); // TODO: magic number!
+				GFX_wrapText(font.tiny, item->desc, DEVICE_WIDTH - SCALE1(2*PADDING), 2);
+				GFX_wrapText(font.medium, item->full, DEVICE_WIDTH - SCALE1(2*PADDING), 16);
 			}
 		
 			for (count=0; def->values[count].value; count++);
@@ -4965,7 +4959,7 @@ typedef struct MenuList {
 	MenuList_callback_t on_change;
 } MenuList;
 
-static int Menu_message(char* message, char** pairs) {
+static int Menu_messageWithFont(char* message, char** pairs, TTF_Font* f) {
 	GFX_setMode(MODE_MAIN);
 	int dirty = 1;
 	while (1) {
@@ -4978,7 +4972,7 @@ static int Menu_message(char* message, char** pairs) {
 		
 	
 		GFX_clear(screen);
-		GFX_blitMessage(font.medium, message, screen, &(SDL_Rect){0,SCALE1(PADDING),screen->w,screen->h-SCALE1(PILL_SIZE+PADDING)});
+		GFX_blitMessage(f, message, screen, &(SDL_Rect){SCALE1(PADDING),SCALE1(PADDING),screen->w-SCALE1(2*PADDING),screen->h-SCALE1(PILL_SIZE+PADDING)});
 		GFX_blitButtonGroup(pairs, 0, screen, 1);
 		GFX_flip(screen);
 		dirty = 0;
@@ -4988,6 +4982,10 @@ static int Menu_message(char* message, char** pairs) {
 	}
 	GFX_setMode(MODE_MENU);
 	return MENU_CALLBACK_NOP; // TODO: this should probably be an arg
+}
+
+static int Menu_message(char* message, char** pairs) {
+	return Menu_messageWithFont(message, pairs, font.medium);
 }
 
 static int Menu_options(MenuList* list);
@@ -5094,7 +5092,7 @@ static int OptionEmulator_optionDetail(MenuList* list, int i) {
 	}
 	else {
 		Option* option = OptionList_getOption(&config.core, item->key);
-		if (option->full) return Menu_message(option->full, (char*[]){ "B","BACK", NULL });
+		if (option->full) return Menu_messageWithFont(option->full, (char*[]){ "B","BACK", NULL }, font.medium);
 		else return MENU_CALLBACK_NOP;
 	}
 }
@@ -5467,11 +5465,7 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 				len = strlen(cheat->info) + 1;
 				item->desc = calloc(len, sizeof(char));
 				strncpy(item->desc, cheat->info, len);
-				
-				// these magic numbers are more about chars per line than pixel width 
-				// so it's not going to be relative to the screen size, only the scale
-				// what does that even mean?
-				GFX_wrapText(font.tiny, item->desc, SCALE1(240), 2); // TODO magic number!
+				GFX_wrapText(font.tiny, item->desc, DEVICE_WIDTH - SCALE1(2*PADDING), 2);
 			}
 
 			item->value = cheat->enabled;
@@ -5494,7 +5488,12 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 		Menu_options(&OptionCheats_menu);
 	}
 	else {
-		Menu_message("No cheat file loaded.", (char*[]){ "B","BACK", NULL });
+		char cheats_path[MAX_PATH] = {0};
+		Cheat_getPath(cheats_path);
+
+		char cheat_text[MAX_PATH + 32] = {0};
+		sprintf(cheat_text, "No cheat file loaded.\n\n%s", cheats_path);
+		Menu_message(cheat_text, (char*[]){ "B","BACK", NULL });
 	}
 	
 	return MENU_CALLBACK_NOP;
