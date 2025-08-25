@@ -6304,6 +6304,9 @@ static void Menu_screenshot(void) {
 	char buffer[100];
 	strftime(buffer, sizeof(buffer), "%Y-%m-%d-%H-%M-%S", t);
 
+	// make sure this actually exists
+	mkdir(SDCARD_PATH "/Screenshots", 0755);
+
 	char png_path[256];
 	sprintf(png_path, SDCARD_PATH "/Screenshots/%s.%s.png", rom_name, buffer);
 	int cw, ch;
