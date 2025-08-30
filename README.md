@@ -93,7 +93,7 @@ For other devices we recommend checking out [MinUI](https://github.com/shauninma
 
 ## Installing
 
-Follow our [installation guide](https://nextui.loveretro.games/getting-started/).
+Follow our [installation guide](https://nextui.loveretro.games/usage/#getting-started).
 
 ---
 
