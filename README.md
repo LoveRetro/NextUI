@@ -49,6 +49,7 @@ For other devices we recommend checking out [MinUI](https://github.com/shauninma
 - Game time tracker!
 - Cheats support
 - Integrated WiFi
+- Bluetooth Audio
 - Overlays support!
 - Dynamic cpu speed scaling (keeps your device cool and extends battery life, but gives the performance right when needed)
 - Fully GPU OpenGL based for faster performance
@@ -81,7 +82,6 @@ For other devices we recommend checking out [MinUI](https://github.com/shauninma
 
 ## Future plans roadmap
 
-- Bluetooth and wifi integrated
 - Configurable FN and switch buttons
 - More compatibility testing with different emulators and fix/improve if nessecary
 - Retroachievements
