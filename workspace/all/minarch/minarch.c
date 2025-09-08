@@ -1623,7 +1623,7 @@ static struct Config {
 			[SH_SHADERS_PRESET] = {
 				.key	= "minarch_shaders_preset", 
 				.name	= "Shader / Emulator Settings Preset",
-				.desc	= "Load a premade shaders/emulators config, to try out a preset but not permantly overwite your current settings, exit the game without saving settings!", // will call getScreenScalingDesc()
+				.desc	= "Load a premade shaders/emulators config.\nTo try out a preset, exit the game without saving settings!", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
 				.count = 0,
@@ -1684,7 +1684,7 @@ static struct Config {
 			[SH_UPSCALE1] = {
 				.key	= "minarch_shader1_upscale", 
 				.name	= "Shader 1 Scale",
-				.desc	= "This will scale images x times, screen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
 				.count = 9,
@@ -1735,7 +1735,7 @@ static struct Config {
 			[SH_UPSCALE2] = {
 				.key	= "minarch_shader2_upscale", 
 				.name	= "Shader 2 Scale",
-				.desc	= "This will scale images x times, screen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
 				.default_value = 0,
 				.value = 0,
 				.count = 9,
@@ -1786,7 +1786,7 @@ static struct Config {
 			[SH_UPSCALE3] = {
 				.key	= "minarch_shader3_upscale", 
 				.name	= "Shader 3 Scale",
-				.desc	= "This will scale images x times, screen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
 				.default_value = 0,
 				.value = 0,
 				.count = 9,
