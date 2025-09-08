@@ -296,6 +296,11 @@ int main(int argc, char *argv[])
             [](const std::any &value)
             { CFG_setShowClock(std::any_cast<bool>(value)); },
             []() { CFG_setShowClock(CFG_DEFAULT_SHOWCLOCK);}},
+            new MenuItem{ListItemType::Generic, "Show remaining time", "Show remaining battery time.\nThis is an estimate and might be inaccurate.", {false, true}, on_off, []() -> std::any
+            { return CFG_getShowRemainingTime(); },
+            [](const std::any &value)
+            { CFG_setShowRemainingTime(std::any_cast<bool>(value)); },
+            []() { CFG_setShowRemainingTime(CFG_DEFAULT_SHOWREMAININGTIME);}},
             new MenuItem{ListItemType::Generic, "Set time and date automatically", "Automatically adjust system time\nwith NTP (requires internet access)", {false, true}, on_off, []() -> std::any
             { return TIME_getNetworkTimeSync(); }, [](const std::any &value)
             { TIME_setNetworkTimeSync(std::any_cast<bool>(value)); },

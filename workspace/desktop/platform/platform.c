@@ -2182,6 +2182,11 @@ void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
 	*charge = 100;
 }
 
+void PLAT_getBatterySecondsRemaining(int* seconds)
+{
+	*seconds = 3600; // infinite
+}
+
 void PLAT_enableBacklight(int enable) {
 	// buh
 }

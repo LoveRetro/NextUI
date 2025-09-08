@@ -67,6 +67,7 @@ typedef struct
 
     // UI
 	bool showClock;
+	bool showRemainingTime;
 	bool clock24h;
 	bool showBatteryPercent;
 	bool showMenuAnimations;
@@ -111,6 +112,7 @@ typedef struct
 #define CFG_DEFAULT_COLOR7 0x000000U
 #define CFG_DEFAULT_THUMBRADIUS 20 // unscaled!
 #define CFG_DEFAULT_SHOWCLOCK false
+#define CFG_DEFAULT_SHOWREMAININGTIME false
 #define CFG_DEFAULT_CLOCK24H true
 #define CFG_DEFAULT_SHOWBATTERYPERCENT false
 #define CFG_DEFAULT_SHOWMENUANIMATIONS true
@@ -163,6 +165,9 @@ void CFG_setShowClock(bool show);
 // Sets the time format to 12/24hrs.
 bool CFG_getClock24H(void);
 void CFG_setClock24H(bool);
+// Show/hide remaining battery time in the status pill.
+bool CFG_getShowRemainingTime(void);
+void CFG_setShowRemainingTime(bool show);
 // Show/hide battery percentage in the status pill.
 bool CFG_getShowBatteryPercent(void);
 void CFG_setShowBatteryPercent(bool show);

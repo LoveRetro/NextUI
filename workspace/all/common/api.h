@@ -622,6 +622,7 @@ void PLAT_enableOverlay(int enable);
 #define PWR_LOW_CHARGE 10
 void PLAT_getBatteryStatus(int* is_charging, int* charge); // 0,1 and 0,10,20,40,60,80,100
 void PLAT_getBatteryStatusFine(int* is_charging, int* charge); // 0,1 and 0-100
+void PLAT_getBatterySecondsRemaining(int* seconds);
 void PLAT_enableBacklight(int enable);
 int PLAT_supportsDeepSleep(void);
 int PLAT_deepSleep(void);

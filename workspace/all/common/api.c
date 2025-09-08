@@ -161,6 +161,7 @@ static struct PWR_Context
 	pthread_t battery_pt;
 	int is_charging;
 	int charge;
+	int seconds_remaining;
 	int should_warn;
 
 	int update_secs;
@@ -1847,9 +1848,10 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 		// this one is async anyway
 		int show_bt = BT_isConnected();
 		bool show_clock = CFG_getShowClock();
+		bool show_remaining = CFG_getShowRemainingTime();
 		SDL_Rect battery_rect = asset_rects[ASSET_BATTERY];
 
-		if (!show_bt && !show_wifi && !show_clock)
+		if (!show_bt && !show_wifi && !show_clock && !show_remaining )
 		{
 			ow = SCALE1(PILL_SIZE);
 			ox = dst->w - SCALE1(PADDING) - ow;
@@ -1897,6 +1899,21 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 				ow += clock_width + SCALE1(BUTTON_MARGIN);
 			}
 
+			SDL_Surface *remaining = NULL;
+			if (show_remaining)
+			{
+				int remaining_width = 0;
+				char remainingString[16];
+				if (pwr.seconds_remaining == -1)
+					snprintf(remainingString, sizeof(remainingString), "Inf");
+				else
+					snprintf(remainingString, sizeof(remainingString), "%02dh%02dm", pwr.seconds_remaining / 3600, (pwr.seconds_remaining % 3600) / 60);
+				char display_name[16];
+				remaining_width = GFX_getTextWidth(font.small, remainingString, display_name, SCALE1(PILL_SIZE), 0);
+				remaining = TTF_RenderUTF8_Blended(font.small, display_name, uintToColour(THEME_COLOR6_255));
+				ow += remaining_width + SCALE1(BUTTON_MARGIN);
+			}
+
 			ox = dst->w - SCALE1(PADDING) - ow;
 			oy = SCALE1(PADDING);
 			GFX_blitPillColor(ASSET_WHITE_PILL, dst, &(SDL_Rect){ox, oy, ow, SCALE1(PILL_SIZE)}, THEME_COLOR2, RGB_WHITE);
@@ -1940,6 +1957,16 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 				int y = oy + (SCALE1(PILL_SIZE) - clock->h) / 2;
 				SDL_BlitSurface(clock, NULL, dst, &(SDL_Rect){x, y});
 				SDL_FreeSurface(clock);
+				ox += clock->w + SCALE1(BUTTON_MARGIN);
+			}
+
+			if (show_remaining && remaining)
+			{
+				int x = ox;
+				int y = oy + (SCALE1(PILL_SIZE) - remaining->h) / 2;
+				SDL_BlitSurface(remaining, NULL, dst, &(SDL_Rect){x, y});
+				SDL_FreeSurface(remaining);
+				ox += remaining->w + SCALE1(BUTTON_MARGIN);
 			}
 		}
 	}
@@ -3434,6 +3461,7 @@ static void PWR_initOverlay(void)
 static void PWR_updateBatteryStatus(void)
 {
 	PLAT_getBatteryStatusFine(&pwr.is_charging, &pwr.charge);
+	PLAT_getBatterySecondsRemaining(&pwr.seconds_remaining);
 	PLAT_enableOverlay(pwr.should_warn && pwr.charge <= PWR_LOW_CHARGE);
 
 	// low power warn on all leds
