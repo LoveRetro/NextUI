@@ -3728,10 +3728,10 @@ void PWR_powerOff(int reboot)
 		GFX_blitMessage(font.large, msg, gfx.screen, &(SDL_Rect){0, 0, gfx.screen->w, gfx.screen->h}); //, NULL);
 		GFX_flip(gfx.screen);
 
-		system("killall -STOP keymon.elf");
-		system("killall -STOP batmon.elf");
-		system("killall -STOP wifi_daemon");
-		system("killall -STOP bt_daemon");
+		system("killall -TERM keymon.elf");
+		system("killall -TERM batmon.elf");
+		system("killall -TERM wifi_daemon");
+		system("killall -TERM bt_daemon");
 
 		PWR_updateFrequency(-1, false);
 
