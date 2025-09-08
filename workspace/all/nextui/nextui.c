@@ -2465,9 +2465,9 @@ int main (int argc, char *argv[]) {
 			}
 		}
 
-		int show_entry_names = 1;
-		if (strcmp(top->path, SDCARD_PATH) == 0 && !CFG_getShowFolderNamesAtRoot()) {
-			show_entry_names = 0;
+		bool show_entry_names = true;
+		if (stack->count == 1) {
+			show_entry_names = CFG_getShowFolderNamesAtRoot();
 		}
 		
 		if(dirty) {
@@ -2840,7 +2840,8 @@ int main (int argc, char *argv[]) {
 						else if (entry->type == ENTRY_ROM)
 							snprintf(tmppath, sizeof(tmppath), "%s/.media/bglist.png", folderBgPath);
 						if(!exists(tmppath)) {
-							show_entry_names = 1;
+							// Safeguard: If no background is available, still render the text to leave the user a way out
+							show_entry_names = true;
 							snprintf(tmppath, sizeof(tmppath), defaultBgPath, folderBgPath);
 						}
 						startLoadFolderBackground(tmppath, onBackgroundLoaded, NULL);
@@ -2851,7 +2852,8 @@ int main (int argc, char *argv[]) {
 					startLoadFolderBackground(defaultBgPath, onBackgroundLoaded, NULL);
 				}
 				else {
-					show_entry_names = 1;
+					// Safeguard: If no background is available, still render the text to leave the user a way out
+					show_entry_names = true;
 				}
 				// load game thumbnails
 				if (total > 0) {
