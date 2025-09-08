@@ -1907,7 +1907,7 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 				if (pwr.seconds_remaining == -1)
 					snprintf(remainingString, sizeof(remainingString), "Inf");
 				// indicate charging with a + sign
-				else if (pwr.is_charging)
+				else if (pwr.is_charging && pwr.charge < 100)
 					snprintf(remainingString, sizeof(remainingString), "%02dh%02dm+", pwr.seconds_remaining / 3600, (pwr.seconds_remaining % 3600) / 60);
 				else
 					snprintf(remainingString, sizeof(remainingString), "%02dh%02dm", pwr.seconds_remaining / 3600, (pwr.seconds_remaining % 3600) / 60);
