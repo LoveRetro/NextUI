@@ -4915,8 +4915,8 @@ void Menu_beforeSleep() {
 	RTC_write();
 	State_autosave();
 	putFile(AUTO_RESUME_PATH, game.path + strlen(SDCARD_PATH));
-	
-	PWR_setCPUSpeed(CPU_SPEED_MENU);
+
+	PWR_setCPUSpeed(CPU_SPEED_ADAPTIVE);
 }
 void Menu_afterSleep() {
 	unlink(AUTO_RESUME_PATH);

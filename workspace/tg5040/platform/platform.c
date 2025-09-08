@@ -2543,11 +2543,16 @@ void PLAT_setCPUSpeed(int speed) {
 		case CPU_SPEED_POWERSAVE:	freq = 1200000; currentcpuspeed = 1200; break;
 		case CPU_SPEED_NORMAL: 		freq = 1608000; currentcpuspeed = 1600; break;
 		case CPU_SPEED_PERFORMANCE: freq = 2000000; currentcpuspeed = 2000; break;
+		case CPU_SPEED_ADAPTIVE:    freq = -1; break;
 	}
-	// ensure we are in userspace governor
-	putFile(GOVERNOR_PATH, "userspace");
-
-	PLAT_setCustomCPUSpeed(freq);
+	// ensure we are on the correct governor
+	if(freq > 0) {
+		putFile(GOVERNOR_PATH, "userspace");
+		PLAT_setCustomCPUSpeed(freq);
+	}
+	else {
+		putFile(GOVERNOR_PATH, "schedutil");
+	}
 }
 
 #define MAX_STRENGTH 0xFFFF
