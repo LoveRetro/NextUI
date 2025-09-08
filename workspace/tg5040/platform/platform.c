@@ -2429,7 +2429,7 @@ void *PLAT_cpu_monitor(void *arg) {
 
 	const int cpu_frequencies[] = {408,600,816,1008,1200,1416,1608,1800,2000};
     const int num_freqs = sizeof(cpu_frequencies) / sizeof(cpu_frequencies[0]);
-    int current_index = 5; 
+    int current_index = 1; 
 
     double cpu_usage_history[ROLLING_WINDOW] = {0};
     double cpu_speed_history[ROLLING_WINDOW] = {0};
