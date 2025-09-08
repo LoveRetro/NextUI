@@ -4514,7 +4514,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 
 		//want this to overwrite bottom right in case screen is too small this info more important tbh
 		PLAT_getCPUTemp();
-		sprintf(debug_text, "%.01f/%.01f/%.0f%%/%iMHz/%ic", currentfps, currentreqfps,currentcpuse,currentcpuspeed,currentcputemp);
+		sprintf(debug_text, "%.01f/%.01f/%.0f%%/%ihz/%ic", currentfps, currentreqfps,currentcpuse,currentcpuspeed,currentcputemp);
 		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
 
 		sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
