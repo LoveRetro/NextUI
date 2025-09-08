@@ -13,17 +13,6 @@
 
 #######################################
 
-if [ -f "/tmp/poweroff" ]; then
-	cpufreq.sh -p reset
-	poweroff_next
-	exit 0
-fi
-if [ -f "/tmp/reboot" ]; then
-	cpufreq.sh -p reset
-	reboot_next
-	exit 0
-fi
-
 export PLATFORM="tg5040"
 export SDCARD_PATH="/mnt/SDCARD"
 export BIOS_PATH="$SDCARD_PATH/Bios"
