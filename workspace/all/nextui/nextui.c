@@ -2009,7 +2009,7 @@ int animWorker(void* unused) {
 			finaltask->move_h = task->move_h;
 			finaltask->targetY = task->targetY;
 			finaltask->targetTextY = task->targetTextY;
-			finaltask->move_y = SCALE1(PADDING + task->targetY+4);
+			finaltask->move_y = SCALE1(PADDING + task->targetY) + (task->targetTextY - task->targetY);
 			finaltask->done = 0;
 			if(frame >= total_frames) finaltask->done=1;
 			task->callback(finaltask);
@@ -2677,6 +2677,7 @@ int main (int argc, char *argv[]) {
 						SDL_Surface* text;
 						SDL_Color textColor = uintToColour(THEME_COLOR6_255);
 						text = TTF_RenderUTF8_Blended(font.large, display_name, textColor);
+						const int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
 						GFX_blitPillLight(ASSET_WHITE_PILL, screen, &(SDL_Rect){
 							SCALE1(PADDING),
 							SCALE1(PADDING),
@@ -2690,7 +2691,7 @@ int main (int argc, char *argv[]) {
 							text->h
 						}, screen, &(SDL_Rect){
 							SCALE1(PADDING+BUTTON_PADDING),
-							SCALE1(PADDING+4)
+							SCALE1(PADDING) + text_offset_y,
 						});
 						SDL_FreeSurface(text);
 					}
@@ -2910,6 +2911,7 @@ int main (int argc, char *argv[]) {
 						}
 						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
 						SDL_Surface* text_unique = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_DARK_TEXT);
+						const int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
 						if (j == selected_row) {
 							is_scrolling = GFX_resetScrollText(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
 							SDL_LockMutex(animMutex);
@@ -2923,7 +2925,7 @@ int main (int argc, char *argv[]) {
 							task->startY = SCALE1(previousY+PADDING);
 							task->targetX = SCALE1(BUTTON_MARGIN);
 							task->targetY = SCALE1(targetY+PADDING);
-							task->targetTextY = SCALE1(PADDING + targetY+4);
+							task->targetTextY = SCALE1(PADDING + targetY) + text_offset_y;
 							pilltargetTextY = +screen->w;
 							task->move_w = max_width;
 							task->move_h = SCALE1(PILL_SIZE);
@@ -2932,7 +2934,7 @@ int main (int argc, char *argv[]) {
 							animPill(task);
 						} 
 						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
-						SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)+4) };
+						SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)) + text_offset_y };
 				
 						SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
 						SDL_BlitSurface(text, &text_rect, screen, &dest_rect);
@@ -3107,12 +3109,13 @@ int main (int argc, char *argv[]) {
 
 					int text_width = GFX_getTextWidth(font.large, entry_text, cached_display_name, available_width, SCALE1(BUTTON_PADDING * 2));
 					int max_width = MIN(available_width, text_width);
+					int text_offset_y = (SCALE1(PILL_SIZE) - TTF_FontHeight(font.large) + 1) >> 1;
 				
 					GFX_clearLayers(LAYER_SCROLLTEXT);
 					GFX_scrollTextTexture(
 						font.large,
 						entry_text,
-						SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (remember_selection * PILL_SIZE) + 4),
+						SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + remember_selection * PILL_SIZE) + text_offset_y,
 						max_width - SCALE1(BUTTON_PADDING * 2),
 						0,
 						text_color,
