@@ -2531,16 +2531,10 @@ void *PLAT_cpu_monitor(void *arg) {
 }
 
 
-#define GOVERNOR_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
+#define GOVERNOR_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
+#define CLOCKSPEED_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
 void PLAT_setCustomCPUSpeed(int speed) {
-    FILE *fp = fopen(GOVERNOR_PATH, "w");
-    if (fp == NULL) {
-        perror("Failed to open scaling_setspeed");
-        return;
-    }
-
-    fprintf(fp, "%d\n", speed);
-    fclose(fp);
+    putInt(CLOCKSPEED_PATH, speed);
 }
 void PLAT_setCPUSpeed(int speed) {
 	int freq = 0;
@@ -2550,7 +2544,10 @@ void PLAT_setCPUSpeed(int speed) {
 		case CPU_SPEED_NORMAL: 		freq = 1608000; currentcpuspeed = 1600; break;
 		case CPU_SPEED_PERFORMANCE: freq = 2000000; currentcpuspeed = 2000; break;
 	}
-	putInt(GOVERNOR_PATH, freq);
+	// ensure we are in userspace governor
+	putFile(GOVERNOR_PATH, "userspace");
+
+	PLAT_setCustomCPUSpeed(freq);
 }
 
 #define MAX_STRENGTH 0xFFFF
