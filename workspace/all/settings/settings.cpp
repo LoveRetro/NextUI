@@ -400,7 +400,7 @@ int main(int argc, char *argv[])
                 new MenuItem{ListItemType::Generic, "Dpad mode when toggled", "Dpad: default. Joystick: Dpad exclusively acts as analog stick.\nBoth: Dpad and Joystick inputs at the same time.", {0, 1, 2}, {"Dpad", "Joystick", "Both"}, []() -> std::any
                 {
                     if(!GetMuteDisablesDpad() && !GetMuteEmulatesJoystick()) return 0;
-                    if(!GetMuteDisablesDpad() && GetMuteEmulatesJoystick()) return 1;
+                    if(GetMuteDisablesDpad() && GetMuteEmulatesJoystick()) return 1;
                     return 2; 
                 },
                 [](const std::any &value)
