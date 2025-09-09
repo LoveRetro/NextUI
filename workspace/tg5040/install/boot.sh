@@ -7,10 +7,8 @@ UPDATE_PATH="$SDCARD_PATH/MinUI.zip"
 PAKZ_PATH="$SDCARD_PATH/*.pakz"
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
-echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
-CPU_SPEED_PERF=2000000
-echo $CPU_SPEED_PERF > $CPU_PATH
+# we cant rely on cpufreq.sh being present, so set manually
+echo schedutil > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 
 ##Remove Old Led Daemon
 if [ -f "/etc/LedControl" ]; then

@@ -2427,9 +2427,9 @@ void *PLAT_cpu_monitor(void *arg) {
     double prev_real_time = get_time_sec();
     double prev_cpu_time = get_process_cpu_time_sec();
 
-	const int cpu_frequencies[] = {408,450,500,550,  600,650,700,750, 800,850,900,950, 1000,1050,1100,1150, 1200,1250,1300,1350, 1400,1450,1500,1550, 1600,1650,1700,1750, 1800,1850,1900,1950, 2000};
+	const int cpu_frequencies[] = {408,600,816,1008,1200,1416,1608,1800,2000};
     const int num_freqs = sizeof(cpu_frequencies) / sizeof(cpu_frequencies[0]);
-    int current_index = 5; 
+    int current_index = 1; 
 
     double cpu_usage_history[ROLLING_WINDOW] = {0};
     double cpu_speed_history[ROLLING_WINDOW] = {0};
@@ -2531,16 +2531,10 @@ void *PLAT_cpu_monitor(void *arg) {
 }
 
 
-#define GOVERNOR_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
+#define GOVERNOR_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
+#define CLOCKSPEED_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
 void PLAT_setCustomCPUSpeed(int speed) {
-    FILE *fp = fopen(GOVERNOR_PATH, "w");
-    if (fp == NULL) {
-        perror("Failed to open scaling_setspeed");
-        return;
-    }
-
-    fprintf(fp, "%d\n", speed);
-    fclose(fp);
+    putInt(CLOCKSPEED_PATH, speed);
 }
 void PLAT_setCPUSpeed(int speed) {
 	int freq = 0;
@@ -2549,8 +2543,16 @@ void PLAT_setCPUSpeed(int speed) {
 		case CPU_SPEED_POWERSAVE:	freq = 1200000; currentcpuspeed = 1200; break;
 		case CPU_SPEED_NORMAL: 		freq = 1608000; currentcpuspeed = 1600; break;
 		case CPU_SPEED_PERFORMANCE: freq = 2000000; currentcpuspeed = 2000; break;
+		case CPU_SPEED_ADAPTIVE:    freq = -1; break;
 	}
-	putInt(GOVERNOR_PATH, freq);
+	// ensure we are on the correct governor
+	if(freq > 0) {
+		putFile(GOVERNOR_PATH, "userspace");
+		PLAT_setCustomCPUSpeed(freq);
+	}
+	else {
+		putFile(GOVERNOR_PATH, "schedutil");
+	}
 }
 
 #define MAX_STRENGTH 0xFFFF

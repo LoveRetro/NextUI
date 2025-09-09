@@ -2152,6 +2152,7 @@ int main (int argc, char *argv[]) {
 	int was_online = PLAT_isOnline();
     int had_bt = PLAT_btIsConnected();
 
+	PWR_setCPUSpeed(CPU_SPEED_MENU);
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
 
