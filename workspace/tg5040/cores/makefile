@@ -22,6 +22,7 @@ CORES+= plus4
 CORES+= pokemini
 CORES+= race
 CORES+= snes9x
+CORES+= snes9x2005_plus
 CORES+= vic
 CORES+= prboom
 
