@@ -763,8 +763,8 @@ static void formatStatePath(char* work_name, char* filename, const char* suffix)
 static void State_getPath(char* filename) {
 	char work_name[MAX_PATH];
 
-	if (CFG_getStateFormat() == STATE_FORMAT_SRM 
-	 || CFG_getStateFormat() == STATE_FORMAT_SRM_UNCOMRESSED) {
+	if (CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT 
+	 || CFG_getStateFormat() == STATE_FORMAT_SRM_UNCOMRESSED_EXTRADOT) {
 		strcpy(work_name, game.name);
 		char* tmp = strrchr(work_name, '.');
 		if (tmp != NULL && strlen(tmp) > 2 && strlen(tmp) <= 5) {
@@ -775,6 +775,19 @@ static void State_getPath(char* filename) {
 			sprintf(filename, "%s/%s.state.auto", core.states_dir, work_name);
 		else 
 			sprintf(filename, "%s/%s.state.%i", core.states_dir, work_name, state_slot);
+	}
+	else if (CFG_getStateFormat() == STATE_FORMAT_SRM
+	 	  || CFG_getStateFormat() == STATE_FORMAT_SRM_UNCOMRESSED) {
+		strcpy(work_name, game.name);
+		char* tmp = strrchr(work_name, '.');
+		if (tmp != NULL && strlen(tmp) > 2 && strlen(tmp) <= 5) {
+			tmp[0] = '\0';
+		}
+
+		if(state_slot == AUTO_RESUME_SLOT)
+			sprintf(filename, "%s/%s.state.auto", core.states_dir, work_name);
+		else 
+			sprintf(filename, "%s/%s.state%i", core.states_dir, work_name, state_slot);
 	}
 	else {
 		sprintf(filename, "%s/%s.st%i", core.states_dir, game.name, state_slot);
@@ -803,7 +816,7 @@ static void State_read(void) { // from picoarch
 
 	// TODO: rzipstream_open can also handle uncompressed, else branch is probably unnecessary
 	// srm, potentially compressed
-	if (CFG_getStateFormat() == STATE_FORMAT_SRM) {
+	if (CFG_getStateFormat() == STATE_FORMAT_SRM || (CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT) {
 		state_rzfile = rzipstream_open(filename, RETRO_VFS_FILE_ACCESS_READ);
 		if(!state_rzfile) {
 			if (state_slot!=8) { // st8 is a default state in MiniUI and may not exist, that's okay
@@ -899,7 +912,7 @@ static void State_write(void) { // from picoarch
 	char filename[MAX_PATH];
 	State_getPath(filename);
 #ifdef HAS_SRM
-	if (CFG_getStateFormat() == STATE_FORMAT_SRM) {
+	if (CFG_getStateFormat() == STATE_FORMAT_SRM || (CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT) {
 		if(!rzipstream_write_file(filename, state, state_size)) {
 			LOG_error("rzipstream: Error writing state data to file: %s\n", filename);
 			goto error;
