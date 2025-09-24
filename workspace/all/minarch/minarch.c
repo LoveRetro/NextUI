@@ -763,6 +763,8 @@ static void formatStatePath(char* work_name, char* filename, const char* suffix)
 static void State_getPath(char* filename) {
 	char work_name[MAX_PATH];
 
+	// This is only here for compatibility with older versions of minarch,
+	// should probably be removed at some point in the future.
 	if (CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT 
 	 || CFG_getStateFormat() == STATE_FORMAT_SRM_UNCOMRESSED_EXTRADOT) {
 		strcpy(work_name, game.name);
@@ -786,6 +788,8 @@ static void State_getPath(char* filename) {
 
 		if(state_slot == AUTO_RESUME_SLOT)
 			sprintf(filename, "%s/%s.state.auto", core.states_dir, work_name);
+		else if(state_slot == 0)
+			sprintf(filename, "%s/%s.state", core.states_dir, work_name);
 		else 
 			sprintf(filename, "%s/%s.state%i", core.states_dir, work_name, state_slot);
 	}
