@@ -820,7 +820,7 @@ static void State_read(void) { // from picoarch
 
 	// TODO: rzipstream_open can also handle uncompressed, else branch is probably unnecessary
 	// srm, potentially compressed
-	if (CFG_getStateFormat() == STATE_FORMAT_SRM || (CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT) {
+	if (CFG_getStateFormat() == STATE_FORMAT_SRM || CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT) {
 		state_rzfile = rzipstream_open(filename, RETRO_VFS_FILE_ACCESS_READ);
 		if(!state_rzfile) {
 			if (state_slot!=8) { // st8 is a default state in MiniUI and may not exist, that's okay
@@ -916,7 +916,7 @@ static void State_write(void) { // from picoarch
 	char filename[MAX_PATH];
 	State_getPath(filename);
 #ifdef HAS_SRM
-	if (CFG_getStateFormat() == STATE_FORMAT_SRM || (CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT) {
+	if (CFG_getStateFormat() == STATE_FORMAT_SRM || CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT) {
 		if(!rzipstream_write_file(filename, state, state_size)) {
 			LOG_error("rzipstream: Error writing state data to file: %s\n", filename);
 			goto error;
