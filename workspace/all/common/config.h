@@ -21,16 +21,27 @@ typedef int (*ColorSet_callback_t)(void);
 
 enum
 {
+	// MinUI: Game.gba.sav
 	SAVE_FORMAT_SAV,
+	//Retroarch: Game.srm
 	SAVE_FORMAT_SRM,
+	// Generic: Game.sav
 	SAVE_FORMAT_GEN,
+	//Retroarch: Game.srm
 	SAVE_FORMAT_SRM_UNCOMPRESSED
 };
 
 enum
 {
+	// MinUI: Game.st0
 	STATE_FORMAT_SAV,
+	//Retroarch-ish: Game.state.<n> (a typo, but keeping it to avoid a breaking change)
+	STATE_FORMAT_SRM_EXTRADOT,
+	//Retroarch-ish: Game.state.<n> (a typo, but keeping it to avoid a breaking change)
+	STATE_FORMAT_SRM_UNCOMRESSED_EXTRADOT,
+	//Retroarch: Game.state<n>
 	STATE_FORMAT_SRM,
+	//Retroarch: Game.state<n>
 	STATE_FORMAT_SRM_UNCOMRESSED
 };
 
@@ -200,7 +211,7 @@ int CFG_getSaveFormat(void);
 void CFG_setSaveFormat(int);
 // Save state format to use for libretro cores
 // 0 - .st0
-// 1 - .state.0 (compressed rzip)
+// 1 - .state.<n> (compressed rzip)
 int CFG_getStateFormat(void);
 void CFG_setStateFormat(int);
 // Enable/disable mute also shutting off LEDs.
