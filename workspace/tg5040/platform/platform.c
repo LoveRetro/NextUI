@@ -2362,6 +2362,19 @@ void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
 	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
 }
 
+void PLAT_getBatterySecondsRemaining(int* seconds)
+{
+	bool charging = getInt("/sys/class/power_supply/axp2202-usb/online");
+	int charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
+	if (charging && charge < 100)
+		*seconds = getInt("/sys/class/power_supply/axp2202-battery/time_to_full_now");
+	else {
+		*seconds = getInt("/sys/class/power_supply/axp2202-battery/time_to_empty_now");
+		// this is likely overestimating, so take 80 percent of it
+		*seconds = (*seconds * 80) / 100;
+	}
+}
+
 void PLAT_enableBacklight(int enable) {
 	if (enable) {
 		if (is_brick) SetRawBrightness(8);

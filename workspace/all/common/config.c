@@ -37,6 +37,7 @@ void CFG_defaults(NextUISettings *cfg)
         .gameArtWidth = CFG_DEFAULT_GAMEARTWIDTH,
 
         .showClock = CFG_DEFAULT_SHOWCLOCK,
+        .showRemainingTime = CFG_DEFAULT_SHOWREMAININGTIME,
         .clock24h = CFG_DEFAULT_CLOCK24H,
         .showBatteryPercent = CFG_DEFAULT_SHOWBATTERYPERCENT,
         .showMenuAnimations = CFG_DEFAULT_SHOWMENUANIMATIONS,
@@ -140,6 +141,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "showclock=%i", &temp_value) == 1)
             {
                 CFG_setShowClock((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "showRemaining=%i", &temp_value) == 1)
+            {
+                CFG_setShowRemainingTime((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "clock24h=%i", &temp_value) == 1)
@@ -392,6 +398,17 @@ void CFG_setShowClock(bool show)
 bool CFG_getClock24H(void)
 {
     return settings.clock24h;
+}
+
+void CFG_setShowRemainingTime(bool show)
+{
+    settings.showRemainingTime = show;
+    CFG_sync();
+}
+
+bool CFG_getShowRemainingTime(void)
+{
+    return settings.showRemainingTime;
 }
 
 void CFG_setClock24H(bool is24)
@@ -673,6 +690,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getShowClock());
     }
+    else if (strcmp(key, "showRemaining") == 0)
+    {
+        sprintf(value, "%i", CFG_getShowRemainingTime());
+    }
     else if (strcmp(key, "clock24h") == 0)
     {
         sprintf(value, "%i", CFG_getClock24H());
@@ -798,6 +819,7 @@ void CFG_sync(void)
     fprintf(file, "color7=0x%06X\n", settings.color7_255);
     fprintf(file, "radius=%i\n", settings.thumbRadius);
     fprintf(file, "showclock=%i\n", settings.showClock);
+    fprintf(file, "showRemaining=%i\n", settings.showRemainingTime);
     fprintf(file, "clock24h=%i\n", settings.clock24h);
     fprintf(file, "batteryperc=%i\n", settings.showBatteryPercent);
     fprintf(file, "menuanim=%i\n", settings.showMenuAnimations);
@@ -837,7 +859,8 @@ void CFG_print(void)
     printf("\t\"color6\": \"0x%06X\",\n", settings.color6_255);
     printf("\t\"color7\": \"0x%06X\",\n", settings.color7_255);
     printf("\t\"radius\": %i,\n", settings.thumbRadius);
-    printf("\t\"showclock\": %i,\n", settings.showClock);
+    printf("\t\"showclock\": %i,\n", settings.showClock);+
+    printf("\t\"showRemaining\": %i,\n", settings.showRemainingTime);
     printf("\t\"clock24h\": %i,\n", settings.clock24h);
     printf("\t\"batteryperc\": %i,\n", settings.showBatteryPercent);
     printf("\t\"menuanim\": %i,\n", settings.showMenuAnimations);
