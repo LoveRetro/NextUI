@@ -1,4 +1,5 @@
 #!/bin/sh
+# https://github.com/Ninoh-FOX/ADB-shell-trimui/blob/master/Apps/poweroff/poweroff
 
 # Function to terminate all non-essential processes
 task_killer() {
