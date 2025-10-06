@@ -99,6 +99,7 @@ typedef struct
 	// Emulator
 	int saveFormat;
 	int stateFormat;
+	bool useExtractedFileName;
 
 	// Haptic
 	bool haptics;
@@ -135,6 +136,7 @@ typedef struct
 #define CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND true
 #define CFG_DEFAULT_SAVEFORMAT SAVE_FORMAT_SAV
 #define CFG_DEFAULT_STATEFORMAT STATE_FORMAT_SAV
+#define CFG_DEFAULT_EXTRACTEDFILENAME false
 #define CFG_DEFAULT_MUTELEDS false
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
@@ -214,6 +216,9 @@ void CFG_setSaveFormat(int);
 // 1 - .state.<n> (compressed rzip)
 int CFG_getStateFormat(void);
 void CFG_setStateFormat(int);
+// use extracted file name instead of archive name (for cores that do not support archives natively)
+bool CFG_getUseExtractedFileName(void);
+void CFG_setUseExtractedFileName(bool);
 // Enable/disable mute also shutting off LEDs.
 bool CFG_getMuteLEDs(void);
 void CFG_setMuteLEDs(bool);
