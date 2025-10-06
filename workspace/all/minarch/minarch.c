@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <zip.h> 
 #include <pthread.h>
+#include <glob.h>
 
 // libretro-common
 #include "libretro.h"
@@ -129,6 +130,7 @@ static struct Core {
 } core;
 
 int extract_zip(char** extensions);
+static bool getAlias(char* path, char* alias);
 
 static struct Game {
 	char path[MAX_PATH];
@@ -535,6 +537,64 @@ finish:
 	return ret;
 }
 
+// return variations with/without extensions and other cruft
+#define CHEAT_MAX_PATHS 16
+#define CHEAT_MAX_LIST_LENGTH (CHEAT_MAX_PATHS * MAX_PATH)
+static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
+	// Generate possible paths, ordered by most likely to be used (pre v6.2.3 style first)
+	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, game.name); // /mnt/SDCARD/Cheats/GB/Super Example World (USA).<ext>.cht
+
+	// game.name, but with all extension-like stuff removed (apart from .cht)
+	// eg. Super Example World (USA).zip -> Super Example World (USA).cht
+	{
+		int i = 0;
+		char* ext;
+		char exts[128];
+		strcpy(exts,core.extensions);
+		while ((ext=strtok(i?NULL:exts,"|"))) {
+			char rom_name[MAX_PATH];
+			strcpy(rom_name, game.name);
+			char* tmp = strrchr(rom_name, '.');
+			if (tmp != NULL && strlen(tmp) > 2 && strlen(tmp) <= 5) {
+				tmp[0] = '\0';
+				sprintf(paths[(*count)++], "%s/%s.%s.cht", core.cheats_dir, rom_name, ext); // /mnt/SDCARD/Cheats/GB/Super Example World (USA).foo.cht
+			}
+			i++;
+		}
+	}
+
+	// Sanitized: remove extension and other cruft
+	// eg. Super Example World (USA).zip -> Super Example World
+	//     Super Example World (USA) [!].7z -> Super Example World
+	//     Super Example World (USA) (Rev 1).rar -> Super Example World
+	char rom_name[MAX_PATH];
+	getDisplayName(game.name, rom_name);
+	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World.cht
+
+	// Respect map.txt: use alias if available
+	// eg. 1941.zip	-> 1941: Counter Attack
+	if(getAlias(game.path, rom_name)) {
+		sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World.cht
+	}
+
+	// Santitized alias, ignoring all extra cruft - including Cheat specifics like "(Game Breaker)" etc.
+	// This is a wildcard that may match something unexpected, but also may find something when nothing else does.
+	getDisplayName(game.name, rom_name);
+	getAlias(game.path, rom_name);
+	sprintf(paths[(*count)++], "%s/%s*.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World*.cht
+
+	// Log all path candidates
+	{
+		int i;
+		char list[CHEAT_MAX_LIST_LENGTH] = {0};
+		for (i=0; i<*count; i++) {
+			strcat(list, paths[i]);
+			if (i < *count-1) strcat(list, ", ");
+		}
+		LOG_info("Cheat paths to check: %s\n", list);
+	}
+}
+
 void Cheats_free() {
 	size_t i;
 	for (i = 0; i < cheatcodes.count; i++) {
@@ -549,25 +609,63 @@ void Cheats_free() {
 	cheatcodes.count = 0;
 }
 
-void Cheats_load(const char *filename) {
+bool Cheats_load() {
 	int success = 0;
 	struct Cheats *cheats = &cheatcodes;
 	FILE *file = NULL;
 	size_t i;
 
-	file = fopen(filename, "r");
-	if (!file) {
-		LOG_error("Error opening cheat file: %s\n\t%s\n", filename, strerror(errno));
+	// we get our paths frrom Cheat_getPaths, some might be wildcards
+	char paths[CHEAT_MAX_PATHS][MAX_PATH];
+	int path_count = 0;
+	Cheat_getPaths(paths, &path_count);
+	char filename[MAX_PATH] = {0};
+	for (i=0; i<path_count; i++) {
+		LOG_info("Checking cheat path: %s\n", paths[i]);
+		// handle wildcards
+		if (strchr(paths[i],'*')) {
+			// Use glob to handle wildcards
+			char glob_pattern[MAX_PATH];
+			strcpy(glob_pattern, paths[i]);
+
+			glob_t glob_results;
+			memset(&glob_results, 0, sizeof(glob_t));
+			int glob_ret = glob(glob_pattern, 0, NULL, &glob_results);
+
+			if (glob_ret == 0 && glob_results.gl_pathc > 0) {
+				for (size_t gi = 0; gi < glob_results.gl_pathc; ++gi) {
+					if (!suffixMatch(".cht", glob_results.gl_pathv[gi])) continue;
+					strcpy(filename, glob_results.gl_pathv[gi]);
+					if (exists(filename)) {
+						LOG_info("Found potential cheat file: %s\n", filename);
+						break;
+					}
+					filename[0] = '\0';
+				}
+			}
+			globfree(&glob_results);
+			if (filename[0] == '\0') continue; // no match
+		} else {
+			strcpy(filename, paths[i]);
+			if (!exists(filename)) {
+				filename[0] = '\0';
+				continue;
+			}
+		}
+		break; // found a valid file
+	}
+	if (filename[0] == '\0') {
+		LOG_info("No cheat file found\n");
 		goto finish;
 	}
 
 	LOG_info("Loading cheats from %s\n", filename);
 
-	//cheats = calloc(1, sizeof(struct Cheats));
-	//if (!cheats) {
-	//	LOG_error("Couldn't allocate memory for cheats\n");
-	//	goto finish;
-	//}
+	file = fopen(filename, "r");
+	if (!file) {
+		LOG_error("Couldn't open cheat file: %s\n", filename);
+		goto finish;
+	}
 
 	cheatcodes.count = parse_count(file);
 	if (cheatcodes.count <= 0) {
@@ -596,11 +694,6 @@ finish:
 
 	if (file)
 		fclose(file);
-}
-
-static void Cheat_getPath(char* filename) {
-	sprintf(filename, "%s/%s.cht", core.cheats_dir, game.name);
-	//LOG_info("Cheat_getPath %s\n", filename);
 }
 
 ///////////////////////////////////////
@@ -4791,13 +4884,8 @@ void Core_load(void) {
 	LOG_info("game path: %s (%i)\n", game_info.path, game.size);
 	core.load_game(&game_info);
 
-	char cheats_path[MAX_PATH] = {0};
-	Cheat_getPath(cheats_path);
-	if (cheats_path[0] != '\0') {
-		LOG_info("cheat file path: %s\n", cheats_path);
-		Cheats_load(cheats_path);
+	if (Cheats_load())
 		Core_applyCheats(&cheatcodes);
-	}
 
 	SRAM_read();
 	RTC_read();
@@ -5513,12 +5601,26 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 		Menu_options(&OptionCheats_menu);
 	}
 	else {
-		char cheats_path[MAX_PATH] = {0};
-		Cheat_getPath(cheats_path);
+		// we expect at most CHEAT_MAX_PATHS paths with MAX_PATH length, just hardcode it here
+		char paths[CHEAT_MAX_PATHS][MAX_PATH];
+		int count = 0;
+		Cheat_getPaths(paths, &count);
 
-		char cheat_text[MAX_PATH + 32] = {0};
-		sprintf(cheat_text, "No cheat file loaded.\n\n%s", cheats_path);
-		Menu_message(cheat_text, (char*[]){ "B","BACK", NULL });
+		// concatenate all paths into one string, and prepend title "No cheat file loaded.\n\n"
+		// each path on its own line, and remove the absolute path prefix
+		char cheats_path[CHEAT_MAX_LIST_LENGTH] = {0};
+
+		// prepend title
+		strcat(cheats_path, "No cheat file loaded.\n\n");
+
+		for (int i = 0; i < count; i++) {
+			char* p = basename(paths[i]);
+			// append to cheats_path
+			strcat(cheats_path, p);
+			if (i < count - 1) strcat(cheats_path, "\n");
+		}
+
+		Menu_messageWithFont(cheats_path, (char*[]){ "B","BACK", NULL }, font.small);
 	}
 	
 	return MENU_CALLBACK_NOP;
@@ -5655,7 +5757,6 @@ static MenuList options_menu = {
 		{"Frontend", "NextUI (" BUILD_DATE " " BUILD_HASH ")",.on_confirm=OptionFrontend_openMenu},
 		{"Emulator",.on_confirm=OptionEmulator_openMenu},
 		{"Shaders",.on_confirm=OptionShaders_openMenu},
-		// TODO: this should be hidden with no cheats available
 		{"Cheats",.on_confirm=OptionCheats_openMenu},
 		{"Controls",.on_confirm=OptionControls_openMenu},
 		{"Shortcuts",.on_confirm=OptionShortcuts_openMenu}, 
@@ -5670,7 +5771,8 @@ static void OptionSaveChanges_updateDesc(void) {
 }
 
 #define OPTION_PADDING 8
-static char* getAlias(char* path, char* alias) {
+static bool getAlias(char* path, char* alias) {
+	bool is_alias = false;
 	// LOG_info("alias path: %s\n", path);
 	char* tmp;
 	char map_path[256];
@@ -5701,6 +5803,7 @@ static char* getAlias(char* path, char* alias) {
 					char* value = tmp+1;
 					if (exactMatch(file_name,key)) {
 						strcpy(alias, value);
+						is_alias = true;
 						break;
 					}
 				}
@@ -5708,6 +5811,7 @@ static char* getAlias(char* path, char* alias) {
 			fclose(file);
 		}
 	}
+	return is_alias;
 }
 
 static int Menu_options(MenuList* list) {
