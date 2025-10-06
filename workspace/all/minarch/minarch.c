@@ -156,6 +156,10 @@ static void Game_open(char* path) {
 		strcpy((char*)game.tmp_path, tmppath);
 		skipzip = 1;
 		free(tmppath);
+		// Update the game name to the extracted file name instead of the zip name
+		if (CFG_getUseExtractedFileName()) {
+			strcpy((char*)game.name, strrchr(game.tmp_path, '/')+1);
+		}
 	} else {
 		printf("File does not exist in %s\n",tmpfldr);
 	}
@@ -185,6 +189,10 @@ static void Game_open(char* path) {
 			LOG_info("Extracting zip file manually: %s\n", game.path);
 			if(!extract_zip(extensions))
 				return;
+			// Update the game name to the extracted file name instead of the zip name
+			if (CFG_getUseExtractedFileName()) {
+				strcpy((char*)game.name, strrchr(game.tmp_path, '/')+1);
+			}
 		}
 		else {
 			LOG_info("Core can handle zip file: %s\n", game.path);

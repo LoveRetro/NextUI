@@ -57,6 +57,7 @@ void CFG_defaults(NextUISettings *cfg)
         .romsUseFolderBackground = CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND,
         .saveFormat = CFG_DEFAULT_SAVEFORMAT,
         .stateFormat = CFG_DEFAULT_STATEFORMAT,
+        .useExtractedFileName = CFG_DEFAULT_EXTRACTEDFILENAME,
 
         .wifi = CFG_DEFAULT_WIFI,
         .wifiDiagnostics = CFG_DEFAULT_WIFI_DIAG,
@@ -210,6 +211,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "stateFormat=%i", &temp_value) == 1)
             {
                 CFG_setStateFormat(temp_value);
+                continue;
+            }
+            if (sscanf(line, "useExtractedFileName=%i", &temp_value) == 1)
+            {
+                CFG_setUseExtractedFileName((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "muteLeds=%i", &temp_value) == 1)
@@ -532,6 +538,17 @@ void CFG_setStateFormat(int f)
     CFG_sync();
 }
 
+bool CFG_getUseExtractedFileName(void)
+{
+    return settings.useExtractedFileName;
+}
+
+void CFG_setUseExtractedFileName(bool use)
+{
+    settings.useExtractedFileName = use;
+    CFG_sync();
+}
+
 bool CFG_getMuteLEDs(void)
 {
     return settings.muteLeds;
@@ -725,6 +742,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getStateFormat());
     }
+    else if (strcmp(key, "useExtractedFileName") == 0)
+    {
+        sprintf(value, "%i", CFG_getUseExtractedFileName());
+    }
     else if (strcmp(key, "muteLeds") == 0)
     {
         sprintf(value, "%i", CFG_getMuteLEDs());
@@ -812,6 +833,7 @@ void CFG_sync(void)
     fprintf(file, "romfolderbg=%i\n", settings.romsUseFolderBackground);
     fprintf(file, "saveFormat=%i\n", settings.saveFormat);
     fprintf(file, "stateFormat=%i\n", settings.stateFormat);
+    fprintf(file, "useExtractedFileName=%i\n", settings.useExtractedFileName);
     fprintf(file, "muteLeds=%i\n", settings.muteLeds);
     fprintf(file, "artWidth=%i\n", (int)(settings.gameArtWidth * 100));
     fprintf(file, "wifi=%i\n", settings.wifi);
@@ -852,6 +874,7 @@ void CFG_print(void)
     printf("\t\"romfolderbg\": %i,\n", settings.romsUseFolderBackground);
     printf("\t\"saveFormat\": %i,\n", settings.saveFormat);
     printf("\t\"stateFormat\": %i,\n", settings.stateFormat);
+    printf("\t\"useExtractedFileName\": %i,\n", settings.useExtractedFileName);
     printf("\t\"muteLeds\": %i,\n", settings.muteLeds);
     printf("\t\"artWidth\": %i,\n", (int)(settings.gameArtWidth * 100));
     printf("\t\"wifi\": %i,\n", settings.wifi);
