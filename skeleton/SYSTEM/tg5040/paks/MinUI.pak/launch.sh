@@ -13,15 +13,6 @@
 
 #######################################
 
-if [ -f "/tmp/poweroff" ]; then
-	poweroff_next
-	exit 0
-fi
-if [ -f "/tmp/reboot" ]; then
-	reboot_next
-	exit 0
-fi
-
 export PLATFORM="tg5040"
 export SDCARD_PATH="/mnt/SDCARD"
 export BIOS_PATH="$SDCARD_PATH/Bios"
@@ -99,19 +90,11 @@ if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
 	echo 0 > /sys/class/led_anim/max_scale_lr
 	echo 0 > /sys/class/led_anim/max_scale_f1f2
 fi
-
 # start stock gpio input daemon
 trimui_inputd &
 
-echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
-CPU_SPEED_PERF=2000000
-echo $CPU_SPEED_PERF > $CPU_PATH
-
 keymon.elf & # &> $SDCARD_PATH/keymon.txt &
 batmon.elf & # &> $SDCARD_PATH/batmon.txt &
-
-#killall MtpDaemon # I dont think we need to micro manage this one
 
 # BT handling
 # on by default, disable based on systemval setting
@@ -124,7 +107,6 @@ if [ "$bluetoothon" -eq 0 ]; then
 	/etc/bluetooth/bt_init.sh stop > /dev/null 2>&1 &
 else
 	/etc/bluetooth/bt_init.sh start > /dev/null 2>&1 &
-	#bt_daemon -s &
 fi
 
 # wifi handling
@@ -135,7 +117,6 @@ if [ "$wifion" -eq 0 ]; then
 	/etc/wifi/wifi_init.sh stop > /dev/null 2>&1 &
 else 
 	/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
-	#wifi_daemon -s &
 fi
 
 #######################################
@@ -153,21 +134,25 @@ EXEC_PATH="/tmp/nextui_exec"
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
 while [ -f $EXEC_PATH ]; do
+	# boost CPU to speed up transition to main UI
+	cpufreq.sh -p reset
 	nextui.elf &> $LOGS_PATH/nextui.txt
-	echo $CPU_SPEED_PERF > $CPU_PATH
 	
 	if [ -f $NEXT_PATH ]; then
+		# at this point main UI exited, boost CPU to speed up transition to new app
+		cpufreq.sh -p reset
 		CMD=`cat $NEXT_PATH`
 		eval $CMD
 		rm -f $NEXT_PATH
-		echo $CPU_SPEED_PERF > $CPU_PATH
 	fi
 
 	if [ -f "/tmp/poweroff" ]; then
+		cpufreq.sh -p reset
 		poweroff_next
 		exit 0
 	fi
 	if [ -f "/tmp/reboot" ]; then
+		cpufreq.sh -p reset
 		reboot_next
 		exit 0
 	fi
