@@ -1625,7 +1625,8 @@ static void Menu_quit(void) {
 ///////////////////////////////////////
 
 static int dirty = 1;
-static int remember_selection = 0;
+static int remember_row = 0;
+static int remember_depth = 0;
 
 ///////////////////////////////////////
 
@@ -2885,7 +2886,7 @@ int main (int argc, char *argv[]) {
 				// list
 				if (total > 0) {
 					selected_row = top->selected - top->start;
-					previousY = (remember_selection) * PILL_SIZE;
+					previousY = (remember_row) * PILL_SIZE;
 					targetY = selected_row * PILL_SIZE;
 					for (int i = top->start, j = 0; i < top->end; i++, j++) {
 						Entry* entry = top->entries->items[i];
@@ -2905,7 +2906,7 @@ int main (int argc, char *argv[]) {
 					
 						SDL_Color text_color = uintToColour(THEME_COLOR4_255);
 						int notext = 0;
-						if(selected_row == remember_selection && j == selected_row && (selected_row+1 >= (top->end-top->start) || selected_row == 0 || selected_row == remember_selection)) {
+						if(selected_row == remember_row && j == selected_row && (selected_row+1 >= (top->end-top->start) || selected_row == 0 || selected_row == remember_row)) {
 							text_color = uintToColour(THEME_COLOR5_255);
 							notext=1;
 						}
@@ -2914,6 +2915,7 @@ int main (int argc, char *argv[]) {
 						const int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
 						if (j == selected_row) {
 							is_scrolling = GFX_resetScrollText(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
+							bool is_scrolling = remember_depth == stack->count;
 							SDL_LockMutex(animMutex);
 							if(globalpill) SDL_FreeSurface(globalpill);
 							globalpill = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888);
@@ -2929,7 +2931,7 @@ int main (int argc, char *argv[]) {
 							pilltargetTextY = +screen->w;
 							task->move_w = max_width;
 							task->move_h = SCALE1(PILL_SIZE);
-							task->frames = CFG_getMenuAnimations() ? 3:0;
+							task->frames = is_scrolling && CFG_getMenuAnimations() ? 3:0;
 							task->entry_name = notext ? " ":entry_name;
 							animPill(task);
 						} 
@@ -2956,7 +2958,8 @@ int main (int argc, char *argv[]) {
 						GFX_animateSurfaceOpacity(blackBG,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,LAYER_THUMBNAIL);
 					}
 		
-					remember_selection = selected_row;
+					remember_row = selected_row;
+					remember_depth = stack->count;
 				}
 				else {
 					// TODO: for some reason screen's dimensions end up being 0x0 in GFX_blitMessage...
@@ -3115,7 +3118,7 @@ int main (int argc, char *argv[]) {
 					GFX_scrollTextTexture(
 						font.large,
 						entry_text,
-						SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + remember_selection * PILL_SIZE) + text_offset_y,
+						SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + remember_row * PILL_SIZE) + text_offset_y,
 						max_width - SCALE1(BUTTON_PADDING * 2),
 						0,
 						text_color,
