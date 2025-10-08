@@ -1797,6 +1797,7 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 
 	if (show_setting && !GetHDMI())
 	{
+		int asset;
 		ow = SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
 		ox = dst->w - SCALE1(PADDING) - ow;
 		oy = SCALE1(PADDING);
@@ -1807,22 +1808,26 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 			setting_value = GetBrightness();
 			setting_min = BRIGHTNESS_MIN;
 			setting_max = BRIGHTNESS_MAX;
+			asset = ASSET_BRIGHTNESS;
 		}
 		else if (show_setting == 3)
 		{
 			setting_value = GetColortemp();
 			setting_min = COLORTEMP_MIN;
 			setting_max = COLORTEMP_MAX;
+			asset = ASSET_COLORTEMP;
 		}
 		else
 		{
 			setting_value = GetVolume();
 			setting_min = VOLUME_MIN;
 			setting_max = VOLUME_MAX;
+			if(GetBluetooth())
+				asset = (setting_value > 0 ? ASSET_BLUETOOTH : ASSET_BLUETOOTH_OFF);
+			else
+				asset = (setting_value > 0 ? ASSET_VOLUME : ASSET_VOLUME_MUTE);
 		}
 
-		int asset = show_setting == 3 ? ASSET_COLORTEMP : show_setting == 1 ? ASSET_BRIGHTNESS
-																			: (setting_value > 0 ? ASSET_VOLUME : ASSET_VOLUME_MUTE);
 		SDL_Rect asset_rect;
 		GFX_assetRect(asset, &asset_rect);
 		int ax = ox + (SCALE1(PILL_SIZE) - asset_rect.w) / 2;
