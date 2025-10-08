@@ -505,7 +505,7 @@ int GetVolume(void) { // 0-20
 int GetJack(void) {
 	return settings->jack;
 }
-// monitored and set by thread in bt_daemon
+// monitored and set by thread in audiomon
 int GetAudioSink(void) {
 	return settings->audiosink;
 }
@@ -625,7 +625,7 @@ void SetJack(int value) {
 	settings->jack = value;
 	SetVolume(GetVolume());
 }
-// monitored and set by thread in bt_daemon
+// monitored and set by thread in audiomon
 void SetAudioSink(int value) {
 	printf("SetAudioSink(%i)\n", value); fflush(stdout);
 	

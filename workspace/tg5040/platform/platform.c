@@ -3902,26 +3902,6 @@ static void bt_test_avrcp_audio_volume_cb(const char *bd_addr, unsigned int volu
 	btlog("AVRCP audio volume:%s : %d\n", bd_addr, volume);
 }
 
-void bt_daemon_open(void)
-{
-	int ret = system("pidof bt_daemon > /dev/null 2>&1");
-	if (ret != 0){
-		LOG_debug("opening bt_daemon......\n");
-		system("bt_daemon -s &");
-		//system("/mnt/SDCARD/.system/tg5040/bin/bt_daemon -s &");
-		//sleep(2);
-	} else {
-		LOG_debug("bt_daemon is already open\n");
-	}
-}
-
-void bt_daemon_close(void)
-{
-	LOG_debug("closing bt daemon......\n");
-	system("killall -q bt_daemon");
-	//sleep(1);
-}
-
 /////////////////////////////////
 
 static btmg_callback_t *bt_callback = NULL;
@@ -4031,11 +4011,9 @@ void PLAT_bluetoothEnable(bool shouldBeOn) {
 				return;
 			}
 			bt_manager_set_name("Trimui Brick (NextUI)");
-			bt_daemon_open();
 		}
 		else if(!shouldBeOn && bt_state == BTMG_STATE_ON ) {
 			btlog("turning BT off...\n");
-			bt_daemon_close();
 			if(bt_manager_enable(false) < 0) {
 				LOG_error("bt_manager_enable failed\n");
 				return;
@@ -4049,11 +4027,9 @@ void PLAT_bluetoothEnable(bool shouldBeOn) {
 			btlog("turning BT on...\n");
 			//system("rfkill.elf unblock bluetooth");
 			system("/etc/bluetooth/bt_init.sh start &");
-			//bt_daemon_open();
 		}
 		else {
 			btlog("turning BT off...\n");
-			//bt_daemon_close();
 			system("/etc/bluetooth/bt_init.sh stop &");
 			//system("rfkill.elf block bluetooth");
 		}

@@ -278,7 +278,7 @@ void scanExistingUsbAudioDevices(struct udev* udev) {
 int main(int argc, char* argv[]) {
     if (argc > 1 && std::string(argv[1]) == "-s") {
         use_syslog = true;
-        openlog("bt_daemon", LOG_PID | LOG_CONS, LOG_USER);
+        openlog("audiomon", LOG_PID | LOG_CONS, LOG_USER);
     }
 
     InitSettings();

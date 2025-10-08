@@ -3740,7 +3740,7 @@ void PWR_powerOff(int reboot)
 		system("killall -STOP keymon.elf");
 		system("killall -STOP batmon.elf");
 		system("killall -STOP wifi_daemon");
-		system("killall -STOP bt_daemon");
+		system("killall -STOP audiomon.elf");
 
 		PWR_updateFrequency(-1, false);
 
@@ -3770,7 +3770,7 @@ static void PWR_enterSleep(void)
 	system("killall -STOP batmon.elf");
 	// this is currently handled in wifi_init.sh from suspend script, doing this double or at same time causes problems
 	// system("killall -STOP wifi_daemon");
-	system("killall -STOP bt_daemon");
+	system("killall -STOP audiomon.elf");
 
 	PWR_updateFrequency(-1, false);
 
@@ -3791,7 +3791,7 @@ static void PWR_exitSleep(void)
 	system("killall -CONT batmon.elf");
 	// this is currently handled in wifi_init.sh from suspend script, doing this double or at same time causes problems
 	// system("killall -CONT wifi_daemon");
-	system("killall -CONT bt_daemon");
+	system("killall -CONT audiomon.elf");
 
 	if (GetHDMI())
 	{

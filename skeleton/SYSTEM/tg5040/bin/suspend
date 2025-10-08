@@ -20,7 +20,6 @@ before() {
 	if pgrep bluetoothd; then
 		bluetoothd_running=1
 		>&2 echo "Stopping bluetoothd..."
-		killall -15 bt_daemon || true
 		/etc/bluetooth/bt_init.sh stop || true
 	fi
 
