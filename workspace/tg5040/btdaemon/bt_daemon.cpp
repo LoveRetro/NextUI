@@ -242,6 +242,39 @@ void signalHandler(int sig) {
     running = false;
 }
 
+void scanExistingUsbAudioDevices(struct udev* udev) {
+    log("Scanning for existing USB audio devices...");
+    
+    struct udev_enumerate* enumerate = udev_enumerate_new(udev);
+    if (!enumerate) {
+        log("Failed to create udev enumerator");
+        return;
+    }
+    
+    // Filter for sound subsystem
+    udev_enumerate_add_match_subsystem(enumerate, "sound");
+    udev_enumerate_scan_devices(enumerate);
+    
+    struct udev_list_entry* devices = udev_enumerate_get_list_entry(enumerate);
+    struct udev_list_entry* entry;
+    
+    udev_list_entry_foreach(entry, devices) {
+        const char* path = udev_list_entry_get_name(entry);
+        struct udev_device* dev = udev_device_new_from_syspath(udev, path);
+        
+        if (dev) {
+            if (isUsbAudioDevice(dev)) {
+                log("Found existing USB audio device at startup");
+                handleUsbAudioConnected(dev);
+            }
+            udev_device_unref(dev);
+        }
+    }
+    
+    udev_enumerate_unref(enumerate);
+    log("Finished scanning for existing USB audio devices");
+}
+
 int main(int argc, char* argv[]) {
     if (argc > 1 && std::string(argv[1]) == "-s") {
         use_syslog = true;
@@ -293,6 +326,9 @@ int main(int argc, char* argv[]) {
     // Don't filter initially - let's see all events
     // udev_monitor_filter_add_match_subsystem_devtype(mon, "sound", NULL);
     udev_monitor_enable_receiving(mon);
+    
+    // Scan for existing USB audio devices before starting event monitoring
+    scanExistingUsbAudioDevices(udev);
     
     int udev_fd = udev_monitor_get_fd(mon);
     int dbus_fd = -1;
