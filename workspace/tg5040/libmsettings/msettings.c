@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <dlfcn.h>
 #include <string.h>
-// #include <tinyalsa/mixer.h>
+#include <tinyalsa/mixer.h>
 
 #include "msettings.h"
 
@@ -456,12 +456,15 @@ void InitSettings(void) {
 		settings->mute = 0;
 	}
 	// printf("brightness: %i\nspeaker: %i \n", settings->brightness, settings->speaker);
-
 	system("amixer");
-	system("amixer sset 'Headphone' 0");	  // 100%
-	system("amixer sset 'digital volume' 0"); // 100%
-	system("amixer sset 'DAC Swap' Off"); // Fix L/R channels
-	// volume is set with 'digital volume'
+
+	// make sure all these volume-influencing controls are set to defaults, we will set volume with 'digital volume'
+	if(!GetBluetooth()) {
+		system("amixer sset 'Headphone' 0");	  // 100%
+		system("amixer sset 'digital volume' 0"); // 100%
+		system("amixer sset 'Soft Volume Master' 255"); // 100%
+		system("amixer sset 'DAC Swap' Off"); // Fix L/R channels
+	}
 
 	// This will implicitly update all other settings based on FN switch state
 	SetMute(settings->mute);
@@ -1087,75 +1090,72 @@ void SetRawColortemp(int val) { // 0 - 255
 		fclose(fd);
 	}
 }
-void SetRawVolume(int val) { // 0-100
-	if (settings->mute) val = scaleVolume(GetMutedVolume());
-	
-	// bluetooth: set volkume on the device directly
-	if(GetBluetooth()) {
-		// Get A2DP mixer control name
-		FILE *fp = popen("amixer | grep \"Simple mixer control\" | grep A2DP | head -n1", "r");
-		if (!fp) return;
 
-		char line[256];
-		char control[128] = {0};
+// Find the first A2DP playback volume control via amixer
+static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
+    FILE *fp = popen("amixer scontrols", "r");
+    if (!fp) return 0;
 
-		
-		if (fgets(line, sizeof(line), fp)) {
-			// Example line: Simple mixer control 'AirPods Pro A2DP',0
-			char *start = strchr(line, '\'');
-			char *end = strrchr(line, '\'');
+    char line[256];
+    while (fgets(line, sizeof(line), fp)) {
+        char *start = strchr(line, '\'');
+        char *end = strrchr(line, '\'');
+        if (start && end && end > start) {
+            size_t len = end - start - 1;
+            if (len < buflen) {
+                strncpy(buf, start + 1, len);
+                buf[len] = '\0';
+                if (strstr(buf, "A2DP")) { // first A2DP simple control
+                    pclose(fp);
+                    return 1;
+                }
+            }
+        }
+    }
 
-			if (start && end && end > start) {
-				size_t len = end - start - 1;
-				if (len < sizeof(control)) {
-					strncpy(control, start + 1, len);
-					control[len] = '\0';
-				}
-			}
-		}
-		pclose(fp);
+    pclose(fp);
+    return 0;
+}
 
-		if (control[0]) {
+void SetRawVolume(int val) { // in: 0-100
+	if (settings->mute) 
+		val = scaleVolume(GetMutedVolume());
+
+    if (GetBluetooth()) {
+        // bluealsa is a mixer plugin, not exposed as a separate card
+        char ctl_name[128] = {0};
+        if (get_a2dp_simple_control_name(ctl_name, sizeof(ctl_name))) {
 			char cmd[256];
-			//sprintf(cmd, "amixer sset '%s' -M %i%% &> /dev/null", control, val);
-			sprintf(cmd, "amixer sset '%s' -M %i%%", control, val);
-			system(cmd);
+            // Update volume on the device
+            snprintf(cmd, sizeof(cmd), "amixer sset '%s' -M %d%% &> /dev/null", ctl_name, val);
+            system(cmd);
+			//printf("Set '%s' to %d%%\n", ctl_name, val);
+        }
+    } else {
+        // Speaker path: use direct lookup by name
+		struct mixer *mixer = mixer_open(0);
+        if (!mixer) {
+            //printf("Failed to open mixer\n");
+            return;
+        }
+
+        struct mixer_ctl *digital = mixer_get_ctl_by_name(mixer, "digital volume");
+        if (digital) {
+			mixer_ctl_set_percent(digital, 0, 100 - val); // reversed mapping
+			//printf("Set 'digital volume' to %d%%\n", val);
 		}
-	}
-	else {
-		// Note: 'digital volume' mapping is reversed
-		char cmd[256];
-		sprintf(cmd, "amixer sset 'digital volume' -M %i%% &> /dev/null", 100-val);
-		system(cmd);
-
-		// Setting just 'digital volume' to 0 still plays audio quietly. Also set DAC volume to 0
-		if (val == 0) system("amixer sset 'DAC volume' 0 &> /dev/null");
-		else system("amixer sset 'DAC volume' 160 &> /dev/null"); // 160=0dB=max for 'DAC volume'
-	}
-
-	// TODO: unfortunately doing it this way creating a linker nightmare
-	// struct mixer *mixer = mixer_open(0);
-	// struct mixer_ctl *ctl;
-	//
-	// // digital volume (one-time?)
-	// ctl = mixer_get_ctl(mixer, 3);
-	// mixer_ctl_set_value(ctl,0,0);
-	//
-	// // Soft Volume Master (one-time?)
-	// ctl = mixer_get_ctl(mixer, 16);
-	// mixer_ctl_set_value(ctl,0,255);
-	// mixer_ctl_set_value(ctl,1,255);
-	//
-	// // DAC volume
-	// ctl = mixer_get_ctl(mixer, 7);
-	// mixer_ctl_set_value(ctl,0,val);
-	// mixer_ctl_set_value(ctl,1,val);
-	// mixer_close(mixer);
-	
-	// char cmd[256];
-	// sprintf(cmd, "amixer sset 'digital volume' %i%% &> /dev/null", 100-val);
-	// // puts(cmd); fflush(stdout);
-	// system(cmd);
+		
+		// Digital volume does not quite go to 0, so also mute the DAC volume
+		struct mixer_ctl *dac     = mixer_get_ctl_by_name(mixer, "DAC volume");
+        if (dac) {
+            int dac_val = (val == 0 ? 0 : 160);
+            unsigned int num_values = mixer_ctl_get_num_values(dac);
+            for (unsigned int i = 0; i < num_values; i++)
+                mixer_ctl_set_value(dac, i, dac_val);
+			//printf("Set 'DAC volume' to %d\n", dac_val);
+		}
+		mixer_close(mixer);
+    }
 }
 
 void SetRawContrast(int val){

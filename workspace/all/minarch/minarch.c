@@ -7135,7 +7135,7 @@ int main(int argc , char* argv[]) {
 
 		if (resetAudio) {
 			resetAudio = false;
-			LOG_info("Resetting audio device config! (new state: BT %s)\n", SDL_getenv("AUDIODEV"));
+			LOG_info("Resetting audio device config! (new state: %s)\n", SDL_getenv("AUDIODEV"));
 			SND_resetAudio(core.sample_rate, core.fps);
 		}
 
