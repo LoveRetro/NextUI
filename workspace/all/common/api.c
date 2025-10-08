@@ -295,8 +295,8 @@ SDL_Surface *GFX_init(int mode)
 	asset_rgbs[ASSET_STATE_BG] = RGB_WHITE;
 	asset_rgbs[ASSET_PAGE] = RGB_BLACK;
 	asset_rgbs[ASSET_BAR] = RGB_WHITE;
-	asset_rgbs[ASSET_BAR_BG] = RGB_BLACK;
-	asset_rgbs[ASSET_BAR_BG_MENU] = RGB_DARK_GRAY;
+	asset_rgbs[ASSET_BAR_BG] = RGB_WHITE;
+	asset_rgbs[ASSET_BAR_BG_MENU] = RGB_WHITE;
 	asset_rgbs[ASSET_UNDERLINE] = RGB_GRAY;
 	asset_rgbs[ASSET_DOT] = RGB_LIGHT_GRAY;
 	asset_rgbs[ASSET_HOLE] = RGB_BLACK;
@@ -310,8 +310,8 @@ SDL_Surface *GFX_init(int mode)
 	asset_rects[ASSET_STATE_BG] = (SDL_Rect){SCALE4(23, 54, 8, 8)};
 	asset_rects[ASSET_PAGE] = (SDL_Rect){SCALE4(39, 54, 6, 6)};
 	asset_rects[ASSET_BAR] = (SDL_Rect){SCALE4(33, 58, 4, 4)};
-	asset_rects[ASSET_BAR_BG] = (SDL_Rect){SCALE4(15, 55, 4, 4)};
-	asset_rects[ASSET_BAR_BG_MENU] = (SDL_Rect){SCALE4(85, 56, 4, 4)};
+	asset_rects[ASSET_BAR_BG] = (SDL_Rect){SCALE4(33, 58, 4, 4)};
+	asset_rects[ASSET_BAR_BG_MENU] = (SDL_Rect){SCALE4(33, 58, 4, 4)};
 	asset_rects[ASSET_UNDERLINE] = (SDL_Rect){SCALE4(85, 51, 3, 3)};
 	asset_rects[ASSET_DOT] = (SDL_Rect){SCALE4(33, 54, 2, 2)};
 	asset_rects[ASSET_BRIGHTNESS] = (SDL_Rect){SCALE4(1, 85, 19, 19)};
@@ -1831,7 +1831,8 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 
 		ox += SCALE1(PILL_SIZE);
 		oy += SCALE1((PILL_SIZE - SETTINGS_SIZE) / 2);
-		GFX_blitPill(gfx.mode == MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, &(SDL_Rect){ox, oy, SCALE1(SETTINGS_WIDTH), SCALE1(SETTINGS_SIZE)});
+		GFX_blitPillColor(gfx.mode == MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, &(SDL_Rect){ox, oy, SCALE1(SETTINGS_WIDTH), SCALE1(SETTINGS_SIZE)}, 
+			THEME_COLOR3, RGB_WHITE);
 
 		float percent = ((float)(setting_value - setting_min) / (setting_max - setting_min));
 		if (show_setting == 1 || show_setting == 3 || setting_value > 0)
