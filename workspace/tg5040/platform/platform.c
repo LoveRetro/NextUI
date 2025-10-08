@@ -4287,9 +4287,45 @@ static int inotify_fd = -1;
 static int dir_watch_fd = -1;
 static int file_watch_fd = -1;
 static volatile int running = 0;
-static void (*callback_fn)(bool exists, int watch_event) = NULL;
+static void (*callback_fn)(int device, int watch_event) = NULL;
 static char watched_dir[MAX_PATH];
 static char watched_file_path[MAX_PATH];
+
+// Function to detect audio device type from .asoundrc content
+static int detect_audio_device_type() {
+    FILE *file = fopen(watched_file_path, "r");
+    if (!file) {
+		//LOG_info("detect_audio_device_type: .asoundrc not found, defaulting to AUDIO_SINK_DEFAULT\n");
+        return AUDIO_SINK_DEFAULT;
+    }
+    
+    char line[256];
+    int is_bluetooth = 0;
+    int is_usb_dac = 0;
+    
+    while (fgets(line, sizeof(line), file)) {
+        if (strstr(line, "type bluealsa") || strstr(line, "defaults.bluealsa.device")) {
+            //LOG_info("detect_audio_device_type: found bluealsa\n");
+            is_bluetooth = 1;
+            break;
+        }
+        if (strstr(line, "type hw")) {
+			//LOG_info("detect_audio_device_type: found hw card\n");
+            is_usb_dac = 1;
+            break;
+        }
+    }
+    
+    fclose(file);
+    
+    if (is_bluetooth) {
+        return AUDIO_SINK_BLUETOOTH;
+    } else if (is_usb_dac) {
+        return AUDIO_SINK_USBDAC;
+    } else {
+        return AUDIO_SINK_DEFAULT;
+    }
+}
 
 static void add_file_watch() {
     if (file_watch_fd >= 0) return; // already watching
@@ -4298,7 +4334,7 @@ static void add_file_watch() {
                                       IN_MODIFY | IN_CLOSE_WRITE | IN_DELETE_SELF);
     if (file_watch_fd < 0) {
         if (errno != ENOENT) // ENOENT means file doesn't exist yet - no error needed
-            LOG_error("PLAT_bluetoothWatchRegister: failed to add file watch: %s\n", strerror(errno));
+            LOG_error("PLAT_audioDeviceWatchRegister: failed to add file watch: %s\n", strerror(errno));
     } else {
         LOG_info("Watching file: %s\n", watched_file_path);
     }
@@ -4336,12 +4372,13 @@ static void *watcher_thread_func(void *arg) {
                 if (event->len > 0 && strcmp(event->name, WATCHED_FILE) == 0) {
                     if (event->mask & IN_CREATE) {
                         add_file_watch();
-                        if (callback_fn) callback_fn(true, DIRWATCH_CREATE);
+                        int device_type = detect_audio_device_type();
+                        if (callback_fn) callback_fn(device_type, DIRWATCH_CREATE);
                     }
 					// No need to react to this, we handle it via file watch
                     //else if (event->mask & IN_DELETE) {
                     //    remove_file_watch();
-                    //    if (callback_fn) callback_fn(false, DIRWATCH_DELETE);
+                    //    if (callback_fn) callback_fn(AUDIO_SINK_DEFAULT, DIRWATCH_DELETE);
                     //}
                 }
             }
@@ -4349,14 +4386,15 @@ static void *watcher_thread_func(void *arg) {
                 if (event->mask & (IN_MODIFY | IN_CLOSE_WRITE | IN_DELETE_SELF)) {
                     if (event->mask & IN_DELETE_SELF) {
                         remove_file_watch();
-						if (callback_fn) callback_fn(false, FILEWATCH_DELETE);
+						if (callback_fn) callback_fn(AUDIO_SINK_DEFAULT, FILEWATCH_DELETE);
                     }
 					// No need to react to this, it usually comes paired with FILEWATCH_MODIFY
 					//else if (event->mask & IN_CLOSE_WRITE) {
-					//	if (callback_fn) callback_fn(true, FILEWATCH_CLOSE_WRITE);
+					//	if (callback_fn) callback_fn(AUDIO_SINK_BLUETOOTH, FILEWATCH_CLOSE_WRITE);
 					//}
 					else if (event->mask & IN_MODIFY) {
-						if (callback_fn) callback_fn(true, FILEWATCH_MODIFY);
+						int device_type = detect_audio_device_type();
+						if (callback_fn) callback_fn(device_type, FILEWATCH_MODIFY);
 					}
                 }
             }
@@ -4368,32 +4406,32 @@ static void *watcher_thread_func(void *arg) {
     return NULL;
 }
 
-void PLAT_bluetoothWatchRegister(void (*cb)(bool bt_on, int event)) {
+void PLAT_audioDeviceWatchRegister(void (*cb)(int device, int event)) {
     if (running) return; // Already running
 
     callback_fn = cb;
 
     const char *home = getenv("HOME");
     if (!home) {
-        LOG_error("PLAT_bluetoothWatchRegister: HOME environment variable not set\n");
+        LOG_error("PLAT_audioDeviceWatchRegister: HOME environment variable not set\n");
         return;
     }
 
     snprintf(watched_dir, MAX_PATH, WATCHED_DIR_FMT, home);
     snprintf(watched_file_path, MAX_PATH, "%s/%s", watched_dir, WATCHED_FILE);
 
-    LOG_info("PLAT_bluetoothWatchRegister: Watching directory %s\n", watched_dir);
-    LOG_info("PLAT_bluetoothWatchRegister: Watching file %s\n", watched_file_path);
+    LOG_info("PLAT_audioDeviceWatchRegister: Watching directory %s\n", watched_dir);
+    LOG_info("PLAT_audioDeviceWatchRegister: Watching file %s\n", watched_file_path);
 
     inotify_fd = inotify_init1(IN_NONBLOCK);
     if (inotify_fd < 0) {
-        LOG_error("PLAT_bluetoothWatchRegister: failed to initialize inotify\n");
+        LOG_error("PLAT_audioDeviceWatchRegister: failed to initialize inotify\n");
         return;
     }
 
     dir_watch_fd = inotify_add_watch(inotify_fd, watched_dir, IN_CREATE | IN_DELETE);
     if (dir_watch_fd < 0) {
-        LOG_error("PLAT_bluetoothWatchRegister: failed to add directory watch\n");
+        LOG_error("PLAT_audioDeviceWatchRegister: failed to add directory watch\n");
         close(inotify_fd);
         inotify_fd = -1;
         return;
@@ -4403,7 +4441,7 @@ void PLAT_bluetoothWatchRegister(void (*cb)(bool bt_on, int event)) {
 
     running = 1;
     if (pthread_create(&watcher_thread, NULL, watcher_thread_func, NULL) != 0) {
-        LOG_error("PLAT_bluetoothWatchRegister: failed to create thread\n");
+        LOG_error("PLAT_audioDeviceWatchRegister: failed to create thread\n");
         inotify_rm_watch(inotify_fd, dir_watch_fd);
         close(inotify_fd);
         inotify_fd = -1;
@@ -4412,7 +4450,7 @@ void PLAT_bluetoothWatchRegister(void (*cb)(bool bt_on, int event)) {
     }
 }
 
-void PLAT_bluetoothWatchUnregister(void) {
+void PLAT_audioDeviceWatchUnregister(void) {
     if (!running) return;
 
     running = 0;

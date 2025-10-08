@@ -1,7 +1,8 @@
 // bt_audio_gamepad_daemon.cpp
-// Monitors Bluetooth device connections and updates .asoundrc for audio sinks
+// Monitors Bluetooth device connections and USB-C DAC connections, updating .asoundrc for audio sinks
 
 #include <dbus/dbus.h>
+#include <libudev.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -12,7 +13,9 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/select.h>
 #include <syslog.h>
+#include <errno.h>
 
 extern "C"
 {
@@ -21,6 +24,11 @@ extern "C"
 
 #define AUDIO_FILE "/mnt/SDCARD/.userdata/tg5040/.asoundrc"
 #define UUID_A2DP "0000110b-0000-1000-8000-00805f9b34fb"
+
+enum DeviceType {
+    DEVICE_BLUETOOTH,
+    DEVICE_USB_AUDIO
+};
 
 bool use_syslog = false;
 bool running = true;
@@ -34,29 +42,42 @@ void ensureDirExists(const std::string& path) {
     mkdir(path.c_str(), 0755);
 }
 
-void writeAudioFile(const std::string& mac) {
+void writeAudioFile(const std::string& device_identifier, DeviceType type) {
     ensureDirExists("/mnt/SDCARD/.userdata/tg5040");
     std::ofstream f(AUDIO_FILE);
     if (!f) {
         log("Failed to write audio config file");
         return;
     }
-    f << "defaults.bluealsa.device \"" << mac << "\"\n\n"
-      << "pcm.!default {\n"
-      << "    type plug\n"
-      << "    slave.pcm {\n"
-      << "        type bluealsa\n"
-      //<< "        interface \"hci0\"\n"
-      << "        device \"" << mac << "\"\n"
-      << "        profile \"a2dp\"\n"
-      << "        delay 0\n"
-      //<< "        delay 1000\n"
-      << "    }\n"
-      << "}\n"
-      << "ctl.!default {\n"
-      << "    type bluealsa\n"
-      //<< "    interface \"hci0\"\n"
-      << "}\n";
+
+    if (type == DEVICE_BLUETOOTH) {
+        // Bluetooth A2DP configuration
+        f << "defaults.bluealsa.device \"" << device_identifier << "\"\n\n"
+          << "pcm.!default {\n"
+          << "    type plug\n"
+          << "    slave.pcm {\n"
+          << "        type bluealsa\n"
+          << "        device \"" << device_identifier << "\"\n"
+          << "        profile \"a2dp\"\n"
+          << "        delay 0\n"
+          << "    }\n"
+          << "}\n"
+          << "ctl.!default {\n"
+          << "    type bluealsa\n"
+          << "}\n";
+        log("Updated .asoundrc with Bluetooth device: " + device_identifier);
+    } else if (type == DEVICE_USB_AUDIO) {
+        // USB Audio configuration using ALSA card
+        f << "pcm.!default {\n"
+          << "    type hw\n"
+          << "    card " << device_identifier << "\n"
+          << "}\n"
+          << "ctl.!default {\n"
+          << "    type hw\n"
+          << "    card " << device_identifier << "\n"
+          << "}\n";
+        log("Updated .asoundrc with USB audio device: " + device_identifier);
+    }
 
     f.flush(); // flush C++ stream buffer
 
@@ -66,8 +87,6 @@ void writeAudioFile(const std::string& mac) {
         fsync(fd);
         close(fd);
     }
-
-    log("Updated .asoundrc with device: " + mac);
 }
 
 void clearAudioFile() {
@@ -88,6 +107,52 @@ std::string pathToMac(const std::string& path) {
     std::string mac = path.substr(pos + 4);
     for (auto& c : mac) if (c == '_') c = ':';
     return mac;
+}
+
+std::string getUsbAudioCardNumber(struct udev_device* dev) {
+    // Look for the card number in the device path or properties
+    const char* devnode = udev_device_get_devnode(dev);
+    if (!devnode) return "";
+    
+    // Extract card number from device node like /dev/snd/controlC1
+    std::string devnode_str(devnode);
+    auto pos = devnode_str.find("controlC");
+    if (pos != std::string::npos) {
+        return devnode_str.substr(pos + 8); // Extract number after "controlC"
+    }
+    
+    // Alternative: check ALSA card property
+    const char* card = udev_device_get_property_value(dev, "SOUND_CARD");
+    if (card) return std::string(card);
+    
+    return "";
+}
+
+bool isUsbAudioDevice(struct udev_device* dev) {
+    const char* subsystem = udev_device_get_subsystem(dev);
+    const char* devnode = udev_device_get_devnode(dev);
+    const char* devpath = udev_device_get_devpath(dev);
+    
+    if (!subsystem || strcmp(subsystem, "sound") != 0) {
+        return false;
+    }
+    
+    if (!devnode) {
+        return false;
+    }
+    
+    // Check if it's a control device (indicates audio capability)
+    std::string devnode_str(devnode);
+    if (devnode_str.find("controlC") == std::string::npos) {
+        return false;
+    }
+    
+    // Check if it's USB-connected by looking at the device path
+    if (devpath && strstr(devpath, "usb")) {
+        return true;
+    }
+    
+    return false;
 }
 
 bool hasUUID(DBusConnection* conn, const std::string& path, const std::string& uuid) {
@@ -137,8 +202,8 @@ void handleDeviceConnected(DBusConnection* conn, const std::string& path) {
     std::string mac = pathToMac(path);
     if (hasUUID(conn, path, UUID_A2DP)) {
         log("Audio device connected: " + mac);
-        writeAudioFile(mac);
-        SetBluetooth(1);
+        writeAudioFile(mac, DEVICE_BLUETOOTH);
+        SetAudioSink(AUDIO_SINK_BLUETOOTH);
     } else {
         log("Non-audio device connected: " + mac);
     }
@@ -149,7 +214,27 @@ void handleDeviceDisconnected(DBusConnection* conn, const std::string& path) {
     if (hasUUID(conn, path, UUID_A2DP)) {
         log("Audio device disconnected: " + mac);
         clearAudioFile();
-        SetBluetooth(0);
+        // TODO: we could maintain a stack here, if USBC was connected before and restore that instead
+        SetAudioSink(AUDIO_SINK_DEFAULT);
+    }
+}
+
+void handleUsbAudioConnected(struct udev_device* dev) {
+    std::string card = getUsbAudioCardNumber(dev);
+    if (!card.empty()) {
+        log("USB audio device connected: card " + card);
+        writeAudioFile(card, DEVICE_USB_AUDIO);
+        SetAudioSink(AUDIO_SINK_USBDAC);
+    }
+}
+
+void handleUsbAudioDisconnected(struct udev_device* dev) {
+    std::string card = getUsbAudioCardNumber(dev);
+    if (!card.empty()) {
+        log("USB audio device disconnected: card " + card);
+        clearAudioFile();
+        // TODO: we could maintain a stack here, if BT was connected before and restore that instead
+        SetAudioSink(AUDIO_SINK_DEFAULT);
     }
 }
 
@@ -165,11 +250,12 @@ int main(int argc, char* argv[]) {
 
     InitSettings();
     // This will be updated as soon as something connects
-    SetBluetooth(0);
+    SetAudioSink(AUDIO_SINK_DEFAULT);
 
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
 
+    // Initialize D-Bus
     DBusError err;
     dbus_error_init(&err);
 
@@ -185,63 +271,144 @@ int main(int argc, char* argv[]) {
         nullptr);
     dbus_connection_flush(conn);
 
+    // Initialize udev
+    struct udev* udev = udev_new();
+    if (!udev) {
+        log("Failed to create udev context");
+        return 1;
+    }
+
+    // Try both kernel and udev events
+    struct udev_monitor* mon = udev_monitor_new_from_netlink(udev, "kernel");
+    if (!mon) {
+        log("Failed to create kernel udev monitor, trying udev monitor");
+        mon = udev_monitor_new_from_netlink(udev, "udev");
+        if (!mon) {
+            log("Failed to create udev monitor");
+            udev_unref(udev);
+            return 1;
+        }
+    }
+
+    // Don't filter initially - let's see all events
+    // udev_monitor_filter_add_match_subsystem_devtype(mon, "sound", NULL);
+    udev_monitor_enable_receiving(mon);
+    
+    int udev_fd = udev_monitor_get_fd(mon);
+    int dbus_fd = -1;
+    
+    // Try to get D-Bus file descriptor
+    if (!dbus_connection_get_unix_fd(conn, &dbus_fd)) {
+        log("Warning: Could not get D-Bus file descriptor, will use polling");
+        dbus_fd = -1;
+    }
+    
+    log("Monitoring for Bluetooth and USB audio device events");
+
     while (running) {
-        dbus_connection_read_write(conn, 1000);
-        DBusMessage* msg = dbus_connection_pop_message(conn);
-        if (!msg) continue;
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        
+        // Add D-Bus file descriptor
+        if (dbus_fd >= 0) {
+            FD_SET(dbus_fd, &readfds);
+        }
+        
+        // Add udev file descriptor
+        FD_SET(udev_fd, &readfds);
+        
+        int max_fd = (dbus_fd > udev_fd) ? dbus_fd : udev_fd;
+        
+        struct timeval timeout;
+        timeout.tv_sec = 1;
+        timeout.tv_usec = 0;
+        
+        int ret = select(max_fd + 1, &readfds, NULL, NULL, &timeout);
+        
+        if (ret < 0) {
+            if (errno == EINTR) continue;
+            log("select() error");
+            break;
+        }
+        
+        // Handle D-Bus events
+        if (dbus_fd >= 0 && FD_ISSET(dbus_fd, &readfds)) {
+            dbus_connection_read_write(conn, 0);
+            DBusMessage* msg = dbus_connection_pop_message(conn);
+            if (msg) {
+                if (dbus_message_is_signal(msg, "org.freedesktop.DBus.Properties", "PropertiesChanged")) {
+                    const char* path = dbus_message_get_path(msg);
+                    if (path && std::string(path).find("dev_") != std::string::npos) {
 
-        if (dbus_message_is_signal(msg, "org.freedesktop.DBus.Properties", "PropertiesChanged")) {
-            const char* path = dbus_message_get_path(msg);
-            if (!path || std::string(path).find("dev_") == std::string::npos) {
-                dbus_message_unref(msg);
-                continue;
-            }
+                        DBusMessageIter args;
+                        dbus_message_iter_init(msg, &args);
 
-            DBusMessageIter args;
-            dbus_message_iter_init(msg, &args);
+                        const char* iface = nullptr;
+                        dbus_message_iter_get_basic(&args, &iface);
+                        if (iface && std::string(iface) == "org.bluez.Device1") {
 
-            const char* iface = nullptr;
-            dbus_message_iter_get_basic(&args, &iface);
-            if (!iface || std::string(iface) != "org.bluez.Device1") {
-                dbus_message_unref(msg);
-                continue;
-            }
+                            dbus_message_iter_next(&args);
+                            if (dbus_message_iter_get_arg_type(&args) == DBUS_TYPE_ARRAY) {
+                                DBusMessageIter changed;
+                                dbus_message_iter_recurse(&args, &changed);
 
-            dbus_message_iter_next(&args);
-            if (dbus_message_iter_get_arg_type(&args) != DBUS_TYPE_ARRAY) {
-                dbus_message_unref(msg);
-                continue;
-            }
+                                while (dbus_message_iter_get_arg_type(&changed) == DBUS_TYPE_DICT_ENTRY) {
+                                    DBusMessageIter dict;
+                                    dbus_message_iter_recurse(&changed, &dict);
 
-            DBusMessageIter changed;
-            dbus_message_iter_recurse(&args, &changed);
+                                    const char* key;
+                                    dbus_message_iter_get_basic(&dict, &key);
 
-            while (dbus_message_iter_get_arg_type(&changed) == DBUS_TYPE_DICT_ENTRY) {
-                DBusMessageIter dict;
-                dbus_message_iter_recurse(&changed, &dict);
+                                    if (std::string(key) == "Connected") {
+                                        dbus_message_iter_next(&dict);
+                                        DBusMessageIter variant;
+                                        dbus_message_iter_recurse(&dict, &variant);
+                                        dbus_bool_t connected;
+                                        dbus_message_iter_get_basic(&variant, &connected);
 
-                const char* key;
-                dbus_message_iter_get_basic(&dict, &key);
+                                        if (connected)
+                                            handleDeviceConnected(conn, path);
+                                        else
+                                            handleDeviceDisconnected(conn, path);
+                                    }
 
-                if (std::string(key) == "Connected") {
-                    dbus_message_iter_next(&dict);
-                    DBusMessageIter variant;
-                    dbus_message_iter_recurse(&dict, &variant);
-                    dbus_bool_t connected;
-                    dbus_message_iter_get_basic(&variant, &connected);
-
-                    if (connected)
-                        handleDeviceConnected(conn, path);
-                    else
-                        handleDeviceDisconnected(conn, path);
+                                    dbus_message_iter_next(&changed);
+                                }
+                            }
+                        }
+                    }
                 }
-
-                dbus_message_iter_next(&changed);
+                dbus_message_unref(msg);
             }
         }
-
-        dbus_message_unref(msg);
+        
+        // Handle udev events
+        if (FD_ISSET(udev_fd, &readfds)) {
+            struct udev_device* dev = udev_monitor_receive_device(mon);
+            if (dev) {
+                const char* action = udev_device_get_action(dev);
+                const char* subsystem = udev_device_get_subsystem(dev);
+                
+                // Only process sound events
+                if (subsystem && strcmp(subsystem, "sound") == 0) {
+                    if (isUsbAudioDevice(dev)) {
+                        if (action) {
+                            if (strcmp(action, "add") == 0) {
+                                handleUsbAudioConnected(dev);
+                            } else if (strcmp(action, "remove") == 0) {
+                                handleUsbAudioDisconnected(dev);
+                            }
+                        }
+                    }
+                }
+                udev_device_unref(dev);
+            }
+        }
     }
+
+    // Cleanup
+    udev_monitor_unref(mon);
+    udev_unref(udev);
 
     if (use_syslog) closelog();
     return 0;

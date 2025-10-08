@@ -169,7 +169,7 @@ typedef struct SettingsV10 {
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
 	int jack; 
-	int bluetooth; 
+	int audiosink; // was bluetooth true/false before
 } SettingsV10;
 
 // When incrementing SETTINGS_VERSION, update the Settings typedef and add
@@ -203,7 +203,7 @@ static Settings DefaultSettings = {
 	.turbo_r1 = 0,
 	.turbo_r2 = 0,
 	.jack = 0,
-	.bluetooth = 0,
+	.audiosink = AUDIO_SINK_DEFAULT,
 };
 static Settings* settings;
 
@@ -459,10 +459,9 @@ void InitSettings(void) {
 	system("amixer");
 
 	// make sure all these volume-influencing controls are set to defaults, we will set volume with 'digital volume'
-	if(!GetBluetooth()) {
+	if(GetAudioSink() == AUDIO_SINK_DEFAULT) {
 		system("amixer sset 'Headphone' 0");	  // 100%
 		system("amixer sset 'digital volume' 0"); // 100%
-		system("amixer sset 'Soft Volume Master' 255"); // 100%
 		system("amixer sset 'DAC Swap' Off"); // Fix L/R channels
 	}
 
@@ -497,7 +496,7 @@ int GetVolume(void) { // 0-20
 	if (settings->mute && GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 		return GetMutedVolume();
 	
-	if(settings->jack || settings->bluetooth)
+	if(settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
 		return settings->headphones;
 
 	return settings->speaker;
@@ -507,8 +506,8 @@ int GetJack(void) {
 	return settings->jack;
 }
 // monitored and set by thread in bt_daemon
-int GetBluetooth(void) {
-	return settings->bluetooth;
+int GetAudioSink(void) {
+	return settings->audiosink;
 }
 
 int GetHDMI(void) { 
@@ -611,7 +610,7 @@ void SetVolume(int value) { // 0-20
 	if (settings->mute) 
 		return SetRawVolume(scaleVolume(GetMutedVolume()));
 	
-	if (settings->jack || settings->bluetooth)
+	if (settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
 		settings->headphones = value;
 	else
 		settings->speaker = value;
@@ -627,10 +626,10 @@ void SetJack(int value) {
 	SetVolume(GetVolume());
 }
 // monitored and set by thread in bt_daemon
-void SetBluetooth(int value) {
-	printf("SetBluetooth(%i)\n", value); fflush(stdout);
+void SetAudioSink(int value) {
+	printf("SetAudioSink(%i)\n", value); fflush(stdout);
 	
-	settings->bluetooth = value;
+	settings->audiosink = value;
 	SetVolume(GetVolume());
 }
 
@@ -1117,11 +1116,37 @@ static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
     return 0;
 }
 
+// Find the first PCM playback volume control via amixer
+static int get_usbdac_simple_control_name(char *buf, size_t buflen) {
+    FILE *fp = popen("amixer scontrols", "r");
+    if (!fp) return 0;
+
+    char line[256];
+    while (fgets(line, sizeof(line), fp)) {
+        char *start = strchr(line, '\'');
+        char *end = strrchr(line, '\'');
+        if (start && end && end > start) {
+            size_t len = end - start - 1;
+            if (len < buflen) {
+                strncpy(buf, start + 1, len);
+                buf[len] = '\0';
+                if (strstr(buf, "PCM")) { // first PCM simple control
+                    pclose(fp);
+                    return 1;
+                }
+            }
+        }
+    }
+
+    pclose(fp);
+    return 0;
+}
+
 void SetRawVolume(int val) { // in: 0-100
 	if (settings->mute) 
 		val = scaleVolume(GetMutedVolume());
 
-    if (GetBluetooth()) {
+    if (GetAudioSink() == AUDIO_SINK_BLUETOOTH) {
         // bluealsa is a mixer plugin, not exposed as a separate card
         char ctl_name[128] = {0};
         if (get_a2dp_simple_control_name(ctl_name, sizeof(ctl_name))) {
@@ -1129,20 +1154,48 @@ void SetRawVolume(int val) { // in: 0-100
             // Update volume on the device
             snprintf(cmd, sizeof(cmd), "amixer sset '%s' -M %d%% &> /dev/null", ctl_name, val);
             system(cmd);
-			//printf("Set '%s' to %d%%\n", ctl_name, val);
+			//printf("Set '%s' to %d%%\n", ctl_name, val); fflush(stdout);
         }
-    } else {
+    } 
+	else if (GetAudioSink() == AUDIO_SINK_USBDAC) {
+		// USB DAC path: use card 1
+		struct mixer *mixer = mixer_open(1);
+		if (!mixer) {
+			printf("Failed to open mixer\n"); fflush(stdout);
+			return;
+		}
+
+        const unsigned int num_controls = mixer_get_num_ctls(mixer);
+        for (unsigned int i = 0; i < num_controls; i++) {
+            struct mixer_ctl *ctl = mixer_get_ctl(mixer, i);
+            const char *name = mixer_ctl_get_name(ctl);
+            if (!name) continue;
+
+            if (strstr(name, "PCM") && (strstr(name, "Volume") || strstr(name, "volume"))) {
+                if (mixer_ctl_get_type(ctl) == MIXER_CTL_TYPE_INT) {
+                    int min = mixer_ctl_get_range_min(ctl);
+                    int max = mixer_ctl_get_range_max(ctl);
+                    int volume = min + (val * (max - min)) / 100;
+					unsigned int num_values = mixer_ctl_get_num_values(ctl);
+					for (unsigned int i = 0; i < num_values; i++)
+						mixer_ctl_set_value(ctl, i, volume);
+                }
+                break;
+            }
+        }
+	}
+	else {
         // Speaker path: use direct lookup by name
 		struct mixer *mixer = mixer_open(0);
         if (!mixer) {
-            //printf("Failed to open mixer\n");
+            printf("Failed to open mixer\n"); fflush(stdout);
             return;
         }
 
         struct mixer_ctl *digital = mixer_get_ctl_by_name(mixer, "digital volume");
         if (digital) {
 			mixer_ctl_set_percent(digital, 0, 100 - val); // reversed mapping
-			//printf("Set 'digital volume' to %d%%\n", val);
+			//printf("Set 'digital volume' to %d%%\n", val); fflush(stdout);
 		}
 		
 		// Digital volume does not quite go to 0, so also mute the DAC volume
@@ -1152,7 +1205,7 @@ void SetRawVolume(int val) { // in: 0-100
             unsigned int num_values = mixer_ctl_get_num_values(dac);
             for (unsigned int i = 0; i < num_values; i++)
                 mixer_ctl_set_value(dac, i, dac_val);
-			//printf("Set 'DAC volume' to %d\n", dac_val);
+			//printf("Set 'DAC volume' to %d\n", dac_val); fflush(stdout);
 		}
 		mixer_close(mixer);
     }

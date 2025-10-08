@@ -376,6 +376,20 @@ void SND_resetAudio(double sample_rate, double frame_rate);
 void SND_pauseAudio(bool paused);
 void SND_setQuality(int quality);
 
+// watch audio device changes
+typedef enum {
+	DIRWATCH_CREATE = 0,
+	DIRWATCH_DELETE,
+	FILEWATCH_MODIFY,
+	FILEWATCH_DELETE,
+	FILEWATCH_CLOSE_WRITE,
+} WatchEvent;
+void PLAT_audioDeviceWatchRegister(void (*cb)(int, int));
+void PLAT_audioDeviceWatchUnregister(void);
+
+#define SND_registerDeviceWatcher PLAT_audioDeviceWatchRegister
+#define SND_removeDeviceWatcher PLAT_audioDeviceWatchUnregister
+
 ///////////////////////////////
 
 typedef struct LID_Context {
@@ -829,16 +843,6 @@ void PLAT_bluetoothStreamQuit();
 // volume getter/setter
 int PLAT_bluetoothVolume();
 void PLAT_bluetoothSetVolume(int vol);
-// watch audio device changes
-typedef enum {
-	DIRWATCH_CREATE = 0,
-	DIRWATCH_DELETE,
-	FILEWATCH_MODIFY,
-	FILEWATCH_DELETE,
-	FILEWATCH_CLOSE_WRITE,
-} WatchEvent;
-void PLAT_bluetoothWatchRegister(void (*cb)(bool, int));
-void PLAT_bluetoothWatchUnregister(void);
 
 #define BT_init PLAT_bluetoothInit
 #define BT_quit PLAT_bluetoothDeinit
@@ -858,7 +862,5 @@ void PLAT_bluetoothWatchUnregister(void);
 #define BT_isConnected PLAT_bluetoothConnected
 #define BT_getVolume PLAT_bluetoothVolume
 #define BT_setVolume PLAT_bluetoothSetVolume
-#define BT_registerDeviceWatcher PLAT_bluetoothWatchRegister
-#define BT_removeDeviceWatcher PLAT_bluetoothWatchUnregister
 
 #endif

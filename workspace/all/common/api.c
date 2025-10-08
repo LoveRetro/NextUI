@@ -1822,7 +1822,7 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 			setting_value = GetVolume();
 			setting_min = VOLUME_MIN;
 			setting_max = VOLUME_MAX;
-			if(GetBluetooth())
+			if(GetAudioSink() == AUDIO_SINK_BLUETOOTH)
 				asset = (setting_value > 0 ? ASSET_BLUETOOTH : ASSET_BLUETOOTH_OFF);
 			else
 				asset = (setting_value > 0 ? ASSET_VOLUME : ASSET_VOLUME_MUTE);
@@ -2726,6 +2726,9 @@ void SND_pauseAudio(bool paused)
 	SDL_PauseAudio(paused);
 #endif
 }
+
+FALLBACK_IMPLEMENTATION void PLAT_audioDeviceWatchRegister(void (*cb)(int, int)) {}
+FALLBACK_IMPLEMENTATION void PLAT_audioDeviceWatchUnregister(void) {}
 
 ///////////////////////////////
 
@@ -4139,5 +4142,3 @@ FALLBACK_IMPLEMENTATION void PLAT_bluetoothStreamEnd() {}
 FALLBACK_IMPLEMENTATION void PLAT_bluetoothStreamQuit() {}
 FALLBACK_IMPLEMENTATION int PLAT_bluetoothVolume() { return 100; }
 FALLBACK_IMPLEMENTATION void PLAT_bluetoothSetVolume(int vol) {}
-FALLBACK_IMPLEMENTATION void PLAT_bluetoothWatchRegister(void (*cb)(bool, int)) {}
-FALLBACK_IMPLEMENTATION void PLAT_bluetoothWatchUnregister(void) {}
