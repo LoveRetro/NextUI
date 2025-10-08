@@ -6962,7 +6962,7 @@ static void limitFF(void) {
 // We need to do this on the audio thread (aka main thread currently)
 static bool resetAudio = false;
 
-void onBluetoothAudioChanged(bool bluetooth, int watch_event)
+void onAudioSinkChanged(int device, int watch_event)
 {
 	switch (watch_event)
 	{
@@ -6976,14 +6976,14 @@ void onBluetoothAudioChanged(bool bluetooth, int watch_event)
 	resetAudio = true;
 
 	// FIXME: This shouldnt be necessary, alsa should just read .asoundrc for the changed defult device.
-	if(bluetooth)
+	if(device == AUDIO_SINK_BLUETOOTH)
 		SDL_setenv("AUDIODEV", "bluealsa", 1);
 	else
 		SDL_setenv("AUDIODEV", "default", 1);
 
-	if(bluetooth && !exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
+	if(device != AUDIO_SINK_DEFAULT && !exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
 		LOG_error("asoundrc is not there yet!!!\n");
-	else if(!bluetooth && exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
+	else if(device == AUDIO_SINK_DEFAULT && exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
 		LOG_error("asoundrc is not deleted yet!!!\n");
 }
 
@@ -7065,7 +7065,7 @@ int main(int argc , char* argv[]) {
 	Config_readControls(); // restore controls (after the core has reported its defaults)
 
 	SND_init(core.sample_rate, core.fps);
-	BT_registerDeviceWatcher(onBluetoothAudioChanged);
+	SND_registerDeviceWatcher(onAudioSinkChanged);
 	InitSettings(); // after we initialize audio
 	Menu_init();
 	State_resume();
@@ -7173,7 +7173,7 @@ finish:
 	MSG_quit();
 	PWR_quit();
 	VIB_quit();
-	BT_removeDeviceWatcher();
+	SND_removeDeviceWatcher();
 	// Disabling this is a dumb hack for bluetooth, we should really be using 
 	// bluealsa with --keep-alive=-1 - but SDL wont reconnect the stream on next start.
 	// Reenable as soon as we have a more recent SDL available, if ever.
