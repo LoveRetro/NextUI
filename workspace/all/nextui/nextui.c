@@ -1161,11 +1161,16 @@ static void readyResumePath(char* rom_path, int type) {
 	strcpy(rom_file, tmp);
 	
 	sprintf(slot_path, "%s/.minui/%s/%s.txt", SHARED_USERDATA_PATH, emu_name, rom_file); // /.userdata/.minui/<EMU>/<romname>.ext.txt
-	sprintf(preview_path, "%s/.minui/%s/%s.0.bmp", SHARED_USERDATA_PATH, emu_name, rom_file); // /.userdata/.minui/<EMU>/<romname>.ext.0.bmp
-	
 	can_resume = exists(slot_path);
-	has_preview = exists(preview_path);
 
+	// slot_path contains a single integer representing the last used slot
+	if (can_resume) {
+		char slot[16];
+		getFile(slot_path, slot, 16);
+		int s = atoi(slot);
+		sprintf(preview_path, "%s/.minui/%s/%s.%0d.bmp", SHARED_USERDATA_PATH, emu_name, rom_file, s); // /.userdata/.minui/<EMU>/<romname>.ext.<n>.bmp
+		has_preview = exists(preview_path);
+	}
 }
 static void readyResume(Entry* entry) {
 	readyResumePath(entry->path, entry->type);
