@@ -135,6 +135,7 @@ static bool getAlias(char* path, char* alias);
 static struct Game {
 	char path[MAX_PATH];
 	char name[MAX_PATH]; // TODO: rename to basename?
+	char alt_name[MAX_PATH]; // alternate name, eg. unzipped rom file name
 	char m3u_path[MAX_PATH];
 	char tmp_path[MAX_PATH]; // location of unzipped file
 	void* data;
@@ -148,6 +149,7 @@ static void Game_open(char* path) {
 	
 	strcpy((char*)game.path, path);
 	strcpy((char*)game.name, strrchr(path, '/')+1);
+	strcpy((char*)game.alt_name, game.name); // default it
 
 	// check first if the rom already is alive in tmp folder if so skip unzipping shit
 	char tmpfldr[255];
@@ -159,9 +161,8 @@ static void Game_open(char* path) {
 		skipzip = 1;
 		free(tmppath);
 		// Update the game name to the extracted file name instead of the zip name
-		if (CFG_getUseExtractedFileName()) {
-			strcpy((char*)game.name, strrchr(game.tmp_path, '/')+1);
-		}
+		if (CFG_getUseExtractedFileName())
+			strcpy((char*)game.alt_name, strrchr(game.tmp_path, '/')+1);
 	} else {
 		printf("File does not exist in %s\n",tmpfldr);
 	}
@@ -192,9 +193,8 @@ static void Game_open(char* path) {
 			if(!extract_zip(extensions))
 				return;
 			// Update the game name to the extracted file name instead of the zip name
-			if (CFG_getUseExtractedFileName()) {
-				strcpy((char*)game.name, strrchr(game.tmp_path, '/')+1);
-			}
+			if (CFG_getUseExtractedFileName())
+				strcpy((char*)game.alt_name, strrchr(game.tmp_path, '/')+1);
 		}
 		else {
 			LOG_info("Core can handle zip file: %s\n", game.path);
@@ -254,6 +254,7 @@ static void Game_open(char* path) {
 	if (exists(m3u_path)) {
 		strcpy(game.m3u_path, m3u_path);
 		strcpy((char*)game.name, strrchr(m3u_path, '/')+1);
+		strcpy((char*)game.alt_name, game.name); // default it
 	}
 	
 	game.is_open = 1;
@@ -542,9 +543,11 @@ finish:
 #define CHEAT_MAX_LIST_LENGTH (CHEAT_MAX_PATHS * MAX_PATH)
 static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 	// Generate possible paths, ordered by most likely to be used (pre v6.2.3 style first)
-	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, game.name); // /mnt/SDCARD/Cheats/GB/Super Example World (USA).<ext>.cht
+	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, game.name); // /mnt/SDCARD/Cheats/GB/Super Example World.<ext>.cht
+	if(CFG_getUseExtractedFileName())
+		sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, game.alt_name); // /mnt/SDCARD/Cheats/GB/Super Example World (USA).<ext>.cht
 
-	// game.name, but with all extension-like stuff removed (apart from .cht)
+	// game.alt_name, but with all extension-like stuff removed (apart from .cht)
 	// eg. Super Example World (USA).zip -> Super Example World (USA).cht
 	{
 		int i = 0;
@@ -553,7 +556,7 @@ static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 		strcpy(exts,core.extensions);
 		while ((ext=strtok(i?NULL:exts,"|"))) {
 			char rom_name[MAX_PATH];
-			strcpy(rom_name, game.name);
+			strcpy(rom_name, game.alt_name);
 			char* tmp = strrchr(rom_name, '.');
 			if (tmp != NULL && strlen(tmp) > 2 && strlen(tmp) <= 5) {
 				tmp[0] = '\0';
@@ -568,18 +571,17 @@ static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 	//     Super Example World (USA) [!].7z -> Super Example World
 	//     Super Example World (USA) (Rev 1).rar -> Super Example World
 	char rom_name[MAX_PATH];
-	getDisplayName(game.name, rom_name);
+	getDisplayName(game.alt_name, rom_name);
 	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World.cht
 
 	// Respect map.txt: use alias if available
 	// eg. 1941.zip	-> 1941: Counter Attack
-	if(getAlias(game.path, rom_name)) {
+	if(getAlias(game.path, rom_name))
 		sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World.cht
-	}
 
 	// Santitized alias, ignoring all extra cruft - including Cheat specifics like "(Game Breaker)" etc.
 	// This is a wildcard that may match something unexpected, but also may find something when nothing else does.
-	getDisplayName(game.name, rom_name);
+	getDisplayName(game.alt_name, rom_name);
 	getAlias(game.path, rom_name);
 	sprintf(paths[(*count)++], "%s/%s*.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World*.cht
 
@@ -710,15 +712,15 @@ static void SRAM_getPath(char* filename) {
 
 	if (CFG_getSaveFormat() == SAVE_FORMAT_SRM 
 	 || CFG_getSaveFormat() == SAVE_FORMAT_SRM_UNCOMPRESSED) {
-		strcpy(work_name, game.name);
+		strcpy(work_name, game.alt_name);
 		formatSavePath(work_name, filename, ".srm");
 	}
 	else if (CFG_getSaveFormat() == SAVE_FORMAT_GEN) {
-		strcpy(work_name, game.name);
+		strcpy(work_name, game.alt_name);
 		formatSavePath(work_name, filename, ".sav");
 	}
 	else {
-		sprintf(filename, "%s/%s.sav", core.saves_dir, game.name);
+		sprintf(filename, "%s/%s.sav", core.saves_dir, game.alt_name);
 	}
 
 	LOG_info("SRAM_getPath %s\n", filename);
@@ -803,7 +805,7 @@ static void SRAM_write(void) {
 ///////////////////////////////////////
 
 static void RTC_getPath(char* filename) {
-	sprintf(filename, "%s/%s.rtc", core.saves_dir, game.name);
+	sprintf(filename, "%s/%s.rtc", core.saves_dir, game.alt_name);
 }
 static void RTC_read(void) {
 	size_t rtc_size = core.get_memory_size(RETRO_MEMORY_RTC);
@@ -868,7 +870,7 @@ static void State_getPath(char* filename) {
 	// should probably be removed at some point in the future.
 	if (CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT 
 	 || CFG_getStateFormat() == STATE_FORMAT_SRM_UNCOMRESSED_EXTRADOT) {
-		strcpy(work_name, game.name);
+		strcpy(work_name, game.alt_name);
 		char* tmp = strrchr(work_name, '.');
 		if (tmp != NULL && strlen(tmp) > 2 && strlen(tmp) <= 5) {
 			tmp[0] = '\0';
@@ -881,7 +883,7 @@ static void State_getPath(char* filename) {
 	}
 	else if (CFG_getStateFormat() == STATE_FORMAT_SRM
 	 	  || CFG_getStateFormat() == STATE_FORMAT_SRM_UNCOMRESSED) {
-		strcpy(work_name, game.name);
+		strcpy(work_name, game.alt_name);
 		char* tmp = strrchr(work_name, '.');
 		if (tmp != NULL && strlen(tmp) > 2 && strlen(tmp) <= 5) {
 			tmp[0] = '\0';
@@ -895,7 +897,7 @@ static void State_getPath(char* filename) {
 			sprintf(filename, "%s/%s.state%i", core.states_dir, work_name, state_slot);
 	}
 	else {
-		sprintf(filename, "%s/%s.st%i", core.states_dir, game.name, state_slot);
+		sprintf(filename, "%s/%s.st%i", core.states_dir, game.alt_name, state_slot);
 	}
 }
 
@@ -2143,7 +2145,7 @@ enum {
 static void Config_getPath(char* filename, int override) {
 	char device_tag[64] = {0};
 	if (config.device_tag) sprintf(device_tag,"-%s",config.device_tag);
-	if (override) sprintf(filename, "%s/%s%s.cfg", core.config_dir, game.name, device_tag);
+	if (override) sprintf(filename, "%s/%s%s.cfg", core.config_dir, game.alt_name, device_tag);
 	else sprintf(filename, "%s/minarch%s.cfg", core.config_dir, device_tag);
 	LOG_info("Config_getPath %s\n", filename);
 }
@@ -2450,7 +2452,7 @@ static void Config_readControls(void) {
 }
 static void Config_write(int override) {
 	char path[MAX_PATH];
-	// sprintf(path, "%s/%s.cfg", core.config_dir, game.name);
+	// sprintf(path, "%s/%s.cfg", core.config_dir, game.alt_name);
 	Config_getPath(path, CONFIG_WRITE_GAME);
 	
 	if (!override) {
@@ -2514,8 +2516,8 @@ static void Config_write(int override) {
 static void Config_restore(void) {
 	char path[MAX_PATH];
 	if (config.loaded==CONFIG_GAME) {
-		if (config.device_tag) sprintf(path, "%s/%s-%s.cfg", core.config_dir, game.name, config.device_tag);
-		else sprintf(path, "%s/%s.cfg", core.config_dir, game.name);
+		if (config.device_tag) sprintf(path, "%s/%s-%s.cfg", core.config_dir, game.alt_name, config.device_tag);
+		else sprintf(path, "%s/%s.cfg", core.config_dir, game.alt_name);
 		unlink(path);
 		LOG_info("deleted game config: %s\n", path);
 	}
@@ -4982,6 +4984,7 @@ void Menu_init(void) {
 	sprintf(menu.minui_dir, SHARED_USERDATA_PATH "/.minui/%s", emu_name);
 	mkdir(menu.minui_dir, 0755);
 
+	// always sanitized/outer name, to keep main UI from having to inspect archives
 	sprintf(menu.slot_path, "%s/%s.txt", menu.minui_dir, game.name);
 	
 	if (simple_mode) menu.items[ITEM_OPTS] = "Reset";
@@ -6378,6 +6381,7 @@ static void Menu_updateState(void) {
 
 	state_slot = last_slot;
 
+	// always sanitized/outer name, to keep main UI from having to inspect archives
 	sprintf(menu.bmp_path, "%s/%s.%d.bmp", menu.minui_dir, game.name, menu.slot);
 	sprintf(menu.txt_path, "%s/%s.%d.txt", menu.minui_dir, game.name, menu.slot);
 	
@@ -6424,7 +6428,7 @@ static void Menu_screenshot(void) {
 	LOG_info("Menu_screenshot\n");
 
 	char rom_name[256];
-	getDisplayName(game.name, rom_name);
+	getDisplayName(game.alt_name, rom_name);
 	getAlias(game.path, rom_name);
 
 	time_t now = time(NULL);
@@ -6547,7 +6551,6 @@ static void Menu_loop(void) {
 	
 	PWR_enableAutosleep();
 	PAD_reset();
-	
 	
 	// path and string things
 	char* tmp;
