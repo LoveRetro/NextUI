@@ -2853,9 +2853,10 @@ int main (int argc, char *argv[]) {
 						int max_h = (int)(screen->h * 0.6);  
 						int new_w = max_w;
 						int new_h = max_h; 
-						had_thumb = 1;
-						if(exists(thumbpath))
+						if(exists(thumbpath)) {
 							ox = (int)(max_w) - SCALE1(BUTTON_MARGIN*5);
+							had_thumb = 1;
+						}
 						else
 							ox = screen->w;
 					}
