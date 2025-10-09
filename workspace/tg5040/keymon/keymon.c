@@ -40,7 +40,7 @@
 
 #define MUTE_STATE_PATH "/sys/class/gpio/gpio243/value"
 
-#define INPUT_COUNT 4
+#define INPUT_COUNT 5
 static int inputs[INPUT_COUNT] = {};
 static struct input_event ev;
 

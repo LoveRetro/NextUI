@@ -1116,32 +1116,6 @@ static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
     return 0;
 }
 
-// Find the first PCM playback volume control via amixer
-static int get_usbdac_simple_control_name(char *buf, size_t buflen) {
-    FILE *fp = popen("amixer scontrols", "r");
-    if (!fp) return 0;
-
-    char line[256];
-    while (fgets(line, sizeof(line), fp)) {
-        char *start = strchr(line, '\'');
-        char *end = strrchr(line, '\'');
-        if (start && end && end > start) {
-            size_t len = end - start - 1;
-            if (len < buflen) {
-                strncpy(buf, start + 1, len);
-                buf[len] = '\0';
-                if (strstr(buf, "PCM")) { // first PCM simple control
-                    pclose(fp);
-                    return 1;
-                }
-            }
-        }
-    }
-
-    pclose(fp);
-    return 0;
-}
-
 void SetRawVolume(int val) { // in: 0-100
 	if (settings->mute) 
 		val = scaleVolume(GetMutedVolume());
