@@ -2445,20 +2445,26 @@ int main (int argc, char *argv[]) {
 				top->selected = selected;
 				dirty = 1;
 			}
+
+			Entry* entry = top->entries->items[top->selected];
 	
-			if (dirty && total>0) readyResume(top->entries->items[top->selected]);
+			if (dirty && total>0) 
+				readyResume(entry);
 
 			if (total>0 && can_resume && PAD_justReleased(BTN_RESUME)) {
 				should_resume = 1;
-				Entry_open(top->entries->items[top->selected]);
+				Entry_open(entry);
+				
 				dirty = 1;
 			}
 			else if (total>0 && PAD_justPressed(BTN_A)) {
-				Entry_open(top->entries->items[top->selected]);
-				animationdirection = SLIDE_LEFT;
-				total = top->entries->count;
+				Entry_open(entry);
+				if(entry->type == ENTRY_DIR) {
+					animationdirection = SLIDE_LEFT;
+					total = top->entries->count;
+				}
 				dirty = 1;
-				
+
 				if (total>0) readyResume(top->entries->items[top->selected]);
 			}
 			else if (PAD_justPressed(BTN_B) && stack->count>1) {
@@ -2649,8 +2655,8 @@ int main (int argc, char *argv[]) {
 				lastScreen = SCREEN_QUICKMENU;
 			}
 			else if(startgame) {
-				pilltargetY = +screen->w;
-				animationdirection = ANIM_NONE;
+				//pilltargetY = +screen->w;
+				//animationdirection = ANIM_NONE;
 				GFX_clearLayers(LAYER_ALL);
 				GFX_clear(screen);
 				GFX_flipHidden();
