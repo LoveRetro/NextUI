@@ -727,26 +727,6 @@ void GFX_flip_fixed_rate(SDL_Surface *screen, double target_fps)
 	per_frame_start = SDL_GetPerformanceCounter();
 }
 
-void GFX_sync_fixed_rate(double target_fps)
-{
-	if (target_fps == 0.0)
-		target_fps = SCREEN_FPS;
-	int frame_budget = (int)lrint(1000.0 / target_fps);
-	uint32_t frame_duration = SDL_GetTicks() - frame_start;
-	if (gfx.vsync != VSYNC_OFF)
-	{
-		// this limiting condition helps SuperFX chip games
-		if (gfx.vsync == VSYNC_STRICT || frame_start == 0 || frame_duration < frame_budget)
-		{ // only wait if we're under frame budget
-			PLAT_vsync(frame_budget - frame_duration);
-		}
-	}
-	else
-	{
-		if (frame_duration < frame_budget)
-			SDL_Delay(frame_budget - frame_duration);
-	}
-}
 // if a fake vsycn delay is really needed
 void GFX_delay(void)
 {

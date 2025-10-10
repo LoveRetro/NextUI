@@ -2454,8 +2454,8 @@ int main (int argc, char *argv[]) {
 				dirty = 1;
 			}
 			else if (total>0 && PAD_justPressed(BTN_A)) {
-				animationdirection = SLIDE_LEFT;
 				Entry_open(top->entries->items[top->selected]);
+				animationdirection = SLIDE_LEFT;
 				total = top->entries->count;
 				dirty = 1;
 				
@@ -2651,17 +2651,10 @@ int main (int argc, char *argv[]) {
 			else if(startgame) {
 				pilltargetY = +screen->w;
 				animationdirection = ANIM_NONE;
-				SDL_Surface *tmpsur = GFX_captureRendererToSurface();
 				GFX_clearLayers(LAYER_ALL);
 				GFX_clear(screen);
 				GFX_flipHidden();
-
-				if(lastScreen==SCREEN_GAMESWITCHER) {
-					GFX_animateSurfaceOpacityAndScale(tmpsur,screen->w/2,screen->h/2,screen->w,screen->h,screen->w*4,screen->h*4,255,0,CFG_getMenuTransitions() ? 150:20,LAYER_BACKGROUND);
-				} else {
-					GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,LAYER_BACKGROUND);
-				}
-				SDL_FreeSurface(tmpsur);
+				GFX_animateSurfaceOpacity(tmpOldScreen,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,LAYER_BACKGROUND);
 			}
 			else if(currentScreen == SCREEN_GAMESWITCHER) {
 				GFX_clearLayers(LAYER_ALL);
@@ -2738,7 +2731,7 @@ int main (int argc, char *argv[]) {
 							if(lastScreen == SCREEN_GAME) {
 								// need to flip once so streaming_texture1 is updated
 								GFX_flipHidden();
-								GFX_animateSurfaceOpacityAndScale(bmp,screen->w/2,screen->h/2,screen->w*4,screen->h*4,aw,ah,0,255,CFG_getMenuTransitions() ? 150:20,LAYER_ALL);
+								GFX_animateSurfaceOpacity(bmp,0,0,screen->w,screen->h,0,255,CFG_getMenuTransitions() ? 150:20,LAYER_ALL);
 							} else if(lastScreen == SCREEN_GAMELIST) { 
 								
 								GFX_drawOnLayer(blackBG,0,0,screen->w,screen->h,1.0f,0,LAYER_BACKGROUND);
@@ -2773,7 +2766,7 @@ int main (int argc, char *argv[]) {
 						SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
 						SDL_FillRect(tmpsur, &preview_rect, SDL_MapRGBA(screen->format,0,0,0,255));
 						if(lastScreen == SCREEN_GAME) {
-							GFX_animateSurfaceOpacityAndScale(tmpsur,screen->w/2,screen->h/2,screen->w*4,screen->h*4,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,LAYER_BACKGROUND);
+							GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,LAYER_BACKGROUND);
 						} else if(lastScreen == SCREEN_GAMELIST) { 
 							GFX_animateSurface(tmpsur,0,0-screen->h,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 100:20,255,255,LAYER_ALL);
 						} else if(lastScreen == SCREEN_GAMESWITCHER) {
@@ -2892,7 +2885,7 @@ int main (int argc, char *argv[]) {
 				// list
 				if (total > 0) {
 					selected_row = top->selected - top->start;
-					previousY = (remember_row) * PILL_SIZE;
+					previousY = remember_row * PILL_SIZE;
 					targetY = selected_row * PILL_SIZE;
 					for (int i = top->start, j = 0; i < top->end; i++, j++) {
 						Entry* entry = top->entries->items[i];

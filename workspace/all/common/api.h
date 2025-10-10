@@ -250,7 +250,6 @@ enum {
 
 SDL_Surface* GFX_init(int mode);
 #define GFX_resize PLAT_resizeVideo				// (int w, int h, int pitch);
-#define GFX_setScaleClip PLAT_setVideoScaleClip // (int x, int y, int width, int height)
 #define GFX_setSharpness PLAT_setSharpness // (int sharpness)
 #define GFX_setEffectColor PLAT_setEffectColor // (int color)
 #define GFX_setEffect PLAT_setEffect // (int effect)
@@ -262,15 +261,12 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_captureRendererToSurface PLAT_captureRendererToSurface //(void)
 #define GFX_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateSurfaceOpacity PLAT_animateSurfaceOpacity //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_animateSurfaceOpacityAndScale PLAT_animateSurfaceOpacityAndScale //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateAndFadeSurface PLAT_animateAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_animateAndRevealSurfaces PLAT_animateAndRevealSurfaces
 #define GFX_resetScrollText PLAT_resetScrollText
 #define GFX_scrollTextTexture PLAT_scrollTextTexture
 #define GFX_flipHidden PLAT_flipHidden //(void)
 #define GFX_GL_screenCapture PLAT_GL_screenCapture //(void)
 
-#define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
 void GFX_setMode(int mode);
 int GFX_hdmiChanged(void);
 SDL_Color /*GFX_*/ uintToColour(uint32_t colour);
@@ -279,13 +275,11 @@ SDL_Color /*GFX_*/ uintToColour(uint32_t colour);
 #define GFX_clearAll PLAT_clearAll // (void)
 
 void GFX_startFrame(void);
-void audioFPS(void);
 void GFX_flip(SDL_Surface* screen);
 void PLAT_flipHidden();
 void GFX_flip_fixed_rate(SDL_Surface* screen, double target_fps); // if target_fps is 0, then use the native screen FPS
 #define GFX_supportsOverscan PLAT_supportsOverscan // (void)
 void GFX_sync(void); // call this to maintain 60fps when not calling GFX_flip() this frame
-void GFX_sync_fixed_rate(double target_fps);
 void GFX_delay(void); // gfx_sync() is only for everywhere where there is no audio buffer to rely on for delaying, stupid so doing gfx_delay() for like waiting for input loop in binding menu. Need to remove gfx_sync() everwhere eventually
 void GFX_quit(void);
 
@@ -524,7 +518,6 @@ void PLAT_clearVideo(SDL_Surface* screen);
 void PLAT_clearAll(void);
 void PLAT_setVsync(int vsync);
 SDL_Surface* PLAT_resizeVideo(int w, int h, int pitch);
-void PLAT_setVideoScaleClip(int x, int y, int width, int height);
 void PLAT_setSharpness(int sharpness);
 void PLAT_setEffectColor(int color);
 void PLAT_setEffect(int effect);
@@ -552,47 +545,9 @@ void PLAT_animateAndFadeSurface(
 	int start_opacity, int target_opacity, int layer
 );
 
-
-
 void PLAT_animateSurfaceOpacity(SDL_Surface *inputSurface, int x, int y, int w, int h,
 	int start_opacity, int target_opacity, int duration_ms, int layer);
-void PLAT_animateSurfaceOpacityAndScale(
-	SDL_Surface *inputSurface,
-	int x, int y,
-	int start_w, int start_h,
-	int target_w, int target_h,
-	int start_opacity, int target_opacity,
-	int duration_ms,
-	int layer
-);
-void PLAT_animateSurfaceOpacity(SDL_Surface *inputSurface, int x, int y, int w, int h,
-	int start_opacity, int target_opacity, int duration_ms, int layer);
-void PLAT_animateSurfaceOpacityAndScale(
-	SDL_Surface *inputSurface,
-	int x, int y,
-	int start_w, int start_h,
-	int target_w, int target_h,
-	int start_opacity, int target_opacity,
-	int duration_ms,
-	int layer
-);
 
-void PLAT_animateAndRevealSurfaces(
-	SDL_Surface* inputMoveSurface,
-	SDL_Surface* inputRevealSurface,
-	int move_start_x, int move_start_y,
-	int move_target_x, int move_target_y,
-	int move_w, int move_h,
-	int reveal_x, int reveal_y,
-	int reveal_w, int reveal_h,
-	const char* reveal_direction,
-	int duration_ms,
-	int move_start_opacity,
-	int move_target_opacity,
-	int reveal_opacity,
-	int layer1,
-	int layer2
-);
 void PLAT_scrollTextTexture(
     TTF_Font* font,
     const char* in_name,
@@ -602,7 +557,6 @@ void PLAT_scrollTextTexture(
     float transparency
 );
 void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
-void PLAT_present();
 void PLAT_vsync(int remaining);
 scaler_t PLAT_getScaler(GFX_Renderer* renderer);
 void PLAT_blitRenderer(GFX_Renderer* renderer);
