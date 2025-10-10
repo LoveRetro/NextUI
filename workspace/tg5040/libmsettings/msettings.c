@@ -1106,20 +1106,22 @@ static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
                 buf[len] = '\0';
                 if (strstr(buf, "A2DP")) { // first A2DP simple control
                     pclose(fp);
-					// escape any single quotes in the name
 					char esc_buf[128];
 					char *src = buf;
 					char *dst = esc_buf;
-					while(*src && (dst - esc_buf) < (sizeof(esc_buf) - 2)) {
-						if(*src == '\'') {
+					while(*src && (dst - esc_buf) < (sizeof(esc_buf) - 4)) {
+						if(*src == '\"') {
 							*dst++ = '\\';
+							*dst++ = '\"';
+						} else {
+							*dst++ = *src;
 						}
-						*dst++ = *src++;
+						src++;
 					}
 					*dst = '\0';
 					strncpy(buf, esc_buf, buflen);
 					buf[buflen - 1] = '\0';
-                    return 1;
+					return 1;
                 }
             }
         }
@@ -1139,7 +1141,7 @@ void SetRawVolume(int val) { // in: 0-100
         if (get_a2dp_simple_control_name(ctl_name, sizeof(ctl_name))) {
 			char cmd[256];
             // Update volume on the device
-            snprintf(cmd, sizeof(cmd), "amixer sset '%s' -M %d%% &> /dev/null", ctl_name, val);
+            snprintf(cmd, sizeof(cmd), "amixer sset \"%s\" -M %d%% &> /dev/null", ctl_name, val);
             system(cmd);
 			//printf("Set '%s' to %d%%\n", ctl_name, val); fflush(stdout);
         }
