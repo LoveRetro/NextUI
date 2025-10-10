@@ -3441,9 +3441,14 @@ bool PLAT_wifiHasCredentials(char *ssid, WifiSecurityType sec)
     char list_net_results[LIST_NETWORK_MAX];
     int ret = aw_wifid_list_networks(list_net_results, LIST_NETWORK_MAX);
     if (ret < 0) {
-        LOG_error("PLAT_wifiHasCredentials: failed to get wifi network list (%i).\n", ret);
+        wifilog("PLAT_wifiHasCredentials: failed to get wifi network list (%i).\n", ret);
         return false;
     }
+	else if (ret == 0)
+	{
+		LOG_warn("PLAT_wifiHasCredentials: wpa_supplicant.conf has no entries.\n");
+		return false;
+	}	
 
     // Ensure null termination just in case aw_wifid_list_networks doesn't guarantee it
     list_net_results[LIST_NETWORK_MAX - 1] = '\0';
@@ -3854,10 +3859,8 @@ static void bt_test_a2dp_source_connection_state_cb(const char *bd_addr, btmg_a2
 		btlog("A2DP source connecting with device: %s\n", bd_addr);
 	} else if (state == BTMG_A2DP_SOURCE_CONNECTED) {
 		btlog("A2DP source connected with device: %s\n", bd_addr);
-		//write_asoundrc_bt(bd_addr);
 	} else if (state == BTMG_A2DP_SOURCE_DISCONNECTING) {
 		btlog("A2DP source disconnecting with device: %s\n", bd_addr);
-		//delete_asoundrc_bt();
 	} else if (state == BTMG_A2DP_SOURCE_CONNECT_FAILED) {
 		btlog("A2DP source connect with device: %s failed!\n", bd_addr);
 	} else if (state == BTMG_A2DP_SOURCE_DISCONNEC_FAILED) {
