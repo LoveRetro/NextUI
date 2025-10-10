@@ -2834,7 +2834,6 @@ int main (int argc, char *argv[]) {
 				char defaultBgPath[512];
 				snprintf(defaultBgPath, sizeof(defaultBgPath), SDCARD_PATH "/bg.png");
 
-
 				if(((entry->type == ENTRY_DIR || entry->type == ENTRY_ROM) && CFG_getRomsUseFolderBackground())) {
 					char *newBg = entry->type == ENTRY_DIR ? entry->path:rompath;
 					if((strcmp(newBg, folderBgPath) != 0 || lastType != entry->type) && sizeof(folderBgPath) != 1) {
@@ -2904,7 +2903,7 @@ int main (int argc, char *argv[]) {
 				}
 
 				// list
-				if (total > 0 && list_show_entry_names) {
+				if (total > 0) {
 					selected_row = top->selected - top->start;
 					previousY = remember_row * PILL_SIZE;
 					targetY = selected_row * PILL_SIZE;
@@ -2957,8 +2956,11 @@ int main (int argc, char *argv[]) {
 						}
 						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
 						SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)) + text_offset_y };
-						SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
-						SDL_BlitSurface(text, &text_rect, screen, &dest_rect);
+
+						if(list_show_entry_names) {
+							SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
+							SDL_BlitSurface(text, &text_rect, screen, &dest_rect);
+						}
 						SDL_FreeSurface(text_unique); // Free after use
 						SDL_FreeSurface(text); // Free after use
 					}
