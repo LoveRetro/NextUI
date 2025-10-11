@@ -2,8 +2,8 @@
 set -euo pipefail
 exec 0<&-
 
-logfile="/mnt/SDCARD/.userdata/tg5040/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
-exec >> "$logfile" 2>&1
+#logfile="/mnt/SDCARD/.userdata/tg5040/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
+#exec >> "$logfile" 2>&1
 
 wifid_running=
 bluetoothd_running=
