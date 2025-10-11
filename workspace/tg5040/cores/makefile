@@ -25,6 +25,7 @@ CORES+= snes9x
 CORES+= vic
 CORES+= prboom
 CORES+= bluemsx
+CORES+= gearcoleco
 
 ###############################
 
@@ -119,6 +120,10 @@ plus4_FLAGS = EMUTYPE=xplus4
 bluemsx_REPO = https://github.com/libretro/blueMSX-libretro
 bluemsx_CORE = bluemsx_libretro.so
 bluemsx_MAKEFILE = Makefile.libretro
+
+gearcoleco_REPO = https://github.com/drhelius/Gearcoleco.git
+gearcoleco_CORE = gearcoleco_libretro.so
+gearcoleco_BUILD_PATH = gearcoleco/platforms/libretro
 
 ###############################
 
