@@ -76,6 +76,9 @@ int main (int argc, char *argv[]) {
 	InitSettings();
 	// pthread_create(&mute_pt, NULL, &watchMute, NULL);
 
+	// just once on boot to get us in sync	
+	watchMute(NULL);
+
 	
 	char path[32];
 	for (int i=0; i<INPUT_COUNT; i++) {
