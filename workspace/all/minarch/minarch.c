@@ -4684,7 +4684,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 		if(!fast_forward && data) {
 			if(ambient_mode!=0) {
 				GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
-				LEDS_updateLeds();
+				LEDS_setProfile(LIGHT_PROFILE_AMBIENT);
 			}
 		}
 
@@ -6576,7 +6576,6 @@ static void Menu_loop(void) {
 	SDL_Surface* preview = SDL_CreateRGBSurface(SDL_SWSURFACE,DEVICE_WIDTH/2,DEVICE_HEIGHT/2,32,RGBA_MASK_8888); // TODO: retain until changed?
 
 	LEDS_initLeds();
-	LEDS_updateLeds();
 
 	//set vid.blit to null for menu drawing no need for blitrender drawing
 	GFX_clearShaders();

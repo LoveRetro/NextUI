@@ -481,8 +481,20 @@ int PWR_preventAutosleep(void);
 int PWR_isCharging(void);
 int PWR_getBattery(void);
 
+enum LightProfile {
+	LIGHT_PROFILE_DEFAULT = 0, // configured via LedControl
+	LIGHT_PROFILE_OFF = 1, // all forced off
+	LIGHT_PROFILE_LOW_BATTERY = 2, // low battery warning
+	LIGHT_PROFILE_CRITICAL_BATTERY = 3, // critical battery warning
+	LIGHT_PROFILE_CHARGING = 4, // derived from default
+	LIGHT_PROFILE_SLEEP = 5, // sleep mode
+	LIGHT_PROFILE_AMBIENT = 6, // ambient mode
+	LIGHT_PROFILE_COUNT
+};
+
 void LEDS_initLeds();
-void LEDS_updateLeds();
+void LEDS_setProfile(int profile); // enum LightProfile
+void LEDS_updateLeds(bool indicator_only);
 void LEDS_SaveSettings();
 void LEDS_setEffect(int);
 void LEDS_setColor(uint32_t color);

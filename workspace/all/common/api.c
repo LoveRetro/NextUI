@@ -63,9 +63,17 @@ uint32_t RGB_LIGHT_GRAY;
 uint32_t RGB_GRAY;
 uint32_t RGB_DARK_GRAY;
 float currentbufferms = 20.0;
+
 LightSettings lightsDefault[MAX_LIGHTS];
-LightSettings lightsMuted[MAX_LIGHTS];
+LightSettings lightsOff[MAX_LIGHTS];
+LightSettings lightsCharging[MAX_LIGHTS];
+LightSettings lightsLowBattery[MAX_LIGHTS];
+LightSettings lightsCriticalBattery[MAX_LIGHTS];
+LightSettings lightsSleep[MAX_LIGHTS];
+LightSettings lightsAmbient[MAX_LIGHTS];
 LightSettings (*lights)[MAX_LIGHTS] = NULL;
+
+///////////////////////////////
 
 volatile int useAutoCpu;
 
@@ -272,7 +280,6 @@ SDL_Surface *GFX_init(int mode)
 
 	PLAT_initLid();
 	LEDS_initLeds();
-	LEDS_updateLeds();
 
 	gfx.screen = PLAT_initVideo();
 	gfx.vsync = VSYNC_STRICT;
@@ -523,24 +530,24 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 
 	if (mode == 1 || mode == 2 || mode == 5)
 	{
-		(*lights)[2].color1 = dominant_color;
-		(*lights)[2].effect = 4;
-		(*lights)[2].brightness = 100;
+		(lightsAmbient)[2].color1 = dominant_color;
+		(lightsAmbient)[2].effect = 4;
+		(lightsAmbient)[2].brightness = 100;
 	}
 	if (mode == 1 || mode == 3)
 	{
-		(*lights)[0].color1 = dominant_color;
-		(*lights)[0].effect = 4;
-		(*lights)[0].brightness = 100;
-		(*lights)[1].color1 = dominant_color;
-		(*lights)[1].effect = 4;
-		(*lights)[1].brightness = 100;
+		(lightsAmbient)[0].color1 = dominant_color;
+		(lightsAmbient)[0].effect = 4;
+		(lightsAmbient)[0].brightness = 100;
+		(lightsAmbient)[1].color1 = dominant_color;
+		(lightsAmbient)[1].effect = 4;
+		(lightsAmbient)[1].brightness = 100;
 	}
 	if (mode == 1 || mode == 4 || mode == 5)
 	{
-		(*lights)[3].color1 = dominant_color;
-		(*lights)[3].effect = 4;
-		(*lights)[3].brightness = 100;
+		(lightsAmbient)[3].color1 = dominant_color;
+		(lightsAmbient)[3].effect = 4;
+		(lightsAmbient)[3].brightness = 100;
 	}
 }
 
@@ -3426,13 +3433,13 @@ static void PWR_updateBatteryStatus(void)
 	PLAT_enableOverlay(pwr.should_warn && pwr.charge <= PWR_LOW_CHARGE);
 
 	// low power warn on all leds
-	if (pwr.charge < PWR_LOW_CHARGE + 10)
+	if (pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE)
 	{
-		LEDS_setIndicator(3, 0xFF3300, -1);
+		LEDS_setProfile(LIGHT_PROFILE_LOW_BATTERY);
 	}
-	if (pwr.charge < PWR_LOW_CHARGE)
+	else if (pwr.charge < PWR_LOW_CHARGE)
 	{
-		LEDS_setIndicator(3, 0xFF0000, -1);
+		LEDS_setProfile(LIGHT_PROFILE_CRITICAL_BATTERY);
 	}
 }
 
@@ -3529,7 +3536,7 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 		was_charging = pwr.is_charging;
 		if (pwr.is_charging)
 		{
-			LED_setIndicator(2, 0xFF0000, -1, 2);
+			LEDS_setProfile(LIGHT_PROFILE_CHARGING);
 		}
 	}
 
@@ -3545,12 +3552,11 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 		{
 			if (is_charging)
 			{
-				LED_setIndicator(2, 0xFF0000, -1, 2);
+				LEDS_setProfile(LIGHT_PROFILE_CHARGING);
 			}
 			else
 			{
-				PLAT_initLeds(lightsDefault);
-				LEDS_updateLeds();
+				LEDS_setProfile(LIGHT_PROFILE_DEFAULT);
 			}
 			was_charging = is_charging;
 			dirty = 1;
@@ -3649,8 +3655,8 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 			setting_shown_at = now;
 			if (CFG_getMuteLEDs())
 			{
-				lights = muted ? &lightsMuted : &lightsDefault;
-				LEDS_updateLeds();
+				LEDS_setProfile(muted ? LIGHT_PROFILE_OFF 
+					: LIGHT_PROFILE_DEFAULT);
 			}
 		}
 	}
@@ -3731,7 +3737,7 @@ void PWR_powerOff(int reboot)
 static void PWR_enterSleep(void)
 {
 	SND_pauseAudio(true);
-	LEDS_setIndicator(2, 0, 5);
+	LEDS_setProfile(LIGHT_PROFILE_SLEEP);
 	if (GetHDMI())
 	{
 		PLAT_clearVideo(gfx.screen);
@@ -3758,12 +3764,7 @@ static void PWR_enterSleep(void)
 }
 static void PWR_exitSleep(void)
 {
-	PLAT_initLeds(lightsDefault);
-	LEDS_updateLeds();
-	if (pwr.is_charging)
-	{
-		LED_setIndicator(2, 0xFF0000, -1, 2);
-	}
+	LEDS_initLeds();
 
 	PWR_updateFrequency(-1, true);
 
@@ -4000,7 +4001,40 @@ void LED_setColor(uint32_t color, int ledindex)
 	}
 }
 
-void LEDS_updateLeds()
+void LEDS_setProfile(int profile)
+{
+	bool indicator = true;
+	switch(profile)
+	{
+		case LIGHT_PROFILE_DEFAULT: // default
+			lights = &lightsDefault;
+			indicator = false;
+			break;
+		case LIGHT_PROFILE_OFF: // muted
+			lights = &lightsOff;
+			indicator = false;
+			break;
+		case LIGHT_PROFILE_LOW_BATTERY: // low battery
+			lights = &lightsLowBattery;
+			break;
+		case LIGHT_PROFILE_CRITICAL_BATTERY: // critical battery
+			lights = &lightsCriticalBattery;
+			break;
+		case LIGHT_PROFILE_CHARGING: // charging
+			lights = &lightsCharging;
+			break;
+		case LIGHT_PROFILE_SLEEP: // sleep mode
+			lights = &lightsSleep;
+			break;
+		case LIGHT_PROFILE_AMBIENT: // ambient mode
+			lights = &lightsAmbient;
+			indicator = false;
+			break;
+	}
+	LEDS_updateLeds(indicator);
+}
+
+void LEDS_updateLeds(bool indicator_only)
 {
 	if (pwr.charge > PWR_LOW_CHARGE)
 	{
@@ -4011,7 +4045,12 @@ void LEDS_updateLeds()
 			lightsize = 4;
 		for (int i = 0; i < lightsize; i++)
 		{
-			PLAT_setLedBrightness(&(*lights)[i]);	// set brightness of each led
+			// set brightness of each led
+			if(indicator_only)
+				PLAT_setLedInbrightness(&(*lights)[i]);
+			else
+				PLAT_setLedBrightness(&(*lights)[i]);
+
 			PLAT_setLedEffectCycles(&(*lights)[i]); // set how many times animation should loop
 			PLAT_setLedEffectSpeed(&(*lights)[i]);	// set animation speed
 			PLAT_setLedColor(&(*lights)[i]);		// set color
@@ -4028,12 +4067,47 @@ void LEDS_initLeds()
 	int lightsize = sizeof(lightsDefault) / sizeof(LightSettings);
 	for (int i = 0; i < lightsize; i++)
 	{
-		lightsMuted[i] = lightsDefault[i];
-		lightsMuted[i].brightness = 0;
-		lightsMuted[i].inbrightness = 0;
+		// LIGHT_PROFILE_OFF
+		lightsOff[i] = lightsDefault[i];
+		lightsOff[i].brightness = 0;
+		lightsOff[i].inbrightness = 0;
+
+		// LIGHT_PROFILE_LOW_BATTERY
+		lightsLowBattery[i] = lightsDefault[i];
+		lightsLowBattery[i].effect = 3; // blink
+		lightsLowBattery[i].color1 = 0xFF3300;
+		lightsLowBattery[i].cycles = -1; // infinite
+
+		// LIGHT_PROFILE_CRITICAL_BATTERY
+		lightsCriticalBattery[i] = lightsDefault[i];
+		lightsCriticalBattery[i].effect = 3; // blink
+		lightsCriticalBattery[i].color1 = 0xFF0000;
+		lightsCriticalBattery[i].cycles = -1; // infinite
+
+		// LIGHT_PROFILE_CHARGING
+		lightsCharging[i] = lightsDefault[i];
+		lightsCharging[i].effect = 2; // breathe
+		lightsCharging[i].color1 = 0x00FF00;
+		lightsCharging[i].cycles = -1; // infinite	
+
+		// LIGHT_PROFILE_SLEEP
+		lightsSleep[i] = lightsDefault[i];
+		lightsSleep[i].effect = 2; // breathe
+		lightsSleep[i].color1 = 0;
+		lightsSleep[i].cycles = 5;
 	}
 
 	lights = &lightsDefault;
+	if(CFG_getMuteLEDs() && GetMute())
+		LEDS_setProfile(LIGHT_PROFILE_OFF);
+	else if (pwr.is_charging)
+		LEDS_setProfile(LIGHT_PROFILE_CHARGING);
+	else if (pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE)
+		LEDS_setProfile(LIGHT_PROFILE_LOW_BATTERY);
+	else if (pwr.charge < PWR_LOW_CHARGE)
+		LEDS_setProfile(LIGHT_PROFILE_CRITICAL_BATTERY);
+	else
+		LEDS_setProfile(LIGHT_PROFILE_DEFAULT);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////

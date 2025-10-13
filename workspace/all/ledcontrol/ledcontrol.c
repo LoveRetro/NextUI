@@ -213,9 +213,7 @@ void handle_light_input(LightSettings *light, SDL_Event *event, int selected_set
     }
 
     // Save settings after each change
-
-    
-    LEDS_updateLeds();
+    LEDS_updateLeds(false);
     save_settings();
 }
 
