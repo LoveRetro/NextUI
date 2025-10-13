@@ -481,14 +481,48 @@ int PWR_preventAutosleep(void);
 int PWR_isCharging(void);
 int PWR_getBattery(void);
 
+// rules-based presets managed and applied by LEDS_applyRules()
+enum LightProfile {
+	LIGHT_PROFILE_DEFAULT = 0, // configured via LedControl
+	LIGHT_PROFILE_OFF = 1, // all forced off
+	LIGHT_PROFILE_LOW_BATTERY = 2, // low battery warning
+	LIGHT_PROFILE_CRITICAL_BATTERY = 3, // critical battery warning
+	LIGHT_PROFILE_CHARGING = 4, // derived from default
+	LIGHT_PROFILE_SLEEP = 5, // sleep mode
+	LIGHT_PROFILE_AMBIENT = 6, // ambient mode
+	LIGHT_PROFILE_COUNT
+};
+
+// initialize LED structures based on user settings and derives
+// automatic profiles from it
 void LEDS_initLeds();
-void LEDS_updateLeds();
-void LEDS_SaveSettings();
-void LEDS_setEffect(int);
-void LEDS_setColor(uint32_t color);
-void LED_setColor(uint32_t color,int ledindex);
-void LEDS_setIndicator(int effect,uint32_t color, int cycles);
-void LED_setIndicator(int effect,uint32_t color,int cycles,int ledindex);
+
+// selects the correct LED profile based on predefined rules (charging, low battery, etc).
+void LEDS_applyRules();
+
+// temporary overrides outside of the scope of LEDS_applyRules
+// these will survive LEDS_applyRules() and need to be manually revoked, e.g. 
+/*
+	LEDS_applyRules(); // applies rules
+	LEDS_pushProfile(LIGHT_PROFILE_AMBIENT); // manual override
+	LEDS_applyRules(); // ignored
+	LEDS_popProfile(); // revoke override
+	LEDS_applyRules(); // applies rules
+*/
+// returns true if value was added to the stack.
+// \note this will also call LEDS_updateLeds()
+bool LEDS_pushProfileOverride(int profile);
+// returns true if value was taken off the stack
+// \note this will also call LEDS_updateLeds()
+bool LEDS_popProfileOverride(int profile);
+// returns top of stack, or default if stack is empty
+int LEDS_getProfileOverride();
+
+// changes the active led profile, calls LEDS_updateLeds() implicitly if needed
+void LEDS_setProfile(int profile); // enum LightProfile
+// reapplies the current led config. This should only be necessary
+// if youre directly modifying the LightSettings structure.
+void LEDS_updateLeds(bool indicator_only);
 
 enum {
 	CPU_SPEED_MENU,

@@ -240,6 +240,19 @@ int getInt(char* path) {
 	}
 	return i;
 }
+void putFile(char* path, char* contents) {
+	FILE* file = fopen(path, "w");
+	if (file) {
+		fputs(contents, file);
+		fclose(file);
+	}
+}
+void putInt(char* path, int value) {
+	char buffer[8];
+	sprintf(buffer, "%d", value);
+	putFile(path, buffer);
+}
+
 void touch(char* path) {
 	close(open(path, O_RDWR|O_CREAT, 0777));
 }
@@ -1197,7 +1210,10 @@ void SetRawVolume(int val) { // in: 0-100
 			//printf("Set 'DAC volume' to %d\n", dac_val); fflush(stdout);
 		}
 		mixer_close(mixer);
-    }
+
+		// Really, actually, finally turn the speaker off - including the hissing
+		putInt("/sys/class/speaker/mute", val == 0 ? 1 : 0);
+	}
 }
 
 void SetRawContrast(int val){

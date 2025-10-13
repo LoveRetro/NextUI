@@ -2168,8 +2168,14 @@ void PLAT_updateNetworkStatus()
 
 void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
 {	
-	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
-	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
+	if(is_charging) {
+		int time_to_full = getInt("/sys/class/power_supply/axp2202-battery/time_to_full_now");
+		int charger_present = getInt("/sys/class/power_supply/axp2202-usb/online"); 
+		*is_charging = (charger_present == 1) && (time_to_full > 0);
+	}
+	if(charge) {
+		*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
+	}
 }
 
 void PLAT_enableBacklight(int enable) {
@@ -2426,35 +2432,6 @@ ConnectionStrength PLAT_connectionStrength(void) {
 		return SIGNAL_STRENGTH_LOW;
 }
 
-void PLAT_chmod(const char *file, int writable)
-{
-    struct stat statbuf;
-    if (stat(file, &statbuf) == 0)
-    {
-        mode_t newMode;
-        if (writable)
-        {
-            // Add write permissions for all users
-            newMode = statbuf.st_mode | S_IWUSR | S_IWGRP | S_IWOTH;
-        }
-        else
-        {
-            // Remove write permissions for all users
-            newMode = statbuf.st_mode & ~(S_IWUSR | S_IWGRP | S_IWOTH);
-        }
-
-        // Apply the new permissions
-        if (chmod(file, newMode) != 0)
-        {
-            printf("chmod error %d %s", writable, file);
-        }
-    }
-    else
-    {
-        printf("stat error %d %s", writable, file);
-    }
-}
-
 void PLAT_initDefaultLeds() {
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
@@ -2560,7 +2537,8 @@ void PLAT_initDefaultLeds() {
 	};
 }
 }
-void PLAT_initLeds(LightSettings *lights) {
+void PLAT_initLeds(LightSettings *lights) 
+{
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
 
@@ -2575,9 +2553,7 @@ void PLAT_initLeds(LightSettings *lights) {
 
     if (file == NULL)
     {
-		
-        LOG_info("Unable to open led settings file\n");
-	
+        LOG_warn("Unable to open led settings file\n");
     }
 	else {
 		char line[256];
@@ -2599,6 +2575,7 @@ void PLAT_initLeds(LightSettings *lights) {
 					}
 					else
 					{
+						LOG_info("Maximum number of lights (%d) exceeded. Ignoring further sections.\n", MAX_LIGHTS);
 						current_light = -1; // Reset if max_lights exceeded
 					}
 				}
@@ -2651,12 +2628,8 @@ void PLAT_initLeds(LightSettings *lights) {
 				}
 			}
 		}
-
 		fclose(file);
 	}
-
-	
-	LOG_info("lights setup\n");
 }
 
 #define LED_PATH1 "/sys/class/led_anim/max_scale"
@@ -2681,14 +2654,12 @@ void PLAT_setLedInbrightness(LightSettings *led)
 	}
 	if (strcmp(led->filename, "f2") != 0) {
 		// do nothhing for f2
-		PLAT_chmod(filepath, 1);
 		file = fopen(filepath, "w");
 		if (file != NULL)
 		{
 			fprintf(file, "%i\n", led->inbrightness);
 			fclose(file);
 		}
-		PLAT_chmod(filepath, 0);
 	}
 }
 void PLAT_setLedBrightness(LightSettings *led)
@@ -2709,14 +2680,12 @@ void PLAT_setLedBrightness(LightSettings *led)
 	}
 	if (strcmp(led->filename, "f2") != 0) {
 		// do nothhing for f2
-		PLAT_chmod(filepath, 1);
 		file = fopen(filepath, "w");
 		if (file != NULL)
 		{
 			fprintf(file, "%i\n", led->brightness);
 			fclose(file);
 		}
-		PLAT_chmod(filepath, 0);
 	}
 }
 void PLAT_setLedEffect(LightSettings *led)
@@ -2725,14 +2694,12 @@ void PLAT_setLedEffect(LightSettings *led)
     FILE *file;
     // first set brightness
     snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_%s", led->filename);
-    PLAT_chmod(filepath, 1);
     file = fopen(filepath, "w");
     if (file != NULL)
     {
         fprintf(file, "%i\n", led->effect);
         fclose(file);
     }
-    PLAT_chmod(filepath, 0);
 }
 void PLAT_setLedEffectCycles(LightSettings *led)
 {
@@ -2740,14 +2707,12 @@ void PLAT_setLedEffectCycles(LightSettings *led)
     FILE *file;
     // first set brightness
     snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_cycles_%s", led->filename);
-    PLAT_chmod(filepath, 1);
     file = fopen(filepath, "w");
     if (file != NULL)
     {
         fprintf(file, "%i\n", led->cycles);
         fclose(file);
     }
-    PLAT_chmod(filepath, 0);
 }
 void PLAT_setLedEffectSpeed(LightSettings *led)
 {
@@ -2755,14 +2720,12 @@ void PLAT_setLedEffectSpeed(LightSettings *led)
     FILE *file;
     // first set brightness
     snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_duration_%s", led->filename);
-    PLAT_chmod(filepath, 1);
     file = fopen(filepath, "w");
     if (file != NULL)
     {
         fprintf(file, "%i\n", led->speed);
         fclose(file);
     }
-    PLAT_chmod(filepath, 0);
 }
 void PLAT_setLedColor(LightSettings *led)
 {
@@ -2770,14 +2733,12 @@ void PLAT_setLedColor(LightSettings *led)
     FILE *file;
     // first set brightness
     snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_rgb_hex_%s", led->filename);
-    PLAT_chmod(filepath, 1);
     file = fopen(filepath, "w");
     if (file != NULL)
     {
         fprintf(file, "%06X\n", led->color1);
         fclose(file);
     }
-    PLAT_chmod(filepath, 0);
 }
 
 //////////////////////////////////////////////

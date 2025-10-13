@@ -1,14 +1,16 @@
 #!/bin/sh
 cd $(dirname "$0")
-chmod a+w /sys/class/led_anim/* >> launch.log
+# chmod a+w /sys/class/led_anim/* >> launch.log
 
 # remove original leddaemon
 LCDAEMON_PATH="/etc/LedControl"
+rm -R $LCDAEMON_PATH 2> /dev/null
+if [ -f /etc/init.d/lcservice ]; then
+    /etc/init.d/lcservice disable
+    rm /etc/init.d/lcservice 2> /dev/null
+fi
 
 cd $(dirname "$0")
-rm -R $LCDAEMON_PATH
-/etc/init.d/lcservice disable
-rm /etc/init.d/lcservice
 
 TARGET_PATH="/mnt/SDCARD/.userdata/shared/ledsettings.txt"
 if [ ! -f "$TARGET_PATH" ]; then
@@ -25,6 +27,5 @@ if [ ! -f "$TARGET_PATH" ]; then
 else
     echo "File already exists in TARGET_PATH" >> launch.log
 fi
-
 
 ./ledcontrol.elf > ledcontrol.log 2>&1

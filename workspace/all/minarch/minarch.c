@@ -2011,6 +2011,10 @@ static void Config_syncFrontend(char* key, int value) {
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_AMBIENT].key)) {
 		ambient_mode = value;
+		if(ambient_mode > 0)
+			LEDS_pushProfileOverride(LIGHT_PROFILE_AMBIENT);
+		else 
+			LEDS_popProfileOverride(LIGHT_PROFILE_AMBIENT);
 		i = FE_OPT_AMBIENT;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_EFFECT].key)) {
@@ -4681,12 +4685,8 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 			}
 		}
 
-		if(!fast_forward && data) {
-			if(ambient_mode!=0) {
-				GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
-				LEDS_updateLeds();
-			}
-		}
+		if(ambient_mode && !fast_forward && data)
+			GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
 
 		if (!data) {
 			if (lastframe) {
@@ -6574,9 +6574,6 @@ static void Menu_loop(void) {
 	int ignore_menu = 0;
 	int menu_start = 0;
 	SDL_Surface* preview = SDL_CreateRGBSurface(SDL_SWSURFACE,DEVICE_WIDTH/2,DEVICE_HEIGHT/2,32,RGBA_MASK_8888); // TODO: retain until changed?
-
-	LEDS_initLeds();
-	LEDS_updateLeds();
 
 	//set vid.blit to null for menu drawing no need for blitrender drawing
 	GFX_clearShaders();
