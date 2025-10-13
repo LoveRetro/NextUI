@@ -3916,7 +3916,7 @@ FALLBACK_IMPLEMENTATION void PLAT_setLedEffectSpeed(LightSettings *led) {}
 
 void LEDS_setProfile(int profile)
 {
-	if(lights_initialized == 0 || lights == NULL)
+	if(lights_initialized == 0)
 		return;
 
 	LightSettings *new_lights = NULL;
@@ -3951,17 +3951,19 @@ void LEDS_setProfile(int profile)
 		default:
 			return;
 	}
-
 	if (lights == (LightSettings (*)[MAX_LIGHTS])new_lights)
 		return;
 	lights = (LightSettings (*)[MAX_LIGHTS])new_lights;
+
 	LEDS_updateLeds(indicator);
 }
 
 void LEDS_applyRules()
 {
-	if(lights_initialized == 0 || lights == NULL)
+	if(lights_initialized == 0) {
+		LOG_error("LEDS_applyRules: lights not initialized, skipping\n");
 		return;
+	}
 	
 	// some rules rely on pwr.is_charging and pwr.charge being valid
 	if(pwr.initialized == 0)
@@ -3971,33 +3973,45 @@ void LEDS_applyRules()
 	// of LightProfile enum.
 	// e.g.
 	// - if charging and low battery, charging takes priority
-	if (pwr.initialized && pwr.is_charging)
+	if (pwr.initialized && pwr.is_charging) {
 		LEDS_setProfile(LIGHT_PROFILE_CHARGING);
+	}
 	// - if critical battery, critical battery takes priority over everything
-	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE)
+	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE) {
 		LEDS_setProfile(LIGHT_PROFILE_CRITICAL_BATTERY);
+	}
 	// - if muted, muted takes priority over everything except critical battery
-	else if(CFG_getMuteLEDs() && GetMute())
+	else if(CFG_getMuteLEDs() && GetMute()) {
 		LEDS_setProfile(LIGHT_PROFILE_OFF);
+	}
 	// other rules
-	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE)
+	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE) {
 		LEDS_setProfile(LIGHT_PROFILE_LOW_BATTERY);
+	}
 	// - if no other rule applies, use default (or temporary override)
 	// manual rules to be set on demand: LIGHT_PROFILE_SLEEP, LIGHT_PROFILE_AMBIENT
-	else
+	else {
 		LEDS_setProfile(LEDS_getProfileOverride());
+	}
 }
 
 void LEDS_updateLeds(bool indicator_only)
 {
-	if(lights_initialized == 0 || lights == NULL)
+	if(lights_initialized == 0) {
+		LOG_error("LEDS_updateLeds: lights not initialized, skipping\n");
 		return;
+	}
 		
 	int lightsize = 3;
 	char *device = getenv("DEVICE");
 	int is_brick = exactMatch("brick", device);
 	if (is_brick)
 		lightsize = 4;
+	if(!lights)
+	{
+		LOG_error("LEDS_updateLeds called but lights is NULL\n");
+		return;
+	}
 	for (int i = 0; i < lightsize; i++)
 	{
 		// set brightness of each led
@@ -4016,6 +4030,12 @@ void LEDS_updateLeds(bool indicator_only)
 void LEDS_initLeds()
 {
 	PLAT_initLeds(lightsDefault);
+
+	if(!lightsDefault)
+	{
+		LOG_error("LEDS_initLeds called but lightsDefault is NULL\n");
+		return;
+	}
 
 	int lightsize = sizeof(lightsDefault) / sizeof(LightSettings);
 	for (int i = 0; i < lightsize; i++)
@@ -4095,8 +4115,10 @@ bool LEDS_popProfileOverride(int profile)
 // returns top of stack, or default if stack is empty
 int LEDS_getProfileOverride()
 {
-	if(profile_override_top == -1)
+	if(profile_override_top == -1) {
+		LOG_debug("LED_profile stack is empty, returning default profile.\n");
 		return LIGHT_PROFILE_DEFAULT;
+	}
 	
 	return profile_override[profile_override_top];
 }
