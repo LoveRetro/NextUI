@@ -493,7 +493,12 @@ enum LightProfile {
 };
 
 void LEDS_initLeds();
+// selects the correct LED profile based on predefined rules (charging, low battery, etc).
+void LEDS_applyRules();
+// changes the active led profile, calls LEDS_updateLeds() implicitly if needed
 void LEDS_setProfile(int profile); // enum LightProfile
+// reapplies the current led config. This should only be necessary
+// if youre directly modifying the LightSettings structure.
 void LEDS_updateLeds(bool indicator_only);
 
 enum {

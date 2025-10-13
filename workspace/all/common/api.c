@@ -3431,16 +3431,6 @@ static void PWR_updateBatteryStatus(void)
 {
 	PLAT_getBatteryStatusFine(&pwr.is_charging, &pwr.charge);
 	PLAT_enableOverlay(pwr.should_warn && pwr.charge <= PWR_LOW_CHARGE);
-
-	// low power warn on all leds
-	if (pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE)
-	{
-		LEDS_setProfile(LIGHT_PROFILE_LOW_BATTERY);
-	}
-	else if (pwr.charge < PWR_LOW_CHARGE)
-	{
-		LEDS_setProfile(LIGHT_PROFILE_CRITICAL_BATTERY);
-	}
 }
 
 static void PWR_updateNetworkStatus(void)
@@ -3531,14 +3521,7 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 		was_muted = GetMute();
 
 	static int was_charging = -1;
-	if (was_charging == -1)
-	{
-		was_charging = pwr.is_charging;
-		if (pwr.is_charging)
-		{
-			LEDS_setProfile(LIGHT_PROFILE_CHARGING);
-		}
-	}
+	if (was_charging == -1) was_charging = pwr.is_charging;
 
 	uint32_t now = SDL_GetTicks();
 	if (was_charging || PAD_anyPressed() || last_input_at == 0)
@@ -3550,14 +3533,6 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 		int is_charging = pwr.is_charging;
 		if (was_charging != is_charging)
 		{
-			if (is_charging)
-			{
-				LEDS_setProfile(LIGHT_PROFILE_CHARGING);
-			}
-			else
-			{
-				LEDS_setProfile(LIGHT_PROFILE_DEFAULT);
-			}
 			was_charging = is_charging;
 			dirty = 1;
 		}
@@ -3653,13 +3628,10 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 			was_muted = muted;
 			show_setting = 2;
 			setting_shown_at = now;
-			if (CFG_getMuteLEDs())
-			{
-				LEDS_setProfile(muted ? LIGHT_PROFILE_OFF 
-					: LIGHT_PROFILE_DEFAULT);
-			}
 		}
 	}
+
+	LEDS_applyRules();
 
 	if (show_setting)
 		dirty = 1; // shm is slow or keymon is catching input on the next frame
@@ -3967,6 +3939,30 @@ void LEDS_setProfile(int profile)
 	LEDS_updateLeds(indicator);
 }
 
+void LEDS_applyRules()
+{
+	// these are defined in order of priority, not necessarily in the order
+	// of LightProfile enum.
+	// e.g.
+	// - if charging and low battery, charging takes priority
+	if (pwr.is_charging)
+		LEDS_setProfile(LIGHT_PROFILE_CHARGING);
+		// - if critical battery, critical battery takes priority over everything
+	else if (pwr.charge < PWR_LOW_CHARGE)
+		LEDS_setProfile(LIGHT_PROFILE_CRITICAL_BATTERY);
+	// - if muted, muted takes priority over everything except critical battery
+	else if(CFG_getMuteLEDs() && GetMute())
+		LEDS_setProfile(LIGHT_PROFILE_OFF);
+	// other rules
+	else if (pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE)
+		LEDS_setProfile(LIGHT_PROFILE_LOW_BATTERY);
+	// - if no other rule applies, use default
+	else
+		LEDS_setProfile(LIGHT_PROFILE_DEFAULT);
+
+	// manual rules to be set on demand: LIGHT_PROFILE_SLEEP, LIGHT_PROFILE_AMBIENT
+}
+
 void LEDS_updateLeds(bool indicator_only)
 {
 	if (pwr.charge > PWR_LOW_CHARGE)
@@ -4030,17 +4026,8 @@ void LEDS_initLeds()
 		lightsSleep[i].cycles = 5;
 	}
 
-	lights = &lightsDefault;
-	if(CFG_getMuteLEDs() && GetMute())
-		LEDS_setProfile(LIGHT_PROFILE_OFF);
-	else if (pwr.is_charging)
-		LEDS_setProfile(LIGHT_PROFILE_CHARGING);
-	else if (pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE)
-		LEDS_setProfile(LIGHT_PROFILE_LOW_BATTERY);
-	else if (pwr.charge < PWR_LOW_CHARGE)
-		LEDS_setProfile(LIGHT_PROFILE_CRITICAL_BATTERY);
-	else
-		LEDS_setProfile(LIGHT_PROFILE_DEFAULT);
+	// monce ius enought to get us started, will be called by the main loop afterwards
+	LEDS_applyRules();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
