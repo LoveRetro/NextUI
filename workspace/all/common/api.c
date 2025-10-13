@@ -64,6 +64,7 @@ uint32_t RGB_GRAY;
 uint32_t RGB_DARK_GRAY;
 float currentbufferms = 20.0;
 
+int lights_initialized = 0;
 LightSettings lightsDefault[MAX_LIGHTS];
 LightSettings lightsOff[MAX_LIGHTS];
 LightSettings lightsCharging[MAX_LIGHTS];
@@ -3915,6 +3916,9 @@ FALLBACK_IMPLEMENTATION void PLAT_setLedEffectSpeed(LightSettings *led) {}
 
 void LEDS_setProfile(int profile)
 {
+	if(lights_initialized == 0 || lights == NULL)
+		return;
+
 	LightSettings *new_lights = NULL;
 	bool indicator = true;
 
@@ -3956,20 +3960,27 @@ void LEDS_setProfile(int profile)
 
 void LEDS_applyRules()
 {
+	if(lights_initialized == 0 || lights == NULL)
+		return;
+	
+	// some rules rely on pwr.is_charging and pwr.charge being valid
+	if(pwr.initialized == 0)
+		LOG_warn("LEDS_applyRules called before PWR_init\n");
+
 	// these are defined in order of priority, not necessarily in the order
 	// of LightProfile enum.
 	// e.g.
 	// - if charging and low battery, charging takes priority
-	if (pwr.is_charging)
+	if (pwr.initialized && pwr.is_charging)
 		LEDS_setProfile(LIGHT_PROFILE_CHARGING);
 	// - if critical battery, critical battery takes priority over everything
-	else if (pwr.charge < PWR_LOW_CHARGE)
+	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE)
 		LEDS_setProfile(LIGHT_PROFILE_CRITICAL_BATTERY);
 	// - if muted, muted takes priority over everything except critical battery
 	else if(CFG_getMuteLEDs() && GetMute())
 		LEDS_setProfile(LIGHT_PROFILE_OFF);
 	// other rules
-	else if (pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE)
+	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE)
 		LEDS_setProfile(LIGHT_PROFILE_LOW_BATTERY);
 	// - if no other rule applies, use default (or temporary override)
 	// manual rules to be set on demand: LIGHT_PROFILE_SLEEP, LIGHT_PROFILE_AMBIENT
@@ -3979,6 +3990,9 @@ void LEDS_applyRules()
 
 void LEDS_updateLeds(bool indicator_only)
 {
+	if(lights_initialized == 0 || lights == NULL)
+		return;
+		
 	int lightsize = 3;
 	char *device = getenv("DEVICE");
 	int is_brick = exactMatch("brick", device);
@@ -4001,7 +4015,6 @@ void LEDS_updateLeds(bool indicator_only)
 
 void LEDS_initLeds()
 {
-	PLAT_getBatteryStatusFine(&pwr.is_charging, &pwr.charge);
 	PLAT_initLeds(lightsDefault);
 
 	int lightsize = sizeof(lightsDefault) / sizeof(LightSettings);
@@ -4043,6 +4056,8 @@ void LEDS_initLeds()
 
 	// this might be called more than once (for reasons), so reset to consistent state
 	profile_override_top = -1;
+
+	lights_initialized = 1;
 
 	// once is enough to get us started, will be called by the main loop afterwards
 	LEDS_applyRules();
