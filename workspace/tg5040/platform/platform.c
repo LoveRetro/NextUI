@@ -2576,9 +2576,7 @@ void PLAT_initLeds(LightSettings *lights) {
 
     if (file == NULL)
     {
-		
         LOG_info("Unable to open led settings file\n");
-	
     }
 	else {
 		char line[256];
@@ -2652,12 +2650,8 @@ void PLAT_initLeds(LightSettings *lights) {
 				}
 			}
 		}
-
 		fclose(file);
 	}
-
-	
-	LOG_info("lights setup\n");
 }
 
 #define LED_PATH1 "/sys/class/led_anim/max_scale"
