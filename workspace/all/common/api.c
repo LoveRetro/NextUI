@@ -280,17 +280,17 @@ int GFX_updateColors()
 
 SDL_Surface *GFX_init(int mode)
 {
+	gfx.screen = PLAT_initVideo();
+	gfx.vsync = VSYNC_STRICT;
+	gfx.mode = mode;
+	
+	CFG_init(GFX_loadSystemFont, GFX_updateColors);
+
 	// TODO: this doesn't really belong here...
 	// tried adding to PWR_init() but that was no good (not sure why)
 
 	PLAT_initLid();
 	LEDS_initLeds();
-
-	gfx.screen = PLAT_initVideo();
-	gfx.vsync = VSYNC_STRICT;
-	gfx.mode = mode;
-
-	CFG_init(GFX_loadSystemFont, GFX_updateColors);
 
 	RGB_WHITE = SDL_MapRGB(gfx.screen->format, TRIAD_WHITE);
 	RGB_BLACK = SDL_MapRGB(gfx.screen->format, TRIAD_BLACK);
@@ -3481,16 +3481,16 @@ void PWR_init(void)
 
 	pwr.update_secs = 5;
 	pwr.poll_network_status = 1;
+	pwr.initialized = 1;
 
 	if (CFG_getHaptics())
-	{
 		VIB_singlePulse(VIB_bootStrength, VIB_bootDuration_ms);
-	}
+
 	PWR_initOverlay();
 	PWR_updateBatteryStatus();
 
 	pthread_create(&pwr.battery_pt, NULL, &PWR_monitorBattery, &pwr);
-	pwr.initialized = 1;
+	LOG_info("PWR_init complete\n");
 }
 void PWR_quit(void)
 {
@@ -3968,29 +3968,37 @@ void LEDS_applyRules()
 	// some rules rely on pwr.is_charging and pwr.charge being valid
 	if(pwr.initialized == 0)
 		LOG_warn("LEDS_applyRules called before PWR_init\n");
+	// some rules rely in InitSettings() being called (e.g GetMute())
+	if(!InitializedSettings())
+		LOG_warn("LEDS_applyRules called before InitSettings\n");
 
 	// these are defined in order of priority, not necessarily in the order
 	// of LightProfile enum.
 	// e.g.
 	// - if charging and low battery, charging takes priority
 	if (pwr.initialized && pwr.is_charging) {
+		//LOG_info("LEDS_applyRules: charging\n");
 		LEDS_setProfile(LIGHT_PROFILE_CHARGING);
 	}
 	// - if critical battery, critical battery takes priority over everything
 	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE) {
+		//LOG_info("LEDS_applyRules: critical battery\n");
 		LEDS_setProfile(LIGHT_PROFILE_CRITICAL_BATTERY);
 	}
 	// - if muted, muted takes priority over everything except critical battery
-	else if(CFG_getMuteLEDs() && GetMute()) {
+	else if(InitializedSettings() && CFG_getMuteLEDs() && GetMute()) {
+		//LOG_info("LEDS_applyRules: muted\n");
 		LEDS_setProfile(LIGHT_PROFILE_OFF);
 	}
 	// other rules
 	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE) {
+		//LOG_info("LEDS_applyRules: low battery\n");
 		LEDS_setProfile(LIGHT_PROFILE_LOW_BATTERY);
 	}
 	// - if no other rule applies, use default (or temporary override)
 	// manual rules to be set on demand: LIGHT_PROFILE_SLEEP, LIGHT_PROFILE_AMBIENT
 	else {
+		//LOG_info("LEDS_applyRules: default\n");
 		LEDS_setProfile(LEDS_getProfileOverride());
 	}
 }
