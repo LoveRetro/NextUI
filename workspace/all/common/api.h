@@ -495,12 +495,6 @@ enum LightProfile {
 void LEDS_initLeds();
 void LEDS_setProfile(int profile); // enum LightProfile
 void LEDS_updateLeds(bool indicator_only);
-void LEDS_SaveSettings();
-void LEDS_setEffect(int);
-void LEDS_setColor(uint32_t color);
-void LED_setColor(uint32_t color,int ledindex);
-void LEDS_setIndicator(int effect,uint32_t color, int cycles);
-void LED_setIndicator(int effect,uint32_t color,int cycles,int ledindex);
 
 enum {
 	CPU_SPEED_MENU,
