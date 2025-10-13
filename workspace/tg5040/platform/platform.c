@@ -2537,9 +2537,8 @@ void PLAT_initDefaultLeds() {
 	};
 }
 }
-void PLAT_initLeds(LightSettings *lights) {
-	LOG_info("PLAT_initLeds: Initializing LEDs\n");
-
+void PLAT_initLeds(LightSettings *lights) 
+{
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
 
@@ -2554,7 +2553,7 @@ void PLAT_initLeds(LightSettings *lights) {
 
     if (file == NULL)
     {
-        LOG_info("Unable to open led settings file\n");
+        LOG_warn("Unable to open led settings file\n");
     }
 	else {
 		char line[256];
@@ -2570,7 +2569,6 @@ void PLAT_initLeds(LightSettings *lights) {
 					current_light++;
 					if (current_light < MAX_LIGHTS)
 					{
-						LOG_info("Found light section: %s\n", light_name);
 						strncpy(lights[current_light].name, light_name, 255 - 1);
 						lights[current_light].name[255 - 1] = '\0'; // Ensure null-termination
 						lights[current_light].cycles = -1; // cycles (times animation loops) should basically always be -1 for unlimited unless specifically set

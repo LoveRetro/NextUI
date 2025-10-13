@@ -3951,7 +3951,7 @@ void LEDS_setProfile(int profile)
 		default:
 			return;
 	}
-	if (lights == (LightSettings (*)[MAX_LIGHTS])new_lights)
+	if (profile != LIGHT_PROFILE_AMBIENT && lights == (LightSettings (*)[MAX_LIGHTS])new_lights)
 		return;
 	lights = (LightSettings (*)[MAX_LIGHTS])new_lights;
 
@@ -3998,7 +3998,7 @@ void LEDS_applyRules()
 	// - if no other rule applies, use default (or temporary override)
 	// manual rules to be set on demand: LIGHT_PROFILE_SLEEP, LIGHT_PROFILE_AMBIENT
 	else {
-		//LOG_info("LEDS_applyRules: default\n");
+		//LOG_info("LEDS_applyRules: default/override: %i\n", LEDS_getProfileOverride());
 		LEDS_setProfile(LEDS_getProfileOverride());
 	}
 }
@@ -4073,8 +4073,10 @@ void LEDS_initLeds()
 
 		// LIGHT_PROFILE_SLEEP
 		lightsSleep[i] = lightsDefault[i];
+		lightsSleep[i].brightness = 30;
+		lightsSleep[i].inbrightness = 30;
 		lightsSleep[i].effect = 2; // breathe
-		lightsSleep[i].color1 = 0;
+		lightsSleep[i].color1 = 0xFFFFFF;
 		lightsSleep[i].cycles = 5;
 
 		// LIGHT_PROFILE_AMBIENT
@@ -4128,6 +4130,7 @@ int LEDS_getProfileOverride()
 		return LIGHT_PROFILE_DEFAULT;
 	}
 	
+	LOG_info("LEDS_getProfileOverride: %i\n", profile_override[profile_override_top]);
 	return profile_override[profile_override_top];
 }
 
