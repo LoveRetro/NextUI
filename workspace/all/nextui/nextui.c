@@ -2866,12 +2866,12 @@ int main (int argc, char *argv[]) {
 						char thumbpath[1024];
 						snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
 						had_thumb = 0;
+						startLoadThumb(thumbpath, onThumbLoaded, NULL);
 						int max_w = (int)(screen->w - (screen->w * CFG_getGameArtWidth())); 
 						int max_h = (int)(screen->h * 0.6);  
 						int new_w = max_w;
 						int new_h = max_h; 
 						if(exists(thumbpath)) {
-							startLoadThumb(thumbpath, onThumbLoaded, NULL);
 							ox = (int)(max_w) - SCALE1(BUTTON_MARGIN*5);
 							had_thumb = 1;
 						}
