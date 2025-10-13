@@ -73,6 +73,10 @@ LightSettings lightsSleep[MAX_LIGHTS];
 LightSettings lightsAmbient[MAX_LIGHTS];
 LightSettings (*lights)[MAX_LIGHTS] = NULL;
 
+#define PROFILE_OVERRIDE_SIZE 4
+int profile_override_top = -1;
+enum LightProfile profile_override[PROFILE_OVERRIDE_SIZE];
+
 ///////////////////////////////
 
 volatile int useAutoCpu;
@@ -3431,6 +3435,9 @@ static void PWR_updateBatteryStatus(void)
 {
 	PLAT_getBatteryStatusFine(&pwr.is_charging, &pwr.charge);
 	PLAT_enableOverlay(pwr.should_warn && pwr.charge <= PWR_LOW_CHARGE);
+
+	// this is technically redundant, but PWR_update() might not always be called to conserve battery and cycles
+	LEDS_applyRules();
 }
 
 static void PWR_updateNetworkStatus(void)
@@ -3709,7 +3716,7 @@ void PWR_powerOff(int reboot)
 static void PWR_enterSleep(void)
 {
 	SND_pauseAudio(true);
-	LEDS_setProfile(LIGHT_PROFILE_SLEEP);
+	LEDS_pushProfileOverride(LIGHT_PROFILE_SLEEP);
 	if (GetHDMI())
 	{
 		PLAT_clearVideo(gfx.screen);
@@ -3736,7 +3743,7 @@ static void PWR_enterSleep(void)
 }
 static void PWR_exitSleep(void)
 {
-	LEDS_initLeds();
+	LEDS_popProfileOverride(LIGHT_PROFILE_SLEEP);
 
 	PWR_updateFrequency(-1, true);
 
@@ -3908,34 +3915,42 @@ FALLBACK_IMPLEMENTATION void PLAT_setLedEffectSpeed(LightSettings *led) {}
 
 void LEDS_setProfile(int profile)
 {
+	LightSettings *new_lights = NULL;
 	bool indicator = true;
+
 	switch(profile)
 	{
-		case LIGHT_PROFILE_DEFAULT: // default
-			lights = &lightsDefault;
+		case LIGHT_PROFILE_DEFAULT:
+			new_lights = lightsDefault;
 			indicator = false;
 			break;
-		case LIGHT_PROFILE_OFF: // muted
-			lights = &lightsOff;
+		case LIGHT_PROFILE_OFF:
+			new_lights = lightsOff;
 			indicator = false;
 			break;
-		case LIGHT_PROFILE_LOW_BATTERY: // low battery
-			lights = &lightsLowBattery;
+		case LIGHT_PROFILE_LOW_BATTERY:
+			new_lights = lightsLowBattery;
 			break;
-		case LIGHT_PROFILE_CRITICAL_BATTERY: // critical battery
-			lights = &lightsCriticalBattery;
+		case LIGHT_PROFILE_CRITICAL_BATTERY:
+			new_lights = lightsCriticalBattery;
 			break;
-		case LIGHT_PROFILE_CHARGING: // charging
-			lights = &lightsCharging;
+		case LIGHT_PROFILE_CHARGING:
+			new_lights = lightsCharging;
 			break;
-		case LIGHT_PROFILE_SLEEP: // sleep mode
-			lights = &lightsSleep;
+		case LIGHT_PROFILE_SLEEP:
+			new_lights = lightsSleep;
 			break;
-		case LIGHT_PROFILE_AMBIENT: // ambient mode
-			lights = &lightsAmbient;
+		case LIGHT_PROFILE_AMBIENT:
+			new_lights = lightsAmbient;
 			indicator = false;
 			break;
+		default:
+			return;
 	}
+
+	if (lights == (LightSettings (*)[MAX_LIGHTS])new_lights)
+		return;
+	lights = (LightSettings (*)[MAX_LIGHTS])new_lights;
 	LEDS_updateLeds(indicator);
 }
 
@@ -3947,7 +3962,7 @@ void LEDS_applyRules()
 	// - if charging and low battery, charging takes priority
 	if (pwr.is_charging)
 		LEDS_setProfile(LIGHT_PROFILE_CHARGING);
-		// - if critical battery, critical battery takes priority over everything
+	// - if critical battery, critical battery takes priority over everything
 	else if (pwr.charge < PWR_LOW_CHARGE)
 		LEDS_setProfile(LIGHT_PROFILE_CRITICAL_BATTERY);
 	// - if muted, muted takes priority over everything except critical battery
@@ -3956,35 +3971,31 @@ void LEDS_applyRules()
 	// other rules
 	else if (pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE)
 		LEDS_setProfile(LIGHT_PROFILE_LOW_BATTERY);
-	// - if no other rule applies, use default
-	else
-		LEDS_setProfile(LIGHT_PROFILE_DEFAULT);
-
+	// - if no other rule applies, use default (or temporary override)
 	// manual rules to be set on demand: LIGHT_PROFILE_SLEEP, LIGHT_PROFILE_AMBIENT
+	else
+		LEDS_setProfile(LEDS_getProfileOverride());
 }
 
 void LEDS_updateLeds(bool indicator_only)
 {
-	if (pwr.charge > PWR_LOW_CHARGE)
+	int lightsize = 3;
+	char *device = getenv("DEVICE");
+	int is_brick = exactMatch("brick", device);
+	if (is_brick)
+		lightsize = 4;
+	for (int i = 0; i < lightsize; i++)
 	{
-		int lightsize = 3;
-		char *device = getenv("DEVICE");
-		int is_brick = exactMatch("brick", device);
-		if (is_brick)
-			lightsize = 4;
-		for (int i = 0; i < lightsize; i++)
-		{
-			// set brightness of each led
-			if(indicator_only)
-				PLAT_setLedInbrightness(&(*lights)[i]);
-			else
-				PLAT_setLedBrightness(&(*lights)[i]);
+		// set brightness of each led
+		if(indicator_only)
+			PLAT_setLedInbrightness(&(*lights)[i]);
+		else
+			PLAT_setLedBrightness(&(*lights)[i]);
 
-			PLAT_setLedEffectCycles(&(*lights)[i]); // set how many times animation should loop
-			PLAT_setLedEffectSpeed(&(*lights)[i]);	// set animation speed
-			PLAT_setLedColor(&(*lights)[i]);		// set color
-			PLAT_setLedEffect(&(*lights)[i]);		// finally set the effect, on trimui devices this also applies the settings
-		}
+		PLAT_setLedEffectCycles(&(*lights)[i]); // set how many times animation should loop
+		PLAT_setLedEffectSpeed(&(*lights)[i]);	// set animation speed
+		PLAT_setLedColor(&(*lights)[i]);		// set color
+		PLAT_setLedEffect(&(*lights)[i]);		// finally set the effect, on trimui devices this also applies the settings
 	}
 }
 
@@ -4024,10 +4035,55 @@ void LEDS_initLeds()
 		lightsSleep[i].effect = 2; // breathe
 		lightsSleep[i].color1 = 0;
 		lightsSleep[i].cycles = 5;
+
+		// LIGHT_PROFILE_AMBIENT
+		// just to have sensible defaults, will be updated by GFX_setAmbientColor
+		lightsAmbient[i] = lightsDefault[i];
 	}
 
-	// monce ius enought to get us started, will be called by the main loop afterwards
+	// this might be called more than once (for reasons), so reset to consistent state
+	profile_override_top = -1;
+
+	// once is enough to get us started, will be called by the main loop afterwards
 	LEDS_applyRules();
+}
+
+bool LEDS_pushProfileOverride(int profile)
+{
+	if(profile_override_top == PROFILE_OVERRIDE_SIZE - 1)
+	{
+		LOG_debug("LED_profile stack is full, ignoring.\n");
+		return false;
+	}
+	profile_override[++profile_override_top] = profile;
+	LEDS_applyRules();
+
+	return true;
+}
+
+bool LEDS_popProfileOverride(int profile)
+{
+	if(profile_override_top == -1) {
+		LOG_debug("LED_profile stack is empty, nothing to pop.\n");
+		return false;
+	}
+	if(LEDS_getProfileOverride() != profile) {
+		LOG_debug("LEDS_popProfileOverride attempted to remove %d, but top of stack is %d\n", profile, LEDS_getProfileOverride());
+		return false;
+	}
+	profile_override_top--;
+	LEDS_applyRules();
+
+	return true;
+}
+
+// returns top of stack, or default if stack is empty
+int LEDS_getProfileOverride()
+{
+	if(profile_override_top == -1)
+		return LIGHT_PROFILE_DEFAULT;
+	
+	return profile_override[profile_override_top];
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////

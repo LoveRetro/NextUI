@@ -2011,6 +2011,10 @@ static void Config_syncFrontend(char* key, int value) {
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_AMBIENT].key)) {
 		ambient_mode = value;
+		if(value)
+			LEDS_pushProfileOverride(LIGHT_PROFILE_AMBIENT);
+		else 
+			LEDS_popProfileOverride(LIGHT_PROFILE_AMBIENT);
 		i = FE_OPT_AMBIENT;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_EFFECT].key)) {
@@ -4681,12 +4685,8 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 			}
 		}
 
-		if(!fast_forward && data) {
-			if(ambient_mode!=0) {
-				GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
-				LEDS_setProfile(LIGHT_PROFILE_AMBIENT);
-			}
-		}
+		if(ambient_mode && !fast_forward && data)
+			GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
 
 		if (!data) {
 			if (lastframe) {
