@@ -2168,7 +2168,8 @@ void PLAT_updateNetworkStatus()
 
 void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
 {	
-	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
+	int is_full = getInt("/sys/class/power_supply/axp2202-battery/time_to_full_now") == 0;
+	*is_charging = !is_full && getInt("/sys/class/power_supply/axp2202-usb/online");
 	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
 }
 
