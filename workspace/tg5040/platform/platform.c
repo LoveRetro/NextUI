@@ -3317,6 +3317,25 @@ void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pa
 		wifilog("PLAT_wifiConnectPass: connected ap successfully\n");
 	else
 		wifilog("PLAT_wifiConnectPass: connecting ap failed:%s\n", connect_event_txt(event));
+
+	// only if:
+	// - TKIP is disabled in settings
+	// - security is WPA or WPA2
+	// - we successfully connected (i.e. password was stored in wpa_supplicant.conf)
+	bool enforceNoTkip = !PLAT_wifiTkipEnabled() && pass != NULL &&  (event == DA_CONNECTED) && 
+		(sec == SECURITY_WPA_PSK || sec == SECURITY_WPA2_PSK);
+	if(enforceNoTkip) {
+		wifilog("Enforcing TKIP disabled on next connection\n");
+
+		// parse and modify wpa_supplicant.conf
+		// find entried for this ssid and require proto RSN only
+		char cmd[512];
+		// this is a bit hacky, but wpa_cli does not provide a way to do this directly
+		// just parse the file directly using C and string ops
+		// not the most portable, but we know what we're writing
+		snprintf(cmd, sizeof(cmd), "sed -i '/ssid=\"%s\"/a\\	proto=RSN' /etc/wifi/wpa_supplicant.conf", ssid);
+		system(cmd);
+	}
 }
 
 void PLAT_wifiDisconnect()
@@ -3333,6 +3352,16 @@ void PLAT_wifiDiagnosticsEnable(bool on)
 {
 	wmg_set_debug_level(on ? 4 : 2);
 	CFG_setWifiDiagnostics(on);
+}
+
+bool PLAT_wifiTkipEnabled() 
+{ 
+	return CFG_getWifiTkipEnabled();; 
+}
+
+void PLAT_wifiTkipEnable(bool on)
+{
+	CFG_setWifiTkipEnabled(on);
 }
 
 /////////////////////////

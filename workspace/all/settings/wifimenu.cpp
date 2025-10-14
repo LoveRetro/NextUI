@@ -23,8 +23,13 @@ Menu::Menu(const int &globalQuit, int &globalDirty) : MenuList(MenuItemType::Fix
                               std::bind(&Menu::getWifDiagnosticsState, this),
                               std::bind(&Menu::setWifiDiagnosticsState, this, std::placeholders::_1),
                               std::bind(&Menu::resetWifiDiagnosticsState, this));
+    tkipItem = new MenuItem(ListItemType::Generic, "Allow TKIP", "Allow connecting to WPA networks using TKIP (less secure).\nDisabling this may improve stability in mixed mode networks.", {false, true}, {"Off", "On"},
+                              std::bind(&Menu::getWifiTkipState, this),
+                              std::bind(&Menu::setWifiTkipState, this, std::placeholders::_1),
+                              std::bind(&Menu::resetWifiTkipState, this));
     items.push_back(toggleItem);
     items.push_back(diagItem);
+    items.push_back(tkipItem);
 
     // best effort layout based on the platform defines, user should really call performLayout manually
     MenuList::performLayout((SDL_Rect){0, 0, FIXED_WIDTH, FIXED_HEIGHT});
@@ -78,6 +83,21 @@ void Menu::setWifiDiagnosticsState(const std::any &on)
 }
 
 void Menu::resetWifiDiagnosticsState()
+{
+    //
+}
+
+std::any Menu::getWifiTkipState() const
+{
+    return WIFI_tkipEnabled();
+}
+
+void Menu::setWifiTkipState(const std::any &on)
+{
+    WIFI_tkipEnable(std::any_cast<bool>(on));
+}
+
+void Menu::resetWifiTkipState()
 {
     //
 }
@@ -140,6 +160,7 @@ void Menu::updater()
                     items.clear();
                     items.push_back(toggleItem);
                     items.push_back(diagItem);
+                    items.push_back(tkipItem);
                     layout_called = false;
 
                     for (auto &[s, r] : scanSsids)
@@ -187,6 +208,7 @@ void Menu::updater()
             items.clear();
             items.push_back(toggleItem);
             items.push_back(diagItem);
+            items.push_back(tkipItem);
             layout_called = false;
             selectionDirty = true;
             pollSecs = 15;

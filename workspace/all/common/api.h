@@ -745,6 +745,11 @@ void PLAT_wifiDisconnect();
 bool PLAT_wifiDiagnosticsEnabled();
 // returns true if diagnostic logging is enabled
 void PLAT_wifiDiagnosticsEnable(bool on);
+// returns true if TKIP is enabled (insecure, but needed for some APs)
+// Disabling may improve stability in mixed mode networks.
+bool PLAT_wifiTkipEnabled();
+// enables or disables TKIP (insecure, but needed for some APs)
+void PLAT_wifiTkipEnable(bool on);
 
 #define WIFI_init PLAT_wifiInit
 #define WIFI_supported PLAT_hasWifi
@@ -760,6 +765,8 @@ void PLAT_wifiDiagnosticsEnable(bool on);
 #define WIFI_disconnect PLAT_wifiDisconnect
 #define WIFI_diagnosticsEnabled PLAT_wifiDiagnosticsEnabled
 #define WIFI_diagnosticsEnable PLAT_wifiDiagnosticsEnable
+#define WIFI_tkipEnabled PLAT_wifiTkipEnabled
+#define WIFI_tkipEnable PLAT_wifiTkipEnable
 
 ////////////////////////
 typedef enum {

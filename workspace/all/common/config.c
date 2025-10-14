@@ -62,6 +62,7 @@ void CFG_defaults(NextUISettings *cfg)
 
         .wifi = CFG_DEFAULT_WIFI,
         .wifiDiagnostics = CFG_DEFAULT_WIFI_DIAG,
+        .wifiTkipEnabled = CFG_DEFAULT_WIFI_TKIP,
         .bluetooth = CFG_DEFAULT_BLUETOOTH,
         .bluetoothDiagnostics = CFG_DEFAULT_BLUETOOTH_DIAG,
         .bluetoothSamplerateLimit = CFG_DEFAULT_BLUETOOTH_MAXRATE,
@@ -252,6 +253,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "wifiDiagnostics=%i", &temp_value) == 1)
             {
                 CFG_setWifiDiagnostics(temp_value);
+                continue;
+            }
+            if (sscanf(line, "wifiTkipEnabled=%i", &temp_value) == 1)
+            {
+                CFG_setWifiTkipEnabled((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "bluetooth=%i", &temp_value) == 1)
@@ -632,6 +638,17 @@ void CFG_setWifiDiagnostics(bool on)
     CFG_sync();
 }
 
+bool CFG_getWifiTkipEnabled(void)
+{
+    return settings.wifiTkipEnabled;
+}
+
+void CFG_setWifiTkipEnabled(bool on)
+{
+    settings.wifiTkipEnabled = on;
+    CFG_sync();
+}
+
 bool CFG_getBluetooth(void)
 {
     return settings.bluetooth;
@@ -791,6 +808,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getWifiDiagnostics()));
     }
+    else if (strcmp(key, "wifiTkipEnabled") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getWifiTkipEnabled()));
+    }
     else if (strcmp(key, "bluetooth") == 0)
     {
         sprintf(value, "%i", (int)(CFG_getBluetooth()));
@@ -862,6 +883,7 @@ void CFG_sync(void)
     fprintf(file, "defaultView=%i\n", settings.defaultView);
     fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
     fprintf(file, "wifiDiagnostics=%i\n", settings.wifiDiagnostics);
+    fprintf(file, "wifiTkipEnabled=%i\n", settings.wifiTkipEnabled);
     fprintf(file, "bluetooth=%i\n", settings.bluetooth);
     fprintf(file, "btDiagnostics=%i\n", settings.bluetoothDiagnostics);
     fprintf(file, "btMaxRate=%i\n", settings.bluetoothSamplerateLimit);
@@ -904,6 +926,7 @@ void CFG_print(void)
     printf("\t\"defaultView\": %i,\n", settings.defaultView);
     printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
     printf("\t\"wifiDiagnostics\": %i,\n", settings.wifiDiagnostics);
+    printf("\t\"wifiTkipEnabled\": %i,\n", settings.wifiTkipEnabled);
     printf("\t\"bluetooth\": %i,\n", settings.bluetooth);
     printf("\t\"btDiagnostics\": %i,\n", settings.bluetoothDiagnostics);
     printf("\t\"btMaxRate\": %i,\n", settings.bluetoothSamplerateLimit);

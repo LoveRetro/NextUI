@@ -108,6 +108,7 @@ typedef struct
 	// Network
 	bool wifi;
 	bool wifiDiagnostics;
+	bool wifiTkipEnabled;
 	bool bluetooth;
 	bool bluetoothDiagnostics;
 	int bluetoothSamplerateLimit;
@@ -145,6 +146,7 @@ typedef struct
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
 #define CFG_DEFAULT_SHOWQUICKWITCHERUI true
 #define CFG_DEFAULT_WIFI_DIAG false
+#define CFG_DEFAULT_WIFI_TKIP true
 #define CFG_DEFAULT_SHOWTOOLS true
 #define CFG_DEFAULT_BLUETOOTH false
 #define CFG_DEFAULT_BLUETOOTH_DIAG false
@@ -251,6 +253,9 @@ void CFG_setBluetoothDiagnostics(bool on);
 // BT maximum sample rate to request
 int CFG_getBluetoothSamplingrateLimit(void);
 void CFG_setBluetoothSamplingrateLimit(int value);
+// Wifi: allow TKIP (legacy) networks
+bool CFG_getWifiTkipEnabled(void);
+void CFG_setWifiTkipEnabled(bool on);
 
 void CFG_sync(void);
 void CFG_quit(void);

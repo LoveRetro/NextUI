@@ -4217,3 +4217,5 @@ FALLBACK_IMPLEMENTATION void PLAT_bluetoothStreamEnd() {}
 FALLBACK_IMPLEMENTATION void PLAT_bluetoothStreamQuit() {}
 FALLBACK_IMPLEMENTATION int PLAT_bluetoothVolume() { return 100; }
 FALLBACK_IMPLEMENTATION void PLAT_bluetoothSetVolume(int vol) {}
+FALLBACK_IMPLEMENTATION bool PLAT_wifiTkipEnabled() { return true; }
+FALLBACK_IMPLEMENTATION void PLAT_wifiTkipEnable(bool on) {}

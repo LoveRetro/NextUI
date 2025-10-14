@@ -13,6 +13,8 @@ namespace Wifi
         MenuItem *toggleItem;
         // diagnostics on/off
         MenuItem *diagItem;
+        // allow basic tkip (wpa) on/off
+        MenuItem *tkipItem;
 
         std::thread worker;
         bool quit = false;
@@ -32,6 +34,10 @@ namespace Wifi
         std::any getWifDiagnosticsState() const;
         void setWifiDiagnosticsState(const std::any &on);
         void resetWifiDiagnosticsState();
+
+        std::any getWifiTkipState() const;
+        void setWifiTkipState(const std::any &on);
+        void resetWifiTkipState();
 
         void updater();
     };
