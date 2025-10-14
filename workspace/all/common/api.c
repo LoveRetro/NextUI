@@ -4073,10 +4073,7 @@ void LEDS_initLeds()
 
 		// LIGHT_PROFILE_SLEEP
 		lightsSleep[i] = lightsDefault[i];
-		lightsSleep[i].brightness = 30;
-		lightsSleep[i].inbrightness = 30;
 		lightsSleep[i].effect = 2; // breathe
-		lightsSleep[i].color1 = 0xFFFFFF;
 		lightsSleep[i].cycles = 5;
 
 		// LIGHT_PROFILE_AMBIENT

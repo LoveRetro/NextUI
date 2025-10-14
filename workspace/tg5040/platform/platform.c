@@ -1030,8 +1030,6 @@ void PLAT_setOverlay(const char* filename, const char* tag) {
         return;
     }
 
-
-
     size_t path_len = strlen(OVERLAYS_FOLDER) + strlen(tag) + strlen(filename) + 4; // +3 for slashes and null-terminator
     overlay_path = malloc(path_len);
 
