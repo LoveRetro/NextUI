@@ -1,11 +1,11 @@
 /*
-  * Copyright (c) 2018 Allwinner Technology. All Rights Reserved.
-  * Filename    wifid_cmd_handle.c
-  * Author        laumy <liumingyuan@allwinnertech.com>
-  * Version       0.0.1
-  * Date           2018.11.05
-  *
-  */
+ * Copyright (c) 2018 Allwinner Technology. All Rights Reserved.
+ * Filename    wifid_cmd_handle.c
+ * Author        laumy <liumingyuan@allwinnertech.com>
+ * Version       0.0.1
+ * Date           2018.11.05
+ *
+ */
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -16,7 +16,7 @@
 #include "wifid_cmd.h"
 #include "wifid_cmd_iface.h"
 #include "tool.h"
-const char* connect_event_txt(enum cn_event event)
+const char *connect_event_txt(enum cn_event event)
 {
 	switch (event) {
 	case DA_CONNECTED:
@@ -42,7 +42,7 @@ const char* connect_event_txt(enum cn_event event)
 	}
 }
 
-int aw_wifid_get_scan_results(char *results,int len)
+int aw_wifid_get_scan_results(char *results, int len)
 {
 	struct da_requst req = {
 		.command = DA_COMMAND_SCAN,
@@ -59,11 +59,11 @@ int aw_wifid_get_scan_results(char *results,int len)
 		goto end;
 
 	if (cli.enable_pipe)
-		ret = read_command_message(cli.pipe_fd,results,len);
+		ret = read_command_message(cli.pipe_fd, results, len);
 
 end:
 	handle_command_free(&cli);
-	return ret ;
+	return ret;
 }
 
 int aw_wifid_get_status(struct wifi_status *sptr)
@@ -80,13 +80,13 @@ int aw_wifid_get_status(struct wifi_status *sptr)
 	int ret = handle_command(&req, &cli);
 	if (ret < 0)
 		goto end;
-		
-	if(cli.enable_pipe)
-		ret = read_command_message(cli.pipe_fd,(char*)sptr,sizeof(struct wifi_status));
+
+	if (cli.enable_pipe)
+		ret = read_command_message(cli.pipe_fd, (char *)sptr, sizeof(struct wifi_status));
 
 end:
 	handle_command_free(&cli);
-	return ret ;
+	return ret;
 }
 
 int aw_wifid_get_connection(struct connection_status *sptr)
@@ -104,17 +104,16 @@ int aw_wifid_get_connection(struct connection_status *sptr)
 	if (ret < 0)
 		goto end;
 
-	if(cli.enable_pipe)
-		ret = read_command_message(cli.pipe_fd,(char*)sptr,sizeof(struct connection_status));
+	if (cli.enable_pipe)
+		ret = read_command_message(cli.pipe_fd, (char *)sptr, sizeof(struct connection_status));
 
 end:
 	handle_command_free(&cli);
-	return ret ;
+	return ret;
 }
 
-int aw_wifid_connect_ap(const char *ssid, const char *passwd,enum cn_event *ptrEvent)
+int aw_wifid_connect_ap(const char *ssid, const char *passwd, enum cn_event *ptrEvent)
 {
-
 	struct da_requst req = {
 		.command = DA_COMMAND_CONNECT,
 		.ssid = {0},
@@ -125,24 +124,24 @@ int aw_wifid_connect_ap(const char *ssid, const char *passwd,enum cn_event *ptrE
 	};
 
 	if (NULL != ssid)
-		strncpy(req.ssid,ssid,strlen(ssid));
+		strncpy(req.ssid, ssid, strlen(ssid));
 
 	if (NULL != passwd)
-		strncpy(req.pwd,passwd,strlen(passwd));
+		strncpy(req.pwd, passwd, strlen(passwd));
 
 	int ret = handle_command(&req, &cli);
 	if (ret < 0)
 		goto end;
 
-	if(cli.enable_pipe)
-		ret = read_command_message(cli.pipe_fd,(char*)ptrEvent,sizeof(enum cn_event));
-	
+	if (cli.enable_pipe)
+		ret = read_command_message(cli.pipe_fd, (char *)ptrEvent, sizeof(enum cn_event));
+
 end:
 	handle_command_free(&cli);
 	return ret;
 }
 
-int aw_wifid_remove_networks(char *pssid,int len)
+int aw_wifid_remove_networks(char *pssid, int len)
 {
 	struct da_requst req = {
 		.command = DA_COMMAND_REMOVE_NET,
@@ -154,7 +153,7 @@ int aw_wifid_remove_networks(char *pssid,int len)
 	};
 
 	if (NULL != pssid)
-		strncpy(req.ssid,pssid,len);
+		strncpy(req.ssid, pssid, len);
 
 	int ret = handle_command(&req, &cli);
 	if (ret < 0)
@@ -180,27 +179,27 @@ int aw_wifid_list_networks(char *reply, size_t len)
 	if (ret < 0)
 		goto end;
 
-	ret = read_command_message(cli.pipe_fd,reply,len);
+	ret = read_command_message(cli.pipe_fd, reply, len);
 
 end:
 	handle_command_free(&cli);
-	return ret ;
+	return ret;
 }
 
 void aw_wifid_open(void)
 {
-	if (get_process_state("wifi_daemon",11) == -1){
-		wmg_printf(MSG_DEBUG,"opening wifi daemon......\n");
+	if (get_process_state("wifi_daemon", 11) == -1) {
+		wmg_printf(MSG_DEBUG, "opening wifi daemon......\n");
 		system("/mnt/SDCARD/.system/tg5040/bin/wifi_daemon -s &");
 		sleep(2);
 	} else {
-		wmg_printf(MSG_INFO,"Wifi daemon is already open\n");
+		wmg_printf(MSG_INFO, "Wifi daemon is already open\n");
 	}
 }
 
 void aw_wifid_close(void)
 {
-	wmg_printf(MSG_DEBUG,"closing wifi daemon......\n");
+	wmg_printf(MSG_DEBUG, "closing wifi daemon......\n");
 	system("killall -q wifi_daemon");
 	sleep(1);
 }

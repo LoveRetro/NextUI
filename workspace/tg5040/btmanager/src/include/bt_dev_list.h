@@ -24,7 +24,7 @@ typedef struct dev_list_t {
 	pthread_mutex_t lock;
 } dev_list_t;
 
-int btmg_dev_list_add_device(dev_list_t *dev_list,const char *name,const char *addr);
+int btmg_dev_list_add_device(dev_list_t *dev_list, const char *name, const char *addr);
 dev_node_t *btmg_dev_list_find_device(dev_list_t *dev_list, const char *addr);
 bool btmg_dev_list_remove_device(dev_list_t *dev_list, const char *addr);
 dev_list_t *btmg_dev_list_new();

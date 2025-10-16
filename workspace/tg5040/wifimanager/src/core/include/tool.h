@@ -26,15 +26,15 @@ struct sys_time {
 	sys_time_t usec;
 };
 
-extern int get_process_state(const char *process_nae,int length);
+extern int get_process_state(const char *process_nae, int length);
 extern int sys_get_time(struct sys_time *t);
-void * wgos_zalloc(size_t size);
-void * wgos_malloc(size_t size);
+void *wgos_zalloc(size_t size);
+void *wgos_malloc(size_t size);
 
 void ms_sleep(unsigned long ms);
 
 #if __cplusplus
-};  // extern "C"
+}; // extern "C"
 #endif
 
 #endif

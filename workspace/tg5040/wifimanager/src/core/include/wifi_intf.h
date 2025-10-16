@@ -8,14 +8,14 @@
 #if __cplusplus
 extern "C" {
 #endif
-#define MAX_CALLBCAKS_COUNT  1024
+#define MAX_CALLBCAKS_COUNT 1024
 
 typedef enum {
 	WIFIMG_NONE = 0,
 	WIFIMG_WPA_PSK,
 	WIFIMG_WPA2_PSK,
 	WIFIMG_WEP,
-}tKEY_MGMT;
+} tKEY_MGMT;
 
 enum wmgState {
 	NETWORK_CONNECTED = 0x01,
@@ -26,7 +26,7 @@ enum wmgState {
 	STATE_UNKNOWN,
 };
 
-enum wmgEvent{
+enum wmgEvent {
 	WSE_UNKNOWN = 0x20,
 
 	WSE_STARTUP_AUTO_CONNECT,
@@ -50,7 +50,7 @@ enum wmgEvent{
 };
 
 #define SSID_MAX 64
-#define PWD	 48
+#define PWD 48
 
 struct WmgStaEvt {
 	enum wmgState state;
@@ -69,9 +69,9 @@ struct Manager {
 };
 
 typedef struct connection_status {
-    char ssid[SSID_MAX];
-    char ip_address[32];
-    int freq;
+	char ssid[SSID_MAX];
+	char ip_address[32];
+	int freq;
 	int rssi;
 	int link_speed;
 	int noise;
@@ -79,9 +79,9 @@ typedef struct connection_status {
 
 extern struct Manager *w;
 
-typedef void (*tWifi_state_callback)(struct Manager *wmg,int state_label);
+typedef void (*tWifi_state_callback)(struct Manager *wmg, int state_label);
 
-typedef struct{
+typedef struct {
 	int (*add_state_callback)(tWifi_state_callback pcb);
 	int (*ssid_is_connected_ap)(char *ssid);
 	int (*is_ap_connected)(char *ssid, int *len);
@@ -100,9 +100,9 @@ typedef struct{
 	int (*get_status)(struct wifi_status *s);
 	int (*clear_network)(const char *ssid);
 	int (*wps_pbc)(int event_label);
-}aw_wifi_interface_t;
+} aw_wifi_interface_t;
 
-const aw_wifi_interface_t * aw_wifi_on(tWifi_state_callback pcb,int event_label);
+const aw_wifi_interface_t *aw_wifi_on(tWifi_state_callback pcb, int event_label);
 int aw_wifi_off(const aw_wifi_interface_t *p_wifi_interface_t);
 int state_event_change(int event_label);
 const char *wmg_event_txt(enum wmgEvent event);
@@ -113,7 +113,7 @@ enum wmgState aw_wifi_get_wifi_state();
 enum wmgEvent aw_wifi_get_wifi_event();
 
 #if __cplusplus
-};  // extern "C"
+}; // extern "C"
 #endif
 
 #endif

@@ -7,7 +7,7 @@ extern "C" {
 
 #include "wifi_intf.h"
 
-#define CMD_LEN        255
+#define CMD_LEN 255
 #define REPLY_BUF_SIZE 4096 // wpa_supplicant's maximum size.
 
 
@@ -23,7 +23,7 @@ int wpa_conf_remove_all_networks();
 int wpa_conf_remove_maxnetid_network();
 
 #if __cplusplus
-};  // extern "C"
+}; // extern "C"
 #endif
 
 #endif /* __WPA_SUPPLICANT_CONF_H */

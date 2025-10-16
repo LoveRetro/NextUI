@@ -9,7 +9,7 @@
 #ifndef WPA_CTRL_H
 #define WPA_CTRL_H
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -218,25 +218,25 @@ extern "C" {
 
 /* BSS command information masks */
 
-#define WPA_BSS_MASK_ALL		0xFFFDFFFF
-#define WPA_BSS_MASK_ID			BIT(0)
-#define WPA_BSS_MASK_BSSID		BIT(1)
-#define WPA_BSS_MASK_FREQ		BIT(2)
-#define WPA_BSS_MASK_BEACON_INT		BIT(3)
-#define WPA_BSS_MASK_CAPABILITIES	BIT(4)
-#define WPA_BSS_MASK_QUAL		BIT(5)
-#define WPA_BSS_MASK_NOISE		BIT(6)
-#define WPA_BSS_MASK_LEVEL		BIT(7)
-#define WPA_BSS_MASK_TSF		BIT(8)
-#define WPA_BSS_MASK_AGE		BIT(9)
-#define WPA_BSS_MASK_IE			BIT(10)
-#define WPA_BSS_MASK_FLAGS		BIT(11)
-#define WPA_BSS_MASK_SSID		BIT(12)
-#define WPA_BSS_MASK_WPS_SCAN		BIT(13)
-#define WPA_BSS_MASK_P2P_SCAN		BIT(14)
-#define WPA_BSS_MASK_INTERNETW		BIT(15)
-#define WPA_BSS_MASK_WIFI_DISPLAY	BIT(16)
-#define WPA_BSS_MASK_DELIM		BIT(17)
+#define WPA_BSS_MASK_ALL 0xFFFDFFFF
+#define WPA_BSS_MASK_ID BIT(0)
+#define WPA_BSS_MASK_BSSID BIT(1)
+#define WPA_BSS_MASK_FREQ BIT(2)
+#define WPA_BSS_MASK_BEACON_INT BIT(3)
+#define WPA_BSS_MASK_CAPABILITIES BIT(4)
+#define WPA_BSS_MASK_QUAL BIT(5)
+#define WPA_BSS_MASK_NOISE BIT(6)
+#define WPA_BSS_MASK_LEVEL BIT(7)
+#define WPA_BSS_MASK_TSF BIT(8)
+#define WPA_BSS_MASK_AGE BIT(9)
+#define WPA_BSS_MASK_IE BIT(10)
+#define WPA_BSS_MASK_FLAGS BIT(11)
+#define WPA_BSS_MASK_SSID BIT(12)
+#define WPA_BSS_MASK_WPS_SCAN BIT(13)
+#define WPA_BSS_MASK_P2P_SCAN BIT(14)
+#define WPA_BSS_MASK_INTERNETW BIT(15)
+#define WPA_BSS_MASK_WIFI_DISPLAY BIT(16)
+#define WPA_BSS_MASK_DELIM BIT(17)
 
 
 /* wpa_supplicant/hostapd control interface access */
@@ -251,7 +251,7 @@ extern "C" {
  * is configured in wpa_supplicant/hostapd and other progras using the control
  * interface need to use matching path configuration.
  */
-struct wpa_ctrl * wpa_ctrl_open(const char *ctrl_path);
+struct wpa_ctrl *wpa_ctrl_open(const char *ctrl_path);
 
 
 /**
@@ -289,9 +289,8 @@ void wpa_ctrl_close(struct wpa_ctrl *ctrl);
  * receiving event messages, in other words, call wpa_ctrl_attach() only for
  * the control interface connection that will be used for event messages.
  */
-int wpa_ctrl_request(struct wpa_ctrl *ctrl, const char *cmd, size_t cmd_len,
-		     char *reply, size_t *reply_len,
-		     void (*msg_cb)(char *msg, size_t len));
+int wpa_ctrl_request(struct wpa_ctrl *ctrl, const char *cmd, size_t cmd_len, char *reply, size_t *reply_len,
+					 void (*msg_cb)(char *msg, size_t len));
 
 
 /**
@@ -363,7 +362,7 @@ int wpa_ctrl_pending(struct wpa_ctrl *ctrl);
  */
 int wpa_ctrl_get_fd(struct wpa_ctrl *ctrl);
 
-char * wpa_ctrl_get_remote_ifnae(struct wpa_ctrl *ctrl);
+char *wpa_ctrl_get_remote_ifnae(struct wpa_ctrl *ctrl);
 
 #ifdef ANDROID
 /**
@@ -382,10 +381,10 @@ void wpa_ctrl_cleanup(void);
 #define WPA_CTRL_IFACE_PORT_LIMIT 50 /* decremented from start */
 #define WPA_GLOBAL_CTRL_IFACE_PORT 9878
 #define WPA_GLOBAL_CTRL_IFACE_PORT_LIMIT 20 /* incremented from start */
-#endif /* CONFIG_CTRL_IFACE_UDP */
+#endif										/* CONFIG_CTRL_IFACE_UDP */
 
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

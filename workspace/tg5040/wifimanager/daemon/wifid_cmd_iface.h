@@ -11,8 +11,8 @@ struct client {
 	bool enable_pipe;
 };
 
-int read_command_message(int fd,char *buffer,int len);
-int handle_command(struct da_requst *ptr_req,struct client *c);
+int read_command_message(int fd, char *buffer, int len);
+int handle_command(struct da_requst *ptr_req, struct client *c);
 void handle_command_free(struct client *c);
 
 #if __cplusplus

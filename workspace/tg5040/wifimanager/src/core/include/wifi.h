@@ -122,8 +122,7 @@ int wifi_command(const char *command, char *reply, size_t reply_len);
  *
  * @return 0 if successful, < 0 if error.
  */
-int do_dhcp_request(int *ipaddr, int *gateway, int *mask,
-                   int *dns1, int *dns2, int *server, int *lease);
+int do_dhcp_request(int *ipaddr, int *gateway, int *mask, int *dns1, int *dns2, int *server, int *lease);
 
 /**
  * Return the error string of the last do_dhcp_request().
@@ -133,9 +132,9 @@ const char *get_dhcp_error_string();
 /**
  * Return the path to requested firmware
  */
-#define WIFI_GET_FW_PATH_STA	0
-#define WIFI_GET_FW_PATH_AP	1
-#define WIFI_GET_FW_PATH_P2P	2
+#define WIFI_GET_FW_PATH_STA 0
+#define WIFI_GET_FW_PATH_AP 1
+#define WIFI_GET_FW_PATH_P2P 2
 const char *wifi_get_fw_path(int fw_type);
 
 /**
@@ -146,7 +145,7 @@ int wifi_change_fw_path(const char *fwpath);
 /**
  * Check and create if necessary initial entropy file
  */
-#define WIFI_ENTROPY_FILE	"/data/misc/wifi/entropy.bin"
+#define WIFI_ENTROPY_FILE "/data/misc/wifi/entropy.bin"
 int ensure_entropy_file_exists();
 
 /**
@@ -157,18 +156,20 @@ int ensure_entropy_file_exists();
 #endif
 
 /* Evaluate EXPRESSION, and repeat as long as it returns -1 with `errno'
-    set to EINTR.  */
+	set to EINTR.  */
 #ifndef TEMP_FAILURE_RETRY
-#define TEMP_FAILURE_RETRY(expression) \
-   (__extension__                                                              \
-     ({ long int __result;                                                     \
-        do __result = (long int) (expression);                                 \
-        while (__result == -1L && errno == EINTR);                             \
-        __result; }))
+#define TEMP_FAILURE_RETRY(expression)                                                                                 \
+	(__extension__({                                                                                                   \
+		long int __result;                                                                                             \
+		do                                                                                                             \
+			__result = (long int)(expression);                                                                         \
+		while (__result == -1L && errno == EINTR);                                                                     \
+		__result;                                                                                                      \
+	}))
 #endif
 
 #if __cplusplus
-};  // extern "C"
+}; // extern "C"
 #endif
 
-#endif  // _WIFI_H
+#endif // _WIFI_H

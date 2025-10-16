@@ -9,7 +9,7 @@ void start_udhcpc();
 int is_ip_exist();
 
 #if __cplusplus
-};  // extern "C"
+}; // extern "C"
 #endif
 
 #endif

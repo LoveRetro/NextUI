@@ -6,11 +6,11 @@
 extern "C" {
 #endif
 
-#define WPA_STA_MAX_SSID	 32
+#define WPA_STA_MAX_SSID 32
 /*for compatibility of chinese ssid*/
-#define WPA_STA_MAX_PSSID	 512
-#define WPA_STA_MAX_BSSID	 18
-#define WPA_STA_MAX_IP_ADDR  16
+#define WPA_STA_MAX_PSSID 512
+#define WPA_STA_MAX_BSSID 18
+#define WPA_STA_MAX_IP_ADDR 16
 #define WPA_STA_MAX_KEY_MGMT 16
 #define WPA_STA_MAX_MAC_ADDR 18
 
@@ -28,15 +28,15 @@ enum wpa_states {
 	WPA_GROUP_HANDSHAKE,
 };
 
-struct wpa_status{
-    int id;
-    char bssid[WPA_STA_MAX_BSSID];
-    int freq;
-    char ssid[WPA_STA_MAX_PSSID];
-    enum wpa_states wpa_state;
-    char ip_address[WPA_STA_MAX_IP_ADDR];
-    char key_mgmt[WPA_STA_MAX_KEY_MGMT];
-    char mac_address[WPA_STA_MAX_MAC_ADDR];
+struct wpa_status {
+	int id;
+	char bssid[WPA_STA_MAX_BSSID];
+	int freq;
+	char ssid[WPA_STA_MAX_PSSID];
+	enum wpa_states wpa_state;
+	char ip_address[WPA_STA_MAX_IP_ADDR];
+	char key_mgmt[WPA_STA_MAX_KEY_MGMT];
+	char mac_address[WPA_STA_MAX_MAC_ADDR];
 };
 
 typedef struct signal_status {
@@ -53,7 +53,7 @@ void print_wpa_status();
 void wpa_status_info_free();
 
 #if __cplusplus
-};  // extern "C"
+}; // extern "C"
 #endif
 
 #endif /* __STATUS_INFO_H */
