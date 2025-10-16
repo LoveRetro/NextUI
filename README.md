@@ -128,6 +128,16 @@ Our community has currated a [list of favorite Paks](https://nextui.loveretro.ga
 
 ---
 
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+
+- Code formatting with clang-format
+- Pull request guidelines
+- Development setup
+
+---
+
 ## Credits
 
 [@josegonzalez](https://github.com/josegonzalez) for [minui-keyboard](https://github.com/josegonzalez/minui-keyboard/t)
