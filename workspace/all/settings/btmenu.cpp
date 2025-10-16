@@ -53,7 +53,7 @@ InputReactionHint Menu::handleInput(int &dirty, int &quit)
 	if (selectionDirty) {
 		dirty = true;
 		selectionDirty = false; // handled
-		// LOG_info("collected selectionDirty\n");
+								// LOG_info("collected selectionDirty\n");
 	}
 	return ret;
 }

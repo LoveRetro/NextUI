@@ -1642,8 +1642,10 @@ static struct Config {
 								 .desc = "This will choose resolution source to scale from", // will call
 																							 // getScreenScalingDesc()
 								 .default_value = 0,
-								 .value = 0,
-								 .count = 2,
+								 .value =
+									 0,
+								 .count =
+									 2,
 								 .values = shscaletype_labels,
 								 .labels = shscaletype_labels,
 							 },
@@ -1655,8 +1657,10 @@ static struct Config {
 								 .desc = "This will choose resolution source to scale from", // will call
 																							 // getScreenScalingDesc()
 								 .default_value = 1,
-								 .value = 1,
-								 .count = 2,
+								 .value =
+									 1,
+								 .count =
+									 2,
 								 .values = shscaletype_labels,
 								 .labels = shscaletype_labels,
 							 },
@@ -1668,8 +1672,10 @@ static struct Config {
 								 .desc = "This will scale images x times,\nscreen scales to screens resolution (can "
 										 "hit performance)", // will call getScreenScalingDesc()
 								 .default_value = 1,
-								 .value = 1,
-								 .count = 9,
+								 .value =
+									 1,
+								 .count =
+									 9,
 								 .values = shupscale_labels,
 								 .labels = shupscale_labels,
 							 },
@@ -1680,8 +1686,10 @@ static struct Config {
 								 .name = "Shader 2",
 								 .desc = "Shader 2 program to run", // will call getScreenScalingDesc()
 								 .default_value = 0,
-								 .value = 0,
-								 .count = 0,
+								 .value =
+									 0,
+								 .count =
+									 0,
 								 .values = NULL,
 								 .labels = NULL,
 
@@ -1693,8 +1701,10 @@ static struct Config {
 								 .name = "Shader 2 Filter",
 								 .desc = "Method of upscaling, NEAREST or LINEAR", // will call getScreenScalingDesc()
 								 .default_value = 0,
-								 .value = 0,
-								 .count = 2,
+								 .value =
+									 0,
+								 .count =
+									 2,
 								 .values = shfilter_labels,
 								 .labels = shfilter_labels,
 							 },
