@@ -16,32 +16,30 @@ extern uint32_t THEME_COLOR7_255;
 // Read-only interface for minui.c usage
 // Read/Write interface for settings.cpp usage
 
-typedef int (*FontLoad_callback_t)(const char* path);
+typedef int (*FontLoad_callback_t)(const char *path);
 typedef int (*ColorSet_callback_t)(void);
 
-enum
-{
+enum {
 	// MinUI: Game.gba.sav
 	SAVE_FORMAT_SAV,
-	//Retroarch: Game.srm
+	// Retroarch: Game.srm
 	SAVE_FORMAT_SRM,
 	// Generic: Game.sav
 	SAVE_FORMAT_GEN,
-	//Retroarch: Game.srm
+	// Retroarch: Game.srm
 	SAVE_FORMAT_SRM_UNCOMPRESSED
 };
 
-enum
-{
+enum {
 	// MinUI: Game.st0
 	STATE_FORMAT_SAV,
-	//Retroarch-ish: Game.state.<n> (a typo, but keeping it to avoid a breaking change)
+	// Retroarch-ish: Game.state.<n> (a typo, but keeping it to avoid a breaking change)
 	STATE_FORMAT_SRM_EXTRADOT,
-	//Retroarch-ish: Game.state.<n> (a typo, but keeping it to avoid a breaking change)
+	// Retroarch-ish: Game.state.<n> (a typo, but keeping it to avoid a breaking change)
 	STATE_FORMAT_SRM_UNCOMRESSED_EXTRADOT,
-	//Retroarch: Game.state<n>
+	// Retroarch: Game.state<n>
 	STATE_FORMAT_SRM,
-	//Retroarch: Game.state<n>
+	// Retroarch: Game.state<n>
 	STATE_FORMAT_SRM_UNCOMRESSED
 };
 
@@ -55,8 +53,7 @@ enum {
 	SCREEN_OFF
 };
 
-typedef struct
-{
+typedef struct {
 	// Theme
 	int font;
 	uint32_t color1_255; // not screen mapped
@@ -71,12 +68,12 @@ typedef struct
 	double gameArtWidth;	 // [0,1] -> 0-100% of screen width
 
 	// font loading/unloading callback
-    FontLoad_callback_t onFontChange;
+	FontLoad_callback_t onFontChange;
 
-    // color update callback
-    ColorSet_callback_t onColorSet;
+	// color update callback
+	ColorSet_callback_t onColorSet;
 
-    // UI
+	// UI
 	bool showClock;
 	bool clock24h;
 	bool showBatteryPercent;
@@ -114,7 +111,7 @@ typedef struct
 
 } NextUISettings;
 
-#define CFG_DEFAULT_FONT_ID 1  // Next
+#define CFG_DEFAULT_FONT_ID 1 // Next
 #define CFG_DEFAULT_COLOR1 0xffffffU
 #define CFG_DEFAULT_COLOR2 0x9b2257U
 #define CFG_DEFAULT_COLOR3 0x1e2329U
@@ -152,7 +149,7 @@ typedef struct
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
-void CFG_get(const char *key, char * value);
+void CFG_get(const char *key, char *value);
 // void CFG_defaults(NextUISettings*);
 //  The font id to use as the UI font.
 //  0 - Default MinUI font

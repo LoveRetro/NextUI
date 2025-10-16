@@ -20,81 +20,78 @@
 // CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-enum class ExitCode
-{
-    Uninitialized = -1,
-    Success = 0,
-    Error = 1,
-    CancelButton = 2,
-    MenuButton = 3,
-    ActionButton = 4,
-    InactionButton = 5,
-    StartButton = 6,
-    ParseError = 10,
-    SerializeError = 11,
-    Timeout = 124,
-    KeyboardInterrupt = 130,
-    Sigterm = 143,
+enum class ExitCode {
+	Uninitialized = -1,
+	Success = 0,
+	Error = 1,
+	CancelButton = 2,
+	MenuButton = 3,
+	ActionButton = 4,
+	InactionButton = 5,
+	StartButton = 6,
+	ParseError = 10,
+	SerializeError = 11,
+	Timeout = 124,
+	KeyboardInterrupt = 130,
+	Sigterm = 143,
 };
 
 // KeyboardState holds the keyboard-related state
-struct KeyboardState
-{
-    bool display;             // whether to display the keyboard
-    int row;                  // the current keyboard row
-    int col;                  // the current keyboard column
-    int layout;               // the current keyboard layout
-    std::string current_text; // the text to display in the keyboard
-    std::string initial_text; // the initial value of the text on keyboard entry
-    std::string final_text;   // the final value of the text on keyboard exit
-    std::string title;        // the title of the keyboard
+struct KeyboardState {
+	bool display;			  // whether to display the keyboard
+	int row;				  // the current keyboard row
+	int col;				  // the current keyboard column
+	int layout;				  // the current keyboard layout
+	std::string current_text; // the text to display in the keyboard
+	std::string initial_text; // the initial value of the text on keyboard entry
+	std::string final_text;	  // the final value of the text on keyboard exit
+	std::string title;		  // the title of the keyboard
 };
 
 // AppState holds the current state of the application
-struct AppState
-{
-    bool redraw;                   // whether the screen needs to be redrawn
-    bool quitting;                 // whether the app should exit
-    ExitCode exit_code;            // the exit code to return
-    struct KeyboardState keyboard; // current keyboard state
+struct AppState {
+	bool redraw;				   // whether the screen needs to be redrawn
+	bool quitting;				   // whether the app should exit
+	ExitCode exit_code;			   // the exit code to return
+	struct KeyboardState keyboard; // current keyboard state
 };
 
 using KeyboardLayout = std::vector<std::vector<std::string>>;
 
 class KeyboardPrompt : public MenuList
 {
-    AppState state{};
+	AppState state{};
 
-public:
-    KeyboardPrompt(const std::string &title, MenuListCallback on_confirm = nullptr);
-    ~KeyboardPrompt();
+  public:
+	KeyboardPrompt(const std::string &title, MenuListCallback on_confirm = nullptr);
+	~KeyboardPrompt();
 
-    void drawCustom(SDL_Surface *surface, const SDL_Rect &dst) override;
+	void drawCustom(SDL_Surface *surface, const SDL_Rect &dst) override;
 
-    InputReactionHint handleInput(int &dirty, int &quit) override;
+	InputReactionHint handleInput(int &dirty, int &quit) override;
 
-private:
-    // handle_keyboard_input interprets keyboard input events and mutates app state
-    void handleKeyboardInput(AppState &state);
+  private:
+	// handle_keyboard_input interprets keyboard input events and mutates app state
+	void handleKeyboardInput(AppState &state);
 
-    // cursor_rescue ensures the cursor lands on a valid key and doesn't get lost in empty space
-    void cursorRescue(AppState &state, const KeyboardLayout& current_layout, int num_rows);
+	// cursor_rescue ensures the cursor lands on a valid key and doesn't get lost in empty space
+	void cursorRescue(AppState &state, const KeyboardLayout &current_layout, int num_rows);
 
-    // count_row_length returns the number of non-empty characters in a keyboard row
-    int countRowLength(const KeyboardLayout& current_layout, int row);
+	// count_row_length returns the number of non-empty characters in a keyboard row
+	int countRowLength(const KeyboardLayout &current_layout, int row);
 
-    // calculate_column_offset returns the offset between two rows
-    int calculateColumnOffset(const KeyboardLayout& current_layout, int from_row, int to_row);
+	// calculate_column_offset returns the offset between two rows
+	int calculateColumnOffset(const KeyboardLayout &current_layout, int from_row, int to_row);
 
-    // adjust_offset_exit_last_row adjusts offset when exiting the last row
-    int adjustOffsetExitLastRow(int offset, int column);
+	// adjust_offset_exit_last_row adjusts offset when exiting the last row
+	int adjustOffsetExitLastRow(int offset, int column);
 
-    // adjust_offset_enter_last_row adjusts offset when entering the last row
-    int adjustOffsetEnterLastRow(int offset, int col, int center);
+	// adjust_offset_enter_last_row adjusts offset when entering the last row
+	int adjustOffsetEnterLastRow(int offset, int col, int center);
 
-    // get_current_layout returns the appropriate keyboard layout array based on the current state
-    const KeyboardLayout& getCurrentLayout(const AppState &state);
+	// get_current_layout returns the appropriate keyboard layout array based on the current state
+	const KeyboardLayout &getCurrentLayout(const AppState &state);
 
-    // draw_keyboard interprets the app state and draws it as a keyboard to the screen
-    void drawKeyboard(SDL_Surface *screen, const AppState &state);
+	// draw_keyboard interprets the app state and draws it as a keyboard to the screen
+	void drawKeyboard(SDL_Surface *screen, const AppState &state);
 };

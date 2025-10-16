@@ -65,11 +65,10 @@ void wmg_debug_print_timestap(void)
 	sys_get_time(&tv);
 #ifdef CONFIG_DEBUG_FILE
 	if (out_file) {
-		fprintf(out_file, "%ld.%06u: ", (long) tv.sec,
-			(unsigned int) tv.usec);
+		fprintf(out_file, "%ld.%06u: ", (long)tv.sec, (unsigned int)tv.usec);
 	} else
 #endif /* CONFIG_DEBUG_FILE */
-	printf("%ld.%06u: ", (long) tv.sec, (unsigned int) tv.usec);
+		printf("%ld.%06u: ", (long)tv.sec, (unsigned int)tv.usec);
 #endif /* CONFIG_ANDROID_LOG */
 }
 void wmg_print(int level, const char *fmt, ...)
@@ -83,17 +82,17 @@ void wmg_print(int level, const char *fmt, ...)
 			vsyslog(syslog_priority(level), fmt, ap);
 		} else {
 #endif /* CONFIG_DEBUG_SYSLOG */
-		wmg_debug_print_timestap();
+			wmg_debug_print_timestap();
 #ifdef CONFIG_DEBUG_FILE
-		if (out_file) {
-			vfprintf(out_file, fmt, ap);
-//			fprintf(out_file, "\n");
-		} else {
+			if (out_file) {
+				vfprintf(out_file, fmt, ap);
+				//			fprintf(out_file, "\n");
+			} else {
 #endif /* CONFIG_DEBUG_FILE */
-		vprintf(fmt, ap);
+				vprintf(fmt, ap);
 //		printf("\n");
 #ifdef CONFIG_DEBUG_FILE
-		}
+			}
 #endif /* CONFIG_DEBUG_FILE */
 #ifdef CONFIG_DEBUG_SYSLOG
 		}
@@ -121,10 +120,10 @@ int wmg_debug_open_file(const char *path)
 	out_file = fopen(path, "a");
 	if (out_file == NULL) {
 		wmg_printf(MSG_ERROR, "wmg_debug_open_file: Failed to open "
-			   "output file, using standard output");
+							  "output file, using standard output");
 		return -1;
 	}
-#else /* CONFIG_DEBUG_FILE */
+#else  /* CONFIG_DEBUG_FILE */
 	(void)path;
 #endif /* CONFIG_DEBUG_FILE */
 	return 0;

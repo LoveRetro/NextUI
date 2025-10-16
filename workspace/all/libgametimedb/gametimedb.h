@@ -7,33 +7,33 @@ typedef struct PlayActivity PlayActivity;
 typedef struct PlayActivities PlayActivities;
 
 struct ROM {
-    int id;
-    char *type;
-    char *name;
-    char *file_path;
-    char *image_path;
+	int id;
+	char *type;
+	char *name;
+	char *file_path;
+	char *image_path;
 };
 struct PlayActivity {
-    ROM *rom;
-    int play_count;
-    int play_time_total;
-    int play_time_average;
-    char *first_played_at;
-    char *last_played_at;
+	ROM *rom;
+	int play_count;
+	int play_time_total;
+	int play_time_average;
+	char *first_played_at;
+	char *last_played_at;
 };
 struct PlayActivities {
-    PlayActivity **play_activity;
-    int count;
-    int play_time_total;
+	PlayActivity **play_activity;
+	int count;
+	int play_time_total;
 };
 
-sqlite3* play_activity_db_open(void);
-void play_activity_db_close(sqlite3* ctx);
+sqlite3 *play_activity_db_open(void);
+void play_activity_db_close(sqlite3 *ctx);
 void free_play_activities(PlayActivities *pa_ptr);
 
 // Main interface functions for read access
 PlayActivities *play_activity_find_all(void);
-//int play_activity_get_play_time(const char *rom_path);
+// int play_activity_get_play_time(const char *rom_path);
 
 // Main interface functions for write access
 void play_activity_start(char *rom_file_path);

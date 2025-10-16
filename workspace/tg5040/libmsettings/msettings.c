@@ -36,7 +36,7 @@ typedef struct SettingsV4 {
 	int speaker;
 	int mute;
 	int unused[2];
-	int jack; 
+	int jack;
 } SettingsV4;
 
 // Second NextUI settings format
@@ -49,7 +49,7 @@ typedef struct SettingsV5 {
 	int mute;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV5;
 
 // Third NextUI settings format
@@ -65,7 +65,7 @@ typedef struct SettingsV6 {
 	int exposure;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV6;
 
 typedef struct SettingsV7 {
@@ -85,7 +85,7 @@ typedef struct SettingsV7 {
 	int mutedexposure;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV7;
 
 typedef struct SettingsV8 {
@@ -106,7 +106,7 @@ typedef struct SettingsV8 {
 	int toggled_volume;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV8;
 
 typedef struct SettingsV9 {
@@ -137,7 +137,7 @@ typedef struct SettingsV9 {
 	int turbo_r2;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV9;
 
 typedef struct SettingsV10 {
@@ -168,7 +168,7 @@ typedef struct SettingsV10 {
 	int turbo_r2;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 	int audiosink; // was bluetooth true/false before
 } SettingsV10;
 
@@ -205,7 +205,7 @@ static Settings DefaultSettings = {
 	.jack = 0,
 	.audiosink = AUDIO_SINK_DEFAULT,
 };
-static Settings* settings;
+static Settings *settings;
 
 #define SHM_KEY "/SharedSettings"
 static char SettingsPath[256];
@@ -231,39 +231,47 @@ void turboL2(int);
 void turboR1(int);
 void turboR2(int);
 
-int getInt(char* path) {
+int getInt(char *path)
+{
 	int i = 0;
 	FILE *file = fopen(path, "r");
-	if (file!=NULL) {
+	if (file != NULL) {
 		fscanf(file, "%i", &i);
 		fclose(file);
 	}
 	return i;
 }
-void putFile(char* path, char* contents) {
-	FILE* file = fopen(path, "w");
+void putFile(char *path, char *contents)
+{
+	FILE *file = fopen(path, "w");
 	if (file) {
 		fputs(contents, file);
 		fclose(file);
 	}
 }
-void putInt(char* path, int value) {
+void putInt(char *path, int value)
+{
 	char buffer[8];
 	sprintf(buffer, "%d", value);
 	putFile(path, buffer);
 }
 
-void touch(char* path) {
-	close(open(path, O_RDWR|O_CREAT, 0777));
+void touch(char *path)
+{
+	close(open(path, O_RDWR | O_CREAT, 0777));
 }
-int exactMatch(char* str1, char* str2) {
-	if (!str1 || !str2) return 0; // NULL isn't safe here
+int exactMatch(char *str1, char *str2)
+{
+	if (!str1 || !str2)
+		return 0; // NULL isn't safe here
 	int len1 = strlen(str1);
-	if (len1!=strlen(str2)) return 0;
-	return (strncmp(str1,str2,len1)==0);
+	if (len1 != strlen(str2))
+		return 0;
+	return (strncmp(str1, str2, len1) == 0);
 }
 
-int peekVersion(const char *filename) {
+int peekVersion(const char *filename)
+{
 	int version = 0;
 	FILE *file = fopen(filename, "r");
 	if (file) {
@@ -275,19 +283,19 @@ int peekVersion(const char *filename) {
 
 static int is_brick = 0;
 
-void InitSettings(void) {	
-	char* device = getenv("DEVICE");
+void InitSettings(void)
+{
+	char *device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
-	
+
 	sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));
-	
+
 	shm_fd = shm_open(SHM_KEY, O_RDWR | O_CREAT | O_EXCL, 0644); // see if it exists
-	if (shm_fd==-1 && errno==EEXIST) { // already exists
+	if (shm_fd == -1 && errno == EEXIST) {						 // already exists
 		// puts("Settings client");
 		shm_fd = shm_open(SHM_KEY, O_RDWR, 0644);
 		settings = mmap(NULL, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-	}
-	else { // host
+	} else { // host
 		// puts("Settings host"); // keymon
 		is_host = 1;
 		// we created it so set initial size and populate
@@ -296,32 +304,31 @@ void InitSettings(void) {
 
 		// peek the first int from fd, it's the version
 		int version = peekVersion(SettingsPath);
-		if(version > 0) {
+		if (version > 0) {
 			int fd = open(SettingsPath, O_RDONLY);
-			if (fd>=0) {
+			if (fd >= 0) {
 				if (version == SETTINGS_VERSION) {
 					read(fd, settings, shm_size);
-				}
-				else {
+				} else {
 					// initialize with defaults
 					memcpy(settings, &DefaultSettings, shm_size);
 
 					// overwrite with migrated data
-					if(version==9) {
+					if (version == 9) {
 						printf("Found settings v9.\n");
 						SettingsV9 old;
 						read(fd, &old, sizeof(SettingsV9));
 
-						settings-> disable_dpad_on_mute = old.disable_dpad_on_mute;
-						settings-> emulate_joystick_on_mute = old.emulate_joystick_on_mute;
-						settings-> turbo_a = old.turbo_a;
-						settings-> turbo_b = old.turbo_b;
-						settings-> turbo_x = old.turbo_x;
-						settings-> turbo_y = old.turbo_y;
-						settings-> turbo_l1 = old.turbo_l1;
-						settings-> turbo_l2 = old.turbo_l2;
-						settings-> turbo_r1 = old.turbo_r1;
-						settings-> turbo_r2 = old.turbo_r2;
+						settings->disable_dpad_on_mute = old.disable_dpad_on_mute;
+						settings->emulate_joystick_on_mute = old.emulate_joystick_on_mute;
+						settings->turbo_a = old.turbo_a;
+						settings->turbo_b = old.turbo_b;
+						settings->turbo_x = old.turbo_x;
+						settings->turbo_y = old.turbo_y;
+						settings->turbo_l1 = old.turbo_l1;
+						settings->turbo_l2 = old.turbo_l2;
+						settings->turbo_r1 = old.turbo_r1;
+						settings->turbo_r2 = old.turbo_r2;
 
 						settings->toggled_volume = old.toggled_volume;
 
@@ -342,8 +349,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-					}
-					else if(version==8) {
+					} else if (version == 8) {
 						printf("Found settings v8.\n");
 						SettingsV8 old;
 						read(fd, &old, sizeof(SettingsV8));
@@ -367,8 +373,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-					}
-					else if(version==7) {
+					} else if (version == 7) {
 						printf("Found settings v7.\n");
 						SettingsV7 old;
 						read(fd, &old, sizeof(SettingsV7));
@@ -391,8 +396,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-					}
-					else if(version==6) {
+					} else if (version == 6) {
 						printf("Found settings v6.\n");
 						SettingsV6 old;
 						read(fd, &old, sizeof(SettingsV6));
@@ -408,8 +412,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-					}
-					else if(version==5) {
+					} else if (version == 5) {
 						printf("Found settings v5.\n");
 						SettingsV5 old;
 						read(fd, &old, sizeof(SettingsV5));
@@ -421,8 +424,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-					}
-					else if(version==4) {
+					} else if (version == 4) {
 						printf("Found settings v4.\n");
 						SettingsV4 old;
 						read(fd, &old, sizeof(SettingsV4));
@@ -435,8 +437,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-					}
-					else if(version==3) {
+					} else if (version == 3) {
 						printf("Found settings v3.\n");
 						SettingsV3 old;
 						read(fd, &old, sizeof(SettingsV3));
@@ -446,24 +447,21 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-					}
-					else {
+					} else {
 						printf("Found unsupported settings version: %i.\n", version);
 					}
 				}
-				
+
 				close(fd);
-			}
-			else {
+			} else {
 				// load defaults
 				memcpy(settings, &DefaultSettings, shm_size);
 			}
-		}
-		else {
+		} else {
 			// load defaults
 			memcpy(settings, &DefaultSettings, shm_size);
 		}
-		
+
 		// these shouldn't be persisted
 		// settings->jack = 0;
 		settings->mute = 0;
@@ -472,25 +470,29 @@ void InitSettings(void) {
 	system("amixer");
 
 	// make sure all these volume-influencing controls are set to defaults, we will set volume with 'digital volume'
-	if(GetAudioSink() == AUDIO_SINK_DEFAULT) {
+	if (GetAudioSink() == AUDIO_SINK_DEFAULT) {
 		system("amixer sset 'Headphone' 0");	  // 100%
 		system("amixer sset 'digital volume' 0"); // 100%
-		system("amixer sset 'DAC Swap' Off"); // Fix L/R channels
+		system("amixer sset 'DAC Swap' Off");	  // Fix L/R channels
 	}
 
 	// This will implicitly update all other settings based on FN switch state
 	SetMute(settings->mute);
 }
-int InitializedSettings(void) {
+int InitializedSettings(void)
+{
 	return (settings != NULL);
 }
-void QuitSettings(void) {
+void QuitSettings(void)
+{
 	munmap(settings, shm_size);
-	if (is_host) shm_unlink(SHM_KEY);
+	if (is_host)
+		shm_unlink(SHM_KEY);
 }
-static inline void SaveSettings(void) {
-	int fd = open(SettingsPath, O_CREAT|O_WRONLY, 0644);
-	if (fd>=0) {
+static inline void SaveSettings(void)
+{
+	int fd = open(SettingsPath, O_CREAT | O_WRONLY, 0644);
+	if (fd >= 0) {
 		write(fd, settings, shm_size);
 		close(fd);
 		sync();
@@ -499,35 +501,42 @@ static inline void SaveSettings(void) {
 
 ///////// Getters exposed in public API
 
-int GetBrightness(void) { // 0-10
+int GetBrightness(void)
+{ // 0-10
 	return settings->brightness;
 }
-int GetColortemp(void) { // 0-10
+int GetColortemp(void)
+{ // 0-10
 	return settings->colortemperature;
 }
-int GetVolume(void) { // 0-20
+int GetVolume(void)
+{ // 0-20
 	if (settings->mute && GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 		return GetMutedVolume();
-	
-	if(settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
+
+	if (settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
 		return settings->headphones;
 
 	return settings->speaker;
 }
 // monitored and set by thread in keymon
-int GetJack(void) {
+int GetJack(void)
+{
 	return settings->jack;
 }
 // monitored and set by thread in audiomon
-int GetAudioSink(void) {
+int GetAudioSink(void)
+{
 	return settings->audiosink;
 }
 
-int GetHDMI(void) { 
+int GetHDMI(void)
+{
 	return 0;
 };
 
-int GetMute(void) {
+int GetMute(void)
+{
 	return settings->mute;
 }
 int GetContrast(void)
@@ -609,20 +618,23 @@ int GetMuteTurboR2(void)
 
 ///////// Setters exposed in public API
 
-void SetBrightness(int value) {
+void SetBrightness(int value)
+{
 	SetRawBrightness(scaleBrightness(value));
 	settings->brightness = value;
 	SaveSettings();
 }
-void SetColortemp(int value) {
+void SetColortemp(int value)
+{
 	SetRawColortemp(scaleColortemp(value));
 	settings->colortemperature = value;
 	SaveSettings();
 }
-void SetVolume(int value) { // 0-20
-	if (settings->mute) 
+void SetVolume(int value)
+{ // 0-20
+	if (settings->mute)
 		return SetRawVolume(scaleVolume(GetMutedVolume()));
-	
+
 	if (settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
 		settings->headphones = value;
 	else
@@ -632,87 +644,91 @@ void SetVolume(int value) { // 0-20
 	SaveSettings();
 }
 // monitored and set by thread in keymon
-void SetJack(int value) {
-	printf("SetJack(%i)\n", value); fflush(stdout);
-	
+void SetJack(int value)
+{
+	printf("SetJack(%i)\n", value);
+	fflush(stdout);
+
 	settings->jack = value;
 	SetVolume(GetVolume());
 }
 // monitored and set by thread in audiomon
-void SetAudioSink(int value) {
-	printf("SetAudioSink(%i)\n", value); fflush(stdout);
-	
+void SetAudioSink(int value)
+{
+	printf("SetAudioSink(%i)\n", value);
+	fflush(stdout);
+
 	settings->audiosink = value;
 	SetVolume(GetVolume());
 }
 
-void SetHDMI(int value){};
+void SetHDMI(int value) {};
 
-void SetMute(int value) {
+void SetMute(int value)
+{
 	settings->mute = value;
 	if (settings->mute) {
 		if (GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawVolume(scaleVolume(GetMutedVolume()));
 		// custom mute mode display settings
-		if(GetMutedBrightness() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		if (GetMutedBrightness() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawBrightness(scaleBrightness(GetMutedBrightness()));
-		if(GetMutedColortemp() != SETTINGS_DEFAULT_MUTE_NO_CHANGE) 
+		if (GetMutedColortemp() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawColortemp(scaleColortemp(GetMutedColortemp()));
-		if(GetMutedContrast() != SETTINGS_DEFAULT_MUTE_NO_CHANGE) 
+		if (GetMutedContrast() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawContrast(scaleContrast(GetMutedContrast()));
-		if(GetMutedSaturation() != SETTINGS_DEFAULT_MUTE_NO_CHANGE) 
+		if (GetMutedSaturation() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawSaturation(scaleSaturation(GetMutedSaturation()));
-		if(GetMutedExposure() != SETTINGS_DEFAULT_MUTE_NO_CHANGE) 
+		if (GetMutedExposure() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawExposure(scaleExposure(GetMutedExposure()));
-		if(is_brick && GetMuteDisablesDpad())
+		if (is_brick && GetMuteDisablesDpad())
 			disableDpad(1);
-		if(is_brick && GetMuteEmulatesJoystick())
+		if (is_brick && GetMuteEmulatesJoystick())
 			emulateJoystick(1);
-		if(GetMuteTurboA())
+		if (GetMuteTurboA())
 			turboA(1);
-		if(GetMuteTurboB())
+		if (GetMuteTurboB())
 			turboB(1);
-		if(GetMuteTurboX())
+		if (GetMuteTurboX())
 			turboX(1);
-		if(GetMuteTurboY())
+		if (GetMuteTurboY())
 			turboY(1);
-		if(GetMuteTurboL1())
+		if (GetMuteTurboL1())
 			turboL1(1);
-		if(GetMuteTurboL2())
+		if (GetMuteTurboL2())
 			turboL2(1);
-		if(GetMuteTurboR1())
+		if (GetMuteTurboR1())
 			turboR1(1);
-		if(GetMuteTurboR2())
+		if (GetMuteTurboR2())
 			turboR2(1);
-	}
-	else {
+	} else {
 		SetVolume(GetVolume());
 		SetBrightness(GetBrightness());
 		SetColortemp(GetColortemp());
 		SetContrast(GetContrast());
 		SetSaturation(GetSaturation());
 		SetExposure(GetExposure());
-		if(is_brick) {
-			if(GetMuteDisablesDpad())
+		if (is_brick) {
+			if (GetMuteDisablesDpad())
 				disableDpad(0);
-			if(GetMuteEmulatesJoystick())
+			if (GetMuteEmulatesJoystick())
 				emulateJoystick(0);
 		}
-		if(GetMuteTurboA())
+		if (GetMuteTurboA())
 			turboA(0);
-		if(GetMuteTurboB())
+		if (GetMuteTurboB())
 			turboB(0);
-		if(GetMuteTurboX())
+		if (GetMuteTurboX())
 			turboX(0);
-		if(GetMuteTurboY())
+		if (GetMuteTurboY())
 			turboY(0);
-		if(GetMuteTurboL1())
+		if (GetMuteTurboL1())
 			turboL1(0);
-		if(GetMuteTurboL2())
+		if (GetMuteTurboL2())
 			turboL2(0);
-		if(GetMuteTurboR1())
+		if (GetMuteTurboR1())
 			turboR1(0);
-		if(GetMuteTurboR2())
+		if (GetMuteTurboR2())
 			turboR2(0);
 	}
 }
@@ -844,257 +860,454 @@ void SetMuteTurboR2(int value)
 #define INPUTD_TURBO_R1_PATH "/tmp/trimui_inputd/turbo_r"
 #define INPUTD_TURBO_R2_PATH "/tmp/trimui_inputd/turbo_r2"
 
-void disableDpad(int value) {
-	if(value) {
+void disableDpad(int value)
+{
+	if (value) {
 		mkdir(INPUTD_PATH, 0755);
 		touch(INPUTD_DPAD_PATH);
-	}
-	else {
+	} else {
 		unlink(INPUTD_DPAD_PATH);
 	}
 }
 
-void emulateJoystick(int value) {
-	if(value) {
+void emulateJoystick(int value)
+{
+	if (value) {
 		mkdir(INPUTD_PATH, 0755);
 		touch(INPUTD_JOYSTICK_PATH);
-	}
-	else {
+	} else {
 		unlink(INPUTD_JOYSTICK_PATH);
 	}
 }
 
-void turboA(int value) {
-	if(value) {
+void turboA(int value)
+{
+	if (value) {
 		mkdir(INPUTD_PATH, 0755);
 		touch(INPUTD_TURBO_A_PATH);
-	}
-	else {
+	} else {
 		unlink(INPUTD_TURBO_A_PATH);
 	}
 }
-void turboB(int value) {
-	if(value) {
+void turboB(int value)
+{
+	if (value) {
 		mkdir(INPUTD_PATH, 0755);
 		touch(INPUTD_TURBO_B_PATH);
-	}
-	else {
+	} else {
 		unlink(INPUTD_TURBO_B_PATH);
 	}
 }
-void turboX(int value) {
-	if(value) {
+void turboX(int value)
+{
+	if (value) {
 		mkdir(INPUTD_PATH, 0755);
 		touch(INPUTD_TURBO_X_PATH);
-	}
-	else {
+	} else {
 		unlink(INPUTD_TURBO_X_PATH);
 	}
 }
-void turboY(int value) {
-	if(value) {
+void turboY(int value)
+{
+	if (value) {
 		mkdir(INPUTD_PATH, 0755);
 		touch(INPUTD_TURBO_Y_PATH);
-	}
-	else {
+	} else {
 		unlink(INPUTD_TURBO_Y_PATH);
 	}
 }
-void turboL1(int value) {
-	if(value) {
+void turboL1(int value)
+{
+	if (value) {
 		mkdir(INPUTD_PATH, 0755);
 		touch(INPUTD_TURBO_L1_PATH);
-	}
-	else {
+	} else {
 		unlink(INPUTD_TURBO_L1_PATH);
 	}
 }
-void turboL2(int value) {
-	if(value) {
+void turboL2(int value)
+{
+	if (value) {
 		mkdir(INPUTD_PATH, 0755);
 		touch(INPUTD_TURBO_L2_PATH);
-	}
-	else {
+	} else {
 		unlink(INPUTD_TURBO_L2_PATH);
 	}
 }
-void turboR1(int value) {
-	if(value) {
+void turboR1(int value)
+{
+	if (value) {
 		mkdir(INPUTD_PATH, 0755);
 		touch(INPUTD_TURBO_R1_PATH);
-	}
-	else {
+	} else {
 		unlink(INPUTD_TURBO_R1_PATH);
 	}
 }
-void turboR2(int value) {
-	if(value) {
+void turboR2(int value)
+{
+	if (value) {
 		mkdir(INPUTD_PATH, 0755);
 		touch(INPUTD_TURBO_R2_PATH);
-	}
-	else {
+	} else {
 		unlink(INPUTD_TURBO_R2_PATH);
 	}
 }
 
 ///////// Platform specific scaling
 
-int scaleVolume(int value) {
+int scaleVolume(int value)
+{
 	return value * 5; // scale 0-20 to 0-100
 }
 
-int scaleBrightness(int value) {
+int scaleBrightness(int value)
+{
 	int raw;
 	if (is_brick) {
 		switch (value) {
-			case 0: raw=1; break; 		// 0
-			case 1: raw=8; break; 		// 8
-			case 2: raw=16; break; 		// 8
-			case 3: raw=32; break; 		// 16
-			case 4: raw=48; break;		// 16
-			case 5: raw=72; break;		// 24
-			case 6: raw=96; break;		// 24
-			case 7: raw=128; break;		// 32
-			case 8: raw=160; break;		// 32
-			case 9: raw=192; break;		// 32
-			case 10: raw=255; break;	// 64
+		case 0:
+			raw = 1;
+			break; // 0
+		case 1:
+			raw = 8;
+			break; // 8
+		case 2:
+			raw = 16;
+			break; // 8
+		case 3:
+			raw = 32;
+			break; // 16
+		case 4:
+			raw = 48;
+			break; // 16
+		case 5:
+			raw = 72;
+			break; // 24
+		case 6:
+			raw = 96;
+			break; // 24
+		case 7:
+			raw = 128;
+			break; // 32
+		case 8:
+			raw = 160;
+			break; // 32
+		case 9:
+			raw = 192;
+			break; // 32
+		case 10:
+			raw = 255;
+			break; // 64
 		}
-	}
-	else {
+	} else {
 		switch (value) {
-			case 0: raw=4; break; 		//  0
-			case 1: raw=6; break; 		//  2
-			case 2: raw=10; break; 		//  4
-			case 3: raw=16; break; 		//  6
-			case 4: raw=32; break;		// 16
-			case 5: raw=48; break;		// 16
-			case 6: raw=64; break;		// 16
-			case 7: raw=96; break;		// 32
-			case 8: raw=128; break;		// 32
-			case 9: raw=192; break;		// 64
-			case 10: raw=255; break;	// 64
+		case 0:
+			raw = 4;
+			break; //  0
+		case 1:
+			raw = 6;
+			break; //  2
+		case 2:
+			raw = 10;
+			break; //  4
+		case 3:
+			raw = 16;
+			break; //  6
+		case 4:
+			raw = 32;
+			break; // 16
+		case 5:
+			raw = 48;
+			break; // 16
+		case 6:
+			raw = 64;
+			break; // 16
+		case 7:
+			raw = 96;
+			break; // 32
+		case 8:
+			raw = 128;
+			break; // 32
+		case 9:
+			raw = 192;
+			break; // 64
+		case 10:
+			raw = 255;
+			break; // 64
 		}
 	}
 	return raw;
 }
-int scaleColortemp(int value) {
+int scaleColortemp(int value)
+{
 	int raw;
-	
+
 	switch (value) {
-		case 0: raw=-200; break; 		// 8
-		case 1: raw=-190; break; 		// 8
-		case 2: raw=-180; break; 		// 16
-		case 3: raw=-170; break;		// 16
-		case 4: raw=-160; break;		// 24
-		case 5: raw=-150; break;		// 24
-		case 6: raw=-140; break;		// 32
-		case 7: raw=-130; break;		// 32
-		case 8: raw=-120; break;		// 32
-		case 9: raw=-110; break;	// 64
-		case 10: raw=-100; break; 		// 0
-		case 11: raw=-90; break; 		// 8
-		case 12: raw=-80; break; 		// 8
-		case 13: raw=-70; break; 		// 16
-		case 14: raw=-60; break;		// 16
-		case 15: raw=-50; break;		// 24
-		case 16: raw=-40; break;		// 24
-		case 17: raw=-30; break;		// 32
-		case 18: raw=-20; break;		// 32
-		case 19: raw=-10; break;		// 32
-		case 20: raw=0; break;	// 64
-		case 21: raw=10; break; 		// 0
-		case 22: raw=20; break; 		// 8
-		case 23: raw=30; break; 		// 8
-		case 24: raw=40; break; 		// 16
-		case 25: raw=50; break;		// 16
-		case 26: raw=60; break;		// 24
-		case 27: raw=70; break;		// 24
-		case 28: raw=80; break;		// 32
-		case 29: raw=90; break;		// 32
-		case 30: raw=100; break;		// 32
-		case 31: raw=110; break;	// 64
-		case 32: raw=120; break; 		// 0
-		case 33: raw=130; break; 		// 8
-		case 34: raw=140; break; 		// 8
-		case 35: raw=150; break; 		// 16
-		case 36: raw=160; break;		// 16
-		case 37: raw=170; break;		// 24
-		case 38: raw=180; break;		// 24
-		case 39: raw=190; break;		// 32
-		case 40: raw=200; break;		// 32
+	case 0:
+		raw = -200;
+		break; // 8
+	case 1:
+		raw = -190;
+		break; // 8
+	case 2:
+		raw = -180;
+		break; // 16
+	case 3:
+		raw = -170;
+		break; // 16
+	case 4:
+		raw = -160;
+		break; // 24
+	case 5:
+		raw = -150;
+		break; // 24
+	case 6:
+		raw = -140;
+		break; // 32
+	case 7:
+		raw = -130;
+		break; // 32
+	case 8:
+		raw = -120;
+		break; // 32
+	case 9:
+		raw = -110;
+		break; // 64
+	case 10:
+		raw = -100;
+		break; // 0
+	case 11:
+		raw = -90;
+		break; // 8
+	case 12:
+		raw = -80;
+		break; // 8
+	case 13:
+		raw = -70;
+		break; // 16
+	case 14:
+		raw = -60;
+		break; // 16
+	case 15:
+		raw = -50;
+		break; // 24
+	case 16:
+		raw = -40;
+		break; // 24
+	case 17:
+		raw = -30;
+		break; // 32
+	case 18:
+		raw = -20;
+		break; // 32
+	case 19:
+		raw = -10;
+		break; // 32
+	case 20:
+		raw = 0;
+		break; // 64
+	case 21:
+		raw = 10;
+		break; // 0
+	case 22:
+		raw = 20;
+		break; // 8
+	case 23:
+		raw = 30;
+		break; // 8
+	case 24:
+		raw = 40;
+		break; // 16
+	case 25:
+		raw = 50;
+		break; // 16
+	case 26:
+		raw = 60;
+		break; // 24
+	case 27:
+		raw = 70;
+		break; // 24
+	case 28:
+		raw = 80;
+		break; // 32
+	case 29:
+		raw = 90;
+		break; // 32
+	case 30:
+		raw = 100;
+		break; // 32
+	case 31:
+		raw = 110;
+		break; // 64
+	case 32:
+		raw = 120;
+		break; // 0
+	case 33:
+		raw = 130;
+		break; // 8
+	case 34:
+		raw = 140;
+		break; // 8
+	case 35:
+		raw = 150;
+		break; // 16
+	case 36:
+		raw = 160;
+		break; // 16
+	case 37:
+		raw = 170;
+		break; // 24
+	case 38:
+		raw = 180;
+		break; // 24
+	case 39:
+		raw = 190;
+		break; // 32
+	case 40:
+		raw = 200;
+		break; // 32
 	}
 	return raw;
 }
-int scaleContrast(int value) {
+int scaleContrast(int value)
+{
 	int raw;
-	
+
 	switch (value) {
-		// dont offer -5/ raw 0, looks like it might turn off the display completely?
-		case -4: raw=10; break;
-		case -3: raw=20; break;
-		case -2: raw=30; break;
-		case -1: raw=40; break;
-		case 0: raw=50; break;
-		case 1: raw=60; break;
-		case 2: raw=70; break;
-		case 3: raw=80; break;
-		case 4: raw=90; break;
-		case 5: raw=100; break;
+	// dont offer -5/ raw 0, looks like it might turn off the display completely?
+	case -4:
+		raw = 10;
+		break;
+	case -3:
+		raw = 20;
+		break;
+	case -2:
+		raw = 30;
+		break;
+	case -1:
+		raw = 40;
+		break;
+	case 0:
+		raw = 50;
+		break;
+	case 1:
+		raw = 60;
+		break;
+	case 2:
+		raw = 70;
+		break;
+	case 3:
+		raw = 80;
+		break;
+	case 4:
+		raw = 90;
+		break;
+	case 5:
+		raw = 100;
+		break;
 	}
 	return raw;
 }
-int scaleSaturation(int value) {
+int scaleSaturation(int value)
+{
 	int raw;
-	
+
 	switch (value) {
-		case -5: raw=0; break;
-		case -4: raw=10; break;
-		case -3: raw=20; break;
-		case -2: raw=30; break;
-		case -1: raw=40; break;
-		case 0: raw=50; break;
-		case 1: raw=60; break;
-		case 2: raw=70; break;
-		case 3: raw=80; break;
-		case 4: raw=90; break;
-		case 5: raw=100; break;
+	case -5:
+		raw = 0;
+		break;
+	case -4:
+		raw = 10;
+		break;
+	case -3:
+		raw = 20;
+		break;
+	case -2:
+		raw = 30;
+		break;
+	case -1:
+		raw = 40;
+		break;
+	case 0:
+		raw = 50;
+		break;
+	case 1:
+		raw = 60;
+		break;
+	case 2:
+		raw = 70;
+		break;
+	case 3:
+		raw = 80;
+		break;
+	case 4:
+		raw = 90;
+		break;
+	case 5:
+		raw = 100;
+		break;
 	}
 	return raw;
 }
-int scaleExposure(int value) {
+int scaleExposure(int value)
+{
 	int raw;
-	
+
 	switch (value) {
-		// stock OS also avoids setting anything lower, so we do the same here.
-		case -4: raw=10; break;
-		case -3: raw=20; break;
-		case -2: raw=30; break;
-		case -1: raw=40; break;
-		case 0: raw=50; break;
-		case 1: raw=60; break;
-		case 2: raw=70; break;
-		case 3: raw=80; break;
-		case 4: raw=90; break;
-		case 5: raw=100; break;
+	// stock OS also avoids setting anything lower, so we do the same here.
+	case -4:
+		raw = 10;
+		break;
+	case -3:
+		raw = 20;
+		break;
+	case -2:
+		raw = 30;
+		break;
+	case -1:
+		raw = 40;
+		break;
+	case 0:
+		raw = 50;
+		break;
+	case 1:
+		raw = 60;
+		break;
+	case 2:
+		raw = 70;
+		break;
+	case 3:
+		raw = 80;
+		break;
+	case 4:
+		raw = 90;
+		break;
+	case 5:
+		raw = 100;
+		break;
 	}
 	return raw;
 }
 
 ///////// Platform specific, unscaled accessors
 
-#define DISP_LCD_SET_BRIGHTNESS  0x102
-void SetRawBrightness(int val) { // 0 - 255
-	printf("SetRawBrightness(%i)\n", val); fflush(stdout);
+#define DISP_LCD_SET_BRIGHTNESS 0x102
+void SetRawBrightness(int val)
+{ // 0 - 255
+	printf("SetRawBrightness(%i)\n", val);
+	fflush(stdout);
 
-    int fd = open("/dev/disp", O_RDWR);
+	int fd = open("/dev/disp", O_RDWR);
 	if (fd) {
-	    unsigned long param[4]={0,val,0,0};
+		unsigned long param[4] = {0, val, 0, 0};
 		ioctl(fd, DISP_LCD_SET_BRIGHTNESS, &param);
 		close(fd);
 	}
 }
-void SetRawColortemp(int val) { // 0 - 255
-	printf("SetRawColortemp(%i)\n", val); fflush(stdout);
+void SetRawColortemp(int val)
+{ // 0 - 255
+	printf("SetRawColortemp(%i)\n", val);
+	fflush(stdout);
 
 	FILE *fd = fopen("/sys/class/disp/disp/attr/color_temperature", "w");
 	if (fd) {
@@ -1104,26 +1317,28 @@ void SetRawColortemp(int val) { // 0 - 255
 }
 
 // Find the first A2DP playback volume control via amixer
-static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
-    FILE *fp = popen("amixer scontrols", "r");
-    if (!fp) return 0;
+static int get_a2dp_simple_control_name(char *buf, size_t buflen)
+{
+	FILE *fp = popen("amixer scontrols", "r");
+	if (!fp)
+		return 0;
 
-    char line[256];
-    while (fgets(line, sizeof(line), fp)) {
-        char *start = strchr(line, '\'');
-        char *end = strrchr(line, '\'');
-        if (start && end && end > start) {
-            size_t len = end - start - 1;
-            if (len < buflen) {
-                strncpy(buf, start + 1, len);
-                buf[len] = '\0';
-                if (strstr(buf, "A2DP")) { // first A2DP simple control
-                    pclose(fp);
+	char line[256];
+	while (fgets(line, sizeof(line), fp)) {
+		char *start = strchr(line, '\'');
+		char *end = strrchr(line, '\'');
+		if (start && end && end > start) {
+			size_t len = end - start - 1;
+			if (len < buflen) {
+				strncpy(buf, start + 1, len);
+				buf[len] = '\0';
+				if (strstr(buf, "A2DP")) { // first A2DP simple control
+					pclose(fp);
 					char esc_buf[128];
 					char *src = buf;
 					char *dst = esc_buf;
-					while(*src && (dst - esc_buf) < (sizeof(esc_buf) - 4)) {
-						if(*src == '\"') {
+					while (*src && (dst - esc_buf) < (sizeof(esc_buf) - 4)) {
+						if (*src == '\"') {
 							*dst++ = '\\';
 							*dst++ = '\"';
 						} else {
@@ -1135,79 +1350,81 @@ static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
 					strncpy(buf, esc_buf, buflen);
 					buf[buflen - 1] = '\0';
 					return 1;
-                }
-            }
-        }
-    }
+				}
+			}
+		}
+	}
 
-    pclose(fp);
-    return 0;
+	pclose(fp);
+	return 0;
 }
 
-void SetRawVolume(int val) { // in: 0-100
-	if (settings->mute) 
+void SetRawVolume(int val)
+{ // in: 0-100
+	if (settings->mute)
 		val = scaleVolume(GetMutedVolume());
 
-    if (GetAudioSink() == AUDIO_SINK_BLUETOOTH) {
-        // bluealsa is a mixer plugin, not exposed as a separate card
-        char ctl_name[128] = {0};
-        if (get_a2dp_simple_control_name(ctl_name, sizeof(ctl_name))) {
+	if (GetAudioSink() == AUDIO_SINK_BLUETOOTH) {
+		// bluealsa is a mixer plugin, not exposed as a separate card
+		char ctl_name[128] = {0};
+		if (get_a2dp_simple_control_name(ctl_name, sizeof(ctl_name))) {
 			char cmd[256];
-            // Update volume on the device
-            snprintf(cmd, sizeof(cmd), "amixer sset \"%s\" -M %d%% &> /dev/null", ctl_name, val);
-            system(cmd);
-			//printf("Set '%s' to %d%%\n", ctl_name, val); fflush(stdout);
-        }
-    } 
-	else if (GetAudioSink() == AUDIO_SINK_USBDAC) {
+			// Update volume on the device
+			snprintf(cmd, sizeof(cmd), "amixer sset \"%s\" -M %d%% &> /dev/null", ctl_name, val);
+			system(cmd);
+			// printf("Set '%s' to %d%%\n", ctl_name, val); fflush(stdout);
+		}
+	} else if (GetAudioSink() == AUDIO_SINK_USBDAC) {
 		// USB DAC path: use card 1
 		struct mixer *mixer = mixer_open(1);
 		if (!mixer) {
-			printf("Failed to open mixer\n"); fflush(stdout);
+			printf("Failed to open mixer\n");
+			fflush(stdout);
 			return;
 		}
 
-        const unsigned int num_controls = mixer_get_num_ctls(mixer);
-        for (unsigned int i = 0; i < num_controls; i++) {
-            struct mixer_ctl *ctl = mixer_get_ctl(mixer, i);
-            const char *name = mixer_ctl_get_name(ctl);
-            if (!name) continue;
+		const unsigned int num_controls = mixer_get_num_ctls(mixer);
+		for (unsigned int i = 0; i < num_controls; i++) {
+			struct mixer_ctl *ctl = mixer_get_ctl(mixer, i);
+			const char *name = mixer_ctl_get_name(ctl);
+			if (!name)
+				continue;
 
-            if (strstr(name, "PCM") && (strstr(name, "Volume") || strstr(name, "volume"))) {
-                if (mixer_ctl_get_type(ctl) == MIXER_CTL_TYPE_INT) {
-                    int min = mixer_ctl_get_range_min(ctl);
-                    int max = mixer_ctl_get_range_max(ctl);
-                    int volume = min + (val * (max - min)) / 100;
+			if (strstr(name, "PCM") && (strstr(name, "Volume") || strstr(name, "volume"))) {
+				if (mixer_ctl_get_type(ctl) == MIXER_CTL_TYPE_INT) {
+					int min = mixer_ctl_get_range_min(ctl);
+					int max = mixer_ctl_get_range_max(ctl);
+					int volume = min + (val * (max - min)) / 100;
 					unsigned int num_values = mixer_ctl_get_num_values(ctl);
 					for (unsigned int i = 0; i < num_values; i++)
 						mixer_ctl_set_value(ctl, i, volume);
-                }
-                break;
-            }
-        }
-	}
-	else {
-        // Speaker path: use direct lookup by name
-		struct mixer *mixer = mixer_open(0);
-        if (!mixer) {
-            printf("Failed to open mixer\n"); fflush(stdout);
-            return;
-        }
-
-        struct mixer_ctl *digital = mixer_get_ctl_by_name(mixer, "digital volume");
-        if (digital) {
-			mixer_ctl_set_percent(digital, 0, 100 - val); // reversed mapping
-			//printf("Set 'digital volume' to %d%%\n", val); fflush(stdout);
+				}
+				break;
+			}
 		}
-		
+	} else {
+		// Speaker path: use direct lookup by name
+		struct mixer *mixer = mixer_open(0);
+		if (!mixer) {
+			printf("Failed to open mixer\n");
+			fflush(stdout);
+			return;
+		}
+
+		struct mixer_ctl *digital = mixer_get_ctl_by_name(mixer, "digital volume");
+		if (digital) {
+			mixer_ctl_set_percent(digital, 0, 100 - val); // reversed mapping
+			// printf("Set 'digital volume' to %d%%\n", val); fflush(stdout);
+		}
+
 		// Digital volume does not quite go to 0, so also mute the DAC volume
-		struct mixer_ctl *dac     = mixer_get_ctl_by_name(mixer, "DAC volume");
-        if (dac) {
-            int dac_val = (val == 0 ? 0 : 160);
-            unsigned int num_values = mixer_ctl_get_num_values(dac);
-            for (unsigned int i = 0; i < num_values; i++)
-                mixer_ctl_set_value(dac, i, dac_val);
-			//printf("Set 'DAC volume' to %d\n", dac_val); fflush(stdout);
+		struct mixer_ctl *dac = mixer_get_ctl_by_name(mixer, "DAC volume");
+		if (dac) {
+			int dac_val = (val == 0 ? 0 : 160);
+			unsigned int num_values = mixer_ctl_get_num_values(dac);
+			for (unsigned int i = 0; i < num_values; i++)
+				mixer_ctl_set_value(dac, i, dac_val);
+			// printf("Set 'DAC volume' to %d\n", dac_val); fflush(stdout);
 		}
 		mixer_close(mixer);
 
@@ -1216,8 +1433,10 @@ void SetRawVolume(int val) { // in: 0-100
 	}
 }
 
-void SetRawContrast(int val){
-	printf("SetRawContrast(%i)\n", val); fflush(stdout);
+void SetRawContrast(int val)
+{
+	printf("SetRawContrast(%i)\n", val);
+	fflush(stdout);
 
 	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_contrast", "w");
 	if (fd) {
@@ -1225,8 +1444,10 @@ void SetRawContrast(int val){
 		fclose(fd);
 	}
 }
-void SetRawSaturation(int val){
-	printf("SetRawSaturation(%i)\n", val); fflush(stdout);
+void SetRawSaturation(int val)
+{
+	printf("SetRawSaturation(%i)\n", val);
+	fflush(stdout);
 
 	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_saturation", "w");
 	if (fd) {
@@ -1234,8 +1455,10 @@ void SetRawSaturation(int val){
 		fclose(fd);
 	}
 }
-void SetRawExposure(int val){
-	printf("SetRawExposure(%i)\n", val); fflush(stdout);
+void SetRawExposure(int val)
+{
+	printf("SetRawExposure(%i)\n", val);
+	fflush(stdout);
 
 	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_bright", "w");
 	if (fd) {
