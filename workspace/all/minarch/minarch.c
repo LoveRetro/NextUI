@@ -7030,6 +7030,7 @@ int main(int argc , char* argv[]) {
 	DEVICE_PITCH = screen->pitch;
 	// LOG_info("DEVICE_SIZE: %ix%i (%i)\n", DEVICE_WIDTH,DEVICE_HEIGHT,DEVICE_PITCH);
 	
+	LEDS_initLeds();
 	VIB_init();
 	PWR_init();
 	if (!HAS_POWER_BUTTON)
