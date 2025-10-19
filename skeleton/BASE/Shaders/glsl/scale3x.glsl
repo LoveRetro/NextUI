@@ -8,8 +8,8 @@ Scale3x is real-time graphics effect able to increase the size of small bitmaps 
 It was originally developed for the AdvanceMAME project in the year 2001 to improve the quality of old games with a low video resolution.
 
 Homepage: http://scale2x.sourceforge.net/
-Copyright (C) 2001, 2002, 2003, 2004 Andrea Mazzoleni 
-License: GNU-GPL  
+Copyright (C) 2001, 2002, 2003, 2004 Andrea Mazzoleni
+License: GNU-GPL
 
 */
 
@@ -49,8 +49,8 @@ bool neq(float3 A, float3 B){
 #define COMPAT_ATTRIBUTE in
 #define COMPAT_TEXTURE texture
 #else
-#define COMPAT_VARYING varying 
-#define COMPAT_ATTRIBUTE attribute 
+#define COMPAT_VARYING varying
+#define COMPAT_ATTRIBUTE attribute
 #define COMPAT_TEXTURE texture2D
 #endif
 
@@ -86,7 +86,7 @@ void main()
     gl_Position = MVPMatrix * VertexCoord;
     COL0 = COLOR;
     TEX0.xy = TexCoord.xy;
-	
+
 	float2 ps = float2(SourceSize.z, SourceSize.w);
 	float dx = ps.x;
 	float dy = ps.y;
@@ -160,7 +160,7 @@ void main()
 	float3 I = tex2D(decal, t3.zw).xyz;
 
 	// equality checks
-	bool eqBD = eq(B,D), eqBF = eq(B,F), eqHD = eq(H,D), eqHF = eq(H,F), neqEA = neq(E,A), neqEC = neq(E,C), neqEG = neq(E,G), neqEI = neq(E,I); 
+	bool eqBD = eq(B,D), eqBF = eq(B,F), eqHD = eq(H,D), eqHF = eq(H,F), neqEA = neq(E,A), neqEC = neq(E,C), neqEG = neq(E,G), neqEI = neq(E,I);
 
 	// rules
 	float3 E0 = eqBD ? B : E;
@@ -174,5 +174,5 @@ void main()
 
 	// general condition & subpixel output
 	FragColor = vec4(neq(B,H) && neq(D,F) ? (fp.y == 0. ? (fp.x == 0. ? E0 : fp.x == 1. ? E1 : E2) : (fp.y == 1. ? (fp.x == 0. ? E3 : fp.x == 1. ? E : E5) : (fp.x == 0. ? E6 : fp.x == 1. ? E7 : E8))) : E, 1.0);
-} 
+}
 #endif

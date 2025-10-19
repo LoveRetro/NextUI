@@ -50,9 +50,9 @@ it's time to retire some supported devices
 	what would this look like if I nuked 32bit archs?
 		h700 has 64bit libs right?
 		my282
-		
+
 	finish updating README (don't forget BASE readme!)
-	
+
 tg_040
 	can I build my own version of SDL2 to speed up launch times?
 		yes but no, built, no change in launch time :\
@@ -69,12 +69,12 @@ my355
 	firmware update
 		https://www.lomiyoo.com/en/gujianxiazai.html
 		test + bootlogo
-		
+
 	minui can't install if
 		MinUI is aleady installed on the card and the tmp_update hook has already been installed previously
 		solution
 			delete .tmp_update and reinstall
-			
+
 	undone
 		+ headphone jack
 			- mute is static noise (same on stock)
@@ -91,7 +91,7 @@ my355
 				- exiting to minui displays correctly until first dirty
 					- then padding changes to 640x480 style
 					- who cares
-				
+
 h700
 	video says 64bit system, why is MinUI using 32bit libraries then?
 	create new 64bit toolchain?
@@ -103,7 +103,7 @@ rg_xx
 		gamma has a fix https://github.com/TheGammaSqueeze/rgxx_boot_package_mods/tree/rgcubexx
 			but the change is so extreme my patching method can't handle it
 			(because of the simple way I fudge the checksum...)
-	
+
 screen scaling + screen effect
 	aspect + grid on cubexx has grid alignment issues
 		even if aspect equals integer
@@ -111,11 +111,11 @@ screen scaling + screen effect
 
 next
 	standard show/say/confirm.elf?
-		sdl2 implementations require a delay arg 
+		sdl2 implementations require a delay arg
 		because they clear the framebuffer on exit
 		so we can't use show + sleep or + confirm
-		
-		trimui's await_input makes it kind of like 
+
+		trimui's await_input makes it kind of like
 		a confirm.elf which I don't see in modern
 		MinUI...was that in MiniUI maybe? yes
 
@@ -126,17 +126,17 @@ next
 		tg5040/tg3040	sdl2	show.elf image.png delay (uses window surface as screen)
 		rgb30			sdl2	show.elf image.png delay (uses window surface as screen)
 		rg35xxplus		sdl2	show.elf image.png delay
-		
+
 		show.elf <image path> <delay>
-			all official uses of show.elf are used to display 
+			all official uses of show.elf are used to display
 			text probably better handled by confirm.elf
-	
+
 		show.elf <image_path or message> <delay or type>
 			(default) 	A confirms, B cancels (both CANCEL and OKAY buttons drawn)
 			<delay>		nothing confirms or cancels, quits after <delay> (no buttons drawn)
 			only 		only A confirms, none cancel (only OKAY button drawn)
 			wait		nothing confirms or cancels, must be killed (no buttons drawn)
-		
+
 		there's an issue with this
 			show.elf used during install/update
 				my282
@@ -145,22 +145,22 @@ next
 				tg5040
 				trimuismart
 			where fonts and bundled libs aren't available yet
-		
+
 	no intel toolchain
-		magicmini 
+		magicmini
 		zero28
 		my355
-	
+
 	slow buildroot evtest
 		https://discord.com/channels/741895796315914271/1232969624417730630/1284606079614849084
-	
+
 	mgba (at least on the mm+) doesn't like zipped roms
 		try to reproduce on something with adb or ssh
 		couldn't reproduce on
 			trimuismart
 			my282
 		I guess maybe tmpfs is just super slow on miyoomini?
-	
+
 	redo audio pipeline
 		I think fceumm has issues on more devices than not at this point (thanks h700)
 		400 SAMPLES fix isn't a true fix, it just minimizes the side effect
@@ -174,51 +174,51 @@ next
 			what if the changes to make audio stream public
 			in SDL2 is what introduced the issue? :sweat_smile:
 
-	
+
 	clean out this rat nest of a todo doc
 	figure out Clock.pak timezone issue
-	
+
 	magicmini
 		check out silent hill (PS) for simple versus gaussian interpolation
 			supposedly awful on simple
 		screen does not really turn off during sleep
 			it doesn't blank either
 			it does if I manually set it to 4 with 351Files :thinking_face:
-		
+
 		move amixer cset name='Playback Path' SPK to libmsettings
 			see rg35xx,rgb30,m17 for keymon poll examples
 			/sys/class/gpio/gpio86/value is meant to be 0 when headphones are connected (only at boot?)
 				but its always 1
 			so we can only detect headphone change events not initial state
 				which makes separate speaker/headphone volumes useless RIP
-				
+
 		audio is choppy in places
 			even after 400 sample fix
-		
+
 	h700
 		implement cpu speed (or figure out why it wasn't already implemented)
-		
+
 	my282
 		ldd isn't working but this is
 			LD_TRACE_LOADED_OBJECTS=1 /lib/ld-2.23.so /mnt/SDCARD/.system/my282/bin/minarch.elf
-		
+
 	emu pak detection isn't working when two folders are combined
 		eg. SFC and SUPA folder but no SUPA.pak still shows games from SUPA
 	all
 		look into how many cores support 8888
 			this might be a bottleneck (if it's having to go 8888 to 565 and back to 8888 for every pixel, every frame)
 			not a single BASE or EXTRA core requests 8888, so that won't help even if it is a bottleneck
-			
+
 		Thread Core
 			needs changes to support systems that change resolution (eg. PS)
 			doesn't seem to have any affect on a30 (mostly because the problems are hi res games and the copy from cpu to gpu)
 			disable and remove this feature entirely?
 
 		revisit bub181's core # vs freq ideas for other devices
-		
+
 		look into RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER for zero copy framebuffer
 			not sure it's really a zero copy because LockTexture has to copy the texture from the gpu to the cpu...
-			
+
 			times on a30's SDL
 				GB: SDL_UnlockTexture blocked for 3ms (160,144) (TLOZ:LA)
 				PS: SDL_UnlockTexture blocked for 5ms (368,480) (TEKKEN3)
@@ -227,7 +227,7 @@ next
 				try using SDL_UpdateTexture instead of Lock/Unlock
 					might be saving 1-2ms
 				could this slowness be related to vram speed? (DMC?)
-		
+
 		add Clear Recently Played.pak, copy to all platforms
 			maybe include confirmation?
 			requires show.elf
@@ -247,7 +247,7 @@ next
 				SDL_NOMOUSE=1 required for SDL1.2 to work
 				WAITFORVSYNC doesn't appear to work
 				more notes in separate 28xx/notes.txt
-		
+
 		muos uses sdl 1.2 fbdev_mali+alsa for retroarch...which what
 			refried beans uses SDL2
 			no underruns in fceumm without threaded video...even with the sdl2 instead of default gl driver...
@@ -256,7 +256,7 @@ next
 				so I'm back to having to build my own rootfs
 				or building sdl2 from muos with my toolchain
 		stock uses sdl2 fbdev_mali+alsa for retroarch
-			stock retroarch has frame pacing issues in AoS/gpsp 
+			stock retroarch has frame pacing issues in AoS/gpsp
 				without threaded video
 				fceumm has underruns without threaded video
 		minarch has the same issues on refried muos
@@ -264,7 +264,7 @@ next
 				export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/lib32
 				might have also had to hide MinUI's libSDL*
 				SDL_BLITTER_DISABLED=1 has no effect on underruns
-		
+
 		diff older version of stock that doesn't underrun so bad
 			compare with rg35xxplus (I don't remember having audio issues there)
 		the problem is the panel is being driven at 59fps
@@ -276,10 +276,10 @@ next
 					because fceumm fills the buffer ~799 samples at a time
 					works
 					also bumped buffer to 8 seconds then reverted to original 5 seconds
-						see if improved underruns persists without or if that a component of the fix 
+						see if improved underruns persists without or if that a component of the fix
 				instead of zero filling on underrun fill with last frame values
 					makes the more regular 1-2 sample underruns almost unnoticeable
-			
+
 			is the batching logic responsible for lag somehow?
 				there's an SDL_Delay and a loop
 				but doubling BATCH_SIZE and switching to usleep(500)
@@ -295,19 +295,19 @@ next
 					figure out where SDL2-2.30.4 with mali came from (knulli? rocknix?)
 					no good, this one works https://github.com/JohnnyonFlame/SDL-malifbdev-rot
 						solves judder
-		
+
 		rebuild using opengl?
 			based on steward-fu's work
 				https://steward-fu.github.io/website/handheld/rg28xx_cpp_es_triangle.htm
 				https://steward-fu.github.io/website/handheld/rg28xx_cpp_es_texture.htm
-			
+
 			# add stock libs and includes to toolchain
 			# what was sysroot.tar.gz created from? just /usr on the device? probably
-			
+
 				tar -czf sysroot.tar.gz /usr/include /usr/lib /usr/lib32
-				
+
 			# will convert to xz in docker
-				
+
 			mv sysroot.tar.gz /opt
 			cd /opt
 			mkdir h700
@@ -317,11 +317,11 @@ next
 
 			# build flags
 			-lGLESv2 -lEGL -lmali -ldl
-		
+
 		tried building sdl2 myself it crashed and burned spectacularly
 		tried using taskset to bump priority but it already appears maxed
-		
-		
+
+
 
 	/tmp/noui
 		show poweroff on quit in minarch if present
@@ -332,7 +332,7 @@ next
 
 	macos (for modern compiler and debugging tools, not for release!)
 		minarch
-	
+
 	rg35xxplus/h
 		figure out
 			audio crackle on quit sdl
@@ -365,7 +365,7 @@ next
 				gb/gbc
 				gba
 				nes/snes
-	
+
 	native Files.pak
 		I might just need to accept some duplication with MinUI (eg. Array and Directory/Entry arrays)
 	m17
@@ -382,7 +382,7 @@ next
 		.res
 			use standard naming (replace ext with png instead of append png)
 		better document the new Bootlogo.paks
-		
+
 		collections can't handle accented characters (eg. é) in path/rom name...
 			wait, why can recents.txt but not collections.txt?
 			because one is written by the device so it's using device native accented chars
@@ -390,7 +390,7 @@ next
 		add make fetch to get all external sources before build?
 		add Developer.pak
 			only for devices with adb or ssh
-			
+
 		rewrite Shortcuts section of readme by device not the tangled mess it currently is
 			maybe do the same for all?
 			break out platforms into completely separate installers/updaters?
@@ -405,10 +405,10 @@ next
 		wonderswan
 			runs at 1fps
 			possibly because minarch forces 60fps but this handheld runs at 75?
-			
+
 	tg5040
 		create PSP.pak and NDS.pak and document how to setup by copying assets from stock?
-			
+
 		can't detect headphone state at boot?
 		wifi
 			Splore.pak can pull updated lists from bbs but cannot download carts
@@ -417,26 +417,26 @@ next
 					this gets ping working: udhcpc -i wlan0
 					but wget is not compiled with ssl support
 					the following did not work to enable opkg to install/update wget
-					
+
 						echo "src/gz openwrt_core_cortexa53 http://downloads.openwrt.org/snapshots/packages/aarch64_cortex-a53/packages" > /etc/opkg/customfeeds.conf
 						echo "src/gz openwrt_core_sunxi http://downloads.openwrt.org/snapshots/targets/sunxi/cortexa53/packages" >> /etc/opkg/customfeeds.conf
-						
+
 						no valid architecture
 					just remap wget calls to curl (which has ssl support)
 			need to patch pico8_64
-			
+
 				xxd old > old.hex
 				xxd new > new.hex
 				diff -u old.hex new.hex > pico8_64.patch
-						
+
 		n64
 			requires libretro opengl implementation
 		psp
-			after adding xrgb8888 support to MinUI it still chokes on a number of missing libraries 
+			after adding xrgb8888 support to MinUI it still chokes on a number of missing libraries
 			and eventually an unlinked function (something like XUnlockMutex)
-		
+
 	user reported
-		random reports of minui not booting reliably 
+		random reports of minui not booting reliably
 			first smart
 				can't reproduce
 				already waits 3 seconds
@@ -444,23 +444,23 @@ next
 				related to orphaned clusters issue? likely
 				if so it needs to either be solved in MOSS/JELOS (RIP)
 				or the other platforms MinUI supports (the non-Plus Mini in particular has a really terrible shutdown process at least on older firmwares)
-		
+
 	move PLAT_isOnline() into PWR_* formally
-			
+
 	all
 		revisit localization?
-	
+
 	minarch:
 		crop save state pillar/letter-boxing?
 		force aspect over hdmi? (or at least disable cropped?)
-	
+
 	rgb30
 		reboots with time offset by timezone offset
 		does jack detection work?
 		could wifi support more than one access point?
 			an additional two lines for each AP?
 			then try them in order?
-			
+
 		figure out why power suspends the device after MOSS install
 			it appears to reboot but it only stops suspending after a manual reboot
 			fewt has a fix?
@@ -481,7 +481,7 @@ rpmini
 		hoping it's not the physical pixels in the panel
 		see rpmini/tmp/sdltest
 			not going to work on this anymore until kernel fix is released
-				
+
 known issues
 	all: race core (NGP/C.pak) doesn't restore audio state correctly
 	rgb30: light crackling in some cores (eg. fceumm and snes9x2005_plus)
@@ -509,7 +509,7 @@ all
 			updating fake-08 was so much copy/pasting
 	minui
 		alt tag is getting truncated, should be added after truncation
-	add a "res" (or "many"?) folder 
+	add a "res" (or "many"?) folder
 		for install/update and charging gfx?
 	standard
 		show
@@ -526,14 +526,14 @@ miyoomini
 
 miniplus
 	-
-	
+
 rg35xx
 	revisit hdmi based on rgb30 implementation?
 	overclock.elf with userspace versus performance
 		performance should be slower because it will max out to the max defined scaling frequency
 		userspace should accept the specific scaling frequency
 		re: NDS.pak
-		
+
 		XQuader figured out that CPUs are unlocked with performance but not userspace
 			the following will unlock them:
 				echo 0xf > /sys/devices/system/cpu/autoplug/plug_mask
@@ -548,7 +548,7 @@ rg35xx
 				seems like this is sufficient to unlock the improved performance
 					echo 0xF > /sys/devices/system/cpu/autoplug/plug_mask
 					though I'm not sure I'm observing a difference...(at least when applying over adb)
-		
+
 	charging screen isn't working for someone on RH discord
 		charging.png isn't being copied to MISC during install (it should only be omitted during update)
 	how to handle updating on mini and missing TF1 updates as a result?
@@ -578,8 +578,8 @@ there's more to this now (eg. PLATFORM/makefile.copy)
 
 ---
 
-replace 
-	git clone repo && cd repo && git checkout branch 
+replace
+	git clone repo && cd repo && git checkout branch
 with
 	git clone --depth 1 --branch branch repo
 note: doesn't work with commits only branches

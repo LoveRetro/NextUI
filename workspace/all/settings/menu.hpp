@@ -108,7 +108,7 @@ enum class ListItemType
 
 enum InputReactionHint
 {
-    // Bubble up handling to caller. 
+    // Bubble up handling to caller.
     // \note All other hints imply the event has been handled.
     Unhandled,
     // No specific hint available
@@ -160,7 +160,7 @@ public:
                     ValueGetCallback on_get = nullptr, ValueSetCallback on_set = nullptr,
                      ValueResetCallback on_reset = nullptr, MenuListCallback on_confirm = nullptr,
                      MenuList *submenu = nullptr)
-        : type(type), name(name), desc(desc), on_get(on_get), on_set(on_set), 
+        : type(type), name(name), desc(desc), on_get(on_get), on_set(on_set),
         on_reset(on_reset), on_confirm(on_confirm), submenu(submenu) {}
     ~AbstractMenuItem() {
          // delete submenu;
@@ -222,18 +222,18 @@ class MenuItem : public AbstractMenuItem
 public:
     MenuItem(ListItemType type, const std::string &name, const std::string &desc,
              const std::vector<std::any> &values, const std::vector<std::string> &labels,
-             ValueGetCallback on_get = nullptr, ValueSetCallback on_set = nullptr, 
-             ValueResetCallback on_reset = nullptr, MenuListCallback on_confirm = nullptr, 
+             ValueGetCallback on_get = nullptr, ValueSetCallback on_set = nullptr,
+             ValueResetCallback on_reset = nullptr, MenuListCallback on_confirm = nullptr,
              MenuList *submenu = nullptr);
 
     MenuItem(ListItemType type, const std::string &name, const std::string &desc, const std::vector<std::any> &values,
-             ValueGetCallback on_get = nullptr, ValueSetCallback on_set = nullptr, 
-             ValueResetCallback on_reset = nullptr, MenuListCallback on_confirm = nullptr, 
+             ValueGetCallback on_get = nullptr, ValueSetCallback on_set = nullptr,
+             ValueResetCallback on_reset = nullptr, MenuListCallback on_confirm = nullptr,
              MenuList *submenu = nullptr);
 
     MenuItem(ListItemType type, const std::string &name, const std::string &desc, int min, int max, const std::string suffix,
-             ValueGetCallback on_get = nullptr, ValueSetCallback on_set = nullptr, 
-             ValueResetCallback on_reset = nullptr, MenuListCallback on_confirm = nullptr, 
+             ValueGetCallback on_get = nullptr, ValueSetCallback on_set = nullptr,
+             ValueResetCallback on_reset = nullptr, MenuListCallback on_confirm = nullptr,
              MenuList *submenu = nullptr);
 
     MenuItem(ListItemType type, const std::string &name, const std::string &desc,

@@ -41,7 +41,7 @@ LDFLAGS += -s -lsqlite3
 
 PRODUCT= build/$(PLATFORM)/lib$(TARGET).so
 
-build: 
+build:
 	mkdir -p build/$(PLATFORM)
 	$(CC) -c -Werror -fpic $(SOURCE) -Wl,--no-as-needed $(LDFLAGS) $(CFLAGS)
 	$(CC) -shared -o $(PRODUCT) "$(TARGET).o" "utils.o" $(LDFLAGS)

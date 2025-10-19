@@ -33,8 +33,8 @@ http://www.gnu.org/copyleft/gpl.html
 #define COMPAT_ATTRIBUTE in
 #define COMPAT_TEXTURE texture
 #else
-#define COMPAT_VARYING varying 
-#define COMPAT_ATTRIBUTE attribute 
+#define COMPAT_VARYING varying
+#define COMPAT_ATTRIBUTE attribute
 #define COMPAT_TEXTURE texture2D
 #endif
 
@@ -136,7 +136,7 @@ float weight(float x)
 		return 0.0;
 	}
 }
-	
+
 vec4 weight4(float x)
 {
 	return vec4(
@@ -165,7 +165,7 @@ void main()
         vec2 stepxy = vec2(1.0/SourceSize.x, 1.0/SourceSize.y);
         vec2 pos = vTexCoord.xy + stepxy * 0.5;
         vec2 f = fract(pos / stepxy);
-		
+
 	vec4 linetaps   = weight4(1.0 - f.x);
 	vec4 columntaps = weight4(1.0 - f.y);
 
@@ -184,5 +184,5 @@ void main()
                       line_run(xystart.y + stepxy.y * 3.0, xpos, linetaps, Source) * columntaps.a,1);
 
    FragColor = final;
-} 
+}
 #endif

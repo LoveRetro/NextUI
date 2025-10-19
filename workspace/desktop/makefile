@@ -12,7 +12,7 @@ endif
 
 all: readmes
 
-early: 
+early:
 
 clean:
 

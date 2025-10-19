@@ -34,7 +34,7 @@
 
 ---
 
-A CFW based of MinUI with a rebuild emulation engine and tons of added features for the TrimUI Brick and Smart Pro. 
+A CFW based of MinUI with a rebuild emulation engine and tons of added features for the TrimUI Brick and Smart Pro.
 
 For other devices we recommend checking out [MinUI](https://github.com/shauninman/MinUI)
 

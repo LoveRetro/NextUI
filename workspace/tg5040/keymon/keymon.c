@@ -61,13 +61,13 @@ static int getInt(char* path) {
 static pthread_t mute_pt;
 static void* watchMute(void *arg) {
 	int is_muted,was_muted;
-	
+
 	is_muted = was_muted = getInt(MUTE_STATE_PATH);
 	SetMute(is_muted);
-	
+
 	while(!quit) {
 		usleep(200000); // 5 times per second
-		
+
 		is_muted = getInt(MUTE_STATE_PATH);
 		// swallow mute val -1 on shutdown
 		if (is_muted >= 0 && was_muted!=is_muted) {
@@ -86,7 +86,7 @@ static void* watchMute(void *arg) {
 			}
 		}
 	}
-	
+
 	return NULL;
 }
 
@@ -103,34 +103,34 @@ int main (int argc, char *argv[]) {
 		sprintf(path, "/dev/input/event%i", i);
 		inputs[i] = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
 	}
-	
+
 	uint32_t input;
 	uint32_t val;
 	uint32_t menu_pressed = 0;
 	uint32_t menu2_pressed = 0;
-	
+
 	uint32_t up_pressed = 0;
 	uint32_t up_just_pressed = 0;
 	uint32_t up_repeat_at = 0;
-	
+
 	uint32_t down_pressed = 0;
 	uint32_t down_just_pressed = 0;
 	uint32_t down_repeat_at = 0;
-	
+
 	uint8_t ignore;
 	uint32_t then;
 	uint32_t now;
 	struct timeval tod;
-	
+
 	gettimeofday(&tod, NULL);
 	then = tod.tv_sec * 1000 + tod.tv_usec / 1000; // essential SDL_GetTicks()
 	ignore = 0;
-	
+
 	while (!quit) {
 		gettimeofday(&tod, NULL);
 		now = tod.tv_sec * 1000 + tod.tv_usec / 1000;
 		if (now-then>1000) ignore = 1; // ignore input that arrived during sleep
-		
+
 		for (int i=0; i<INPUT_COUNT; i++) {
 			input = inputs[i];
 			while(read(input, &ev, sizeof(ev))==sizeof(ev)) {
@@ -165,7 +165,7 @@ int main (int argc, char *argv[]) {
 				}
 			}
 		}
-		
+
 		if (ignore) {
 			menu_pressed = 0;
 			menu2_pressed = 0;
@@ -174,7 +174,7 @@ int main (int argc, char *argv[]) {
 			up_repeat_at = 0;
 			down_repeat_at = 0;
 		}
-		
+
 		if (up_just_pressed || (up_pressed && now>=up_repeat_at)) {
 			if (menu_pressed) {
 				val = GetBrightness();
@@ -190,11 +190,11 @@ int main (int argc, char *argv[]) {
 				val = GetVolume();
 				if (val<VOLUME_MAX) SetVolume(++val);
 			}
-			
+
 			if (up_just_pressed) up_just_pressed = 0;
 			else up_repeat_at += 100;
 		}
-		
+
 		if (down_just_pressed || (down_pressed && now>=down_repeat_at)) {
 			if (menu_pressed) {
 				val = GetBrightness();
@@ -210,20 +210,20 @@ int main (int argc, char *argv[]) {
 				val = GetVolume();
 				if (val>VOLUME_MIN) SetVolume(--val);
 			}
-			
+
 			if (down_just_pressed) down_just_pressed = 0;
 			else down_repeat_at += 100;
 		}
-		
+
 		then = now;
 		ignore = 0;
-		
+
 		usleep(16666); // 60fps
 	}
 
 	for (int i=0; i<INPUT_COUNT; i++)
 		close(inputs[i]);
-	
+
 	pthread_cancel(mute_pt);
 	pthread_join(mute_pt, NULL);
 }

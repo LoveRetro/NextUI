@@ -4,7 +4,7 @@
 
 int main (int argc, char *argv[]) {
 	InitSettings();
-	
+
 	sleep(1);
 	SetVolume(GetVolume());
 	SetBrightness(GetBrightness());

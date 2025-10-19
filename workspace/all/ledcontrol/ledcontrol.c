@@ -68,7 +68,7 @@ void save_settings() {
         fclose(file);
     }
 }
-    
+
 void handle_light_input(LightSettings *light, SDL_Event *event, int selected_setting)
 {
     const uint32_t bright_colors[] = {
@@ -91,7 +91,7 @@ void handle_light_input(LightSettings *light, SDL_Event *event, int selected_set
         // White to Black Gradient
         0x000000, 0x111111, 0x222222, 0x333333, 0x444444, 0x555555, 0x666666, 0x777777, 0x888888, 0x999999, 0xAAAAAA, 0xBBBBBB, 0xCCCCCC, 0xDDDDDD, 0xFFFFFF
     };
-    
+
     const int num_bright_colors = sizeof(bright_colors) / sizeof(bright_colors[0]);
 
     switch (selected_setting)
@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
 {
     char* device = getenv("DEVICE");
     is_brick = exactMatch("brick", device);
-    
+
 	InitSettings();
     PWR_setCPUSpeed(CPU_SPEED_MENU);
 
@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
         const char *default_names[] = {"Joystick L","Joystick R", "Logo"};
         memcpy(lightnames, default_names, sizeof(default_names)); // Copy values
     }
-    
+
     SDL_Surface* screen = GFX_init(MODE_MENU);
 	PAD_init();
 	PWR_init();
@@ -249,13 +249,13 @@ int main(int argc, char *argv[])
     {
         GFX_startFrame();
         uint32_t frame_start = SDL_GetTicks();
-		
+
 		PAD_poll();
 
         PWR_update(&dirty, &show_setting, NULL, NULL);
-        
+
         int is_online = PLAT_isOnline();
-		if (was_online!=is_online) 
+		if (was_online!=is_online)
             dirty = 1;
 		was_online = is_online;
 
@@ -350,18 +350,18 @@ int main(int argc, char *argv[])
                     int text_width = text->w + SCALE1(BUTTON_PADDING * 2);
                     GFX_blitPill(selected ? ASSET_WHITE_PILL : ASSET_BLACK_PILL, screen,
                                     &(SDL_Rect){SCALE1(PADDING), y, text_width, SCALE1(PILL_SIZE)});
-                    SDL_BlitSurface(text, 
-                        &(SDL_Rect){0, 0, text->w, text->h}, screen, 
+                    SDL_BlitSurface(text,
+                        &(SDL_Rect){0, 0, text->w, text->h}, screen,
                         &(SDL_Rect){SCALE1(PADDING + BUTTON_PADDING), y + SCALE1(4)});
                     SDL_FreeSurface(text);
                 } else if (j == 1) { // Display color as hex code
                     snprintf(setting_text, sizeof(setting_text), "%s", settings_labels[j]);
                     SDL_Surface *text = TTF_RenderUTF8_Blended(font.medium, setting_text, current_color);
                     int text_width = text->w + SCALE1(BUTTON_PADDING * 2);
-                    GFX_blitPill(selected ? ASSET_WHITE_PILL : ASSET_BLACK_PILL, screen, 
+                    GFX_blitPill(selected ? ASSET_WHITE_PILL : ASSET_BLACK_PILL, screen,
                         &(SDL_Rect){SCALE1(PADDING), y, text_width + SCALE1(BUTTON_MARGIN + BUTTON_SIZE), SCALE1(PILL_SIZE)});
-                    SDL_BlitSurface(text, 
-                        &(SDL_Rect){0, 0, text->w, text->h}, screen, 
+                    SDL_BlitSurface(text,
+                        &(SDL_Rect){0, 0, text->w, text->h}, screen,
                         &(SDL_Rect){SCALE1(PADDING + BUTTON_PADDING), y + SCALE1(4)});
                     SDL_FreeSurface(text);
 
@@ -373,10 +373,10 @@ int main(int argc, char *argv[])
                     snprintf(setting_text, sizeof(setting_text), "%s: %d", settings_labels[j], settings_values[j]);
                     SDL_Surface *text = TTF_RenderUTF8_Blended(font.medium, setting_text, current_color);
                     int text_width = text->w + SCALE1(BUTTON_PADDING * 2);
-                    GFX_blitPill(selected ? ASSET_WHITE_PILL : ASSET_BLACK_PILL, screen, 
+                    GFX_blitPill(selected ? ASSET_WHITE_PILL : ASSET_BLACK_PILL, screen,
                         &(SDL_Rect){SCALE1(PADDING), y, text_width, SCALE1(PILL_SIZE)});
-                    SDL_BlitSurface(text, 
-                        &(SDL_Rect){0, 0, text->w, text->h}, screen, 
+                    SDL_BlitSurface(text,
+                        &(SDL_Rect){0, 0, text->w, text->h}, screen,
                         &(SDL_Rect){SCALE1(PADDING + BUTTON_PADDING), y + SCALE1(4)});
                     SDL_FreeSurface(text);
                 }

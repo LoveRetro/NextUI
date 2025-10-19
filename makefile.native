@@ -15,7 +15,7 @@ ifeq ($(UNAME_S),Linux)
 	PREFIX_LOCAL=$(HOME)/nextui
 endif
 ifeq ($(UNAME_S),Darwin)
-	# TODO: brew installs gcc to e.g. /opt/homebrew/bin/gcc-14, but none of our makefiles support the suffix. 
+	# TODO: brew installs gcc to e.g. /opt/homebrew/bin/gcc-14, but none of our makefiles support the suffix.
 	#       For now, just manually symlink all the build tools to a suffix-less path: sudo ./workspace/desktop/macos_create_gcc_symlinks.sh
 	#       and make with: make setup common PLATFORM=desktop
 	#       From brew we need at least: brew install sdl2_image sdl2_ttf gcc make libsamplerate sqlite
@@ -25,15 +25,15 @@ ifeq ($(UNAME_S),Darwin)
 endif
 UNION_PLATFORM=desktop
 
-all: 
-	
+all:
+
 clean:
 	cd workspace && make clean
-	
-build: 
+
+build:
 	COMPILE_CORES=$(COMPILE_CORES) cd workspace && make
 
-build-cores: 
+build-cores:
     COMPILE_CORES=$(COMPILE_CORES) cd workspace && make cores
 
 build-core:

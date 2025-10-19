@@ -28,7 +28,7 @@ CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 
-all: 
+all:
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 clean:

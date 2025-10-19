@@ -10,8 +10,8 @@ TARGET_CC = $(CROSS_COMPILE)gcc
 TARGET_CXX = $(CROSS_COMPILE)g++
 TARGET_AR = $(CROSS_COMPILE)ar
 TARGET_CFLAGS = -pthread
-TARGET_LDFLAGS = 
-PKG_INSTALL_DIR = 
+TARGET_LDFLAGS =
+PKG_INSTALL_DIR =
 PKG_BUILD_DIR = .
 
 TARGET_CFLAGS = $(if $(CONFIG_USE_GLIBC),-pthread)
@@ -72,7 +72,7 @@ bluez:
 	cp /usr/bin/sbcenc build/.update_bluez/usr/bin/
 	# script
 	cp support/upgrade_bluez.sh build/post_install.sh
-	# zip 
+	# zip
 	# zip -r nextui.upgrade_bluez.pakz build/
 	cd build && python -m zipfile -c nextui.upgrade_bluez.pakz .update_bluez/ post_install.sh
 

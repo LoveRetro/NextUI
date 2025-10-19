@@ -43,7 +43,7 @@ src/$(1)/.patched: src/$(1)
 
 src/$(1)/.patched-all:
 	(test ! -d ../../all/cores/patches/$(1)) || (test -f src/$(1)/.patched-all) || (cd src/$(1) && $(foreach patch, $(sort $(wildcard ../../all/cores/patches/$(1)/*.patch)), $(PATCH) -p1 < ../../$(patch) &&) touch .patched-all && true)
-	
+
 
 output/$(1)_libretro.so: src/$(1)/.patched src/$(1)/.patched-all
 	mkdir -p output
@@ -72,9 +72,9 @@ all: cores
 $(foreach CORE,$(CORES),$(eval $(call TEMPLATE,$(CORE))))
 
 cores: $(foreach CORE,$(CORES),$(CORE))
-	
+
 clean: $(foreach CORE,$(CORES),clean-$(CORE))
-	
+
 nuke:
 	rm -rf ./output
 	rm -rf ./src

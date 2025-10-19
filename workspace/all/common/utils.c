@@ -241,7 +241,7 @@ const char *baseName(const char *filename)
     return p ? p + 1 : (char *)filename;
 }
 void folderPath(const char *path, char *result) {
-    char pathCopy[256];  
+    char pathCopy[256];
     strcpy(pathCopy, path);
 
     char *lastSlash = strrchr(pathCopy, '/');  // Find the last slash
@@ -312,23 +312,23 @@ void getDisplayName(const char* in_name, char* out_name) {
 	char work_name[256];
 	strcpy(work_name, in_name);
 	strcpy(out_name, in_name);
-	
+
 	if (suffixMatch("/" PLATFORM, work_name)) { // hide platform from Tools path...
 		tmp = strrchr(work_name, '/');
 		tmp[0] = '\0';
 	}
-	
+
 	// extract just the filename if necessary
 	tmp = strrchr(work_name, '/');
 	if (tmp) strcpy(out_name, tmp+1);
-	
+
 	// remove extension(s), eg. .p8.png
 	while ((tmp = strrchr(out_name, '.'))!=NULL) {
 		int len = strlen(tmp);
 		if (len>2 && len<=5) tmp[0] = '\0'; // 1-4 letter extension plus dot (was 1-3, extended for .doom files)
 		else break;
 	}
-	
+
 	// remove trailing parens (round and square)
 	strcpy(work_name, out_name);
 	while ((tmp=strrchr(out_name, '('))!=NULL || (tmp=strrchr(out_name, '['))!=NULL) {
@@ -336,10 +336,10 @@ void getDisplayName(const char* in_name, char* out_name) {
 		tmp[0] = '\0';
 		tmp = out_name;
 	}
-	
+
 	// make sure we haven't nuked the entire name
 	if (out_name[0]=='\0') strcpy(out_name, work_name);
-	
+
 	// remove trailing whitespace
 	tmp = out_name + strlen(out_name) - 1;
     while(tmp>out_name && isspace((unsigned char)*tmp)) tmp--;
@@ -349,9 +349,9 @@ void getEmuName(const char* in_name, char* out_name) { // NOTE: both char arrays
 	char* tmp;
 	strcpy(out_name, in_name);
 	tmp = out_name;
-	
+
 	// printf("--------\n  in_name: %s\n",in_name); fflush(stdout);
-	
+
 	// extract just the Roms folder name if necessary
 	if (prefixMatch(ROMS_PATH, tmp)) {
 		tmp += strlen(ROMS_PATH) + 1;
@@ -371,7 +371,7 @@ void getEmuName(const char* in_name, char* out_name) { // NOTE: both char arrays
 		tmp = strchr(out_name,')');
 		tmp[0] = '\0';
 	}
-	
+
 	// printf(" out_name: %s\n", out_name); fflush(stdout);
 }
 void getEmuPath(char* emu_name, char* pak_path) {
@@ -406,7 +406,7 @@ void trimSortingMeta(char** str) { // eg. `001) `
 		*str = safe;
 		return;
 	}
-	
+
 	while(isblank(**str)) *str += 1; // ignore leading space
 }
 
@@ -464,7 +464,7 @@ int getInt(char* path) {
 	int i = 0;
     if(path == NULL)
         return i;
-    
+
 	FILE *file = fopen(path, "r");
 	if (file!=NULL) {
 		int res = fscanf(file, "%i", &i);

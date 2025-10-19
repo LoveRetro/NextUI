@@ -1,6 +1,6 @@
 # About NextUI paks
 
-A pak is just a folder with a ".pak" extension that contains a shell script named "launch.sh". 
+A pak is just a folder with a ".pak" extension that contains a shell script named "launch.sh".
 
 There are two kinds of paks, emulators and tools. Emulator paks live in the Emus folder. Tool paks live in the Tools folder. These two folders live at the root of your SD card. Extra paks should never be added to the hidden ".system" folder at the root of the SD card. This folder is deleted and replaced every time a user updates NextUI.
 
@@ -29,11 +29,11 @@ NextUI maps roms to paks based on the tag in parentheses at the end the name of 
 Here's an example "launch.sh":
 
 	#!/bin/sh
-	
+
 	EMU_EXE=picodrive
-	
+
 	###############################
-	
+
 	EMU_TAG=$(basename "$(dirname "$0")" .pak)
 	ROM="$1"
 	mkdir -p "$BIOS_PATH/$EMU_TAG"
@@ -55,7 +55,7 @@ Oh, if you're creating a pak for Anbernic's RG*XX line you'll need to change the
 
 # Option defaults and button bindings
 
-Copy your new pak and some roms to your SD card and launch a game. Press the MENU button and select Options. Configure the Frontend, Emulator, and Controls. NextUI standard practice is to only bind controls present on the physical controller of the original system (eg. no turbo buttons or core-specific features like palette or disk switching). Let the player dig into that if they want to, the same goes for Shortcuts. Finally select Save Changes > Save for Console. Then quit and pop your SD card back into your computer. 
+Copy your new pak and some roms to your SD card and launch a game. Press the MENU button and select Options. Configure the Frontend, Emulator, and Controls. NextUI standard practice is to only bind controls present on the physical controller of the original system (eg. no turbo buttons or core-specific features like palette or disk switching). Let the player dig into that if they want to, the same goes for Shortcuts. Finally select Save Changes > Save for Console. Then quit and pop your SD card back into your computer.
 
 Inside the hidden ".userdata" folder at the root of your SD card, you'll find platform folders, and inside your platform folder a "[TAG]-[core]" folder. Copy the "minarch.cfg" file found within to your pak folder and rename it "default.cfg". Open "default.cfg" and delete any options you didn't customize. Any option name prefixed with a "-" will be set and hidden. This is useful for disabling features that may not be available (eg. overclocking) or perform poorly (eg. upscaling) on a specific platform. Near the bottom of the file you will find the button bindings. Here's an example from the "MGBA.pak":
 
@@ -97,9 +97,9 @@ But if a binary takes more than one second to initialize you might need to just 
 	    syncsettings.elf
 	done &
 	LOOP_PID=$!
-	
+
 	./PPSSPPSDL --pause-menu-exit "$ROM_PATH"
-	
+
 	kill $LOOP_PID
 
 # Caveats
