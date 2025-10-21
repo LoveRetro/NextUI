@@ -80,17 +80,6 @@ For other devices we recommend checking out [MinUI](https://github.com/shauninma
 
 ---
 
-## Future plans roadmap
-
-- Configurable FN and switch buttons
-- More compatibility testing with different emulators and fix/improve if nessecary
-- Retroachievements
-- Probably we think of a lot of other stuff a long the way to add :D
-- Once everything is to my liking I will look into porting this to more devices
-- Clean up all MinUI code and strip it from all stuff for legacy devices etc.
-
----
-
 ## Installing
 
 Follow our [installation guide](https://nextui.loveretro.games/usage/#getting-started).
