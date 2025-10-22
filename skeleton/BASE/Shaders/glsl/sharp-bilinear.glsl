@@ -2,7 +2,7 @@
  * sharp-bilinear
  * Author: Themaister
  * License: Public domain
- * 
+ *
  * Does a bilinear stretch, with a preapplied Nx nearest-neighbor scale, giving a
  * sharper image than plain bilinear.
  */
@@ -18,8 +18,8 @@
 #define COMPAT_ATTRIBUTE in
 #define COMPAT_TEXTURE texture
 #else
-#define COMPAT_VARYING varying 
-#define COMPAT_ATTRIBUTE attribute 
+#define COMPAT_VARYING varying
+#define COMPAT_ATTRIBUTE attribute
 #define COMPAT_TEXTURE texture2D
 #endif
 
@@ -118,5 +118,5 @@ void main()
    vec2 mod_texel = texel_floored + f;
 
    FragColor = vec4(COMPAT_TEXTURE(Source, mod_texel / SourceSize.xy).rgb, 1.0);
-} 
+}
 #endif

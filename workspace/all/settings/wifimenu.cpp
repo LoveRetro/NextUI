@@ -159,7 +159,7 @@ void Menu::updater()
                                                                     { WIFI_disconnect(); selectionDirty = true; return Exit; }},
                                                     new ForgetItem(r, selectionDirty)
                                                 });
-                        else 
+                        else
                         if (hasCredentials)
                             options = new MenuList(MenuItemType::List, "Options", { new ConnectKnownItem(r, selectionDirty), new ForgetItem(r, selectionDirty) });
                         else
@@ -196,7 +196,7 @@ void Menu::updater()
         if (selectionDirty)
         {
             MenuList::performLayout((SDL_Rect){0, 0, FIXED_WIDTH, FIXED_HEIGHT});
-            selectionDirty = false;        
+            selectionDirty = false;
         }
 
         std::this_thread::sleep_for(std::chrono::seconds(pollSecs));
@@ -205,26 +205,26 @@ void Menu::updater()
 
 ConnectKnownItem::ConnectKnownItem(WIFI_network n, bool& dirty)
     : MenuItem(ListItemType::Button, "Connect", "Connect to this network.", [&](AbstractMenuItem &item) -> InputReactionHint{
-        WIFI_connect(net.ssid, net.security); 
+        WIFI_connect(net.ssid, net.security);
         dirty = true;
         return Exit;
     }), net(n)
 {}
 
 ConnectNewItem::ConnectNewItem(WIFI_network n, bool& dirty)
-    : MenuItem(ListItemType::Button, "Enter WiFi passcode", "Connect to this network.", DeferToSubmenu, new KeyboardPrompt("Enter Wifi passcode", 
+    : MenuItem(ListItemType::Button, "Enter WiFi passcode", "Connect to this network.", DeferToSubmenu, new KeyboardPrompt("Enter Wifi passcode",
         [&](AbstractMenuItem &item) -> InputReactionHint {
-            WIFI_connectPass(net.ssid, net.security, item.getName().c_str()); 
+            WIFI_connectPass(net.ssid, net.security, item.getName().c_str());
             dirty = true;
-            return Exit; 
+            return Exit;
         })), net(n)
 {}
 
 ForgetItem::ForgetItem(WIFI_network n, bool& dirty)
     : MenuItem(ListItemType::Button, "Forget", "Removes credentials for this network.",
-        [&](AbstractMenuItem &item) -> InputReactionHint { 
-            WIFI_forget(net.ssid, net.security); 
-            dirty = true; 
+        [&](AbstractMenuItem &item) -> InputReactionHint {
+            WIFI_forget(net.ssid, net.security);
+            dirty = true;
             return Exit;
         }), net(n)
 {}

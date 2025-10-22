@@ -48,7 +48,7 @@ NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
 #while [ -f $EXEC_PATH ]; do
 	nextui.elf # &> $LOGS_PATH/nextui.txt
-	
+
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
 		eval $CMD

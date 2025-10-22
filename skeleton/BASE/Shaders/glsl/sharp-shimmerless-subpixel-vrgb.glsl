@@ -2,7 +2,7 @@
  * sharp-shimmerless-vrgb
  * Author: zadpos
  * License: Public domain
- * 
+ *
  * Sharp-Shimmerless shader for v-RGB subpixels
  */
 
@@ -13,8 +13,8 @@
 #define COMPAT_ATTRIBUTE in
 #define COMPAT_TEXTURE texture
 #else
-#define COMPAT_VARYING varying 
-#define COMPAT_ATTRIBUTE attribute 
+#define COMPAT_VARYING varying
+#define COMPAT_ATTRIBUTE attribute
 #define COMPAT_TEXTURE texture2D
 #endif
 
@@ -45,7 +45,7 @@ void main()
     vec2 pixel_xy = TexCoord.xy * OutputSize * TextureSize / InputSize;
     vec2 scale_xy = OutputSize / InputSize;
     vec2 invscale_xy = InputSize / OutputSize;
-    
+
     pixel = pixel_xy.xyyy;
     scale = scale_xy.xyyy;
     invscale = invscale_xy.xyyy;
@@ -95,7 +95,7 @@ void main()
 
     vec4 texel_tl = floor(invscale * pixel_tl);
     vec4 texel_br = floor(invscale * pixel_br);
-    
+
     vec4 mod_texel = texel_br + vec4(0.5, 0.5, 0.5, 0.5);
     mod_texel -= (vec4(1.0, 1.0, 1.0, 1.0) - step(texel_br, texel_tl)) * (scale * texel_br - pixel_tl);
 
@@ -103,5 +103,5 @@ void main()
     FragColor.g = COMPAT_TEXTURE(Texture, mod_texel.xz / TextureSize).g;
     FragColor.b = COMPAT_TEXTURE(Texture, mod_texel.xw / TextureSize).b;
     FragColor.a = 1.0;
-} 
+}
 #endif

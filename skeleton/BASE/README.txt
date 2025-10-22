@@ -10,7 +10,7 @@ PREFACE
 
 NextUI has two essential parts: an installer/updater zip archive named "MinUI.zip" and a bootstrap file or folder with names that vary by platform.
 
-On devices that support two SD cards NextUI will generally end up being installed on the "secondary" one. All instances of "SD card" or "primary card" refer to the card that goes into the second slot or to the sole SD card of devices that only support a single card. 
+On devices that support two SD cards NextUI will generally end up being installed on the "secondary" one. All instances of "SD card" or "primary card" refer to the card that goes into the second slot or to the sole SD card of devices that only support a single card.
 
 Please refer to https://nextui.loveretro.games/usage/#getting-started for detailed instructions that might differ slightly between devices.
 
@@ -64,7 +64,7 @@ NextUI will create a quicksave when powering off in-game. The next time you powe
 ----------------------------------------
 Roms
 
-Included in this zip is a "Roms" folder containing folders for each console NextUI currently supports. You can rename these folders but you must keep the uppercase tag name in parentheses in order to retain the mapping to the correct emulator (eg. "Nintendo Entertainment System (FC)" could be renamed to "Nintendo (FC)", "NES (FC)", or "Famicom (FC)"). 
+Included in this zip is a "Roms" folder containing folders for each console NextUI currently supports. You can rename these folders but you must keep the uppercase tag name in parentheses in order to retain the mapping to the correct emulator (eg. "Nintendo Entertainment System (FC)" could be renamed to "Nintendo (FC)", "NES (FC)", or "Famicom (FC)").
 
 When one or more folder share the same display name (eg. "Game Boy Advance (GBA)" and "Game Boy Advance (MGBA)") they will be combined into a single menu item containing the roms from both folders (continuing the previous example, "Game Boy Advance"). This allows opening specific roms with an alternate pak.
 
@@ -97,7 +97,7 @@ Cheat file name needs to match ROM name, and go underneath the "Cheats" director
 
 Disc-based games
 
-To streamline launching multi-file disc-based games with NextUI place your bin/cue (and/or iso/wav files) in a folder with the same name as the cue file. NextUI will automatically launch the cue file instead of navigating into the folder when selected, eg. 
+To streamline launching multi-file disc-based games with NextUI place your bin/cue (and/or iso/wav files) in a folder with the same name as the cue file. NextUI will automatically launch the cue file instead of navigating into the folder when selected, eg.
 
   Harmful Park (English v1.0)/
     Harmful Park (English v1.0).bin
@@ -136,7 +136,7 @@ A collection is just a text file containing an ordered list of full paths to rom
 Display names
 
 Certain (unsupported arcade) cores require roms to use arcane file names. You can override the display name used throughout NextUI by creating a map.txt in the same folder as the files you want to rename. One line per file, `rom.ext` followed by a single tab followed by `Display Name`. You can hide a file by adding a `.` at the beginning of the display name. eg.
-	
+
   neogeo.zip	.Neo Geo Bios
   mslug.zip	Metal Slug
   sf2.zip	Street Fighter II
@@ -156,7 +156,7 @@ Thanks
 
 To eggs, for his NEON scalers, years of top-notch example code, and patience in the face of my endless questions.
 
-Check out eggs' releases (includes source code): 
+Check out eggs' releases (includes source code):
 
   RG35XX https://www.dropbox.com/sh/3av70t99ffdgzk1/AAAKPQ4y0kBtTsO3e_Xlrhqha
   Miyoo Mini https://www.dropbox.com/sh/hqcsr1h1d7f8nr3/AABtSOygIX_e4mio3rkLetWTa
@@ -164,7 +164,7 @@ Check out eggs' releases (includes source code):
 
 To neonloop, for putting together the original Trimui toolchain from which I learned everything I know about docker and buildroot and is the basis for every toolchain I've put together since, and for picoarch, the inspiration for minarch.
 
-Check out neonloop's repos: 
+Check out neonloop's repos:
 
   https://git.crowdedwood.com
 
@@ -199,8 +199,7 @@ Check out the GarlicOS repos:
 
 To Jim Gray, for commiserating during development, for early alpha testing, and for providing the soundtrack for much of MinUI's development.
 
-Check out Jim's music: 
+Check out Jim's music:
 
   https://ourghosts.bandcamp.com/music
   https://www.patreon.com/ourghosts/
- 

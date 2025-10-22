@@ -51,11 +51,11 @@ deploy: setup $(PLATFORMS) special package
 	adb push ./build/BASE/MinUI.zip /mnt/SDCARD && adb shell reboot
 
 all: setup $(PLATFORMS) special package done
-	
+
 shell:
 	make -f $(TOOLCHAIN_FILE) PLATFORM=$(PLATFORM)
 
-name: 
+name:
 	@echo $(RELEASE_NAME)
 
 build:
@@ -78,7 +78,7 @@ endif
 
 system:
 	make -f ./workspace/$(PLATFORM)/platform/makefile.copy PLATFORM=$(PLATFORM)
-	
+
 	# populate system
 ifneq ($(PLATFORM), desktop)
 	cp ./workspace/$(PLATFORM)/keymon/keymon.elf ./build/SYSTEM/$(PLATFORM)/bin/
@@ -100,12 +100,12 @@ endif
 	cp ./workspace/all/libgametimedb/build/$(PLATFORM)/libgametimedb.so ./build/SYSTEM/$(PLATFORM)/lib
 	cp ./workspace/all/gametimectl/build/$(PLATFORM)/gametimectl.elf ./build/SYSTEM/$(PLATFORM)/bin/
 	cp ./workspace/all/gametime/build/$(PLATFORM)/gametime.elf ./build/EXTRAS/Tools/$(PLATFORM)/Game\ Tracker.pak/
-  
+
 	cp ./workspace/all/settings/build/$(PLATFORM)/settings.elf ./build/EXTRAS/Tools/$(PLATFORM)/Settings.pak/
 ifeq ($(PLATFORM), tg5040)
 	cp ./workspace/all/ledcontrol/build/$(PLATFORM)/ledcontrol.elf ./build/EXTRAS/Tools/$(PLATFORM)/LedControl.pak/
 	cp ./workspace/all/bootlogo/build/$(PLATFORM)/bootlogo.elf ./build/EXTRAS/Tools/$(PLATFORM)/Bootlogo.pak/
-	
+
 	# lib dependencies
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libsamplerate.* ./build/SYSTEM/$(PLATFORM)/lib/
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
@@ -129,7 +129,7 @@ cores: # TODO: can't assume every platform will have the same stock cores (platf
 	cp ./workspace/$(PLATFORM)/cores/output/picodrive_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
 	cp ./workspace/$(PLATFORM)/cores/output/snes9x_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
 	cp ./workspace/$(PLATFORM)/cores/output/pcsx_rearmed_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
-	
+
 	# extras
 	cp ./workspace/$(PLATFORM)/cores/output/a5200_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/A5200.pak
 	cp ./workspace/$(PLATFORM)/cores/output/prosystem_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/A7800.pak
@@ -166,7 +166,7 @@ endif
 endif
 
 common: build system cores
-	
+
 clean:
 	rm -rf ./build
 	make clean -f $(TOOLCHAIN_FILE) PLATFORM=$(PLATFORM) COMPILE_CORES=$(COMPILE_CORES)
@@ -175,22 +175,22 @@ setup: name
 	# ----------------------------------------------------
 	# make sure we're running in an input device
 	tty -s || echo "No tty detected"
-	
+
 	# ready fresh build
 	rm -rf ./build
 	mkdir -p ./releases
 	cp -R ./skeleton ./build
-	
+
 	# remove authoring detritus
 	cd ./build && find . -type f -name '.keep' -delete
 	cd ./build && find . -type f -name '*.meta' -delete
 	echo $(BUILD_HASH) > ./workspace/hash.txt
-	
+
 	# copy readmes to workspace so we can use Linux fmt instead of host's
 	mkdir -p ./workspace/readmes
 	cp ./skeleton/BASE/README.txt ./workspace/readmes/BASE-in.txt
 	cp ./skeleton/EXTRAS/README.txt ./workspace/readmes/EXTRAS-in.txt
-	
+
 done:
 	# say "done" 2>/dev/null || true
 
@@ -211,7 +211,7 @@ special:
 #endif
 
 tidy:
-	rm -f releases/$(RELEASE_NAME)-base.zip 
+	rm -f releases/$(RELEASE_NAME)-base.zip
 	rm -f releases/$(RELEASE_NAME)-extras.zip
 	rm -f releases/$(RELEASE_NAME)-all.zip
 	# ----------------------------------------------------
@@ -224,12 +224,12 @@ tidy:
 package: tidy
 	# ----------------------------------------------------
 	# zip up build
-		
+
 	# move formatted readmes from workspace to build
 	cp ./workspace/readmes/BASE-out.txt ./build/BASE/README.txt
 	cp ./workspace/readmes/EXTRAS-out.txt ./build/EXTRAS/README.txt
 	rm -rf ./workspace/readmes
-	
+
 	cd ./build/SYSTEM && echo "$(RELEASE_NAME)\n$(BUILD_HASH)" > version.txt
 	# ./commits.sh > ./build/SYSTEM/commits.txt
 	cd ./build && find . -type f -name '.DS_Store' -delete
@@ -237,7 +237,7 @@ package: tidy
 	mv ./build/SYSTEM ./build/PAYLOAD/.system
 	cp -R ./build/BOOT/.tmp_update ./build/PAYLOAD/
 	cp -R ./build/EXTRAS/Tools ./build/PAYLOAD/
-	
+
 	cd ./build/PAYLOAD && zip -r MinUI.zip .system .tmp_update Tools
 	mv ./build/PAYLOAD/MinUI.zip ./build/BASE
 
@@ -253,20 +253,19 @@ package: tidy
 	# Move renamed .pakz files into base folder
 	mkdir -p ./build/BASE
 	mv $(VENDOR_DEST)/* ./build/BASE/
-	
+
 	# TODO: can I just add everything in BASE to zip?
 	# cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves miyoo miyoo354 trimui rg35xx rg35xxplus gkdpixel miyoo355 magicx em_ui.sh MinUI.zip README.txt
 	cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves Shaders trimui em_ui.sh MinUI.zip *.pakz README.txt
 	cd ./build/EXTRAS && zip -r ../../releases/$(RELEASE_NAME)-extras.zip Bios Emus Roms Saves Shaders Tools README.txt
 	echo "$(RELEASE_VERSION)" > ./build/latest.txt
 
-	# compound zip (brew install libzip needed) 
+	# compound zip (brew install libzip needed)
 	cd ./releases && zipmerge $(RELEASE_NAME)-all.zip $(RELEASE_NAME)-base.zip  && zipmerge $(RELEASE_NAME)-all.zip $(RELEASE_NAME)-extras.zip
-	
+
 ###########################################################
 
 .DEFAULT:
 	# ----------------------------------------------------
 	# $@
 	@echo "$(PLATFORMS)" | grep -q "\b$@\b" && (make common PLATFORM=$@) || (exit 1)
-	

@@ -23,7 +23,7 @@
 
 static void dummy(void* __restrict src, void* __restrict dst, uint32_t sw, uint32_t sh, uint32_t sp, uint32_t dw, uint32_t dh, uint32_t dp) {}
 
-// 
+//
 // C scalers for Trimui Model S and GKD Pixel
 //
 void scale1x_c16to32(void* __restrict src, void* __restrict dst, uint32_t sw, uint32_t sh, uint32_t sp, uint32_t dw, uint32_t dh, uint32_t dp) {
@@ -2905,14 +2905,14 @@ void scaler_c32(uint32_t xmul, uint32_t ymul, void* __restrict src, void* __rest
 #define MIN(a, b) (a) < (b) ? (a) : (b)
 void scale1x_line(void* __restrict src, void* __restrict dst, uint32_t sw, uint32_t sh, uint32_t sp, uint32_t dw, uint32_t dh, uint32_t dp) {
 	// pitch of src image not src buffer!
-	// eg. gb has a 160 pixel wide image but 
+	// eg. gb has a 160 pixel wide image but
 	// gambatte uses a 256 pixel wide buffer
-	// (only matters when using memcpy) 
-	int ip = sw * FIXED_BPP; 
+	// (only matters when using memcpy)
+	int ip = sw * FIXED_BPP;
 	int src_stride = 2 * sp / FIXED_BPP;
 	int dst_stride = 2 * dp / FIXED_BPP;
 	int cpy_pitch = MIN(ip, dp);
-	
+
 	uint16_t k = 0x0000;
 	uint16_t* restrict src_row = (uint16_t*)src;
 	uint16_t* restrict dst_row = (uint16_t*)dst;
@@ -2935,13 +2935,13 @@ void scale2x_line(void* __restrict src, void* __restrict dst, uint32_t sw, uint3
 		for (unsigned x=0; x<sw; x++) {
 			uint16_t c1 = *src_row;
 			uint16_t c2 = Weight3_2( c1, k);
-			
+
 			*(dst_row     ) = c1;
 			*(dst_row + 1 ) = c1;
-			
+
 			*(dst_row + dw    ) = c2;
 			*(dst_row + dw + 1) = c2;
-			
+
 			src_row += 1;
 			dst_row += 2;
 		}
@@ -2956,7 +2956,7 @@ void scale3x_line(void* __restrict src, void* __restrict dst, uint32_t sw, uint3
 		for (unsigned x=0; x<sw; x++) {
 			uint16_t c1 = *src_row;
 			uint16_t c2 = Weight3_2( c1, k);
-			
+
 			// row 1
 			*(dst_row             ) = c2;
 			*(dst_row          + 1) = c2;
@@ -2988,13 +2988,13 @@ void scale4x_line(void* __restrict src, void* __restrict dst, uint32_t sw, uint3
 		for (unsigned x=0; x<sw; x++) {
 			uint16_t c1 = *src_row;
 			uint16_t c2 = Weight3_2( c1, k);
-			
+
 			// row 1
 			*(dst_row    ) = c1;
 			*(dst_row + 1) = c1;
 			*(dst_row + 2) = c1;
 			*(dst_row + 3) = c1;
-			
+
 			// row 2
 			*(dst_row + dw    ) = c2;
 			*(dst_row + dw + 1) = c2;
@@ -3028,13 +3028,13 @@ void scale2x_grid(void* __restrict src, void* __restrict dst, uint32_t sw, uint3
 		for (unsigned x=0; x<sw; x++) {
 			uint16_t c1 = *src_row;
 			uint16_t c2 = Weight3_1( c1, k);
-			
+
 			*(dst_row     ) = c2;
 			*(dst_row + 1 ) = c2;
-			
+
 			*(dst_row + dw    ) = c2;
 			*(dst_row + dw + 1) = c1;
-			
+
 			src_row += 1;
 			dst_row += 2;
 		}
@@ -3050,7 +3050,7 @@ void scale3x_grid(void* __restrict src, void* __restrict dst, uint32_t sw, uint3
 			uint16_t c1 = *src_row;
 			uint16_t c2 = Weight3_2( c1, k);
 			uint16_t c3 = Weight2_3( c1, k);
-			
+
 			// row 1
 			*(dst_row                       ) = c2;
 			*(dst_row                    + 1) = c1;

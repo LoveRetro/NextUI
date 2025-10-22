@@ -69,7 +69,7 @@ void get_rom_image_path(char *rom_file, char *out_image_path)
     if (suffixMatch(rom_file, ".p8") || suffixMatch(rom_file, ".png")) {
         snprintf(out_image_path, STR_MAX - 1, ROMS_PATH "/%s", rom_file);
     }
-    
+
     char *clean_rom_name = removeExtension(baseName(rom_file));
     // this assumes all media resides in a top-level .media folder
     //char *rom_folder = strtok(rom_file, "/");

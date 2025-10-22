@@ -2,7 +2,7 @@
  * sharp-shimmerless
  * Author: zadpos
  * License: Public domain
- * 
+ *
  * A retro gaming shader for sharpest pixels with no aliasing/shimmering.
  * Instead of pixels as point samples, this shader considers pixels as
  * ideal rectangles forming a grid, and interpolates pixel by calculating
@@ -16,8 +16,8 @@
 #define COMPAT_ATTRIBUTE in
 #define COMPAT_TEXTURE texture
 #else
-#define COMPAT_VARYING varying 
-#define COMPAT_ATTRIBUTE attribute 
+#define COMPAT_VARYING varying
+#define COMPAT_ATTRIBUTE attribute
 #define COMPAT_TEXTURE texture2D
 #endif
 
@@ -94,7 +94,7 @@ void main()
     // the sampling point to get the correct box-filtered value
     vec2 mod_texel = texel_br + vec2(0.5, 0.5);
     mod_texel -= (vec2(1.0, 1.0) - step(texel_br, texel_tl)) * (scale * texel_br - pixel_tl);
-    
+
     FragColor = vec4(COMPAT_TEXTURE(Texture, mod_texel / TextureSize).rgb, 1.0);
-} 
+}
 #endif

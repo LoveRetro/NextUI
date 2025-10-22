@@ -24,7 +24,7 @@ def preprocess_filename(filename):
 def process_folder(folder_path, gamelist_path):
     # Load game titles from the XML file
     game_titles = load_gamelist(gamelist_path)
-    
+
     # Open map.txt to write results in the folder being scanned
     map_file_path = os.path.join(folder_path, "map.txt")
     with open(map_file_path, "w") as output_file:
@@ -34,13 +34,13 @@ def process_folder(folder_path, gamelist_path):
                 # Ignore .txt and .xml files
                 if file.endswith('.txt') or file.endswith('.xml'):
                     continue
-                
+
                 # Preprocess the filename
                 preprocessed_filename = preprocess_filename(file)
-                
+
                 # Find the best match
                 best_match = find_best_match(preprocessed_filename, game_titles)
-                
+
                 # Write the result to map.txt
                 output_file.write(f"{file}\t{best_match[0]}\n")
 

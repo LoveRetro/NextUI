@@ -5,7 +5,7 @@ endif
 TARGET = rfkill
 PRODUCT = $(TARGET).elf
 
-CC = $(CROSS_COMPILE)gcc 
+CC = $(CROSS_COMPILE)gcc
 FLAGS	= -Os -lrt -ldl -Wl,--gc-sections -s
 
 all:

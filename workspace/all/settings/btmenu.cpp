@@ -229,38 +229,38 @@ void Menu::updater()
 }
 
 PairNewItem::PairNewItem(BT_device d, bool& dirty)
-    : MenuItem(ListItemType::Button, "Pair", "Pair this device.", 
+    : MenuItem(ListItemType::Button, "Pair", "Pair this device.",
         [&](AbstractMenuItem &item) -> InputReactionHint {
-            BT_pair(dev.addr); 
+            BT_pair(dev.addr);
             dirty = true;
-            return Exit; 
+            return Exit;
         }), dev(d)
 {}
 
 UnpairItem::UnpairItem(BT_devicePaired d, bool& dirty)
     : MenuItem(ListItemType::Button, "Forget", "Forget this device.",
         [&](AbstractMenuItem &item) -> InputReactionHint {
-            BT_unpair(dev.remote_addr); 
+            BT_unpair(dev.remote_addr);
             dirty = true;
-            return Exit; 
+            return Exit;
         }), dev(d)
 {}
 
 ConnectKnownItem::ConnectKnownItem(BT_devicePaired d, bool& dirty)
     : MenuItem(ListItemType::Button, "Connect", "Connect this device.",
         [&](AbstractMenuItem &item) -> InputReactionHint {
-            BT_connect(dev.remote_addr); 
+            BT_connect(dev.remote_addr);
             dirty = true;
-            return Exit; 
+            return Exit;
         }), dev(d)
 {}
 
 DisconnectKnownItem::DisconnectKnownItem(BT_devicePaired d, bool& dirty)
     : MenuItem(ListItemType::Button, "Disconnect", "Disconnect this device.",
         [&](AbstractMenuItem &item) -> InputReactionHint {
-            BT_disconnect(dev.remote_addr); 
+            BT_disconnect(dev.remote_addr);
             dirty = true;
-            return Exit; 
+            return Exit;
         }), dev(d)
 {}
 
@@ -327,7 +327,7 @@ void PairedItem::drawCustomItem(SDL_Surface *surface, const SDL_Rect &dst, const
 
     // rssi icon
     auto asset =
-        dev.rssi == 0   ? ASSET_WIFI_OFF : 
+        dev.rssi == 0   ? ASSET_WIFI_OFF :
         dev.rssi >= -55 ? ASSET_WIFI :
         dev.rssi >= -67 ? ASSET_WIFI_MED
                         : ASSET_WIFI_LOW;

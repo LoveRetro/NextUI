@@ -14,5 +14,4 @@ install:
 	cp ./lib/aarch64/glibc-gcc8_3_0/$(target) $(PREFIX)/lib
 
 ####################################################################
-all: install 
-
+all: install

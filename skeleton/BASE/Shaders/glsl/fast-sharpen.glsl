@@ -1,6 +1,6 @@
 /*
    Fast Sharpen Shader
-   
+
    Copyright (C) 2005 - 2019 guest(r) - guest.r@gmail.com
 
    This program is free software; you can redistribute it and/or
@@ -18,9 +18,9 @@
    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
-#pragma parameter SHARPEN  "Sharpen strength"       1.00 0.0 2.00 0.05 
-#pragma parameter CONTR    "Ammount of sharpening"  0.07 0.0 0.25 0.01 
-#pragma parameter DETAILS  "Details sharpened "     1.00 0.0 1.00 0.05 
+#pragma parameter SHARPEN  "Sharpen strength"       1.00 0.0 2.00 0.05
+#pragma parameter CONTR    "Ammount of sharpening"  0.07 0.0 0.25 0.01
+#pragma parameter DETAILS  "Details sharpened "     1.00 0.0 1.00 0.05
 
 #if defined(VERTEX)
 
@@ -29,8 +29,8 @@
 #define COMPAT_ATTRIBUTE in
 #define COMPAT_TEXTURE texture
 #else
-#define COMPAT_VARYING varying 
-#define COMPAT_ATTRIBUTE attribute 
+#define COMPAT_VARYING varying
+#define COMPAT_ATTRIBUTE attribute
 #define COMPAT_TEXTURE texture2D
 #endif
 
@@ -44,7 +44,7 @@ COMPAT_ATTRIBUTE vec4 VertexCoord;
 COMPAT_ATTRIBUTE vec4 TexCoord;
 COMPAT_VARYING vec4 TEX0;
 
-vec4 _oPosition1; 
+vec4 _oPosition1;
 uniform mat4 MVPMatrix;
 uniform COMPAT_PRECISION int FrameDirection;
 uniform COMPAT_PRECISION int FrameCount;
@@ -68,7 +68,7 @@ void main()
    g10 = vec2( 0.3333,-1.0)*SourceSize.zw;
    g01 = vec2(-1.0,-0.3333)*SourceSize.zw;
    g12 = vec2(-0.3333, 1.0)*SourceSize.zw;
-   g21 = vec2( 1.0, 0.3333)*SourceSize.zw; 
+   g21 = vec2( 1.0, 0.3333)*SourceSize.zw;
 }
 
 #elif defined(FRAGMENT)
@@ -121,7 +121,7 @@ uniform COMPAT_PRECISION float DETAILS;
 #define SHARPEN   1.2
 #define CONTR  0.08
 #define DETAILS   1.0
-#endif 
+#endif
 
 void main()
 {
@@ -129,20 +129,20 @@ void main()
 	vec3 c01 = COMPAT_TEXTURE(Source, vTexCoord + g01).rgb;
 	vec3 c21 = COMPAT_TEXTURE(Source, vTexCoord + g21).rgb;
 	vec3 c12 = COMPAT_TEXTURE(Source, vTexCoord + g12).rgb;
-	vec3 c11 = COMPAT_TEXTURE(Source, vTexCoord      ).rgb;	
-	vec3 b11 = (c10+c01+c12+c21)*0.25; 
-	
+	vec3 c11 = COMPAT_TEXTURE(Source, vTexCoord      ).rgb;
+	vec3 b11 = (c10+c01+c12+c21)*0.25;
+
 	float contrast = max(max(c11.r,c11.g),c11.b);
 	contrast = mix(2.0*CONTR, CONTR, contrast);
-	
+
 	vec3 mn1 = min(min(c10,c01),min(c12,c21)); mn1 = min(mn1,c11*(1.0-contrast));
 	vec3 mx1 = max(max(c10,c01),max(c12,c21)); mx1 = max(mx1,c11*(1.0+contrast));
-	
+
 	vec3 dif = pow(mx1-mn1+0.0001, vec3(0.75,0.75,0.75));
 	vec3 sharpen = mix(vec3(SHARPEN*DETAILS), vec3(SHARPEN), dif);
-	
+
 	c11 = clamp(mix(c11,b11,-sharpen), mn1,mx1);
-	
-	FragColor = vec4(c11,1.0); 
-} 
+
+	FragColor = vec4(c11,1.0);
+}
 #endif

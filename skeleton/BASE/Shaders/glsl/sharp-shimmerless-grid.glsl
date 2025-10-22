@@ -2,7 +2,7 @@
  * sharp-shimmerless-gridlines
  * Author: zadpos
  * License: Public domain
- * 
+ *
  * A retro gaming shader for sharpest pixels with no aliasing/shimmering.
  * Instead of pixels as point samples, this shader considers pixels as
  * ideal rectangles forming a grid, and interpolates pixel by calculating
@@ -25,8 +25,8 @@
 #define COMPAT_ATTRIBUTE in
 #define COMPAT_TEXTURE texture
 #else
-#define COMPAT_VARYING varying 
-#define COMPAT_ATTRIBUTE attribute 
+#define COMPAT_VARYING varying
+#define COMPAT_ATTRIBUTE attribute
 #define COMPAT_TEXTURE texture2D
 #endif
 
@@ -138,5 +138,5 @@ void main()
     vec2 mod_texel = texel_br - vec2(0.5, 0.5) + interp_ratio;
 
     FragColor = vec4(factor * COMPAT_TEXTURE(Texture, mod_texel / TextureSize).rgb, 1.0);
-} 
+}
 #endif

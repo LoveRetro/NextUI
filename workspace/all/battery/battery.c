@@ -276,7 +276,7 @@ void compute_graph(void)
     int total_duration = 0;
     int previous_index = graph.layout.graph_max_size - 1;
     bool is_estimation_computed = false;
-    
+
     bat_log_db = open_battery_log_db();
     secondsToHoursMinutes(get_best_session_time(bat_log_db, device_model), session_best);
 
@@ -405,7 +405,7 @@ void drawBatteryIcon(int percent, SDL_Rect dst) {
     if (clip.w<=0) return;
     clip.x = rect.w - clip.w;
     clip.y = 0;
-    
+
     GFX_blitAsset(ASSET_BATTERY_FILL, &clip, screen, &(SDL_Rect){x+SCALE1(3)+clip.x,y+SCALE1(2)});
 }
 
@@ -752,7 +752,7 @@ int main(int argc, char *argv[])
 
                 SDL_Surface *text;
                 text = TTF_RenderUTF8_Blended(font.large, title, COLOR_WHITE);
-                
+
                 GFX_blitPill(ASSET_BLACK_PILL, screen, &(SDL_Rect){SCALE1(PADDING), SCALE1(PADDING), max_width, SCALE1(PILL_SIZE)});
                 SDL_BlitSurface(text, &(SDL_Rect){0, 0, max_width - SCALE1(BUTTON_PADDING * 2), text->h}, screen, &(SDL_Rect){SCALE1(PADDING + BUTTON_PADDING), SCALE1(PADDING + 4)});
                 SDL_FreeSurface(text);
