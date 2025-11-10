@@ -2,23 +2,59 @@
 set -euo pipefail
 exec 0<&-
 
+log() {
+    >&2 echo "$1"
 
+    # DEBUGGING
+    # echo "$1" >> /mnt/SDCARD/debug.log
+}
+
+fix_sleep_sound_bug() {
+    # turn it off and on againt
+    val=$(amixer cget numid=2 | awk -F'values=' '/: values/{print $2}')
+    amixer cset numid=2 0
+    amixer cset numid=2 $val
+}
 
 before() {
-	>&2 echo "Preparing for suspend..."
-	
+    log "Preparing for suspend..."
+
+    # Probably not necessary and dangerous actually
+    # log "Turning off input"
+    # echo 0 > /sys/module/gpio_keys_polled/parameters/button_enable
+
+    # TODO bluetooth
+    # TODO wifi
+
+    touch /tmp/system_suspend
 }
 
 after() {
-	echo 100 > /sys/class/leds/work/brightness
-	>&2 echo "Resumed from suspend."
+    # log "Turning on input"
+    # echo 1 > /sys/module/gpio_keys_polled/parameters/button_enable
+
+    log "Restoring brightness"
+    # TODO save and restore backlight settings
+    echo 100 > /sys/class/leds/work/brightness
+
+    log "Restoring sound"
+    fix_sleep_sound_bug
+
+    # TODO bluetooth
+    # TODO wifi
+
+    rm /tmp/system_suspend
+
+    log "Resumed from suspend."
 }
 
 before
 
->&2 echo "Suspending..."
-# sync
-echo mem >/sys/power/state
+log "Suspending..."
+sync
+echo deep > /sys/power/mem_sleep
+echo mem > /sys/power/state
+log "Resuming..."
 
 # Resume services in background to reduce UI latency
-after
+after &
