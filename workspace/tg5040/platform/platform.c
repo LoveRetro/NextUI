@@ -348,6 +348,10 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
         define = "#define FRAGMENT\n";
         default_precision =
             "#ifdef GL_ES\n"
+            // compat fix for fwidth, dFdx, dFdy
+            "#ifdef GL_OES_standard_derivatives\n"
+            "#extension GL_OES_standard_derivatives : enable\n"
+            "#endif\n"
             "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
             "precision highp float;\n"
             "#else\n"
