@@ -19,12 +19,14 @@ include ../platform/makefile.env
 ###########################################################
 
 TARGET = poweroff_next
-SOURCE = $(TARGET).c
+INCDIR = -I. -I../../all/common -I../platform
+SOURCE = $(TARGET).c ../../all/common/utils.c ../../all/common/config.c
 
 CC = $(CROSS_COMPILE)gcc
-CFLAGS += $(ARCH) -fomit-frame-pointer -std=gnu11 -Wall -Wextra
-CFLAGS += -DPLATFORM=\"$(PLATFORM)\"
-LDFLAGS +=
+# Override CFLAGS and LDFLAGS to not include SDL2 dependencies
+CFLAGS = $(ARCH) -g -std=gnu11 -Wall -Wextra
+CFLAGS += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\"
+LDFLAGS = -lpthread -ldl
 
 PRODUCT = build/$(PLATFORM)/$(TARGET).elf
 
