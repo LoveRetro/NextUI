@@ -31,15 +31,14 @@
 
 static void kill_processes(int sig)
 {
-    printf("poweroff_next: [DEBUG] kill_processes: Starting with signal %d\n", sig);
+    pid_t self = getpid();
+    printf("poweroff_next: [DEBUG] kill_processes: Starting with signal %d (my PID=%d)\n", sig, self);
     DIR *proc = opendir("/proc");
     if (!proc)
     {
         perror("poweroff_next: opendir(/proc)");
         return;
     }
-
-    pid_t self = getpid();
     struct dirent *entry;
     int killed_count = 0;
     while ((entry = readdir(proc)) != NULL)
@@ -388,6 +387,16 @@ static void run_standard_shutdown(void)
 int main(void)
 {
     printf("poweroff_next: [DEBUG] main: Starting poweroff_next\n");
+    
+    // Block SIGTERM and SIGKILL for this process to prevent self-termination
+    sigset_t block_set;
+    sigemptyset(&block_set);
+    sigaddset(&block_set, SIGTERM);
+    sigaddset(&block_set, SIGINT);
+    sigaddset(&block_set, SIGHUP);
+    sigprocmask(SIG_BLOCK, &block_set, NULL);
+    printf("poweroff_next: [DEBUG] main: Signals blocked (SIGTERM, SIGINT, SIGHUP)\n");
+    
     CFG_init(NULL, NULL);
 
     bool protection_enabled = CFG_getPowerOffProtection();
