@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
             new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
         });
 
-        std::vector<AbstractMenuItem*> systemItems =
+        auto systemMenu = new MenuList(MenuItemType::Fixed, "System",
         {
             new MenuItem{ListItemType::Generic, "Volume", "Speaker volume", 
             {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}, 
@@ -323,20 +323,13 @@ int main(int argc, char *argv[])
             new MenuItem{ListItemType::Generic, "Use extracted file name", "Use the extracted file name instead of the archive name.\nOnly applies to cores that do not handle archives natively", {false, true}, on_off, 
             []() -> std::any{ return CFG_getUseExtractedFileName(); },
             [](const std::any &value){ CFG_setUseExtractedFileName(std::any_cast<bool>(value)); },
-            []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}}
-        };
-
-        if (is_brick)
-        {
-            systemItems.push_back(new MenuItem{ListItemType::Generic, "Power-off battery protection", "Bypasses the stock shutdown procedure to avoid the \"limbo bug\".\nInstructs the PMIC directly to soft disconnect the battery.", {false, true}, on_off, 
+            []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}},
+            new MenuItem{ListItemType::Generic, "Safe poweroff (experimental)", "Bypasses the stock shutdown procedure to avoid the \"limbo bug\".\nInstructs the PMIC directly to soft disconnect the battery.", {false, true}, on_off, 
             []() -> std::any { return CFG_getPowerOffProtection(); },
             [](const std::any &value) { CFG_setPowerOffProtection(std::any_cast<bool>(value)); },
-            []() { CFG_setPowerOffProtection(CFG_DEFAULT_POWEROFFPROTECTION); }});
-        }
-
-        systemItems.push_back(new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu});
-
-        auto systemMenu = new MenuList(MenuItemType::Fixed, "System", systemItems);
+            []() { CFG_setPowerOffProtection(CFG_DEFAULT_POWEROFFPROTECTION); }},
+            new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
+        });
 
         std::vector<AbstractMenuItem*> muteItems = 
         {
