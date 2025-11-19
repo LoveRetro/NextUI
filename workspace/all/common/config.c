@@ -846,8 +846,10 @@ void CFG_sync(void)
     const char *shared_userdata = getenv("SHARED_USERDATA_PATH");
     if (!shared_userdata || !shared_userdata[0])
     {
-        shared_userdata = SHARED_USERDATA_PATH;
+        printf("[CFG] SHARED_USERDATA_PATH is not set!\n");
+        return;
     }
+
     snprintf(settingsPath, sizeof(settingsPath), "%s/minuisettings.txt", shared_userdata);
     FILE *file = fopen(settingsPath, "w");
     if (file == NULL)
