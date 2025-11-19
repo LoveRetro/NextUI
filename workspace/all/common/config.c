@@ -843,7 +843,12 @@ void CFG_sync(void)
 {
     // write to file
     char settingsPath[MAX_PATH];
-    sprintf(settingsPath, "%s/minuisettings.txt", getenv("SHARED_USERDATA_PATH"));
+    const char *shared_userdata = getenv("SHARED_USERDATA_PATH");
+    if (!shared_userdata || !shared_userdata[0])
+    {
+        shared_userdata = SHARED_USERDATA_PATH;
+    }
+    snprintf(settingsPath, sizeof(settingsPath), "%s/minuisettings.txt", shared_userdata);
     FILE *file = fopen(settingsPath, "w");
     if (file == NULL)
     {
