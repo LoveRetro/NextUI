@@ -120,7 +120,7 @@ static void swapoff_device(const char *path)
 
 static void swapoff_all(void)
 {
-    printf("poweroff_next: [DEBUG] swapoff_all: Starting\n");
+    log_msg("poweroff_next: [DEBUG] swapoff_all: Starting\n");
     FILE *swaps = fopen("/proc/swaps", "r");
     if (!swaps)
     {
@@ -194,11 +194,11 @@ static void finalize_poweroff(void)
 
 static void kill_sdcard_users(void)
 {
-    printf("poweroff_next: [DEBUG] kill_sdcard_users: Starting\n");
+    log_msg("poweroff_next: [DEBUG] kill_sdcard_users: Starting\n");
     DIR *proc = opendir("/proc");
     if (!proc)
     {
-        printf("poweroff_next: [DEBUG] kill_sdcard_users: Failed to open /proc\n");
+        log_msg("poweroff_next: [DEBUG] kill_sdcard_users: Failed to open /proc\n");
         return;
     }
 
@@ -246,17 +246,17 @@ static void kill_sdcard_users(void)
     }
 
     closedir(proc);
-    printf("poweroff_next: [DEBUG] kill_sdcard_users: Completed\n");
+    log_msg("poweroff_next: [DEBUG] kill_sdcard_users: Completed\n");
 }
 
 static bool is_sdcard_mounted(void)
 {
-    printf("poweroff_next: [DEBUG] is_sdcard_mounted: Checking\n");
+    log_msg("poweroff_next: [DEBUG] is_sdcard_mounted: Checking\n");
     bool mounted = false;
     FILE *fp = setmntent("/proc/mounts", "r");
     if (!fp)
     {
-        printf("poweroff_next: [DEBUG] is_sdcard_mounted: Failed to open /proc/mounts\n");
+        log_msg("poweroff_next: [DEBUG] is_sdcard_mounted: Failed to open /proc/mounts\n");
         return false;
     }
 
@@ -278,7 +278,7 @@ static bool is_sdcard_mounted(void)
 
 static bool unmount_sdcard_with_retries(void)
 {
-    printf("poweroff_next: [DEBUG] unmount_sdcard_with_retries: Starting\n");
+    log_msg("poweroff_next: [DEBUG] unmount_sdcard_with_retries: Starting\n");
     for (int attempt = 0; attempt < 3; ++attempt)
     {
         log_msg("poweroff_next: [DEBUG] unmount_sdcard_with_retries: Attempt %d/3\n", attempt + 1);
@@ -293,7 +293,7 @@ static bool unmount_sdcard_with_retries(void)
             return true;
         }
 
-        printf("poweroff_next: [DEBUG] unmount_sdcard_with_retries: Still mounted, killing users\n");
+        log_msg("poweroff_next: [DEBUG] unmount_sdcard_with_retries: Still mounted, killing users\n");
         kill_sdcard_users();
         sync();
     }
@@ -372,12 +372,12 @@ static int run_poweroff_protection(void)
 
     bool unmounted = unmount_sdcard_with_retries();
     if (!unmounted)
-        fprintf(stderr, "poweroff_next: SD card remained mounted after retries.\n");
+        log_msg("poweroff_next: SD card remained mounted after retries.\n");
 
     kill_all_processes();
 
     // Final sync before PMIC shutdown
-    printf("poweroff_next: [DEBUG] Final sync before PMIC shutdown\n");
+    log_msg("poweroff_next: [DEBUG] Final sync before PMIC shutdown\n");
     sync();
     
     struct timespec pre_pmic_wait = {.tv_sec = 0, .tv_nsec = 500000000};
@@ -385,7 +385,7 @@ static int run_poweroff_protection(void)
 
     if (execute_axp2202_poweroff() != 0)
     {
-        fprintf(stderr, "poweroff_next: PMIC shutdown sequence failed.\n");
+        log_msg("poweroff_next: PMIC shutdown sequence failed.\n");
         return -1;
     }
 
@@ -393,7 +393,7 @@ static int run_poweroff_protection(void)
     
     // The PMIC should cut power almost immediately, but if we're still running,
     // call the kernel poweroff to ensure shutdown completes
-    printf("poweroff_next: [DEBUG] Calling kernel poweroff\n");
+    log_msg("poweroff_next: [DEBUG] Calling kernel poweroff\n");
     finalize_poweroff();
     
     return 0;
@@ -439,17 +439,17 @@ int main(void)
 
     if (protection_enabled)
     {
-        printf("poweroff_next: [DEBUG] main: Running protected poweroff sequence\n");
+        log_msg("poweroff_next: [DEBUG] main: Running protected poweroff sequence\n");
         if (run_poweroff_protection() == 0)
         {
             CFG_quit();
             return 0;
         }
 
-        fprintf(stderr, "poweroff_next: Falling back to standard shutdown.\n");
+        log_msg("poweroff_next: Falling back to standard shutdown.\n");
     }
 
-    printf("poweroff_next: [DEBUG] main: Running standard shutdown\n");
+    log_msg("poweroff_next: [DEBUG] main: Running standard shutdown\n");
     run_standard_shutdown();
     CFG_quit();
     return 0;
