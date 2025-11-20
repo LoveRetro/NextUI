@@ -21,6 +21,7 @@ ifeq ($(PLATFORM), desktop)
 	cd ./all/nextui/ && make
 	cd ./all/minarch/ && make
 	cd ./all/libbatmondb/ && make
+	cd ./all/bash/ && make
 	cd ./all/battery/ && make
 	cd ./all/clock/ && make
 	cd ./all/batmon/ && make
@@ -40,6 +41,7 @@ else
 	cd ./$(PLATFORM)/keymon && make
 	cd ./all/nextui/ && make
 	cd ./all/minarch/ && make
+	cd ./all/bash/ && make
 	cd ./all/battery/ && make
 	cd ./all/clock/ && make
 	cd ./all/libbatmondb/ && make
@@ -84,6 +86,7 @@ endif
 	cd ./$(PLATFORM)/libmsettings && make clean
 	cd ./all/nextui/ && make clean
 	cd ./all/minarch/ && make clean
+	cd ./all/bash/ && make clean
 	cd ./all/battery/ && make clean
 	cd ./all/clock/ && make clean
 	cd ./all/libbatmondb/ && make clean
