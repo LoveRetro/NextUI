@@ -540,7 +540,9 @@ finish:
 
 // return variations with/without extensions and other cruft
 #define CHEAT_MAX_PATHS 16
-#define CHEAT_MAX_LIST_LENGTH (CHEAT_MAX_PATHS * MAX_PATH)
+#define CHEAT_MAX_DISPLAY_PATHS 8
+// the list of displayed paths will be a bit shorter, we cant render that much text
+#define CHEAT_MAX_LIST_LENGTH (CHEAT_MAX_DISPLAY_PATHS * MAX_PATH)
 static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 	// Generate possible paths, ordered by most likely to be used (pre v6.2.3 style first)
 	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, game.name); // /mnt/SDCARD/Cheats/GB/Super Example World.<ext>.cht
@@ -553,14 +555,37 @@ static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 		int i = 0;
 		char* ext;
 		char exts[128];
-		strcpy(exts,core.extensions);
-		while ((ext=strtok(i?NULL:exts,"|"))) {
+		if (core.extensions == NULL || strlen(core.extensions) >= sizeof(exts)) {
+			LOG_info("Invalid or too long core.extensions\n");
+			return;
+		}
+		
+		strcpy(exts, core.extensions);
+		while ((ext = strtok(i ? NULL : exts, "|"))) {
+			if (*count >= CHEAT_MAX_PATHS - 1) {
+				LOG_info("Maximum cheat paths reached, stopping\n");
+				break;
+			}
+			
 			char rom_name[MAX_PATH];
+			if (strlen(game.alt_name) >= MAX_PATH) {
+				LOG_info("game.alt_name too long, skipping\n");
+				i++;
+				continue;
+			}
+			
 			strcpy(rom_name, game.alt_name);
 			char* tmp = strrchr(rom_name, '.');
 			if (tmp != NULL && strlen(tmp) > 2 && strlen(tmp) <= 5) {
 				tmp[0] = '\0';
-				sprintf(paths[(*count)++], "%s/%s.%s.cht", core.cheats_dir, rom_name, ext); // /mnt/SDCARD/Cheats/GB/Super Example World (USA).foo.cht
+				
+				// Add length check before sprintf to prevent buffer overflow
+				int needed_len = strlen(core.cheats_dir) + strlen(rom_name) + strlen(ext) + 10; // +10 for "/", ".", ".cht", etc.
+				if (needed_len < MAX_PATH) {
+					sprintf(paths[(*count)++], "%s/%s.%s.cht", core.cheats_dir, rom_name, ext);
+				} else {
+					LOG_info("Path too long, skipping: %s/%s.%s.cht\n", core.cheats_dir, rom_name, ext);
+				}
 			}
 			i++;
 		}
@@ -573,7 +598,6 @@ static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 	char rom_name[MAX_PATH];
 	getDisplayName(game.alt_name, rom_name);
 	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World.cht
-
 	// Respect map.txt: use alias if available
 	// eg. 1941.zip	-> 1941: Counter Attack
 	if(getAlias(game.path, rom_name))
@@ -584,7 +608,6 @@ static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 	getDisplayName(game.alt_name, rom_name);
 	getAlias(game.path, rom_name);
 	sprintf(paths[(*count)++], "%s/%s*.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World*.cht
-
 	// Log all path candidates
 	{
 		int i;
@@ -5612,15 +5635,41 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 		// concatenate all paths into one string, and prepend title "No cheat file loaded.\n\n"
 		// each path on its own line, and remove the absolute path prefix
 		char cheats_path[CHEAT_MAX_LIST_LENGTH] = {0};
+		
+		// prepend title with bounds checking
+		const char* title = "No cheat file loaded.\n\n";
+		size_t title_len = strlen(title);
+		
+		strcpy(cheats_path, title);  // Use strcpy for first string
+		size_t current_len = title_len;
 
-		// prepend title
-		strcat(cheats_path, "No cheat file loaded.\n\n");
-
-		for (int i = 0; i < count; i++) {
+		for (int i = 0; i < count && i < CHEAT_MAX_DISPLAY_PATHS; i++) {
 			char* p = basename(paths[i]);
-			// append to cheats_path
+			
+			// Check for NULL return from basename
+			if (p == NULL) {
+				LOG_info("basename() returned NULL for path: %s\n", paths[i]);
+				continue;
+			}
+			
+			size_t p_len = strlen(p);
+			size_t newline_len = (i < count - 1) ? 1 : 0;  // "\n" length
+			
+			// Check if adding this path would overflow the buffer
+			if (current_len + p_len + newline_len >= CHEAT_MAX_LIST_LENGTH) {
+				LOG_info("Cheats path buffer would overflow, truncating list\n");
+				strcat(cheats_path, "...");
+				break;
+			}
+			
+			// Safe to append
 			strcat(cheats_path, p);
-			if (i < count - 1) strcat(cheats_path, "\n");
+			current_len += p_len;
+			
+			if (i < count - 1) {
+				strcat(cheats_path, "\n");
+				current_len += 1;
+			}
 		}
 
 		Menu_messageWithFont(cheats_path, (char*[]){ "B","BACK", NULL }, font.small);
