@@ -48,12 +48,12 @@ create_symlink() {
     local source_file="$1"
     local target_name="$2"  # Now accepts an optional specific target name
     local source_name=$(basename "$source_file")
-    
+
     # Skip architecture-specific tools
     if [[ "$source_name" == aarch64-apple-darwin* ]]; then
         return 0
     fi
-    
+
     # If no specific target name provided, generate it from source name
     if [ -z "$target_name" ]; then
         if [[ $source_name =~ ^(.*)-[0-9]+$ ]]; then
@@ -62,7 +62,7 @@ create_symlink() {
             target_name="$source_name"
         fi
     fi
-    
+
     local target_path="$TARGET_DIR/$target_name"
 
     # Check if source exists and is executable
@@ -107,12 +107,12 @@ echo "Processing GCC tools from $GCC_BIN_DIR..."
 for tool in "$GCC_BIN_DIR"/*-[0-9]*; do
     # Skip non-existent files (in case no matches found)
     [ -e "$tool" ] || continue
-    
+
     # Skip if not a regular file or not executable
     [ -f "$tool" ] && [ -x "$tool" ] || continue
-    
+
     create_symlink "$tool"
-    
+
     # Special case for gcc-ar: create additional 'ar' symlink
     if [[ $(basename "$tool") == "gcc-ar-14" ]]; then
         create_symlink "$tool" "ar"
@@ -129,4 +129,3 @@ echo "Finished creating symlinks"
 # Final verification
 echo "Verifying created symlinks..."
 ls -l "$TARGET_DIR"
-

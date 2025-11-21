@@ -26,8 +26,8 @@
 #define COMPAT_ATTRIBUTE in
 #define COMPAT_TEXTURE texture
 #else
-#define COMPAT_VARYING varying 
-#define COMPAT_ATTRIBUTE attribute 
+#define COMPAT_VARYING varying
+#define COMPAT_ATTRIBUTE attribute
 #define COMPAT_TEXTURE texture2D
 #endif
 
@@ -120,5 +120,5 @@ void main()
    colour.rgb = yfactor * xfactor * colour.rgb;
 
    FragColor = vec4(colour.rgb, 1.0);
-} 
+}
 #endif

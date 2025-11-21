@@ -4,7 +4,7 @@
 task_killer() {
     for pid in /proc/[0-9]*; do
         pid=$(basename "$pid")
-        
+
         # Ignore critical processes and the script's own process
         if [ "$pid" != "1" ] && [ "$pid" != "$$" ]; then
             kill $1 "$pid" 2>/dev/null

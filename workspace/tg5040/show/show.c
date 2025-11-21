@@ -12,28 +12,28 @@ int main(int argc , char* argv[]) {
 		puts("Usage: show.elf image.png delay");
 		return 0;
 	}
-	
+
 	char path[256];
 	strncpy(path,argv[1],256);
 	if (access(path, F_OK)!=0) return 0; // nothing to show :(
-	
+
 	int delay = argc>2 ? atoi(argv[2]) : 2;
-	
+
 	SDL_Init(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
-	
+
 	window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0,0, SDL_WINDOW_SHOWN);
 	puts("");
-	
-	screen = SDL_GetWindowSurface(window); 
+
+	screen = SDL_GetWindowSurface(window);
 	SDL_FillRect(screen, NULL, 0);
-	 
-	SDL_Surface* img = IMG_Load(path); 
+
+	SDL_Surface* img = IMG_Load(path);
 	SDL_BlitSurface(img, NULL, screen, &(SDL_Rect){(screen->w-img->w)/2,(screen->h-img->h)/2});
-	
+
 	SDL_UpdateWindowSurface(window);
 	sleep(delay);
-	
+
 	SDL_FreeSurface(img);
 	SDL_DestroyWindow(window);
 	SDL_Quit();

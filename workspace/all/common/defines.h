@@ -89,7 +89,7 @@ enum
 	GFX_SCALE_FULLSCREEN = 0,
 	GFX_SCALE_FIT,
 	GFX_SCALE_FILL,
-	GFX_SCALE_NUM_OPTIONS // do not use 
+	GFX_SCALE_NUM_OPTIONS // do not use
 };
 
 ///////////////////////////////
@@ -144,14 +144,14 @@ enum
 #ifndef AXIS_L2
 #define AXIS_L2	AXIS_NA
 #define AXIS_R2	AXIS_NA
-#endif 
+#endif
 
 #ifndef AXIS_LX
 #define AXIS_LX	AXIS_NA
 #define AXIS_LY	AXIS_NA
 #define AXIS_RX	AXIS_NA
 #define AXIS_RY	AXIS_NA
-#endif 
+#endif
 
 #ifndef HAS_HDMI
 #define HDMI_WIDTH	FIXED_WIDTH
@@ -183,7 +183,7 @@ enum {
 	BTN_ID_MENU,
 	BTN_ID_PLUS,
 	BTN_ID_MINUS,
-	BTN_ID_POWER,	
+	BTN_ID_POWER,
 	BTN_ID_POWEROFF,
 
 	BTN_ID_ANALOG_UP,
@@ -221,7 +221,7 @@ enum {
 	BTN_ANALOG_DOWN	= 1 << BTN_ID_ANALOG_DOWN,
 	BTN_ANALOG_LEFT	= 1 << BTN_ID_ANALOG_LEFT,
 	BTN_ANALOG_RIGHT= 1 << BTN_ID_ANALOG_RIGHT,
-	
+
 	BTN_UP 		= BTN_DPAD_UP | BTN_ANALOG_UP,
 	BTN_DOWN 	= BTN_DPAD_DOWN | BTN_ANALOG_DOWN,
 	BTN_LEFT	= BTN_DPAD_LEFT | BTN_ANALOG_LEFT,

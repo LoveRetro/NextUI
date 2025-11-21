@@ -50,7 +50,7 @@ for pakz in $PAKZ_PATH; do
 done
 
 # install/update
-if [ -f "$UPDATE_PATH" ]; then 
+if [ -f "$UPDATE_PATH" ]; then
 	echo ok
 	cd $(dirname "$0")/$PLATFORM
 	if [ -d "$SYSTEM_PATH" ]; then

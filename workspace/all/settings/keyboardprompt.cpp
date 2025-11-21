@@ -425,8 +425,8 @@ void KeyboardPrompt::drawKeyboard(SDL_Surface *screen, const AppState &state)
                 default_key_size};
 
             // draw key background
-            Uint32 bg_color = (row == state.keyboard.row && col == state.keyboard.col) 
-                ? SDL_MapRGB(screen->format, TRIAD_WHITE) 
+            Uint32 bg_color = (row == state.keyboard.row && col == state.keyboard.col)
+                ? SDL_MapRGB(screen->format, TRIAD_WHITE)
                 : SDL_MapRGB(screen->format, TRIAD_DARK_GRAY);
             SDL_FillRect(screen, &key_pos, bg_color);
 

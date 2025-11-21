@@ -36,7 +36,7 @@ typedef struct SettingsV4 {
 	int speaker;
 	int mute;
 	int unused[2];
-	int jack; 
+	int jack;
 } SettingsV4;
 
 // Second NextUI settings format
@@ -49,7 +49,7 @@ typedef struct SettingsV5 {
 	int mute;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV5;
 
 // Third NextUI settings format
@@ -65,7 +65,7 @@ typedef struct SettingsV6 {
 	int exposure;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV6;
 
 typedef struct SettingsV7 {
@@ -85,7 +85,7 @@ typedef struct SettingsV7 {
 	int mutedexposure;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV7;
 
 typedef struct SettingsV8 {
@@ -106,7 +106,7 @@ typedef struct SettingsV8 {
 	int toggled_volume;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV8;
 
 typedef struct SettingsV9 {
@@ -137,7 +137,7 @@ typedef struct SettingsV9 {
 	int turbo_r2;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV9;
 
 typedef struct SettingsV10 {
@@ -168,7 +168,7 @@ typedef struct SettingsV10 {
 	int turbo_r2;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 	int audiosink; // was bluetooth true/false before
 } SettingsV10;
 
@@ -275,12 +275,12 @@ int peekVersion(const char *filename) {
 
 static int is_brick = 0;
 
-void InitSettings(void) {	
+void InitSettings(void) {
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
-	
+
 	sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));
-	
+
 	shm_fd = shm_open(SHM_KEY, O_RDWR | O_CREAT | O_EXCL, 0644); // see if it exists
 	if (shm_fd==-1 && errno==EEXIST) { // already exists
 		// puts("Settings client");
@@ -451,7 +451,7 @@ void InitSettings(void) {
 						printf("Found unsupported settings version: %i.\n", version);
 					}
 				}
-				
+
 				close(fd);
 			}
 			else {
@@ -463,7 +463,7 @@ void InitSettings(void) {
 			// load defaults
 			memcpy(settings, &DefaultSettings, shm_size);
 		}
-		
+
 		// these shouldn't be persisted
 		// settings->jack = 0;
 		settings->mute = 0;
@@ -508,7 +508,7 @@ int GetColortemp(void) { // 0-10
 int GetVolume(void) { // 0-20
 	if (settings->mute && GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 		return GetMutedVolume();
-	
+
 	if(settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
 		return settings->headphones;
 
@@ -523,7 +523,7 @@ int GetAudioSink(void) {
 	return settings->audiosink;
 }
 
-int GetHDMI(void) { 
+int GetHDMI(void) {
 	return 0;
 };
 
@@ -620,9 +620,9 @@ void SetColortemp(int value) {
 	SaveSettings();
 }
 void SetVolume(int value) { // 0-20
-	if (settings->mute) 
+	if (settings->mute)
 		return SetRawVolume(scaleVolume(GetMutedVolume()));
-	
+
 	if (settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
 		settings->headphones = value;
 	else
@@ -634,14 +634,14 @@ void SetVolume(int value) { // 0-20
 // monitored and set by thread in keymon
 void SetJack(int value) {
 	printf("SetJack(%i)\n", value); fflush(stdout);
-	
+
 	settings->jack = value;
 	SetVolume(GetVolume());
 }
 // monitored and set by thread in audiomon
 void SetAudioSink(int value) {
 	printf("SetAudioSink(%i)\n", value); fflush(stdout);
-	
+
 	settings->audiosink = value;
 	SetVolume(GetVolume());
 }
@@ -656,13 +656,13 @@ void SetMute(int value) {
 		// custom mute mode display settings
 		if(GetMutedBrightness() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawBrightness(scaleBrightness(GetMutedBrightness()));
-		if(GetMutedColortemp() != SETTINGS_DEFAULT_MUTE_NO_CHANGE) 
+		if(GetMutedColortemp() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawColortemp(scaleColortemp(GetMutedColortemp()));
-		if(GetMutedContrast() != SETTINGS_DEFAULT_MUTE_NO_CHANGE) 
+		if(GetMutedContrast() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawContrast(scaleContrast(GetMutedContrast()));
-		if(GetMutedSaturation() != SETTINGS_DEFAULT_MUTE_NO_CHANGE) 
+		if(GetMutedSaturation() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawSaturation(scaleSaturation(GetMutedSaturation()));
-		if(GetMutedExposure() != SETTINGS_DEFAULT_MUTE_NO_CHANGE) 
+		if(GetMutedExposure() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 			SetRawExposure(scaleExposure(GetMutedExposure()));
 		if(is_brick && GetMuteDisablesDpad())
 			disableDpad(1);
@@ -979,7 +979,7 @@ int scaleBrightness(int value) {
 }
 int scaleColortemp(int value) {
 	int raw;
-	
+
 	switch (value) {
 		case 0: raw=-200; break; 		// 8
 		case 1: raw=-190; break; 		// 8
@@ -1027,7 +1027,7 @@ int scaleColortemp(int value) {
 }
 int scaleContrast(int value) {
 	int raw;
-	
+
 	switch (value) {
 		// dont offer -5/ raw 0, looks like it might turn off the display completely?
 		case -4: raw=10; break;
@@ -1045,7 +1045,7 @@ int scaleContrast(int value) {
 }
 int scaleSaturation(int value) {
 	int raw;
-	
+
 	switch (value) {
 		case -5: raw=0; break;
 		case -4: raw=10; break;
@@ -1063,7 +1063,7 @@ int scaleSaturation(int value) {
 }
 int scaleExposure(int value) {
 	int raw;
-	
+
 	switch (value) {
 		// stock OS also avoids setting anything lower, so we do the same here.
 		case -4: raw=10; break;
@@ -1145,7 +1145,7 @@ static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
 }
 
 void SetRawVolume(int val) { // in: 0-100
-	if (settings->mute) 
+	if (settings->mute)
 		val = scaleVolume(GetMutedVolume());
 
     if (GetAudioSink() == AUDIO_SINK_BLUETOOTH) {
@@ -1158,7 +1158,7 @@ void SetRawVolume(int val) { // in: 0-100
             system(cmd);
 			//printf("Set '%s' to %d%%\n", ctl_name, val); fflush(stdout);
         }
-    } 
+    }
 	else if (GetAudioSink() == AUDIO_SINK_USBDAC) {
 		// USB DAC path: use card 1
 		struct mixer *mixer = mixer_open(1);
@@ -1199,7 +1199,7 @@ void SetRawVolume(int val) { // in: 0-100
 			mixer_ctl_set_percent(digital, 0, 100 - val); // reversed mapping
 			//printf("Set 'digital volume' to %d%%\n", val); fflush(stdout);
 		}
-		
+
 		// Digital volume does not quite go to 0, so also mute the DAC volume
 		struct mixer_ctl *dac     = mixer_get_ctl_by_name(mixer, "DAC volume");
         if (dac) {

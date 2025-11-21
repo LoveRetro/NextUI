@@ -5,7 +5,7 @@ start() {
 	rfkill.elf unblock wifi
 
 	/etc/init.d/wpa_supplicant start
-	
+
 	wifi_daemon -s &
 }
 
