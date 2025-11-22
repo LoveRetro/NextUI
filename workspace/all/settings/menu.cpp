@@ -570,6 +570,7 @@ void MenuList::drawList(SDL_Surface *surface, const SDL_Rect &dst)
     for (int i = scope.start, j = 0; i < scope.end; i++, j++)
     {
         auto pos = dy(rect, SCALE1(j * BUTTON_SIZE));
+        pos.h = SCALE1(BUTTON_SIZE);
         drawListItem(surface, pos, *items[i], j == selected_row);
     }
 }
@@ -591,7 +592,7 @@ void MenuList::drawListItem(SDL_Surface *surface, const SDL_Rect &dst, const Abs
         text_color = uintToColour(THEME_COLOR5_255);
     }
     text = TTF_RenderUTF8_Blended(font.small, item.getName().c_str(), text_color);
-    SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + SCALE1(OPTION_PADDING), dst.y + SCALE1(1)});
+    SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + SCALE1(OPTION_PADDING), dst.y  + ((dst.h - text->h) / 2)});
     SDL_FreeSurface(text);
 }
 
@@ -609,6 +610,7 @@ void MenuList::drawFixed(SDL_Surface *surface, const SDL_Rect &dst)
     for (int i = scope.start, j = 0; i < scope.end; i++, j++)
     {
         auto pos = dy(rect, SCALE1(j * BUTTON_SIZE));
+        pos.h = SCALE1(BUTTON_SIZE);
         drawFixedItem(surface, pos, *items[i], j == selected_row);
     }
 }
@@ -663,7 +665,7 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
             rect.w -= 1;
             SDL_FillRect(surface, &rect, color);
 #define COLOR_PADDING 4
-            SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + mw - text->w - SCALE1(OPTION_PADDING + COLOR_PADDING + FONT_TINY), dst.y + SCALE1(3)});
+            SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + mw - text->w - SCALE1(OPTION_PADDING + COLOR_PADDING + FONT_TINY), dst.y + ((dst.h - text->h) / 2)});
         }
         else if(item.getType() == ListItemType::Button) {
             // dont draw anything for now, could be a button hint later
@@ -672,7 +674,7 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
             item.drawCustomItem(surface, dst, item, selected);
         }
         else // Generic and fallback
-            SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + mw - text->w - SCALE1(OPTION_PADDING), dst.y + SCALE1(3)});
+            SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + mw - text->w - SCALE1(OPTION_PADDING), dst.y + ((dst.h - text->h) / 2)});
         SDL_FreeSurface(text);
     }
 
@@ -688,7 +690,7 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
     }
 
     text = TTF_RenderUTF8_Blended(font.small, item.getName().c_str(), text_color);
-    SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + SCALE1(OPTION_PADDING), dst.y + SCALE1(1)});
+    SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + SCALE1(OPTION_PADDING), dst.y + ((dst.h - text->h) / 2)});
     SDL_FreeSurface(text);
 }
 
@@ -716,6 +718,7 @@ void MenuList::drawInput(SDL_Surface *surface, const SDL_Rect &dst)
     for (int i = scope.start, j = 0; i < scope.end; i++, j++)
     {
         auto pos = dy(rect, SCALE1(j * BUTTON_SIZE));
+        pos.h = SCALE1(BUTTON_SIZE);
         pos.w = max_width;
         drawInputItem(surface, pos, *items[i], j == selected_row);
     }
@@ -742,7 +745,7 @@ void MenuList::drawInputItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
         text_color = COLOR_BLACK;
     }
     text = TTF_RenderUTF8_Blended(font.small, item.getName().c_str(), text_color);
-    SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + SCALE1(OPTION_PADDING), dst.y + SCALE1(1)});
+    SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + SCALE1(OPTION_PADDING), dst.y + ((dst.h - text->h) / 2)});
     SDL_FreeSurface(text);
 
     if (/*await_input &&*/ selected)
@@ -752,7 +755,7 @@ void MenuList::drawInputItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
     else if (item.getValue().has_value())
     {
         text = TTF_RenderUTF8_Blended(font.tiny, item.getLabel().c_str(), COLOR_WHITE); // always white
-        SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + mw - text->w - SCALE1(OPTION_PADDING), dst.y + SCALE1(1)});
+        SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + mw - text->w - SCALE1(OPTION_PADDING), dst.y + ((dst.h - text->h) / 2)});
         SDL_FreeSurface(text);
     }
 }
@@ -804,7 +807,7 @@ void MenuList::drawMainItem(SDL_Surface *surface, const SDL_Rect &dst, const Abs
         // TODO: port this over when needed. Its complete spaghetti code...
     }
     text = TTF_RenderUTF8_Blended(font.large, truncated, text_color);
-    SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + SCALE1(BUTTON_PADDING), dst.y + SCALE1(3)});
+    SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + SCALE1(BUTTON_PADDING), dst.y + ((dst.h - text->h) / 2)});
     SDL_FreeSurface(text);
 }
 

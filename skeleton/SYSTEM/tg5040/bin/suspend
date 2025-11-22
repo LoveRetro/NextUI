@@ -2,8 +2,8 @@
 set -euo pipefail
 exec 0<&-
 
-logfile="/mnt/SDCARD/.userdata/tg5040/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
-exec >> "$logfile" 2>&1
+#logfile="/mnt/SDCARD/.userdata/tg5040/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
+#exec >> "$logfile" 2>&1
 
 wifid_running=
 bluetoothd_running=
@@ -20,7 +20,6 @@ before() {
 	if pgrep bluetoothd; then
 		bluetoothd_running=1
 		>&2 echo "Stopping bluetoothd..."
-		killall -15 bt_daemon || true
 		/etc/bluetooth/bt_init.sh stop || true
 	fi
 

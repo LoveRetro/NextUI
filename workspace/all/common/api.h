@@ -251,7 +251,6 @@ enum {
 
 SDL_Surface* GFX_init(int mode);
 #define GFX_resize PLAT_resizeVideo				// (int w, int h, int pitch);
-#define GFX_setScaleClip PLAT_setVideoScaleClip // (int x, int y, int width, int height)
 #define GFX_setSharpness PLAT_setSharpness // (int sharpness)
 #define GFX_setEffectColor PLAT_setEffectColor // (int color)
 #define GFX_setEffect PLAT_setEffect // (int effect)
@@ -263,15 +262,12 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_captureRendererToSurface PLAT_captureRendererToSurface //(void)
 #define GFX_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateSurfaceOpacity PLAT_animateSurfaceOpacity //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_animateSurfaceOpacityAndScale PLAT_animateSurfaceOpacityAndScale //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateAndFadeSurface PLAT_animateAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_animateAndRevealSurfaces PLAT_animateAndRevealSurfaces
 #define GFX_resetScrollText PLAT_resetScrollText
 #define GFX_scrollTextTexture PLAT_scrollTextTexture
 #define GFX_flipHidden PLAT_flipHidden //(void)
 #define GFX_GL_screenCapture PLAT_GL_screenCapture //(void)
 
-#define GFX_present PLAT_present //(SDL_Surface *inputSurface,int x, int y)
 void GFX_setMode(int mode);
 int GFX_hdmiChanged(void);
 SDL_Color /*GFX_*/ uintToColour(uint32_t colour);
@@ -280,13 +276,11 @@ SDL_Color /*GFX_*/ uintToColour(uint32_t colour);
 #define GFX_clearAll PLAT_clearAll // (void)
 
 void GFX_startFrame(void);
-void audioFPS(void);
 void GFX_flip(SDL_Surface* screen);
 void PLAT_flipHidden();
 void GFX_flip_fixed_rate(SDL_Surface* screen, double target_fps); // if target_fps is 0, then use the native screen FPS
 #define GFX_supportsOverscan PLAT_supportsOverscan // (void)
 void GFX_sync(void); // call this to maintain 60fps when not calling GFX_flip() this frame
-void GFX_sync_fixed_rate(double target_fps);
 void GFX_delay(void); // gfx_sync() is only for everywhere where there is no audio buffer to rely on for delaying, stupid so doing gfx_delay() for like waiting for input loop in binding menu. Need to remove gfx_sync() everwhere eventually
 void GFX_quit(void);
 
@@ -376,6 +370,20 @@ void SND_quit(void);
 void SND_resetAudio(double sample_rate, double frame_rate);
 void SND_pauseAudio(bool paused);
 void SND_setQuality(int quality);
+
+// watch audio device changes
+typedef enum {
+	DIRWATCH_CREATE = 0,
+	DIRWATCH_DELETE,
+	FILEWATCH_MODIFY,
+	FILEWATCH_DELETE,
+	FILEWATCH_CLOSE_WRITE,
+} WatchEvent;
+void PLAT_audioDeviceWatchRegister(void (*cb)(int, int));
+void PLAT_audioDeviceWatchUnregister(void);
+
+#define SND_registerDeviceWatcher PLAT_audioDeviceWatchRegister
+#define SND_removeDeviceWatcher PLAT_audioDeviceWatchUnregister
 
 ///////////////////////////////
 
@@ -474,14 +482,48 @@ int PWR_preventAutosleep(void);
 int PWR_isCharging(void);
 int PWR_getBattery(void);
 
+// rules-based presets managed and applied by LEDS_applyRules()
+enum LightProfile {
+	LIGHT_PROFILE_DEFAULT = 0, // configured via LedControl
+	LIGHT_PROFILE_OFF = 1, // all forced off
+	LIGHT_PROFILE_LOW_BATTERY = 2, // low battery warning
+	LIGHT_PROFILE_CRITICAL_BATTERY = 3, // critical battery warning
+	LIGHT_PROFILE_CHARGING = 4, // derived from default
+	LIGHT_PROFILE_SLEEP = 5, // sleep mode
+	LIGHT_PROFILE_AMBIENT = 6, // ambient mode
+	LIGHT_PROFILE_COUNT
+};
+
+// initialize LED structures based on user settings and derives
+// automatic profiles from it
 void LEDS_initLeds();
-void LEDS_updateLeds();
-void LEDS_SaveSettings();
-void LEDS_setEffect(int);
-void LEDS_setColor(uint32_t color);
-void LED_setColor(uint32_t color,int ledindex);
-void LEDS_setIndicator(int effect,uint32_t color, int cycles);
-void LED_setIndicator(int effect,uint32_t color,int cycles,int ledindex);
+
+// selects the correct LED profile based on predefined rules (charging, low battery, etc).
+void LEDS_applyRules();
+
+// temporary overrides outside of the scope of LEDS_applyRules
+// these will survive LEDS_applyRules() and need to be manually revoked, e.g. 
+/*
+	LEDS_applyRules(); // applies rules
+	LEDS_pushProfile(LIGHT_PROFILE_AMBIENT); // manual override
+	LEDS_applyRules(); // ignored
+	LEDS_popProfile(); // revoke override
+	LEDS_applyRules(); // applies rules
+*/
+// returns true if value was added to the stack.
+// \note this will also call LEDS_updateLeds()
+bool LEDS_pushProfileOverride(int profile);
+// returns true if value was taken off the stack
+// \note this will also call LEDS_updateLeds()
+bool LEDS_popProfileOverride(int profile);
+// returns top of stack, or default if stack is empty
+int LEDS_getProfileOverride();
+
+// changes the active led profile, calls LEDS_updateLeds() implicitly if needed
+void LEDS_setProfile(int profile); // enum LightProfile
+// reapplies the current led config. This should only be necessary
+// if youre directly modifying the LightSettings structure.
+void LEDS_updateLeds(bool indicator_only);
 
 enum {
 	CPU_SPEED_MENU,
@@ -511,7 +553,6 @@ void PLAT_clearVideo(SDL_Surface* screen);
 void PLAT_clearAll(void);
 void PLAT_setVsync(int vsync);
 SDL_Surface* PLAT_resizeVideo(int w, int h, int pitch);
-void PLAT_setVideoScaleClip(int x, int y, int width, int height);
 void PLAT_setSharpness(int sharpness);
 void PLAT_setEffectColor(int color);
 void PLAT_setEffect(int effect);
@@ -539,47 +580,9 @@ void PLAT_animateAndFadeSurface(
 	int start_opacity, int target_opacity, int layer
 );
 
-
-
 void PLAT_animateSurfaceOpacity(SDL_Surface *inputSurface, int x, int y, int w, int h,
 	int start_opacity, int target_opacity, int duration_ms, int layer);
-void PLAT_animateSurfaceOpacityAndScale(
-	SDL_Surface *inputSurface,
-	int x, int y,
-	int start_w, int start_h,
-	int target_w, int target_h,
-	int start_opacity, int target_opacity,
-	int duration_ms,
-	int layer
-);
-void PLAT_animateSurfaceOpacity(SDL_Surface *inputSurface, int x, int y, int w, int h,
-	int start_opacity, int target_opacity, int duration_ms, int layer);
-void PLAT_animateSurfaceOpacityAndScale(
-	SDL_Surface *inputSurface,
-	int x, int y,
-	int start_w, int start_h,
-	int target_w, int target_h,
-	int start_opacity, int target_opacity,
-	int duration_ms,
-	int layer
-);
 
-void PLAT_animateAndRevealSurfaces(
-	SDL_Surface* inputMoveSurface,
-	SDL_Surface* inputRevealSurface,
-	int move_start_x, int move_start_y,
-	int move_target_x, int move_target_y,
-	int move_w, int move_h,
-	int reveal_x, int reveal_y,
-	int reveal_w, int reveal_h,
-	const char* reveal_direction,
-	int duration_ms,
-	int move_start_opacity,
-	int move_target_opacity,
-	int reveal_opacity,
-	int layer1,
-	int layer2
-);
 void PLAT_scrollTextTexture(
     TTF_Font* font,
     const char* in_name,
@@ -589,7 +592,6 @@ void PLAT_scrollTextTexture(
     float transparency
 );
 void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
-void PLAT_present();
 void PLAT_vsync(int remaining);
 scaler_t PLAT_getScaler(GFX_Renderer* renderer);
 void PLAT_blitRenderer(GFX_Renderer* renderer);
@@ -831,16 +833,6 @@ void PLAT_bluetoothStreamQuit();
 // volume getter/setter
 int PLAT_bluetoothVolume();
 void PLAT_bluetoothSetVolume(int vol);
-// watch audio device changes
-typedef enum {
-	DIRWATCH_CREATE = 0,
-	DIRWATCH_DELETE,
-	FILEWATCH_MODIFY,
-	FILEWATCH_DELETE,
-	FILEWATCH_CLOSE_WRITE,
-} WatchEvent;
-void PLAT_bluetoothWatchRegister(void (*cb)(bool, int));
-void PLAT_bluetoothWatchUnregister(void);
 
 #define BT_init PLAT_bluetoothInit
 #define BT_quit PLAT_bluetoothDeinit
@@ -860,7 +852,5 @@ void PLAT_bluetoothWatchUnregister(void);
 #define BT_isConnected PLAT_bluetoothConnected
 #define BT_getVolume PLAT_bluetoothVolume
 #define BT_setVolume PLAT_bluetoothSetVolume
-#define BT_registerDeviceWatcher PLAT_bluetoothWatchRegister
-#define BT_removeDeviceWatcher PLAT_bluetoothWatchUnregister
 
 #endif

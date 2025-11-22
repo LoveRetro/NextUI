@@ -46,13 +46,6 @@ start() {
 		bluealsa -p a2dp-source &
 		sleep 1
     }
-
-	b=`ps | grep bt_daemon | grep -v grep`
-	[ -z "$b" ] && {
-		bt_daemon -s &
-		# sleep 1
-    }
-
 }
 
 ble_start() {
@@ -83,13 +76,6 @@ ble_start() {
 }
 
 stop() {
-
-	b=`ps | grep bt_daemon | grep -v grep`
-	[ -n "$b" ] && {
-		killall bt_daemon
-		#sleep 1
-	}
-
 	a=`ps | grep bluealsa | grep -v grep`
 	[ -n "$a" ] && {
 		killall bluealsa

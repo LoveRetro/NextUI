@@ -35,8 +35,11 @@ void SetVolume(int value); // 0-20
 int GetJack(void);
 void SetJack(int value); // 0-1
 
-int GetBluetooth(void);
-void SetBluetooth(int value); // 0-1
+#define AUDIO_SINK_DEFAULT 0 // use system default, usually speaker (or jack if plugged in)
+#define AUDIO_SINK_BLUETOOTH 1 // software control via bluealsa, not a separate card
+#define AUDIO_SINK_USBDAC 2 // assumes being exposed as card 1 to alsa
+int GetAudioSink(void);
+void SetAudioSink(int value);
 
 int GetHDMI(void);
 void SetHDMI(int value); // 0-1

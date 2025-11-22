@@ -462,10 +462,15 @@ char* allocFile(char* path) { // caller must free!
 }
 int getInt(char* path) {
 	int i = 0;
+    if(path == NULL)
+        return i;
+    
 	FILE *file = fopen(path, "r");
 	if (file!=NULL) {
-		fscanf(file, "%i", &i);
+		int res = fscanf(file, "%i", &i);
 		fclose(file);
+        if(res != 1)
+            i = 0; // failed to parse int
 	}
 	return i;
 }
