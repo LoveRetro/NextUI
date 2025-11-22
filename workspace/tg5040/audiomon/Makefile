@@ -5,7 +5,7 @@ ifeq (,$(PREFIX))
 $(error missing PREFIX for this toolchain)
 endif
 
-TARGET = bt_daemon
+TARGET = audiomon.elf
 
 .PHONY: all clean
 
@@ -13,11 +13,11 @@ CC = $(CROSS_COMPILE)gcc
 CCXX= $(CROSS_COMPILE)g++
 
 CXXFLAGS = -Wall -O2 -I$(PREFIX)/include/dbus-1.0 -I$(PREFIX)/lib/dbus-1.0/include
-LDFLAGS = -L$(PREFIX)/lib -ldbus-1
+LDFLAGS = -L$(PREFIX)/lib -ldbus-1 -ludev
 CXXFLAGS += -I$(PREFIX_LOCAL)/include
 LDFLAGS += -L$(PREFIX_LOCAL)/lib -lmsettings
 
-SRCS = bt_daemon.cpp
+SRCS = audiomon.cpp
 OBJS = $(SRCS:.cpp=.o)
 
 all: $(PREFIX_LOCAL)/include/msettings.h $(TARGET)

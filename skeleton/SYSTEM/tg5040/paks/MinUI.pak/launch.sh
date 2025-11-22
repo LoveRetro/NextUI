@@ -111,6 +111,10 @@ echo $CPU_SPEED_PERF > $CPU_PATH
 keymon.elf & # &> $SDCARD_PATH/keymon.txt &
 batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 
+# start fresh, will be populated on the next connect
+rm -f $USERDATA_PATH/.asoundrc
+audiomon.elf & # &> $SDCARD_PATH/audiomon.txt &
+
 #killall MtpDaemon # I dont think we need to micro manage this one
 
 # BT handling
@@ -118,13 +122,10 @@ batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')
 # somehow trimui deploys aic?
 cp -f $SYSTEM_PATH/etc/bluetooth/bt_init.sh /etc/bluetooth/bt_init.sh
-# start fresh, will be populated on the next connect
-rm -f $USERDATA_PATH/.asoundrc
 if [ "$bluetoothon" -eq 0 ]; then
 	/etc/bluetooth/bt_init.sh stop > /dev/null 2>&1 &
 else
 	/etc/bluetooth/bt_init.sh start > /dev/null 2>&1 &
-	#bt_daemon -s &
 fi
 
 # wifi handling
@@ -135,7 +136,6 @@ if [ "$wifion" -eq 0 ]; then
 	/etc/wifi/wifi_init.sh stop > /dev/null 2>&1 &
 else 
 	/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
-	#wifi_daemon -s &
 fi
 
 #######################################

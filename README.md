@@ -7,7 +7,7 @@
 <hr>
 
 <h4 align="center">
-  <a href="https://nextui.loveretro.games/getting-started/" target="_blank">Installation Guide</a>
+  <a href="https://nextui.loveretro.games/usage/#getting-started" target="_blank">Installation Guide</a>
   ·
   <a href="https://nextui.loveretro.games/docs/" target="_blank">Documentation</a>
   ·
@@ -49,6 +49,7 @@ For other devices we recommend checking out [MinUI](https://github.com/shauninma
 - Game time tracker!
 - Cheats support
 - Integrated WiFi
+- Bluetooth Audio
 - Overlays support!
 - Dynamic cpu speed scaling (keeps your device cool and extends battery life, but gives the performance right when needed)
 - Fully GPU OpenGL based for faster performance
@@ -79,21 +80,9 @@ For other devices we recommend checking out [MinUI](https://github.com/shauninma
 
 ---
 
-## Future plans roadmap
-
-- Bluetooth and wifi integrated
-- Configurable FN and switch buttons
-- More compatibility testing with different emulators and fix/improve if nessecary
-- Retroachievements
-- Probably we think of a lot of other stuff a long the way to add :D
-- Once everything is to my liking I will look into porting this to more devices
-- Clean up all MinUI code and strip it from all stuff for legacy devices etc.
-
----
-
 ## Installing
 
-Follow our [installation guide](https://nextui.loveretro.games/getting-started/).
+Follow our [installation guide](https://nextui.loveretro.games/usage/#getting-started).
 
 ---
 
