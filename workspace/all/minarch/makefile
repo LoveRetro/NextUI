@@ -62,12 +62,12 @@ all: clean libretro-common $(PREFIX_LOCAL)/include/msettings.h
 else
 all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
-	cp $(PREFIX)/lib/libsamplerate.so build/$(PLATFORM)
+	cp $(PREFIX)/lib/libsamplerate.* build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
-	cp $(PREFIX)/lib/libzip.so build/$(PLATFORM)
-	cp $(PREFIX)/lib/libbz2.so build/$(PLATFORM)
-	cp $(PREFIX)/lib/liblzma.so build/$(PLATFORM)
-	cp $(PREFIX)/lib/libzstd.so build/$(PLATFORM)
+	cp $(PREFIX)/lib/libzip.* build/$(PLATFORM)
+	cp $(PREFIX)/lib/libbz2.* build/$(PLATFORM)
+	cp $(PREFIX)/lib/liblzma.* build/$(PLATFORM)
+	cp $(PREFIX)/lib/libzstd.* build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
 
