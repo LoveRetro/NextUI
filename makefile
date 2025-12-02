@@ -18,7 +18,7 @@ endif
 ###########################################################
 
 BUILD_HASH:=$(shell git rev-parse --short HEAD)
-BUILD_BRANCH:=$(shell git rev-parse --abbrev-ref HEAD)
+BUILD_BRANCH:=$(shell git symbolic-ref --short HEAD)
 RELEASE_TIME:=$(shell TZ=GMT date +%Y%m%d)
 ifeq ($(BUILD_BRANCH),main)
   RELEASE_BETA :=
