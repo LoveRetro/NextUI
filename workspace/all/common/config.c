@@ -53,6 +53,7 @@ void CFG_defaults(NextUISettings *cfg)
 
         .screenTimeoutSecs = CFG_DEFAULT_SCREENTIMEOUTSECS,
         .suspendTimeoutSecs = CFG_DEFAULT_SUSPENDTIMEOUTSECS,
+        .powerOffProtection = CFG_DEFAULT_POWEROFFPROTECTION,
 
         .haptics = CFG_DEFAULT_HAPTICS,
         .romsUseFolderBackground = CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND,
@@ -192,6 +193,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "suspendTimeout=%i", &temp_value) == 1)
             {
                 CFG_setSuspendTimeoutSecs(temp_value);
+                continue;
+            }
+            if (sscanf(line, "powerOffProtection=%i", &temp_value) == 1)
+            {
+                CFG_setPowerOffProtection((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "switcherscale=%i", &temp_value) == 1)
@@ -398,6 +404,17 @@ uint32_t CFG_getSuspendTimeoutSecs(void)
 void CFG_setSuspendTimeoutSecs(uint32_t secs)
 {
     settings.suspendTimeoutSecs = secs;
+    CFG_sync();
+}
+
+bool CFG_getPowerOffProtection(void)
+{
+    return settings.powerOffProtection;
+}
+
+void CFG_setPowerOffProtection(bool enable)
+{
+    settings.powerOffProtection = enable;
     CFG_sync();
 }
 
@@ -747,6 +764,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getSuspendTimeoutSecs());
     }
+    else if (strcmp(key, "powerOffProtection") == 0)
+    {
+        sprintf(value, "%i", CFG_getPowerOffProtection());
+    }
     else if (strcmp(key, "switcherscale") == 0)
     {
         sprintf(value, "%i", CFG_getGameSwitcherScaling());
@@ -822,7 +843,14 @@ void CFG_sync(void)
 {
     // write to file
     char settingsPath[MAX_PATH];
-    sprintf(settingsPath, "%s/minuisettings.txt", getenv("SHARED_USERDATA_PATH"));
+    const char *shared_userdata = getenv("SHARED_USERDATA_PATH");
+    if (!shared_userdata || !shared_userdata[0])
+    {
+        printf("[CFG] SHARED_USERDATA_PATH is not set!\n");
+        return;
+    }
+
+    snprintf(settingsPath, sizeof(settingsPath), "%s/minuisettings.txt", shared_userdata);
     FILE *file = fopen(settingsPath, "w");
     if (file == NULL)
     {
@@ -850,6 +878,7 @@ void CFG_sync(void)
     fprintf(file, "showfoldernamesatroot=%i\n", settings.showFolderNamesAtRoot);
     fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
     fprintf(file, "suspendTimeout=%i\n", settings.suspendTimeoutSecs);
+    fprintf(file, "powerOffProtection=%i\n", settings.powerOffProtection);
     fprintf(file, "switcherscale=%i\n", settings.gameSwitcherScaling);
     fprintf(file, "haptics=%i\n", settings.haptics);
     fprintf(file, "romfolderbg=%i\n", settings.romsUseFolderBackground);
@@ -889,9 +918,10 @@ void CFG_print(void)
     printf("\t\"recents\": %i,\n", settings.showRecents);
     printf("\t\"tools\": %i,\n", settings.showTools);
     printf("\t\"gameart\": %i,\n", settings.showGameArt);
-	printf("\t\"showfoldernamesatroot\": %i,\n", settings.showFolderNamesAtRoot);
+    printf("\t\"showfoldernamesatroot\": %i,\n", settings.showFolderNamesAtRoot);
     printf("\t\"screentimeout\": %i,\n", settings.screenTimeoutSecs);
     printf("\t\"suspendTimeout\": %i,\n", settings.suspendTimeoutSecs);
+    printf("\t\"powerOffProtection\": %i,\n", settings.powerOffProtection);
     printf("\t\"switcherscale\": %i,\n", settings.gameSwitcherScaling);
     printf("\t\"haptics\": %i,\n", settings.haptics);
     printf("\t\"romfolderbg\": %i,\n", settings.romsUseFolderBackground);
