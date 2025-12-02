@@ -324,7 +324,7 @@ int main(int argc, char *argv[])
             []() -> std::any{ return CFG_getUseExtractedFileName(); },
             [](const std::any &value){ CFG_setUseExtractedFileName(std::any_cast<bool>(value)); },
             []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}},
-            new MenuItem{ListItemType::Generic, "Safe poweroff (experimental)", "Bypasses the stock shutdown procedure to avoid the \"limbo bug\".\nInstructs the PMIC directly to soft disconnect the battery.", {false, true}, on_off, 
+            new MenuItem{ListItemType::Generic, "Safe poweroff", "Bypasses the stock shutdown procedure to avoid the \"limbo bug\".\nInstructs the PMIC directly to soft disconnect the battery.", {false, true}, on_off, 
             []() -> std::any { return CFG_getPowerOffProtection(); },
             [](const std::any &value) { CFG_setPowerOffProtection(std::any_cast<bool>(value)); },
             []() { CFG_setPowerOffProtection(CFG_DEFAULT_POWEROFFPROTECTION); }},

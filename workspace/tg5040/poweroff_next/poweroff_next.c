@@ -55,7 +55,6 @@ static void log_msg(const char *format, ...)
 static void kill_processes(int sig)
 {
     pid_t self = getpid();
-    log_msg("poweroff_next: [DEBUG] kill_processes: Starting with signal %d (my PID=%d)\n", sig, self);
     DIR *proc = opendir("/proc");
     if (!proc)
     {
@@ -63,7 +62,6 @@ static void kill_processes(int sig)
         return;
     }
     struct dirent *entry;
-    int killed_count = 0;
     while ((entry = readdir(proc)) != NULL)
     {
         if (!isdigit((unsigned char)entry->d_name[0]))
@@ -79,19 +77,13 @@ static void kill_processes(int sig)
             log_msg("poweroff_next: failed to send signal %d to %d: %s\n",
                     sig, pid, strerror(err));
         }
-        else
-        {
-            killed_count++;
-        }
     }
 
     closedir(proc);
-    log_msg("poweroff_next: [DEBUG] kill_processes: Sent signal %d to %d processes\n", sig, killed_count);
 }
 
 static void kill_all_processes(void)
 {
-    log_msg("poweroff_next: Attempting to gracefully shut down processes...\n");
     kill_processes(SIGTERM);
 
     struct timespec ts = {
@@ -100,27 +92,20 @@ static void kill_all_processes(void)
     };
     nanosleep(&ts, NULL);
 
-    log_msg("poweroff_next: Forcing termination of remaining processes...\n");
     kill_processes(SIGKILL);
 }
 
 static void swapoff_device(const char *path)
 {
-    log_msg("poweroff_next: [DEBUG] swapoff_device: Attempting to swapoff %s\n", path);
     if (swapoff(path) != 0 && errno != ENOENT && errno != EINVAL)
     {
         int err = errno;
         log_msg("poweroff_next: swapoff(%s) failed: %s\n", path, strerror(err));
     }
-    else
-    {
-        log_msg("poweroff_next: [DEBUG] swapoff_device: Successfully turned off swap on %s\n", path);
-    }
 }
 
 static void swapoff_all(void)
 {
-    log_msg("poweroff_next: [DEBUG] swapoff_all: Starting\n");
     FILE *swaps = fopen("/proc/swaps", "r");
     if (!swaps)
     {
@@ -136,38 +121,24 @@ static void swapoff_all(void)
         return;
     }
 
-    int swap_count = 0;
     while (fgets(line, sizeof(line), swaps))
     {
         char device[128];
         if (sscanf(line, "%127s", device) == 1)
         {
             swapoff_device(device);
-            swap_count++;
         }
     }
 
     fclose(swaps);
-    log_msg("poweroff_next: [DEBUG] swapoff_all: Processed %d swap devices\n", swap_count);
 }
 
 static void safe_umount(const char *path, int flags)
 {
-    log_msg("poweroff_next: [DEBUG] safe_umount: Attempting to unmount %s with flags 0x%x\n", path, flags);
-    if (umount2(path, flags) != 0)
+    if (umount2(path, flags) != 0 && errno != EINVAL && errno != ENOENT)
     {
-        if (errno == EINVAL || errno == ENOENT)
-        {
-            log_msg("poweroff_next: [DEBUG] safe_umount: %s not mounted or invalid\n", path);
-            return;
-        }
-
         int err = errno;
         log_msg("poweroff_next: umount2(%s) failed: %s\n", path, strerror(err));
-    }
-    else
-    {
-        log_msg("poweroff_next: [DEBUG] safe_umount: Successfully unmounted %s\n", path);
     }
 }
 
@@ -194,11 +165,10 @@ static void finalize_poweroff(void)
 
 static void kill_sdcard_users(void)
 {
-    log_msg("poweroff_next: [DEBUG] kill_sdcard_users: Starting\n");
     DIR *proc = opendir("/proc");
     if (!proc)
     {
-        log_msg("poweroff_next: [DEBUG] kill_sdcard_users: Failed to open /proc\n");
+        log_msg("poweroff_next: kill_sdcard_users: Failed to open /proc\n");
         return;
     }
 
@@ -236,7 +206,6 @@ static void kill_sdcard_users(void)
             target[len] = '\0';
             if (strncmp(target, SDCARD_PREFIX, strlen(SDCARD_PREFIX)) == 0)
             {
-                log_msg("poweroff_next: [DEBUG] kill_sdcard_users: Killing PID %d (has fd to %s)\n", pid, target);
                 kill(pid, SIGKILL);
                 break;
             }
@@ -246,17 +215,15 @@ static void kill_sdcard_users(void)
     }
 
     closedir(proc);
-    log_msg("poweroff_next: [DEBUG] kill_sdcard_users: Completed\n");
 }
 
 static bool is_sdcard_mounted(void)
 {
-    log_msg("poweroff_next: [DEBUG] is_sdcard_mounted: Checking\n");
     bool mounted = false;
     FILE *fp = setmntent("/proc/mounts", "r");
     if (!fp)
     {
-        log_msg("poweroff_next: [DEBUG] is_sdcard_mounted: Failed to open /proc/mounts\n");
+        log_msg("poweroff_next: is_sdcard_mounted: Failed to open /proc/mounts\n");
         return false;
     }
 
@@ -265,42 +232,38 @@ static bool is_sdcard_mounted(void)
     {
         if (strcmp(ent->mnt_dir, SDCARD_PREFIX) == 0)
         {
-            log_msg("poweroff_next: [DEBUG] is_sdcard_mounted: Found %s mounted\n", SDCARD_PREFIX);
             mounted = true;
             break;
         }
     }
 
     endmntent(fp);
-    log_msg("poweroff_next: [DEBUG] is_sdcard_mounted: Result = %s\n", mounted ? "true" : "false");
     return mounted;
 }
 
 static bool unmount_sdcard_with_retries(void)
 {
-    log_msg("poweroff_next: [DEBUG] unmount_sdcard_with_retries: Starting\n");
     for (int attempt = 0; attempt < 3; ++attempt)
     {
-        log_msg("poweroff_next: [DEBUG] unmount_sdcard_with_retries: Attempt %d/3\n", attempt + 1);
         safe_umount(SDCARD_PREFIX, MNT_FORCE | MNT_DETACH);
 
         struct timespec wait = {.tv_sec = 0, .tv_nsec = 800000000};
         nanosleep(&wait, NULL);
 
         if (!is_sdcard_mounted())
-        {
-            log_msg("poweroff_next: [DEBUG] unmount_sdcard_with_retries: Success on attempt %d\n", attempt + 1);
             return true;
-        }
 
-        log_msg("poweroff_next: [DEBUG] unmount_sdcard_with_retries: Still mounted, killing users\n");
         kill_sdcard_users();
         sync();
     }
 
-    bool result = !is_sdcard_mounted();
-    log_msg("poweroff_next: [DEBUG] unmount_sdcard_with_retries: Final result = %s\n", result ? "success" : "failed");
-    return result;
+    if (is_sdcard_mounted())
+    {
+        log_msg("poweroff_next: Failed to unmount %s after retries.\n", SDCARD_PREFIX);
+        return false;
+    }
+
+    return true;
 }
 
 static int axp2202_write_reg(int fd, uint8_t reg, uint8_t value)
@@ -315,19 +278,17 @@ static int axp2202_write_reg(int fd, uint8_t reg, uint8_t value)
 
 static int execute_axp2202_poweroff(void)
 {
-    log_msg("poweroff_next: [DEBUG] execute_axp2202_poweroff: Starting PMIC shutdown sequence\n");
     int fd = open(I2C_DEVICE, O_RDWR | O_CLOEXEC);
     if (fd < 0)
     {
         log_msg("poweroff_next: open(I2C_DEVICE): %s\n", strerror(errno));
         return -1;
     }
-    log_msg("poweroff_next: [DEBUG] execute_axp2202_poweroff: Opened I2C device\n");
 
     // Try normal I2C_SLAVE first, then force if busy
     if (ioctl(fd, I2C_SLAVE, AXP2202_ADDR) < 0)
     {
-        log_msg("poweroff_next: [DEBUG] ioctl(I2C_SLAVE) failed: %s, trying I2C_SLAVE_FORCE\n", strerror(errno));
+        log_msg("poweroff_next: ioctl(I2C_SLAVE) failed: %s, trying I2C_SLAVE_FORCE\n", strerror(errno));
         if (ioctl(fd, I2C_SLAVE_FORCE, AXP2202_ADDR) < 0)
         {
             log_msg("poweroff_next: ioctl(I2C_SLAVE_FORCE): %s\n", strerror(errno));
@@ -335,25 +296,19 @@ static int execute_axp2202_poweroff(void)
             return -1;
         }
     }
-    log_msg("poweroff_next: [DEBUG] execute_axp2202_poweroff: Set I2C slave address\n");
 
-    log_msg("poweroff_next: [DEBUG] execute_axp2202_poweroff: Writing 0x00 to registers 0x40-0x44\n");
     for (int reg = 0x40; reg <= 0x44; ++reg)
         axp2202_write_reg(fd, (uint8_t)reg, 0x00);
 
-    log_msg("poweroff_next: [DEBUG] execute_axp2202_poweroff: Writing 0xFF to registers 0x48-0x4C\n");
     for (int reg = 0x48; reg <= 0x4C; ++reg)
         axp2202_write_reg(fd, (uint8_t)reg, 0xFF);
 
-    log_msg("poweroff_next: [DEBUG] execute_axp2202_poweroff: Writing 0x0A to reg 0x22\n");
     axp2202_write_reg(fd, 0x22, 0x0A);
     struct timespec wait = {.tv_sec = 0, .tv_nsec = 50000000};
     nanosleep(&wait, NULL);
 
-    log_msg("poweroff_next: [DEBUG] execute_axp2202_poweroff: Writing final poweroff command (0x01 to reg 0x27)\n");
     int ret = axp2202_write_reg(fd, 0x27, 0x01);
     close(fd);
-    log_msg("poweroff_next: [DEBUG] execute_axp2202_poweroff: PMIC poweroff command sent, result=%d\n", ret);
 
     struct timespec latch = {.tv_sec = 1, .tv_nsec = 0};
     nanosleep(&latch, NULL);
@@ -363,8 +318,6 @@ static int execute_axp2202_poweroff(void)
 
 static int run_poweroff_protection(void)
 {
-    log_msg("poweroff_next: Starting power-off protection sequence...\n");
-
     kill_sdcard_users();
     sync();
     swapoff_all();
@@ -376,8 +329,6 @@ static int run_poweroff_protection(void)
 
     kill_all_processes();
 
-    // Final sync before PMIC shutdown
-    log_msg("poweroff_next: [DEBUG] Final sync before PMIC shutdown\n");
     sync();
     
     struct timespec pre_pmic_wait = {.tv_sec = 0, .tv_nsec = 500000000};
@@ -389,11 +340,6 @@ static int run_poweroff_protection(void)
         return -1;
     }
 
-    log_msg("poweroff_next: PMIC software power-off triggered.\n");
-    
-    // The PMIC should cut power almost immediately, but if we're still running,
-    // call the kernel poweroff to ensure shutdown completes
-    log_msg("poweroff_next: [DEBUG] Calling kernel poweroff\n");
     finalize_poweroff();
     
     return 0;
@@ -408,7 +354,6 @@ static void run_standard_shutdown(void)
     safe_umount("/etc/profile", MNT_FORCE);
     safe_umount(SDCARD_PATH, MNT_DETACH);
 
-    log_msg("poweroff_next: Shutting down the system...\n");
     finalize_poweroff();
 }
 
@@ -420,9 +365,7 @@ int main(void)
         // Make unbuffered so we don't lose messages if we crash/poweroff
         setvbuf(log_fp, NULL, _IONBF, 0);
     }
-    
-    log_msg("poweroff_next: [DEBUG] main: Starting poweroff_next\n");
-    
+
     // Block SIGTERM and SIGKILL for this process to prevent self-termination
     sigset_t block_set;
     sigemptyset(&block_set);
@@ -430,7 +373,6 @@ int main(void)
     sigaddset(&block_set, SIGINT);
     sigaddset(&block_set, SIGHUP);
     sigprocmask(SIG_BLOCK, &block_set, NULL);
-    log_msg("poweroff_next: [DEBUG] main: Signals blocked (SIGTERM, SIGINT, SIGHUP)\n");
     
     CFG_init(NULL, NULL);
 
@@ -439,7 +381,6 @@ int main(void)
 
     if (protection_enabled)
     {
-        log_msg("poweroff_next: [DEBUG] main: Running protected poweroff sequence\n");
         if (run_poweroff_protection() == 0)
         {
             CFG_quit();
@@ -449,7 +390,6 @@ int main(void)
         log_msg("poweroff_next: Falling back to standard shutdown.\n");
     }
 
-    log_msg("poweroff_next: [DEBUG] main: Running standard shutdown\n");
     run_standard_shutdown();
     CFG_quit();
     return 0;
