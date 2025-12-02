@@ -840,11 +840,13 @@ void PLAT_clearAll(void) {
 	// so yeah clear all layers and pull a flip() to make it switch back to SDL before clearing
 	PLAT_clearLayers(0);
 	PLAT_flip(vid.screen,0);
+	PLAT_clearLayers(0);
+	PLAT_flip(vid.screen,0);
 
 	// then do normal SDL clearing stuff
 	PLAT_clearVideo(vid.screen); 
+	SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0); 
 	SDL_RenderClear(vid.renderer);
-
 }
 
 void PLAT_setVsync(int vsync) {
@@ -892,9 +894,6 @@ SDL_Surface* PLAT_resizeVideo(int w, int h, int p) {
 	return vid.screen;
 }
 
-void PLAT_setVideoScaleClip(int x, int y, int width, int height) {
-	// buh
-}
 void PLAT_setSharpness(int sharpness) {
 	if(sharpness==1) {
 		finalScaleFilter=GL_LINEAR;
@@ -1030,8 +1029,6 @@ void PLAT_setOverlay(const char* filename, const char* tag) {
         printf("Skipping overlay update.\n");
         return;
     }
-
-
 
     size_t path_len = strlen(OVERLAYS_FOLDER) + strlen(tag) + strlen(filename) + 4; // +3 for slashes and null-terminator
     overlay_path = malloc(path_len);
@@ -1321,121 +1318,6 @@ void PLAT_GPU_Flip() {
 	SDL_RenderPresent(vid.renderer);
 }
 
-
-void PLAT_animateAndRevealSurfaces(
-	SDL_Surface* inputMoveSurface,
-	SDL_Surface* inputRevealSurface,
-	int move_start_x, int move_start_y,
-	int move_target_x, int move_target_y,
-	int move_w, int move_h,
-	int reveal_x, int reveal_y,
-	int reveal_w, int reveal_h,
-	const char* reveal_direction,
-	int duration_ms,
-	int move_start_opacity,
-	int move_target_opacity,
-	int reveal_opacity,
-	int layer1,
-	int layer2
-) {
-	if (!inputMoveSurface || !inputRevealSurface || !vid.renderer || !vid.target_layer2) return;
-
-	SDL_Texture* moveTexture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
-		SDL_TEXTUREACCESS_TARGET,
-		inputMoveSurface->w, inputMoveSurface->h);
-	if (!moveTexture) {
-		printf("Failed to create move texture: %s\n", SDL_GetError());
-		return;
-	}
-	SDL_UpdateTexture(moveTexture, NULL, inputMoveSurface->pixels, inputMoveSurface->pitch);
-	SDL_SetTextureBlendMode(moveTexture, SDL_BLENDMODE_BLEND);
-
-	SDL_Surface* formatted = SDL_CreateRGBSurfaceWithFormat(0, inputRevealSurface->w, inputRevealSurface->h, 32, SDL_PIXELFORMAT_RGBA8888);
-	if (!formatted) {
-		SDL_DestroyTexture(moveTexture);
-		printf("Failed to create formatted surface for reveal: %s\n", SDL_GetError());
-		return;
-	}
-	SDL_FillRect(formatted, NULL, SDL_MapRGBA(formatted->format, 0, 0, 0, 0));
-	SDL_SetSurfaceBlendMode(inputRevealSurface, SDL_BLENDMODE_BLEND);
-	SDL_BlitSurface(inputRevealSurface, &(SDL_Rect){0, 0, reveal_w, reveal_h}, formatted, &(SDL_Rect){0, 0, reveal_w, reveal_h});
-	SDL_Texture* revealTexture = SDL_CreateTextureFromSurface(vid.renderer, formatted);
-	SDL_FreeSurface(formatted);
-	if (!revealTexture) {
-		SDL_DestroyTexture(moveTexture);
-		printf("Failed to create reveal texture: %s\n", SDL_GetError());
-		return;
-	}
-	SDL_SetTextureBlendMode(revealTexture, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureAlphaMod(revealTexture, reveal_opacity);
-
-	const int fps = 60;
-	const int frame_delay = 1000 / fps;
-	const int total_frames = duration_ms / frame_delay;
-
-	for (int frame = 0; frame <= total_frames; ++frame) {
-		float t = (float)frame / total_frames;
-		if (t > 1.0f) t = 1.0f;
-
-		int current_x = move_start_x + (int)((move_target_x - move_start_x) * t);
-		int current_y = move_start_y + (int)((move_target_y - move_start_y) * t);
-		int current_opacity = move_start_opacity + (int)((move_target_opacity - move_start_opacity) * t);
-		if (current_opacity < 0) current_opacity = 0;
-		if (current_opacity > 255) current_opacity = 255;
-		SDL_SetTextureAlphaMod(moveTexture, current_opacity);
-
-		int reveal_src_x = 0, reveal_src_y = 0;
-		int reveal_draw_w = reveal_w, reveal_draw_h = reveal_h;
-
-		if (strcmp(reveal_direction, "left") == 0) {
-			reveal_draw_w = (int)(reveal_w * t + 0.5f);
-		}
-		else if (strcmp(reveal_direction, "right") == 0) {
-			reveal_draw_w = (int)(reveal_w * t + 0.5f);
-			reveal_src_x = reveal_w - reveal_draw_w;
-		}
-		else if (strcmp(reveal_direction, "up") == 0) {
-			reveal_draw_h = (int)(reveal_h * t + 0.5f);
-		}
-		else if (strcmp(reveal_direction, "down") == 0) {
-			reveal_draw_h = (int)(reveal_h * t + 0.5f);
-			reveal_src_y = reveal_h - reveal_draw_h;
-		}
-
-		SDL_Rect revealSrc = { reveal_src_x, reveal_src_y, reveal_draw_w, reveal_draw_h };
-		SDL_Rect revealDst = { reveal_x + reveal_src_x, reveal_y + reveal_src_y, reveal_draw_w, reveal_draw_h };
-
-		SDL_SetRenderTarget(vid.renderer, (layer1 == 0) ? vid.target_layer3 : vid.target_layer4);
-		SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_NONE);
-		SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
-		SDL_RenderClear(vid.renderer);
-		SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
-		SDL_SetRenderTarget(vid.renderer, (2 == 0) ? vid.target_layer3 : vid.target_layer4);
-		SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_NONE);
-		SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
-		SDL_RenderClear(vid.renderer);
-		SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
-
-		SDL_SetRenderTarget(vid.renderer, (layer1 == 0) ? vid.target_layer3 : vid.target_layer4);
-		SDL_Rect moveDst = { current_x, current_y, move_w, move_h };
-		SDL_RenderCopy(vid.renderer, moveTexture, NULL, &moveDst);
-
-		SDL_SetRenderTarget(vid.renderer, (layer2 == 0) ? vid.target_layer3 : vid.target_layer4);
-
-		if (reveal_draw_w > 0 && reveal_draw_h > 0)
-			SDL_RenderCopy(vid.renderer, revealTexture, &revealSrc, &revealDst);
-
-		SDL_SetRenderTarget(vid.renderer, NULL);
-		PLAT_GPU_Flip();
-
-	}
-
-	SDL_DestroyTexture(moveTexture);
-	SDL_DestroyTexture(revealTexture);
-}
-
-
 void PLAT_animateSurfaceOpacity(
 	SDL_Surface *inputSurface,
 	int x, int y, int w, int h,
@@ -1487,73 +1369,6 @@ void PLAT_animateSurfaceOpacity(
 		// blit to 0 for normal draw
 		vid.blit = 0;
 		PLAT_flip(vid.screen,0);
-
-	}
-
-	SDL_DestroyTexture(tempTexture);
-}
-void PLAT_animateSurfaceOpacityAndScale(
-	SDL_Surface *inputSurface,
-	int x, int y,                         // Center position
-	int start_w, int start_h,
-	int target_w, int target_h,
-	int start_opacity, int target_opacity,
-	int duration_ms,
-	int layer
-) {
-	if (!inputSurface || !vid.renderer) return;
-
-	SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
-		SDL_TEXTUREACCESS_TARGET,
-		inputSurface->w, inputSurface->h);
-
-	if (!tempTexture) {
-		printf("Failed to create temporary texture: %s\n", SDL_GetError());
-		return;
-	}
-
-	SDL_UpdateTexture(tempTexture, NULL, inputSurface->pixels, inputSurface->pitch);
-	SDL_SetTextureBlendMode(tempTexture, SDL_BLENDMODE_BLEND); 
-
-	const int fps = 60;
-	const int frame_delay = 1000 / fps;
-	const int total_frames = duration_ms / frame_delay;
-
-	SDL_Texture* target_layer = (layer == 0) ? vid.target_layer2 : vid.target_layer4;
-	if (!target_layer) {
-		SDL_DestroyTexture(tempTexture);
-		return;
-	}
-
-	for (int frame = 0; frame <= total_frames; ++frame) {
-
-		float t = (float)frame / total_frames;
-
-		int current_opacity = start_opacity + (int)((target_opacity - start_opacity) * t);
-		if (current_opacity < 0) current_opacity = 0;
-		if (current_opacity > 255) current_opacity = 255;
-
-		int current_w = start_w + (int)((target_w - start_w) * t);
-		int current_h = start_h + (int)((target_h - start_h) * t);
-
-		SDL_SetTextureAlphaMod(tempTexture, current_opacity);
-
-		SDL_SetRenderTarget(vid.renderer, target_layer);
-		SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
-		SDL_RenderClear(vid.renderer);
-
-		SDL_Rect dstRect = {
-			x - current_w / 2,
-			y - current_h / 2,
-			current_w,
-			current_h
-		};
-
-		SDL_RenderCopy(vid.renderer, tempTexture, NULL, &dstRect);
-
-		SDL_SetRenderTarget(vid.renderer, NULL);
-		PLAT_GPU_Flip();
 
 	}
 
@@ -1687,11 +1502,6 @@ void PLAT_animateAndFadeSurface(
 	if (fadeTexture) SDL_DestroyTexture(fadeTexture);
 }
 
-
-
-void PLAT_present() {
-	SDL_RenderPresent(vid.renderer);
-}
 void PLAT_setEffect(int next_type) {
 	effect.next_type = next_type;
 }
@@ -2356,8 +2166,14 @@ void PLAT_updateNetworkStatus()
 
 void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
 {	
-	*is_charging = getInt("/sys/class/power_supply/axp2202-usb/online");
-	*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
+	if(is_charging) {
+		int time_to_full = getInt("/sys/class/power_supply/axp2202-battery/time_to_full_now");
+		int charger_present = getInt("/sys/class/power_supply/axp2202-usb/online"); 
+		*is_charging = (charger_present == 1) && (time_to_full > 0);
+	}
+	if(charge) {
+		*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
+	}
 }
 
 void PLAT_enableBacklight(int enable) {
@@ -2614,35 +2430,6 @@ ConnectionStrength PLAT_connectionStrength(void) {
 		return SIGNAL_STRENGTH_LOW;
 }
 
-void PLAT_chmod(const char *file, int writable)
-{
-    struct stat statbuf;
-    if (stat(file, &statbuf) == 0)
-    {
-        mode_t newMode;
-        if (writable)
-        {
-            // Add write permissions for all users
-            newMode = statbuf.st_mode | S_IWUSR | S_IWGRP | S_IWOTH;
-        }
-        else
-        {
-            // Remove write permissions for all users
-            newMode = statbuf.st_mode & ~(S_IWUSR | S_IWGRP | S_IWOTH);
-        }
-
-        // Apply the new permissions
-        if (chmod(file, newMode) != 0)
-        {
-            printf("chmod error %d %s", writable, file);
-        }
-    }
-    else
-    {
-        printf("stat error %d %s", writable, file);
-    }
-}
-
 void PLAT_initDefaultLeds() {
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
@@ -2748,7 +2535,8 @@ void PLAT_initDefaultLeds() {
 	};
 }
 }
-void PLAT_initLeds(LightSettings *lights) {
+void PLAT_initLeds(LightSettings *lights) 
+{
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
 
@@ -2763,9 +2551,7 @@ void PLAT_initLeds(LightSettings *lights) {
 
     if (file == NULL)
     {
-		
-        LOG_info("Unable to open led settings file\n");
-	
+        LOG_warn("Unable to open led settings file\n");
     }
 	else {
 		char line[256];
@@ -2787,6 +2573,7 @@ void PLAT_initLeds(LightSettings *lights) {
 					}
 					else
 					{
+						LOG_info("Maximum number of lights (%d) exceeded. Ignoring further sections.\n", MAX_LIGHTS);
 						current_light = -1; // Reset if max_lights exceeded
 					}
 				}
@@ -2839,12 +2626,8 @@ void PLAT_initLeds(LightSettings *lights) {
 				}
 			}
 		}
-
 		fclose(file);
 	}
-
-	
-	LOG_info("lights setup\n");
 }
 
 #define LED_PATH1 "/sys/class/led_anim/max_scale"
@@ -2869,14 +2652,12 @@ void PLAT_setLedInbrightness(LightSettings *led)
 	}
 	if (strcmp(led->filename, "f2") != 0) {
 		// do nothhing for f2
-		PLAT_chmod(filepath, 1);
 		file = fopen(filepath, "w");
 		if (file != NULL)
 		{
 			fprintf(file, "%i\n", led->inbrightness);
 			fclose(file);
 		}
-		PLAT_chmod(filepath, 0);
 	}
 }
 void PLAT_setLedBrightness(LightSettings *led)
@@ -2897,14 +2678,12 @@ void PLAT_setLedBrightness(LightSettings *led)
 	}
 	if (strcmp(led->filename, "f2") != 0) {
 		// do nothhing for f2
-		PLAT_chmod(filepath, 1);
 		file = fopen(filepath, "w");
 		if (file != NULL)
 		{
 			fprintf(file, "%i\n", led->brightness);
 			fclose(file);
 		}
-		PLAT_chmod(filepath, 0);
 	}
 }
 void PLAT_setLedEffect(LightSettings *led)
@@ -2913,14 +2692,12 @@ void PLAT_setLedEffect(LightSettings *led)
     FILE *file;
     // first set brightness
     snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_%s", led->filename);
-    PLAT_chmod(filepath, 1);
     file = fopen(filepath, "w");
     if (file != NULL)
     {
         fprintf(file, "%i\n", led->effect);
         fclose(file);
     }
-    PLAT_chmod(filepath, 0);
 }
 void PLAT_setLedEffectCycles(LightSettings *led)
 {
@@ -2928,14 +2705,12 @@ void PLAT_setLedEffectCycles(LightSettings *led)
     FILE *file;
     // first set brightness
     snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_cycles_%s", led->filename);
-    PLAT_chmod(filepath, 1);
     file = fopen(filepath, "w");
     if (file != NULL)
     {
         fprintf(file, "%i\n", led->cycles);
         fclose(file);
     }
-    PLAT_chmod(filepath, 0);
 }
 void PLAT_setLedEffectSpeed(LightSettings *led)
 {
@@ -2943,14 +2718,12 @@ void PLAT_setLedEffectSpeed(LightSettings *led)
     FILE *file;
     // first set brightness
     snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_duration_%s", led->filename);
-    PLAT_chmod(filepath, 1);
     file = fopen(filepath, "w");
     if (file != NULL)
     {
         fprintf(file, "%i\n", led->speed);
         fclose(file);
     }
-    PLAT_chmod(filepath, 0);
 }
 void PLAT_setLedColor(LightSettings *led)
 {
@@ -2958,14 +2731,12 @@ void PLAT_setLedColor(LightSettings *led)
     FILE *file;
     // first set brightness
     snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_rgb_hex_%s", led->filename);
-    PLAT_chmod(filepath, 1);
     file = fopen(filepath, "w");
     if (file != NULL)
     {
         fprintf(file, "%06X\n", led->color1);
         fclose(file);
     }
-    PLAT_chmod(filepath, 0);
 }
 
 //////////////////////////////////////////////
@@ -3439,9 +3210,14 @@ bool PLAT_wifiHasCredentials(char *ssid, WifiSecurityType sec)
     char list_net_results[LIST_NETWORK_MAX];
     int ret = aw_wifid_list_networks(list_net_results, LIST_NETWORK_MAX);
     if (ret < 0) {
-        LOG_error("PLAT_wifiHasCredentials: failed to get wifi network list (%i).\n", ret);
+        wifilog("PLAT_wifiHasCredentials: failed to get wifi network list (%i).\n", ret);
         return false;
     }
+	else if (ret == 0)
+	{
+		LOG_warn("PLAT_wifiHasCredentials: wpa_supplicant.conf has no entries.\n");
+		return false;
+	}	
 
     // Ensure null termination just in case aw_wifid_list_networks doesn't guarantee it
     list_net_results[LIST_NETWORK_MAX - 1] = '\0';
@@ -3852,10 +3628,8 @@ static void bt_test_a2dp_source_connection_state_cb(const char *bd_addr, btmg_a2
 		btlog("A2DP source connecting with device: %s\n", bd_addr);
 	} else if (state == BTMG_A2DP_SOURCE_CONNECTED) {
 		btlog("A2DP source connected with device: %s\n", bd_addr);
-		//write_asoundrc_bt(bd_addr);
 	} else if (state == BTMG_A2DP_SOURCE_DISCONNECTING) {
 		btlog("A2DP source disconnecting with device: %s\n", bd_addr);
-		//delete_asoundrc_bt();
 	} else if (state == BTMG_A2DP_SOURCE_CONNECT_FAILED) {
 		btlog("A2DP source connect with device: %s failed!\n", bd_addr);
 	} else if (state == BTMG_A2DP_SOURCE_DISCONNEC_FAILED) {
@@ -3898,26 +3672,6 @@ static void bt_test_avrcp_play_state_cb(const char *bd_addr, btmg_avrcp_play_sta
 static void bt_test_avrcp_audio_volume_cb(const char *bd_addr, unsigned int volume)
 {
 	btlog("AVRCP audio volume:%s : %d\n", bd_addr, volume);
-}
-
-void bt_daemon_open(void)
-{
-	int ret = system("pidof bt_daemon > /dev/null 2>&1");
-	if (ret != 0){
-		LOG_debug("opening bt_daemon......\n");
-		system("bt_daemon -s &");
-		//system("/mnt/SDCARD/.system/tg5040/bin/bt_daemon -s &");
-		//sleep(2);
-	} else {
-		LOG_debug("bt_daemon is already open\n");
-	}
-}
-
-void bt_daemon_close(void)
-{
-	LOG_debug("closing bt daemon......\n");
-	system("killall -q bt_daemon");
-	//sleep(1);
 }
 
 /////////////////////////////////
@@ -4029,11 +3783,9 @@ void PLAT_bluetoothEnable(bool shouldBeOn) {
 				return;
 			}
 			bt_manager_set_name("Trimui Brick (NextUI)");
-			bt_daemon_open();
 		}
 		else if(!shouldBeOn && bt_state == BTMG_STATE_ON ) {
 			btlog("turning BT off...\n");
-			bt_daemon_close();
 			if(bt_manager_enable(false) < 0) {
 				LOG_error("bt_manager_enable failed\n");
 				return;
@@ -4047,11 +3799,9 @@ void PLAT_bluetoothEnable(bool shouldBeOn) {
 			btlog("turning BT on...\n");
 			//system("rfkill.elf unblock bluetooth");
 			system("/etc/bluetooth/bt_init.sh start &");
-			//bt_daemon_open();
 		}
 		else {
 			btlog("turning BT off...\n");
-			//bt_daemon_close();
 			system("/etc/bluetooth/bt_init.sh stop &");
 			//system("rfkill.elf block bluetooth");
 		}
@@ -4285,9 +4035,45 @@ static int inotify_fd = -1;
 static int dir_watch_fd = -1;
 static int file_watch_fd = -1;
 static volatile int running = 0;
-static void (*callback_fn)(bool exists, int watch_event) = NULL;
+static void (*callback_fn)(int device, int watch_event) = NULL;
 static char watched_dir[MAX_PATH];
 static char watched_file_path[MAX_PATH];
+
+// Function to detect audio device type from .asoundrc content
+static int detect_audio_device_type() {
+    FILE *file = fopen(watched_file_path, "r");
+    if (!file) {
+		//LOG_info("detect_audio_device_type: .asoundrc not found, defaulting to AUDIO_SINK_DEFAULT\n");
+        return AUDIO_SINK_DEFAULT;
+    }
+    
+    char line[256];
+    int is_bluetooth = 0;
+    int is_usb_dac = 0;
+    
+    while (fgets(line, sizeof(line), file)) {
+        if (strstr(line, "type bluealsa") || strstr(line, "defaults.bluealsa.device")) {
+            //LOG_info("detect_audio_device_type: found bluealsa\n");
+            is_bluetooth = 1;
+            break;
+        }
+        if (strstr(line, "type hw")) {
+			//LOG_info("detect_audio_device_type: found hw card\n");
+            is_usb_dac = 1;
+            break;
+        }
+    }
+    
+    fclose(file);
+    
+    if (is_bluetooth) {
+        return AUDIO_SINK_BLUETOOTH;
+    } else if (is_usb_dac) {
+        return AUDIO_SINK_USBDAC;
+    } else {
+        return AUDIO_SINK_DEFAULT;
+    }
+}
 
 static void add_file_watch() {
     if (file_watch_fd >= 0) return; // already watching
@@ -4296,7 +4082,7 @@ static void add_file_watch() {
                                       IN_MODIFY | IN_CLOSE_WRITE | IN_DELETE_SELF);
     if (file_watch_fd < 0) {
         if (errno != ENOENT) // ENOENT means file doesn't exist yet - no error needed
-            LOG_error("PLAT_bluetoothWatchRegister: failed to add file watch: %s\n", strerror(errno));
+            LOG_error("PLAT_audioDeviceWatchRegister: failed to add file watch: %s\n", strerror(errno));
     } else {
         LOG_info("Watching file: %s\n", watched_file_path);
     }
@@ -4334,12 +4120,13 @@ static void *watcher_thread_func(void *arg) {
                 if (event->len > 0 && strcmp(event->name, WATCHED_FILE) == 0) {
                     if (event->mask & IN_CREATE) {
                         add_file_watch();
-                        if (callback_fn) callback_fn(true, DIRWATCH_CREATE);
+                        int device_type = detect_audio_device_type();
+                        if (callback_fn) callback_fn(device_type, DIRWATCH_CREATE);
                     }
 					// No need to react to this, we handle it via file watch
                     //else if (event->mask & IN_DELETE) {
                     //    remove_file_watch();
-                    //    if (callback_fn) callback_fn(false, DIRWATCH_DELETE);
+                    //    if (callback_fn) callback_fn(AUDIO_SINK_DEFAULT, DIRWATCH_DELETE);
                     //}
                 }
             }
@@ -4347,14 +4134,15 @@ static void *watcher_thread_func(void *arg) {
                 if (event->mask & (IN_MODIFY | IN_CLOSE_WRITE | IN_DELETE_SELF)) {
                     if (event->mask & IN_DELETE_SELF) {
                         remove_file_watch();
-						if (callback_fn) callback_fn(false, FILEWATCH_DELETE);
+						if (callback_fn) callback_fn(AUDIO_SINK_DEFAULT, FILEWATCH_DELETE);
                     }
 					// No need to react to this, it usually comes paired with FILEWATCH_MODIFY
 					//else if (event->mask & IN_CLOSE_WRITE) {
-					//	if (callback_fn) callback_fn(true, FILEWATCH_CLOSE_WRITE);
+					//	if (callback_fn) callback_fn(AUDIO_SINK_BLUETOOTH, FILEWATCH_CLOSE_WRITE);
 					//}
 					else if (event->mask & IN_MODIFY) {
-						if (callback_fn) callback_fn(true, FILEWATCH_MODIFY);
+						int device_type = detect_audio_device_type();
+						if (callback_fn) callback_fn(device_type, FILEWATCH_MODIFY);
 					}
                 }
             }
@@ -4366,32 +4154,32 @@ static void *watcher_thread_func(void *arg) {
     return NULL;
 }
 
-void PLAT_bluetoothWatchRegister(void (*cb)(bool bt_on, int event)) {
+void PLAT_audioDeviceWatchRegister(void (*cb)(int device, int event)) {
     if (running) return; // Already running
 
     callback_fn = cb;
 
     const char *home = getenv("HOME");
     if (!home) {
-        LOG_error("PLAT_bluetoothWatchRegister: HOME environment variable not set\n");
+        LOG_error("PLAT_audioDeviceWatchRegister: HOME environment variable not set\n");
         return;
     }
 
     snprintf(watched_dir, MAX_PATH, WATCHED_DIR_FMT, home);
     snprintf(watched_file_path, MAX_PATH, "%s/%s", watched_dir, WATCHED_FILE);
 
-    LOG_info("PLAT_bluetoothWatchRegister: Watching directory %s\n", watched_dir);
-    LOG_info("PLAT_bluetoothWatchRegister: Watching file %s\n", watched_file_path);
+    LOG_info("PLAT_audioDeviceWatchRegister: Watching directory %s\n", watched_dir);
+    LOG_info("PLAT_audioDeviceWatchRegister: Watching file %s\n", watched_file_path);
 
     inotify_fd = inotify_init1(IN_NONBLOCK);
     if (inotify_fd < 0) {
-        LOG_error("PLAT_bluetoothWatchRegister: failed to initialize inotify\n");
+        LOG_error("PLAT_audioDeviceWatchRegister: failed to initialize inotify\n");
         return;
     }
 
     dir_watch_fd = inotify_add_watch(inotify_fd, watched_dir, IN_CREATE | IN_DELETE);
     if (dir_watch_fd < 0) {
-        LOG_error("PLAT_bluetoothWatchRegister: failed to add directory watch\n");
+        LOG_error("PLAT_audioDeviceWatchRegister: failed to add directory watch\n");
         close(inotify_fd);
         inotify_fd = -1;
         return;
@@ -4401,7 +4189,7 @@ void PLAT_bluetoothWatchRegister(void (*cb)(bool bt_on, int event)) {
 
     running = 1;
     if (pthread_create(&watcher_thread, NULL, watcher_thread_func, NULL) != 0) {
-        LOG_error("PLAT_bluetoothWatchRegister: failed to create thread\n");
+        LOG_error("PLAT_audioDeviceWatchRegister: failed to create thread\n");
         inotify_rm_watch(inotify_fd, dir_watch_fd);
         close(inotify_fd);
         inotify_fd = -1;
@@ -4410,7 +4198,7 @@ void PLAT_bluetoothWatchRegister(void (*cb)(bool bt_on, int event)) {
     }
 }
 
-void PLAT_bluetoothWatchUnregister(void) {
+void PLAT_audioDeviceWatchUnregister(void) {
     if (!running) return;
 
     running = 0;

@@ -202,6 +202,10 @@ int main(int argc, char *argv[])
                 []() -> std::any{ return (int)(CFG_getGameArtWidth() * 100); }, 
                 [](const std::any &value) { CFG_setGameArtWidth((double)std::any_cast<int>(value) / 100.0); },
                 []() { CFG_setGameArtWidth(CFG_DEFAULT_GAMEARTWIDTH);}},
+                new MenuItem{ListItemType::Generic, "Show folder names at root", "Show folder names at root directory", {false, true}, on_off,
+                []() -> std::any { return CFG_getShowFolderNamesAtRoot(); },
+                [](const std::any &value) { CFG_setShowFolderNamesAtRoot(std::any_cast<bool>(value)); },
+                []() { CFG_setShowFolderNamesAtRoot(CFG_DEFAULT_SHOWFOLDERNAMESATROOT);}},
                 new MenuItem{ListItemType::Generic, "Show Recents", "Show \"Recently Played\" menu entry in game list.", {false, true}, on_off, 
                 []() -> std::any { return CFG_getShowRecents(); },
                 [](const std::any &value) { CFG_setShowRecents(std::any_cast<bool>(value)); },
@@ -310,12 +314,16 @@ int main(int argc, char *argv[])
             { return CFG_getSaveFormat(); }, [](const std::any &value)
             { CFG_setSaveFormat(std::any_cast<int>(value)); },
             []() { CFG_setSaveFormat(CFG_DEFAULT_SAVEFORMAT);}},
-            new MenuItem{ListItemType::Generic, "Save state format", "The save state format to use.\nMinUI: Game.st0, Retroarch: Game.state.0", 
-            {(int)STATE_FORMAT_SAV, (int)STATE_FORMAT_SRM, (int)STATE_FORMAT_SRM_UNCOMRESSED}, 
-            {"MinUI (default)", "Retroarch (compressed)", "Retroarch (uncompressed)"}, []() -> std::any
+            new MenuItem{ListItemType::Generic, "Save state format", "The save state format to use. MinUI: Game.st0, \nRetroarch-ish: Game.state.0, Retroarch: Game.state0", 
+            {(int)STATE_FORMAT_SAV, (int)STATE_FORMAT_SRM_EXTRADOT, (int)STATE_FORMAT_SRM_UNCOMRESSED_EXTRADOT, (int)STATE_FORMAT_SRM, (int)STATE_FORMAT_SRM_UNCOMRESSED}, 
+            {"MinUI (default)", "Retroarch-ish (compressed)", "Retroarch-ish (uncompressed)", "Retroarch (compressed)", "Retroarch (uncompressed)"}, []() -> std::any
             { return CFG_getStateFormat(); }, [](const std::any &value)
             { CFG_setStateFormat(std::any_cast<int>(value)); },
             []() { CFG_setStateFormat(CFG_DEFAULT_STATEFORMAT);}},
+            new MenuItem{ListItemType::Generic, "Use extracted file name", "Use the extracted file name instead of the archive name.\nOnly applies to cores that do not handle archives natively", {false, true}, on_off, 
+            []() -> std::any{ return CFG_getUseExtractedFileName(); },
+            [](const std::any &value){ CFG_setUseExtractedFileName(std::any_cast<bool>(value)); },
+            []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}},
 
             new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
         });
@@ -400,7 +408,7 @@ int main(int argc, char *argv[])
                 new MenuItem{ListItemType::Generic, "Dpad mode when toggled", "Dpad: default. Joystick: Dpad exclusively acts as analog stick.\nBoth: Dpad and Joystick inputs at the same time.", {0, 1, 2}, {"Dpad", "Joystick", "Both"}, []() -> std::any
                 {
                     if(!GetMuteDisablesDpad() && !GetMuteEmulatesJoystick()) return 0;
-                    if(!GetMuteDisablesDpad() && GetMuteEmulatesJoystick()) return 1;
+                    if(GetMuteDisablesDpad() && GetMuteEmulatesJoystick()) return 1;
                     return 2; 
                 },
                 [](const std::any &value)
@@ -420,7 +428,7 @@ int main(int argc, char *argv[])
         auto muteMenu = new MenuList(MenuItemType::Fixed, "FN Switch", muteItems);
 
         // TODO: check WIFI_supported(), hide menu otherwise
-        auto networkMenu = new Wifi::Menu(appQuit);
+        auto networkMenu = new Wifi::Menu(appQuit, ctx.dirty);
 
         // TODO: check BT_supported(), hide menu otherwise
         auto btMenu = new Bluetooth::Menu(appQuit, ctx.dirty);

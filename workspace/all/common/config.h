@@ -21,16 +21,27 @@ typedef int (*ColorSet_callback_t)(void);
 
 enum
 {
+	// MinUI: Game.gba.sav
 	SAVE_FORMAT_SAV,
+	//Retroarch: Game.srm
 	SAVE_FORMAT_SRM,
+	// Generic: Game.sav
 	SAVE_FORMAT_GEN,
+	//Retroarch: Game.srm
 	SAVE_FORMAT_SRM_UNCOMPRESSED
 };
 
 enum
 {
+	// MinUI: Game.st0
 	STATE_FORMAT_SAV,
+	//Retroarch-ish: Game.state.<n> (a typo, but keeping it to avoid a breaking change)
+	STATE_FORMAT_SRM_EXTRADOT,
+	//Retroarch-ish: Game.state.<n> (a typo, but keeping it to avoid a breaking change)
+	STATE_FORMAT_SRM_UNCOMRESSED_EXTRADOT,
+	//Retroarch: Game.state<n>
 	STATE_FORMAT_SRM,
+	//Retroarch: Game.state<n>
 	STATE_FORMAT_SRM_UNCOMRESSED
 };
 
@@ -74,6 +85,7 @@ typedef struct
 	bool showRecents;
 	bool showTools;
 	bool showGameArt;
+	bool showFolderNamesAtRoot;
 	bool romsUseFolderBackground;
 	bool showQuickSwitcherUi;
 	int defaultView;
@@ -88,6 +100,7 @@ typedef struct
 	// Emulator
 	int saveFormat;
 	int stateFormat;
+	bool useExtractedFileName;
 
 	// Haptic
 	bool haptics;
@@ -117,6 +130,7 @@ typedef struct
 #define CFG_DEFAULT_SHOWMENUTRANSITIONS true
 #define CFG_DEFAULT_SHOWRECENTS true
 #define CFG_DEFAULT_SHOWGAMEART true
+#define CFG_DEFAULT_SHOWFOLDERNAMESATROOT true
 #define CFG_DEFAULT_GAMESWITCHERSCALING GFX_SCALE_FULLSCREEN
 #define CFG_DEFAULT_SCREENTIMEOUTSECS 60
 #define CFG_DEFAULT_SUSPENDTIMEOUTSECS 30
@@ -124,6 +138,7 @@ typedef struct
 #define CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND true
 #define CFG_DEFAULT_SAVEFORMAT SAVE_FORMAT_SAV
 #define CFG_DEFAULT_STATEFORMAT STATE_FORMAT_SAV
+#define CFG_DEFAULT_EXTRACTEDFILENAME false
 #define CFG_DEFAULT_MUTELEDS false
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
@@ -200,15 +215,21 @@ int CFG_getSaveFormat(void);
 void CFG_setSaveFormat(int);
 // Save state format to use for libretro cores
 // 0 - .st0
-// 1 - .state.0 (compressed rzip)
+// 1 - .state.<n> (compressed rzip)
 int CFG_getStateFormat(void);
 void CFG_setStateFormat(int);
+// use extracted file name instead of archive name (for cores that do not support archives natively)
+bool CFG_getUseExtractedFileName(void);
+void CFG_setUseExtractedFileName(bool);
 // Enable/disable mute also shutting off LEDs.
 bool CFG_getMuteLEDs(void);
 void CFG_setMuteLEDs(bool);
 // Set game art width percentage.
 double CFG_getGameArtWidth(void);
 void CFG_setGameArtWidth(double zeroToOne);
+// Show/hide folder names at root directory.
+bool CFG_getShowFolderNamesAtRoot(void);
+void CFG_setShowFolderNamesAtRoot(bool show);
 // WiFi on/off (if available)
 bool CFG_getWifi(void);
 void CFG_setWifi(bool on);

@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <zip.h> 
 #include <pthread.h>
+#include <glob.h>
 
 // libretro-common
 #include "libretro.h"
@@ -129,10 +130,12 @@ static struct Core {
 } core;
 
 int extract_zip(char** extensions);
+static bool getAlias(char* path, char* alias);
 
 static struct Game {
 	char path[MAX_PATH];
 	char name[MAX_PATH]; // TODO: rename to basename?
+	char alt_name[MAX_PATH]; // alternate name, eg. unzipped rom file name
 	char m3u_path[MAX_PATH];
 	char tmp_path[MAX_PATH]; // location of unzipped file
 	void* data;
@@ -146,6 +149,7 @@ static void Game_open(char* path) {
 	
 	strcpy((char*)game.path, path);
 	strcpy((char*)game.name, strrchr(path, '/')+1);
+	strcpy((char*)game.alt_name, game.name); // default it
 
 	// check first if the rom already is alive in tmp folder if so skip unzipping shit
 	char tmpfldr[255];
@@ -156,6 +160,9 @@ static void Game_open(char* path) {
 		strcpy((char*)game.tmp_path, tmppath);
 		skipzip = 1;
 		free(tmppath);
+		// Update the game name to the extracted file name instead of the zip name
+		if (CFG_getUseExtractedFileName())
+			strcpy((char*)game.alt_name, strrchr(game.tmp_path, '/')+1);
 	} else {
 		printf("File does not exist in %s\n",tmpfldr);
 	}
@@ -185,6 +192,9 @@ static void Game_open(char* path) {
 			LOG_info("Extracting zip file manually: %s\n", game.path);
 			if(!extract_zip(extensions))
 				return;
+			// Update the game name to the extracted file name instead of the zip name
+			if (CFG_getUseExtractedFileName())
+				strcpy((char*)game.alt_name, strrchr(game.tmp_path, '/')+1);
 		}
 		else {
 			LOG_info("Core can handle zip file: %s\n", game.path);
@@ -244,6 +254,7 @@ static void Game_open(char* path) {
 	if (exists(m3u_path)) {
 		strcpy(game.m3u_path, m3u_path);
 		strcpy((char*)game.name, strrchr(m3u_path, '/')+1);
+		strcpy((char*)game.alt_name, game.name); // default it
 	}
 	
 	game.is_open = 1;
@@ -527,6 +538,88 @@ finish:
 	return ret;
 }
 
+// return variations with/without extensions and other cruft
+#define CHEAT_MAX_PATHS 16
+#define CHEAT_MAX_DISPLAY_PATHS 8
+// the list of displayed paths will be a bit shorter, we cant render that much text
+#define CHEAT_MAX_LIST_LENGTH (CHEAT_MAX_DISPLAY_PATHS * MAX_PATH)
+static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
+	// Generate possible paths, ordered by most likely to be used (pre v6.2.3 style first)
+	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, game.name); // /mnt/SDCARD/Cheats/GB/Super Example World.<ext>.cht
+	if(CFG_getUseExtractedFileName())
+		sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, game.alt_name); // /mnt/SDCARD/Cheats/GB/Super Example World (USA).<ext>.cht
+
+	// game.alt_name, but with all extension-like stuff removed (apart from .cht)
+	// eg. Super Example World (USA).zip -> Super Example World (USA).cht
+	{
+		int i = 0;
+		char* ext;
+		char exts[128];
+		if (core.extensions == NULL || strlen(core.extensions) >= sizeof(exts)) {
+			LOG_info("Invalid or too long core.extensions\n");
+			return;
+		}
+		
+		strcpy(exts, core.extensions);
+		while ((ext = strtok(i ? NULL : exts, "|"))) {
+			if (*count >= CHEAT_MAX_PATHS - 1) {
+				LOG_info("Maximum cheat paths reached, stopping\n");
+				break;
+			}
+			
+			char rom_name[MAX_PATH];
+			if (strlen(game.alt_name) >= MAX_PATH) {
+				LOG_info("game.alt_name too long, skipping\n");
+				i++;
+				continue;
+			}
+			
+			strcpy(rom_name, game.alt_name);
+			char* tmp = strrchr(rom_name, '.');
+			if (tmp != NULL && strlen(tmp) > 2 && strlen(tmp) <= 5) {
+				tmp[0] = '\0';
+				
+				// Add length check before sprintf to prevent buffer overflow
+				int needed_len = strlen(core.cheats_dir) + strlen(rom_name) + strlen(ext) + 10; // +10 for "/", ".", ".cht", etc.
+				if (needed_len < MAX_PATH) {
+					sprintf(paths[(*count)++], "%s/%s.%s.cht", core.cheats_dir, rom_name, ext);
+				} else {
+					LOG_info("Path too long, skipping: %s/%s.%s.cht\n", core.cheats_dir, rom_name, ext);
+				}
+			}
+			i++;
+		}
+	}
+
+	// Sanitized: remove extension and other cruft
+	// eg. Super Example World (USA).zip -> Super Example World
+	//     Super Example World (USA) [!].7z -> Super Example World
+	//     Super Example World (USA) (Rev 1).rar -> Super Example World
+	char rom_name[MAX_PATH];
+	getDisplayName(game.alt_name, rom_name);
+	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World.cht
+	// Respect map.txt: use alias if available
+	// eg. 1941.zip	-> 1941: Counter Attack
+	if(getAlias(game.path, rom_name))
+		sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World.cht
+
+	// Santitized alias, ignoring all extra cruft - including Cheat specifics like "(Game Breaker)" etc.
+	// This is a wildcard that may match something unexpected, but also may find something when nothing else does.
+	getDisplayName(game.alt_name, rom_name);
+	getAlias(game.path, rom_name);
+	sprintf(paths[(*count)++], "%s/%s*.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World*.cht
+	// Log all path candidates
+	{
+		int i;
+		char list[CHEAT_MAX_LIST_LENGTH] = {0};
+		for (i=0; i<*count; i++) {
+			strcat(list, paths[i]);
+			if (i < *count-1) strcat(list, ", ");
+		}
+		LOG_info("Cheat paths to check: %s\n", list);
+	}
+}
+
 void Cheats_free() {
 	size_t i;
 	for (i = 0; i < cheatcodes.count; i++) {
@@ -541,25 +634,63 @@ void Cheats_free() {
 	cheatcodes.count = 0;
 }
 
-void Cheats_load(const char *filename) {
+bool Cheats_load() {
 	int success = 0;
 	struct Cheats *cheats = &cheatcodes;
 	FILE *file = NULL;
 	size_t i;
 
-	file = fopen(filename, "r");
-	if (!file) {
-		LOG_error("Error opening cheat file: %s\n\t%s\n", filename, strerror(errno));
+	// we get our paths frrom Cheat_getPaths, some might be wildcards
+	char paths[CHEAT_MAX_PATHS][MAX_PATH];
+	int path_count = 0;
+	Cheat_getPaths(paths, &path_count);
+	char filename[MAX_PATH] = {0};
+	for (i=0; i<path_count; i++) {
+		LOG_info("Checking cheat path: %s\n", paths[i]);
+		// handle wildcards
+		if (strchr(paths[i],'*')) {
+			// Use glob to handle wildcards
+			char glob_pattern[MAX_PATH];
+			strcpy(glob_pattern, paths[i]);
+
+			glob_t glob_results;
+			memset(&glob_results, 0, sizeof(glob_t));
+			int glob_ret = glob(glob_pattern, 0, NULL, &glob_results);
+
+			if (glob_ret == 0 && glob_results.gl_pathc > 0) {
+				for (size_t gi = 0; gi < glob_results.gl_pathc; ++gi) {
+					if (!suffixMatch(".cht", glob_results.gl_pathv[gi])) continue;
+					strcpy(filename, glob_results.gl_pathv[gi]);
+					if (exists(filename)) {
+						LOG_info("Found potential cheat file: %s\n", filename);
+						break;
+					}
+					filename[0] = '\0';
+				}
+			}
+			globfree(&glob_results);
+			if (filename[0] == '\0') continue; // no match
+		} else {
+			strcpy(filename, paths[i]);
+			if (!exists(filename)) {
+				filename[0] = '\0';
+				continue;
+			}
+		}
+		break; // found a valid file
+	}
+	if (filename[0] == '\0') {
+		LOG_info("No cheat file found\n");
 		goto finish;
 	}
 
 	LOG_info("Loading cheats from %s\n", filename);
 
-	//cheats = calloc(1, sizeof(struct Cheats));
-	//if (!cheats) {
-	//	LOG_error("Couldn't allocate memory for cheats\n");
-	//	goto finish;
-	//}
+	file = fopen(filename, "r");
+	if (!file) {
+		LOG_error("Couldn't open cheat file: %s\n", filename);
+		goto finish;
+	}
 
 	cheatcodes.count = parse_count(file);
 	if (cheatcodes.count <= 0) {
@@ -590,11 +721,6 @@ finish:
 		fclose(file);
 }
 
-static void Cheat_getPath(char* filename) {
-	sprintf(filename, "%s/%s.cht", core.cheats_dir, game.name);
-	LOG_info("Cheat_getPath %s\n", filename);
-}
-
 ///////////////////////////////////////
 static void formatSavePath(char* work_name, char* filename, const char* suffix) {
 	char* tmp = strrchr(work_name, '.');
@@ -609,15 +735,15 @@ static void SRAM_getPath(char* filename) {
 
 	if (CFG_getSaveFormat() == SAVE_FORMAT_SRM 
 	 || CFG_getSaveFormat() == SAVE_FORMAT_SRM_UNCOMPRESSED) {
-		strcpy(work_name, game.name);
+		strcpy(work_name, game.alt_name);
 		formatSavePath(work_name, filename, ".srm");
 	}
 	else if (CFG_getSaveFormat() == SAVE_FORMAT_GEN) {
-		strcpy(work_name, game.name);
+		strcpy(work_name, game.alt_name);
 		formatSavePath(work_name, filename, ".sav");
 	}
 	else {
-		sprintf(filename, "%s/%s.sav", core.saves_dir, game.name);
+		sprintf(filename, "%s/%s.sav", core.saves_dir, game.alt_name);
 	}
 
 	LOG_info("SRAM_getPath %s\n", filename);
@@ -702,7 +828,7 @@ static void SRAM_write(void) {
 ///////////////////////////////////////
 
 static void RTC_getPath(char* filename) {
-	sprintf(filename, "%s/%s.rtc", core.saves_dir, game.name);
+	sprintf(filename, "%s/%s.rtc", core.saves_dir, game.alt_name);
 }
 static void RTC_read(void) {
 	size_t rtc_size = core.get_memory_size(RETRO_MEMORY_RTC);
@@ -763,9 +889,11 @@ static void formatStatePath(char* work_name, char* filename, const char* suffix)
 static void State_getPath(char* filename) {
 	char work_name[MAX_PATH];
 
-	if (CFG_getStateFormat() == STATE_FORMAT_SRM 
-	 || CFG_getStateFormat() == STATE_FORMAT_SRM_UNCOMRESSED) {
-		strcpy(work_name, game.name);
+	// This is only here for compatibility with older versions of minarch,
+	// should probably be removed at some point in the future.
+	if (CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT 
+	 || CFG_getStateFormat() == STATE_FORMAT_SRM_UNCOMRESSED_EXTRADOT) {
+		strcpy(work_name, game.alt_name);
 		char* tmp = strrchr(work_name, '.');
 		if (tmp != NULL && strlen(tmp) > 2 && strlen(tmp) <= 5) {
 			tmp[0] = '\0';
@@ -776,8 +904,23 @@ static void State_getPath(char* filename) {
 		else 
 			sprintf(filename, "%s/%s.state.%i", core.states_dir, work_name, state_slot);
 	}
+	else if (CFG_getStateFormat() == STATE_FORMAT_SRM
+	 	  || CFG_getStateFormat() == STATE_FORMAT_SRM_UNCOMRESSED) {
+		strcpy(work_name, game.alt_name);
+		char* tmp = strrchr(work_name, '.');
+		if (tmp != NULL && strlen(tmp) > 2 && strlen(tmp) <= 5) {
+			tmp[0] = '\0';
+		}
+
+		if(state_slot == AUTO_RESUME_SLOT)
+			sprintf(filename, "%s/%s.state.auto", core.states_dir, work_name);
+		else if(state_slot == 0)
+			sprintf(filename, "%s/%s.state", core.states_dir, work_name);
+		else 
+			sprintf(filename, "%s/%s.state%i", core.states_dir, work_name, state_slot);
+	}
 	else {
-		sprintf(filename, "%s/%s.st%i", core.states_dir, game.name, state_slot);
+		sprintf(filename, "%s/%s.st%i", core.states_dir, game.alt_name, state_slot);
 	}
 }
 
@@ -803,7 +946,7 @@ static void State_read(void) { // from picoarch
 
 	// TODO: rzipstream_open can also handle uncompressed, else branch is probably unnecessary
 	// srm, potentially compressed
-	if (CFG_getStateFormat() == STATE_FORMAT_SRM) {
+	if (CFG_getStateFormat() == STATE_FORMAT_SRM || CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT) {
 		state_rzfile = rzipstream_open(filename, RETRO_VFS_FILE_ACCESS_READ);
 		if(!state_rzfile) {
 			if (state_slot!=8) { // st8 is a default state in MiniUI and may not exist, that's okay
@@ -899,7 +1042,7 @@ static void State_write(void) { // from picoarch
 	char filename[MAX_PATH];
 	State_getPath(filename);
 #ifdef HAS_SRM
-	if (CFG_getStateFormat() == STATE_FORMAT_SRM) {
+	if (CFG_getStateFormat() == STATE_FORMAT_SRM || CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT) {
 		if(!rzipstream_write_file(filename, state, state_size)) {
 			LOG_error("rzipstream: Error writing state data to file: %s\n", filename);
 			goto error;
@@ -1249,6 +1392,7 @@ enum {
 	SHORTCUT_TOGGLE_FF,
 	SHORTCUT_HOLD_FF,
 	SHORTCUT_GAMESWITCHER,
+	SHORTCUT_SCREENSHOT,
 	// Trimui only
 	SHORTCUT_TOGGLE_TURBO_A,
 	SHORTCUT_TOGGLE_TURBO_B,
@@ -1622,7 +1766,7 @@ static struct Config {
 			[SH_SHADERS_PRESET] = {
 				.key	= "minarch_shaders_preset", 
 				.name	= "Shader / Emulator Settings Preset",
-				.desc	= "Load a premade shaders/emulators config, to try out a preset but not permantly overwite your current settings, exit the game without saving settings!", // will call getScreenScalingDesc()
+				.desc	= "Load a premade shaders/emulators config.\nTo try out a preset, exit the game without saving settings!", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
 				.count = 0,
@@ -1683,7 +1827,7 @@ static struct Config {
 			[SH_UPSCALE1] = {
 				.key	= "minarch_shader1_upscale", 
 				.name	= "Shader 1 Scale",
-				.desc	= "This will scale images x times, screen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
 				.count = 9,
@@ -1734,7 +1878,7 @@ static struct Config {
 			[SH_UPSCALE2] = {
 				.key	= "minarch_shader2_upscale", 
 				.name	= "Shader 2 Scale",
-				.desc	= "This will scale images x times, screen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
 				.default_value = 0,
 				.value = 0,
 				.count = 9,
@@ -1785,7 +1929,7 @@ static struct Config {
 			[SH_UPSCALE3] = {
 				.key	= "minarch_shader3_upscale", 
 				.name	= "Shader 3 Scale",
-				.desc	= "This will scale images x times, screen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
 				.default_value = 0,
 				.value = 0,
 				.count = 9,
@@ -1810,6 +1954,7 @@ static struct Config {
 		[SHORTCUT_TOGGLE_FF]			= {"Toggle FF",			-1, BTN_ID_NONE, 0},
 		[SHORTCUT_HOLD_FF]				= {"Hold FF",			-1, BTN_ID_NONE, 0},
 		[SHORTCUT_GAMESWITCHER]			= {"Game Switcher",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_SCREENSHOT]           = {"Screenshot",        -1, BTN_ID_NONE, 0},
 		// Trimui only
 		[SHORTCUT_TOGGLE_TURBO_A]		= {"Toggle Turbo A",	-1, BTN_ID_NONE, 0},
 		[SHORTCUT_TOGGLE_TURBO_B]		= {"Toggle Turbo B",	-1, BTN_ID_NONE, 0},
@@ -1889,6 +2034,10 @@ static void Config_syncFrontend(char* key, int value) {
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_AMBIENT].key)) {
 		ambient_mode = value;
+		if(ambient_mode > 0)
+			LEDS_pushProfileOverride(LIGHT_PROFILE_AMBIENT);
+		else 
+			LEDS_popProfileOverride(LIGHT_PROFILE_AMBIENT);
 		i = FE_OPT_AMBIENT;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_EFFECT].key)) {
@@ -2023,7 +2172,7 @@ enum {
 static void Config_getPath(char* filename, int override) {
 	char device_tag[64] = {0};
 	if (config.device_tag) sprintf(device_tag,"-%s",config.device_tag);
-	if (override) sprintf(filename, "%s/%s%s.cfg", core.config_dir, game.name, device_tag);
+	if (override) sprintf(filename, "%s/%s%s.cfg", core.config_dir, game.alt_name, device_tag);
 	else sprintf(filename, "%s/minarch%s.cfg", core.config_dir, device_tag);
 	LOG_info("Config_getPath %s\n", filename);
 }
@@ -2330,7 +2479,7 @@ static void Config_readControls(void) {
 }
 static void Config_write(int override) {
 	char path[MAX_PATH];
-	// sprintf(path, "%s/%s.cfg", core.config_dir, game.name);
+	// sprintf(path, "%s/%s.cfg", core.config_dir, game.alt_name);
 	Config_getPath(path, CONFIG_WRITE_GAME);
 	
 	if (!override) {
@@ -2394,8 +2543,8 @@ static void Config_write(int override) {
 static void Config_restore(void) {
 	char path[MAX_PATH];
 	if (config.loaded==CONFIG_GAME) {
-		if (config.device_tag) sprintf(path, "%s/%s-%s.cfg", core.config_dir, game.name, config.device_tag);
-		else sprintf(path, "%s/%s.cfg", core.config_dir, game.name);
+		if (config.device_tag) sprintf(path, "%s/%s-%s.cfg", core.config_dir, game.alt_name, config.device_tag);
+		else sprintf(path, "%s/%s.cfg", core.config_dir, game.alt_name);
 		unlink(path);
 		LOG_info("deleted game config: %s\n", path);
 	}
@@ -2728,11 +2877,8 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
 				strncpy(item->full, item->desc, len);
 				// item->desc[len-1] = '\0';
 				
-				// these magic numbers are more about chars per line than pixel width 
-				// so it's not going to be relative to the screen size, only the scale
-				// what does that even mean?
-				GFX_wrapText(font.tiny, item->desc, SCALE1(240), 2); // TODO magic number!
-				GFX_wrapText(font.medium, item->full, SCALE1(240), 7); // TODO: magic number!
+				GFX_wrapText(font.tiny, item->desc, DEVICE_WIDTH - SCALE1(2*PADDING), 2);
+				GFX_wrapText(font.medium, item->full, DEVICE_WIDTH - SCALE1(2*PADDING), 16);
 			}
 		
 			for (count=0; def->values[count].value; count++);
@@ -2817,11 +2963,8 @@ static void OptionList_v2_init(const struct retro_core_options_v2 *opt_defs) {
 				item->desc = strdup(def->info);
 				item->full = strdup(item->desc);
 				
-				// these magic numbers are more about chars per line than pixel width 
-				// so it's not going to be relative to the screen size, only the scale
-				// what does that even mean?
-				GFX_wrapText(font.tiny, item->desc, SCALE1(240), 2); // TODO magic number!
-				GFX_wrapText(font.medium, item->full, SCALE1(240), 7); // TODO: magic number!
+				GFX_wrapText(font.tiny, item->desc, DEVICE_WIDTH - SCALE1(2*PADDING), 2);
+				GFX_wrapText(font.medium, item->full, DEVICE_WIDTH - SCALE1(2*PADDING), 16);
 			}
 		
 			for (count=0; def->values[count].value; count++);
@@ -2996,6 +3139,8 @@ static void OptionList_setOptionVisibility(OptionList* list, const char* key, in
 static void Menu_beforeSleep();
 static void Menu_afterSleep();
 
+static void Menu_screenshot(void);
+
 static void Menu_saveState(void);
 static void Menu_loadState(void);
 
@@ -3088,6 +3233,9 @@ static void input_poll_callback(void) {
 						Menu_saveState(); 
 						break;
 					case SHORTCUT_LOAD_STATE: Menu_loadState(); break;
+					case SHORTCUT_SCREENSHOT:
+						Menu_screenshot();
+						break;
 					case SHORTCUT_RESET_GAME: core.reset(); break;
 					case SHORTCUT_SAVE_QUIT:
 						newScreenshot = 1;
@@ -4484,7 +4632,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	// eg. true src + cropped src + fixed dst + cropped dst
 	if (renderer.dst_p==0 || width!=renderer.true_w || height!=renderer.true_h) {
 		selectScaler(width, height, pitch);
-		// GFX_clearAll();
+		GFX_clearAll();
 		GFX_resetShaders();
 	}
 	
@@ -4560,12 +4708,8 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 			}
 		}
 
-		if(!fast_forward && data) {
-			if(ambient_mode!=0) {
-				GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
-				LEDS_updateLeds();
-			}
-		}
+		if(ambient_mode && !fast_forward && data)
+			GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
 
 		if (!data) {
 			if (lastframe) {
@@ -4765,13 +4909,8 @@ void Core_load(void) {
 	LOG_info("game path: %s (%i)\n", game_info.path, game.size);
 	core.load_game(&game_info);
 
-	char cheats_path[MAX_PATH] = {0};
-	Cheat_getPath(cheats_path);
-	if (cheats_path[0] != '\0') {
-		LOG_info("cheat file path: %s\n", cheats_path);
-		Cheats_load(cheats_path);
+	if (Cheats_load())
 		Core_applyCheats(&cheatcodes);
-	}
 
 	SRAM_read();
 	RTC_read();
@@ -4868,6 +5007,7 @@ void Menu_init(void) {
 	sprintf(menu.minui_dir, SHARED_USERDATA_PATH "/.minui/%s", emu_name);
 	mkdir(menu.minui_dir, 0755);
 
+	// always sanitized/outer name, to keep main UI from having to inspect archives
 	sprintf(menu.slot_path, "%s/%s.txt", menu.minui_dir, game.name);
 	
 	if (simple_mode) menu.items[ITEM_OPTS] = "Reset";
@@ -4958,7 +5098,7 @@ typedef struct MenuList {
 	MenuList_callback_t on_change;
 } MenuList;
 
-static int Menu_message(char* message, char** pairs) {
+static int Menu_messageWithFont(char* message, char** pairs, TTF_Font* f) {
 	GFX_setMode(MODE_MAIN);
 	int dirty = 1;
 	while (1) {
@@ -4971,7 +5111,7 @@ static int Menu_message(char* message, char** pairs) {
 		
 	
 		GFX_clear(screen);
-		GFX_blitMessage(font.medium, message, screen, &(SDL_Rect){0,SCALE1(PADDING),screen->w,screen->h-SCALE1(PILL_SIZE+PADDING)});
+		GFX_blitMessage(f, message, screen, &(SDL_Rect){SCALE1(PADDING),SCALE1(PADDING),screen->w-SCALE1(2*PADDING),screen->h-SCALE1(PILL_SIZE+PADDING)});
 		GFX_blitButtonGroup(pairs, 0, screen, 1);
 		GFX_flip(screen);
 		dirty = 0;
@@ -4981,6 +5121,10 @@ static int Menu_message(char* message, char** pairs) {
 	}
 	GFX_setMode(MODE_MENU);
 	return MENU_CALLBACK_NOP; // TODO: this should probably be an arg
+}
+
+static int Menu_message(char* message, char** pairs) {
+	return Menu_messageWithFont(message, pairs, font.medium);
 }
 
 static int Menu_options(MenuList* list);
@@ -5087,7 +5231,7 @@ static int OptionEmulator_optionDetail(MenuList* list, int i) {
 	}
 	else {
 		Option* option = OptionList_getOption(&config.core, item->key);
-		if (option->full) return Menu_message(option->full, (char*[]){ "B","BACK", NULL });
+		if (option->full) return Menu_messageWithFont(option->full, (char*[]){ "B","BACK", NULL }, font.medium);
 		else return MENU_CALLBACK_NOP;
 	}
 }
@@ -5460,11 +5604,7 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 				len = strlen(cheat->info) + 1;
 				item->desc = calloc(len, sizeof(char));
 				strncpy(item->desc, cheat->info, len);
-				
-				// these magic numbers are more about chars per line than pixel width 
-				// so it's not going to be relative to the screen size, only the scale
-				// what does that even mean?
-				GFX_wrapText(font.tiny, item->desc, SCALE1(240), 2); // TODO magic number!
+				GFX_wrapText(font.tiny, item->desc, DEVICE_WIDTH - SCALE1(2*PADDING), 2);
 			}
 
 			item->value = cheat->enabled;
@@ -5487,7 +5627,52 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 		Menu_options(&OptionCheats_menu);
 	}
 	else {
-		Menu_message("No cheat file loaded.", (char*[]){ "B","BACK", NULL });
+		// we expect at most CHEAT_MAX_PATHS paths with MAX_PATH length, just hardcode it here
+		char paths[CHEAT_MAX_PATHS][MAX_PATH];
+		int count = 0;
+		Cheat_getPaths(paths, &count);
+
+		// concatenate all paths into one string, and prepend title "No cheat file loaded.\n\n"
+		// each path on its own line, and remove the absolute path prefix
+		char cheats_path[CHEAT_MAX_LIST_LENGTH] = {0};
+		
+		// prepend title with bounds checking
+		const char* title = "No cheat file loaded.\n\n";
+		size_t title_len = strlen(title);
+		
+		strcpy(cheats_path, title);  // Use strcpy for first string
+		size_t current_len = title_len;
+
+		for (int i = 0; i < count && i < CHEAT_MAX_DISPLAY_PATHS; i++) {
+			char* p = basename(paths[i]);
+			
+			// Check for NULL return from basename
+			if (p == NULL) {
+				LOG_info("basename() returned NULL for path: %s\n", paths[i]);
+				continue;
+			}
+			
+			size_t p_len = strlen(p);
+			size_t newline_len = (i < count - 1) ? 1 : 0;  // "\n" length
+			
+			// Check if adding this path would overflow the buffer
+			if (current_len + p_len + newline_len >= CHEAT_MAX_LIST_LENGTH) {
+				LOG_info("Cheats path buffer would overflow, truncating list\n");
+				strcat(cheats_path, "...");
+				break;
+			}
+			
+			// Safe to append
+			strcat(cheats_path, p);
+			current_len += p_len;
+			
+			if (i < count - 1) {
+				strcat(cheats_path, "\n");
+				current_len += 1;
+			}
+		}
+
+		Menu_messageWithFont(cheats_path, (char*[]){ "B","BACK", NULL }, font.small);
 	}
 	
 	return MENU_CALLBACK_NOP;
@@ -5624,7 +5809,6 @@ static MenuList options_menu = {
 		{"Frontend", "NextUI (" BUILD_DATE " " BUILD_HASH ")",.on_confirm=OptionFrontend_openMenu},
 		{"Emulator",.on_confirm=OptionEmulator_openMenu},
 		{"Shaders",.on_confirm=OptionShaders_openMenu},
-		// TODO: this should be hidden with no cheats available
 		{"Cheats",.on_confirm=OptionCheats_openMenu},
 		{"Controls",.on_confirm=OptionControls_openMenu},
 		{"Shortcuts",.on_confirm=OptionShortcuts_openMenu}, 
@@ -5639,6 +5823,48 @@ static void OptionSaveChanges_updateDesc(void) {
 }
 
 #define OPTION_PADDING 8
+static bool getAlias(char* path, char* alias) {
+	bool is_alias = false;
+	// LOG_info("alias path: %s\n", path);
+	char* tmp;
+	char map_path[256];
+	strcpy(map_path, path);
+	tmp = strrchr(map_path, '/');
+	if (tmp) {
+		tmp += 1;
+		strcpy(tmp, "map.txt");
+		// LOG_info("map_path: %s\n", map_path);
+	}
+	char* file_name = strrchr(path,'/');
+	if (file_name) file_name += 1;
+	// LOG_info("file_name: %s\n", file_name);
+	
+	if (exists(map_path)) {
+		FILE* file = fopen(map_path, "r");
+		if (file) {
+			char line[256];
+			while (fgets(line,256,file)!=NULL) {
+				normalizeNewline(line);
+				trimTrailingNewlines(line);
+				if (strlen(line)==0) continue; // skip empty lines
+			
+				tmp = strchr(line,'\t');
+				if (tmp) {
+					tmp[0] = '\0';
+					char* key = line;
+					char* value = tmp+1;
+					if (exactMatch(file_name,key)) {
+						strcpy(alias, value);
+						is_alias = true;
+						break;
+					}
+				}
+			}
+			fclose(file);
+		}
+	}
+	return is_alias;
+}
 
 static int Menu_options(MenuList* list) {
 	MenuItem* items = list->items;
@@ -6204,6 +6430,7 @@ static void Menu_updateState(void) {
 
 	state_slot = last_slot;
 
+	// always sanitized/outer name, to keep main UI from having to inspect archives
 	sprintf(menu.bmp_path, "%s/%s.%d.bmp", menu.minui_dir, game.name, menu.slot);
 	sprintf(menu.txt_path, "%s/%s.%d.txt", menu.minui_dir, game.name, menu.slot);
 	
@@ -6246,6 +6473,33 @@ int save_screenshot_thread(void* data) {
     return 0;
 }
 SDL_Thread* screenshotsavethread;
+static void Menu_screenshot(void) {
+	LOG_info("Menu_screenshot\n");
+
+	char rom_name[256];
+	getDisplayName(game.alt_name, rom_name);
+	getAlias(game.path, rom_name);
+
+	time_t now = time(NULL);
+	struct tm *t = localtime(&now);
+	char buffer[100];
+	strftime(buffer, sizeof(buffer), "%Y-%m-%d-%H-%M-%S", t);
+
+	// make sure this actually exists
+	mkdir(SDCARD_PATH "/Screenshots", 0755);
+
+	char png_path[256];
+	sprintf(png_path, SDCARD_PATH "/Screenshots/%s.%s.png", rom_name, buffer);
+	int cw, ch;
+	unsigned char* pixels = GFX_GL_screenCapture(&cw, &ch);
+	SaveImageArgs* args = malloc(sizeof(SaveImageArgs));
+	args->pixels = pixels;
+	args->w = cw;
+	args->h = ch;
+	args->path = SDL_strdup(png_path);
+	SDL_WaitThread(screenshotsavethread, NULL);
+	screenshotsavethread = SDL_CreateThread(save_screenshot_thread, "SaveScreenshotThread", args);
+}
 static void Menu_saveState(void) {
 	// LOG_info("Menu_saveState\n");
 	Menu_updateState();
@@ -6301,46 +6555,6 @@ static void Menu_loadState(void) {
 	}
 }
 
-static char* getAlias(char* path, char* alias) {
-	// LOG_info("alias path: %s\n", path);
-	char* tmp;
-	char map_path[256];
-	strcpy(map_path, path);
-	tmp = strrchr(map_path, '/');
-	if (tmp) {
-		tmp += 1;
-		strcpy(tmp, "map.txt");
-		// LOG_info("map_path: %s\n", map_path);
-	}
-	char* file_name = strrchr(path,'/');
-	if (file_name) file_name += 1;
-	// LOG_info("file_name: %s\n", file_name);
-	
-	if (exists(map_path)) {
-		FILE* file = fopen(map_path, "r");
-		if (file) {
-			char line[256];
-			while (fgets(line,256,file)!=NULL) {
-				normalizeNewline(line);
-				trimTrailingNewlines(line);
-				if (strlen(line)==0) continue; // skip empty lines
-			
-				tmp = strchr(line,'\t');
-				if (tmp) {
-					tmp[0] = '\0';
-					char* key = line;
-					char* value = tmp+1;
-					if (exactMatch(file_name,key)) {
-						strcpy(alias, value);
-						break;
-					}
-				}
-			}
-			fclose(file);
-		}
-	}
-}
-
 static void Menu_loop(void) {
 
 	int cw, ch;
@@ -6387,7 +6601,6 @@ static void Menu_loop(void) {
 	PWR_enableAutosleep();
 	PAD_reset();
 	
-	
 	// path and string things
 	char* tmp;
 	char rom_name[256]; // without extension or cruft
@@ -6410,9 +6623,6 @@ static void Menu_loop(void) {
 	int ignore_menu = 0;
 	int menu_start = 0;
 	SDL_Surface* preview = SDL_CreateRGBSurface(SDL_SWSURFACE,DEVICE_WIDTH/2,DEVICE_HEIGHT/2,32,RGBA_MASK_8888); // TODO: retain until changed?
-
-	LEDS_initLeds();
-	LEDS_updateLeds();
 
 	//set vid.blit to null for menu drawing no need for blitrender drawing
 	GFX_clearShaders();
@@ -6801,7 +7011,7 @@ static void limitFF(void) {
 // We need to do this on the audio thread (aka main thread currently)
 static bool resetAudio = false;
 
-void onBluetoothAudioChanged(bool bluetooth, int watch_event)
+void onAudioSinkChanged(int device, int watch_event)
 {
 	switch (watch_event)
 	{
@@ -6815,14 +7025,14 @@ void onBluetoothAudioChanged(bool bluetooth, int watch_event)
 	resetAudio = true;
 
 	// FIXME: This shouldnt be necessary, alsa should just read .asoundrc for the changed defult device.
-	if(bluetooth)
+	if(device == AUDIO_SINK_BLUETOOTH)
 		SDL_setenv("AUDIODEV", "bluealsa", 1);
 	else
 		SDL_setenv("AUDIODEV", "default", 1);
 
-	if(bluetooth && !exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
+	if(device != AUDIO_SINK_DEFAULT && !exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
 		LOG_error("asoundrc is not there yet!!!\n");
-	else if(!bluetooth && exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
+	else if(device == AUDIO_SINK_DEFAULT && exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
 		LOG_error("asoundrc is not deleted yet!!!\n");
 }
 
@@ -6869,6 +7079,7 @@ int main(int argc , char* argv[]) {
 	DEVICE_PITCH = screen->pitch;
 	// LOG_info("DEVICE_SIZE: %ix%i (%i)\n", DEVICE_WIDTH,DEVICE_HEIGHT,DEVICE_PITCH);
 	
+	LEDS_initLeds();
 	VIB_init();
 	PWR_init();
 	if (!HAS_POWER_BUTTON)
@@ -6904,7 +7115,7 @@ int main(int argc , char* argv[]) {
 	Config_readControls(); // restore controls (after the core has reported its defaults)
 
 	SND_init(core.sample_rate, core.fps);
-	BT_registerDeviceWatcher(onBluetoothAudioChanged);
+	SND_registerDeviceWatcher(onAudioSinkChanged);
 	InitSettings(); // after we initialize audio
 	Menu_init();
 	State_resume();
@@ -6974,7 +7185,7 @@ int main(int argc , char* argv[]) {
 
 		if (resetAudio) {
 			resetAudio = false;
-			LOG_info("Resetting audio device config! (new state: BT %s)\n", SDL_getenv("AUDIODEV"));
+			LOG_info("Resetting audio device config! (new state: %s)\n", SDL_getenv("AUDIODEV"));
 			SND_resetAudio(core.sample_rate, core.fps);
 		}
 
@@ -7012,7 +7223,7 @@ finish:
 	MSG_quit();
 	PWR_quit();
 	VIB_quit();
-	BT_removeDeviceWatcher();
+	SND_removeDeviceWatcher();
 	// Disabling this is a dumb hack for bluetooth, we should really be using 
 	// bluealsa with --keep-alive=-1 - but SDL wont reconnect the stream on next start.
 	// Reenable as soon as we have a more recent SDL available, if ever.

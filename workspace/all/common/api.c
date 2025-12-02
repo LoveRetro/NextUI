@@ -63,9 +63,22 @@ uint32_t RGB_LIGHT_GRAY;
 uint32_t RGB_GRAY;
 uint32_t RGB_DARK_GRAY;
 float currentbufferms = 20.0;
+
+int lights_initialized = 0;
 LightSettings lightsDefault[MAX_LIGHTS];
-LightSettings lightsMuted[MAX_LIGHTS];
+LightSettings lightsOff[MAX_LIGHTS];
+LightSettings lightsCharging[MAX_LIGHTS];
+LightSettings lightsLowBattery[MAX_LIGHTS];
+LightSettings lightsCriticalBattery[MAX_LIGHTS];
+LightSettings lightsSleep[MAX_LIGHTS];
+LightSettings lightsAmbient[MAX_LIGHTS];
 LightSettings (*lights)[MAX_LIGHTS] = NULL;
+
+#define PROFILE_OVERRIDE_SIZE 4
+int profile_override_top = -1;
+enum LightProfile profile_override[PROFILE_OVERRIDE_SIZE];
+
+///////////////////////////////
 
 volatile int useAutoCpu;
 
@@ -267,18 +280,17 @@ int GFX_updateColors()
 
 SDL_Surface *GFX_init(int mode)
 {
+	gfx.screen = PLAT_initVideo();
+	gfx.vsync = VSYNC_STRICT;
+	gfx.mode = mode;
+	
+	CFG_init(GFX_loadSystemFont, GFX_updateColors);
+
 	// TODO: this doesn't really belong here...
 	// tried adding to PWR_init() but that was no good (not sure why)
 
 	PLAT_initLid();
 	LEDS_initLeds();
-	LEDS_updateLeds();
-
-	gfx.screen = PLAT_initVideo();
-	gfx.vsync = VSYNC_STRICT;
-	gfx.mode = mode;
-
-	CFG_init(GFX_loadSystemFont, GFX_updateColors);
 
 	RGB_WHITE = SDL_MapRGB(gfx.screen->format, TRIAD_WHITE);
 	RGB_BLACK = SDL_MapRGB(gfx.screen->format, TRIAD_BLACK);
@@ -295,8 +307,8 @@ SDL_Surface *GFX_init(int mode)
 	asset_rgbs[ASSET_STATE_BG] = RGB_WHITE;
 	asset_rgbs[ASSET_PAGE] = RGB_BLACK;
 	asset_rgbs[ASSET_BAR] = RGB_WHITE;
-	asset_rgbs[ASSET_BAR_BG] = RGB_BLACK;
-	asset_rgbs[ASSET_BAR_BG_MENU] = RGB_DARK_GRAY;
+	asset_rgbs[ASSET_BAR_BG] = RGB_WHITE;
+	asset_rgbs[ASSET_BAR_BG_MENU] = RGB_WHITE;
 	asset_rgbs[ASSET_UNDERLINE] = RGB_GRAY;
 	asset_rgbs[ASSET_DOT] = RGB_LIGHT_GRAY;
 	asset_rgbs[ASSET_HOLE] = RGB_BLACK;
@@ -310,8 +322,8 @@ SDL_Surface *GFX_init(int mode)
 	asset_rects[ASSET_STATE_BG] = (SDL_Rect){SCALE4(23, 54, 8, 8)};
 	asset_rects[ASSET_PAGE] = (SDL_Rect){SCALE4(39, 54, 6, 6)};
 	asset_rects[ASSET_BAR] = (SDL_Rect){SCALE4(33, 58, 4, 4)};
-	asset_rects[ASSET_BAR_BG] = (SDL_Rect){SCALE4(15, 55, 4, 4)};
-	asset_rects[ASSET_BAR_BG_MENU] = (SDL_Rect){SCALE4(85, 56, 4, 4)};
+	asset_rects[ASSET_BAR_BG] = (SDL_Rect){SCALE4(33, 58, 4, 4)};
+	asset_rects[ASSET_BAR_BG_MENU] = (SDL_Rect){SCALE4(33, 58, 4, 4)};
 	asset_rects[ASSET_UNDERLINE] = (SDL_Rect){SCALE4(85, 51, 3, 3)};
 	asset_rects[ASSET_DOT] = (SDL_Rect){SCALE4(33, 54, 2, 2)};
 	asset_rects[ASSET_BRIGHTNESS] = (SDL_Rect){SCALE4(1, 85, 19, 19)};
@@ -523,24 +535,24 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 
 	if (mode == 1 || mode == 2 || mode == 5)
 	{
-		(*lights)[2].color1 = dominant_color;
-		(*lights)[2].effect = 4;
-		(*lights)[2].brightness = 100;
+		(lightsAmbient)[2].color1 = dominant_color;
+		(lightsAmbient)[2].effect = 4;
+		(lightsAmbient)[2].brightness = 100;
 	}
 	if (mode == 1 || mode == 3)
 	{
-		(*lights)[0].color1 = dominant_color;
-		(*lights)[0].effect = 4;
-		(*lights)[0].brightness = 100;
-		(*lights)[1].color1 = dominant_color;
-		(*lights)[1].effect = 4;
-		(*lights)[1].brightness = 100;
+		(lightsAmbient)[0].color1 = dominant_color;
+		(lightsAmbient)[0].effect = 4;
+		(lightsAmbient)[0].brightness = 100;
+		(lightsAmbient)[1].color1 = dominant_color;
+		(lightsAmbient)[1].effect = 4;
+		(lightsAmbient)[1].brightness = 100;
 	}
 	if (mode == 1 || mode == 4 || mode == 5)
 	{
-		(*lights)[3].color1 = dominant_color;
-		(*lights)[3].effect = 4;
-		(*lights)[3].brightness = 100;
+		(lightsAmbient)[3].color1 = dominant_color;
+		(lightsAmbient)[3].effect = 4;
+		(lightsAmbient)[3].brightness = 100;
 	}
 }
 
@@ -727,26 +739,6 @@ void GFX_flip_fixed_rate(SDL_Surface *screen, double target_fps)
 	per_frame_start = SDL_GetPerformanceCounter();
 }
 
-void GFX_sync_fixed_rate(double target_fps)
-{
-	if (target_fps == 0.0)
-		target_fps = SCREEN_FPS;
-	int frame_budget = (int)lrint(1000.0 / target_fps);
-	uint32_t frame_duration = SDL_GetTicks() - frame_start;
-	if (gfx.vsync != VSYNC_OFF)
-	{
-		// this limiting condition helps SuperFX chip games
-		if (gfx.vsync == VSYNC_STRICT || frame_start == 0 || frame_duration < frame_budget)
-		{ // only wait if we're under frame budget
-			PLAT_vsync(frame_budget - frame_duration);
-		}
-	}
-	else
-	{
-		if (frame_duration < frame_budget)
-			SDL_Delay(frame_budget - frame_duration);
-	}
-}
 // if a fake vsycn delay is really needed
 void GFX_delay(void)
 {
@@ -1697,7 +1689,6 @@ void GFX_blitMessage(TTF_Font *font, char *msg, SDL_Surface *dst, SDL_Rect *dst_
 
 	SDL_Surface *text;
 #define TEXT_BOX_MAX_ROWS 16
-#define LINE_HEIGHT 24
 	char *rows[TEXT_BOX_MAX_ROWS];
 	int row_count = 0;
 
@@ -1710,7 +1701,8 @@ void GFX_blitMessage(TTF_Font *font, char *msg, SDL_Surface *dst, SDL_Rect *dst_
 		rows[row_count++] = tmp + 1;
 	}
 
-	int rendered_height = SCALE1(LINE_HEIGHT) * row_count;
+	int line_height = TTF_FontHeight(font);
+	int rendered_height = line_height * row_count;
 	int y = dst_rect->y;
 	y += (dst_rect->h - rendered_height) / 2;
 
@@ -1733,13 +1725,13 @@ void GFX_blitMessage(TTF_Font *font, char *msg, SDL_Surface *dst, SDL_Rect *dst_
 
 		if (len)
 		{
-			text = TTF_RenderUTF8_Blended(font, line, COLOR_WHITE);
+			text = TTF_RenderUTF8_Blended_Wrapped(font, line, COLOR_WHITE, dst_rect->w);
 			int x = dst_rect->x;
 			x += (dst_rect->w - text->w) / 2;
 			SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){x, y});
 			SDL_FreeSurface(text);
 		}
-		y += SCALE1(LINE_HEIGHT);
+		y += line_height;
 	}
 }
 
@@ -1797,6 +1789,7 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 
 	if (show_setting && !GetHDMI())
 	{
+		int asset;
 		ow = SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
 		ox = dst->w - SCALE1(PADDING) - ow;
 		oy = SCALE1(PADDING);
@@ -1807,22 +1800,26 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 			setting_value = GetBrightness();
 			setting_min = BRIGHTNESS_MIN;
 			setting_max = BRIGHTNESS_MAX;
+			asset = ASSET_BRIGHTNESS;
 		}
 		else if (show_setting == 3)
 		{
 			setting_value = GetColortemp();
 			setting_min = COLORTEMP_MIN;
 			setting_max = COLORTEMP_MAX;
+			asset = ASSET_COLORTEMP;
 		}
 		else
 		{
 			setting_value = GetVolume();
 			setting_min = VOLUME_MIN;
 			setting_max = VOLUME_MAX;
+			if(GetAudioSink() == AUDIO_SINK_BLUETOOTH)
+				asset = (setting_value > 0 ? ASSET_BLUETOOTH : ASSET_BLUETOOTH_OFF);
+			else
+				asset = (setting_value > 0 ? ASSET_VOLUME : ASSET_VOLUME_MUTE);
 		}
 
-		int asset = show_setting == 3 ? ASSET_COLORTEMP : show_setting == 1 ? ASSET_BRIGHTNESS
-																			: (setting_value > 0 ? ASSET_VOLUME : ASSET_VOLUME_MUTE);
 		SDL_Rect asset_rect;
 		GFX_assetRect(asset, &asset_rect);
 		int ax = ox + (SCALE1(PILL_SIZE) - asset_rect.w) / 2;
@@ -1831,7 +1828,8 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 
 		ox += SCALE1(PILL_SIZE);
 		oy += SCALE1((PILL_SIZE - SETTINGS_SIZE) / 2);
-		GFX_blitPill(gfx.mode == MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, &(SDL_Rect){ox, oy, SCALE1(SETTINGS_WIDTH), SCALE1(SETTINGS_SIZE)});
+		GFX_blitPillColor(gfx.mode == MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, &(SDL_Rect){ox, oy, SCALE1(SETTINGS_WIDTH), SCALE1(SETTINGS_SIZE)}, 
+			THEME_COLOR3, RGB_WHITE);
 
 		float percent = ((float)(setting_value - setting_min) / (setting_max - setting_min));
 		if (show_setting == 1 || show_setting == 3 || setting_value > 0)
@@ -2721,6 +2719,9 @@ void SND_pauseAudio(bool paused)
 #endif
 }
 
+FALLBACK_IMPLEMENTATION void PLAT_audioDeviceWatchRegister(void (*cb)(int, int)) {}
+FALLBACK_IMPLEMENTATION void PLAT_audioDeviceWatchUnregister(void) {}
+
 ///////////////////////////////
 
 LID_Context lid = {
@@ -3436,15 +3437,8 @@ static void PWR_updateBatteryStatus(void)
 	PLAT_getBatteryStatusFine(&pwr.is_charging, &pwr.charge);
 	PLAT_enableOverlay(pwr.should_warn && pwr.charge <= PWR_LOW_CHARGE);
 
-	// low power warn on all leds
-	if (pwr.charge < PWR_LOW_CHARGE + 10)
-	{
-		LEDS_setIndicator(3, 0xFF3300, -1);
-	}
-	if (pwr.charge < PWR_LOW_CHARGE)
-	{
-		LEDS_setIndicator(3, 0xFF0000, -1);
-	}
+	// this is technically redundant, but PWR_update() might not always be called to conserve battery and cycles
+	LEDS_applyRules();
 }
 
 static void PWR_updateNetworkStatus(void)
@@ -3487,16 +3481,16 @@ void PWR_init(void)
 
 	pwr.update_secs = 5;
 	pwr.poll_network_status = 1;
+	pwr.initialized = 1;
 
 	if (CFG_getHaptics())
-	{
 		VIB_singlePulse(VIB_bootStrength, VIB_bootDuration_ms);
-	}
+
 	PWR_initOverlay();
 	PWR_updateBatteryStatus();
 
 	pthread_create(&pwr.battery_pt, NULL, &PWR_monitorBattery, &pwr);
-	pwr.initialized = 1;
+	LOG_info("PWR_init complete\n");
 }
 void PWR_quit(void)
 {
@@ -3535,14 +3529,7 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 		was_muted = GetMute();
 
 	static int was_charging = -1;
-	if (was_charging == -1)
-	{
-		was_charging = pwr.is_charging;
-		if (pwr.is_charging)
-		{
-			LED_setIndicator(2, 0xFF0000, -1, 2);
-		}
-	}
+	if (was_charging == -1) was_charging = pwr.is_charging;
 
 	uint32_t now = SDL_GetTicks();
 	if (was_charging || PAD_anyPressed() || last_input_at == 0)
@@ -3554,15 +3541,6 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 		int is_charging = pwr.is_charging;
 		if (was_charging != is_charging)
 		{
-			if (is_charging)
-			{
-				LED_setIndicator(2, 0xFF0000, -1, 2);
-			}
-			else
-			{
-				PLAT_initLeds(lightsDefault);
-				LEDS_updateLeds();
-			}
 			was_charging = is_charging;
 			dirty = 1;
 		}
@@ -3658,13 +3636,10 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 			was_muted = muted;
 			show_setting = 2;
 			setting_shown_at = now;
-			if (CFG_getMuteLEDs())
-			{
-				lights = muted ? &lightsMuted : &lightsDefault;
-				LEDS_updateLeds();
-			}
 		}
 	}
+
+	LEDS_applyRules();
 
 	if (show_setting)
 		dirty = 1; // shm is slow or keymon is catching input on the next frame
@@ -3731,7 +3706,7 @@ void PWR_powerOff(int reboot)
 		system("killall -STOP keymon.elf");
 		system("killall -STOP batmon.elf");
 		system("killall -STOP wifi_daemon");
-		system("killall -STOP bt_daemon");
+		system("killall -STOP audiomon.elf");
 
 		PWR_updateFrequency(-1, false);
 
@@ -3742,7 +3717,7 @@ void PWR_powerOff(int reboot)
 static void PWR_enterSleep(void)
 {
 	SND_pauseAudio(true);
-	LEDS_setIndicator(2, 0, 5);
+	LEDS_pushProfileOverride(LIGHT_PROFILE_SLEEP);
 	if (GetHDMI())
 	{
 		PLAT_clearVideo(gfx.screen);
@@ -3761,7 +3736,7 @@ static void PWR_enterSleep(void)
 	system("killall -STOP batmon.elf");
 	// this is currently handled in wifi_init.sh from suspend script, doing this double or at same time causes problems
 	// system("killall -STOP wifi_daemon");
-	system("killall -STOP bt_daemon");
+	system("killall -STOP audiomon.elf");
 
 	PWR_updateFrequency(-1, false);
 
@@ -3769,12 +3744,7 @@ static void PWR_enterSleep(void)
 }
 static void PWR_exitSleep(void)
 {
-	PLAT_initLeds(lightsDefault);
-	LEDS_updateLeds();
-	if (pwr.is_charging)
-	{
-		LED_setIndicator(2, 0xFF0000, -1, 2);
-	}
+	LEDS_popProfileOverride(LIGHT_PROFILE_SLEEP);
 
 	PWR_updateFrequency(-1, true);
 
@@ -3782,7 +3752,7 @@ static void PWR_exitSleep(void)
 	system("killall -CONT batmon.elf");
 	// this is currently handled in wifi_init.sh from suspend script, doing this double or at same time causes problems
 	// system("killall -CONT wifi_daemon");
-	system("killall -CONT bt_daemon");
+	system("killall -CONT audiomon.elf");
 
 	if (GetHDMI())
 	{
@@ -3944,107 +3914,221 @@ FALLBACK_IMPLEMENTATION void PLAT_setLedInbrightness(LightSettings *led) {}
 FALLBACK_IMPLEMENTATION void PLAT_setLedEffectCycles(LightSettings *led) {}
 FALLBACK_IMPLEMENTATION void PLAT_setLedEffectSpeed(LightSettings *led) {}
 
-// only indicator leds may work when battery is below PWR_LOW_CHARGE
-void LED_setIndicator(int effect, uint32_t color, int cycles, int ledindex)
+void LEDS_setProfile(int profile)
 {
-	int lightsize = sizeof(*lights) / sizeof(LightSettings);
-	(*lights)[ledindex].effect = effect;
-	(*lights)[ledindex].color1 = color;
-	(*lights)[ledindex].cycles = cycles;
+	if(lights_initialized == 0)
+		return;
 
-	PLAT_setLedInbrightness(&(*lights)[ledindex]);
-	PLAT_setLedEffectCycles(&(*lights)[ledindex]);
-	PLAT_setLedColor(&(*lights)[ledindex]);
-	PLAT_setLedEffect(&(*lights)[ledindex]);
+	LightSettings *new_lights = NULL;
+	bool indicator = true;
+
+	switch(profile)
+	{
+		case LIGHT_PROFILE_DEFAULT:
+			new_lights = lightsDefault;
+			indicator = false;
+			break;
+		case LIGHT_PROFILE_OFF:
+			new_lights = lightsOff;
+			indicator = false;
+			break;
+		case LIGHT_PROFILE_LOW_BATTERY:
+			new_lights = lightsLowBattery;
+			break;
+		case LIGHT_PROFILE_CRITICAL_BATTERY:
+			new_lights = lightsCriticalBattery;
+			break;
+		case LIGHT_PROFILE_CHARGING:
+			new_lights = lightsCharging;
+			break;
+		case LIGHT_PROFILE_SLEEP:
+			new_lights = lightsSleep;
+			break;
+		case LIGHT_PROFILE_AMBIENT:
+			new_lights = lightsAmbient;
+			indicator = false;
+			break;
+		default:
+			return;
+	}
+	if (profile != LIGHT_PROFILE_AMBIENT && lights == (LightSettings (*)[MAX_LIGHTS])new_lights)
+		return;
+	lights = (LightSettings (*)[MAX_LIGHTS])new_lights;
+
+	LEDS_updateLeds(indicator);
 }
-void LEDS_setIndicator(int effect, uint32_t color, int cycles)
+
+void LEDS_applyRules()
 {
-	int lightsize = sizeof(*lights) / sizeof(LightSettings);
+	if(lights_initialized == 0) {
+		LOG_error("LEDS_applyRules: lights not initialized, skipping\n");
+		return;
+	}
+	
+	// some rules rely on pwr.is_charging and pwr.charge being valid
+	if(pwr.initialized == 0)
+		LOG_warn("LEDS_applyRules called before PWR_init\n");
+	// some rules rely in InitSettings() being called (e.g GetMute())
+	if(!InitializedSettings())
+		LOG_warn("LEDS_applyRules called before InitSettings\n");
+
+	// these are defined in order of priority, not necessarily in the order
+	// of LightProfile enum.
+	// e.g.
+	// - if charging and low battery, charging takes priority
+	if (pwr.initialized && pwr.is_charging) {
+		//LOG_info("LEDS_applyRules: charging\n");
+		LEDS_setProfile(LIGHT_PROFILE_CHARGING);
+	}
+	// - if critical battery, critical battery takes priority over everything
+	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE) {
+		//LOG_info("LEDS_applyRules: critical battery\n");
+		LEDS_setProfile(LIGHT_PROFILE_CRITICAL_BATTERY);
+	}
+	// - if muted, muted takes priority over everything except critical battery
+	else if(InitializedSettings() && CFG_getMuteLEDs() && GetMute()) {
+		//LOG_info("LEDS_applyRules: muted\n");
+		LEDS_setProfile(LIGHT_PROFILE_OFF);
+	}
+	// other rules
+	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE) {
+		//LOG_info("LEDS_applyRules: low battery\n");
+		LEDS_setProfile(LIGHT_PROFILE_LOW_BATTERY);
+	}
+	// - if no other rule applies, use default (or temporary override)
+	// manual rules to be set on demand: LIGHT_PROFILE_SLEEP, LIGHT_PROFILE_AMBIENT
+	else {
+		//LOG_info("LEDS_applyRules: default/override: %i\n", LEDS_getProfileOverride());
+		LEDS_setProfile(LEDS_getProfileOverride());
+	}
+}
+
+void LEDS_updateLeds(bool indicator_only)
+{
+	if(lights_initialized == 0) {
+		LOG_error("LEDS_updateLeds: lights not initialized, skipping\n");
+		return;
+	}
+		
+	int lightsize = 3;
+	char *device = getenv("DEVICE");
+	int is_brick = exactMatch("brick", device);
+	if (is_brick)
+		lightsize = 4;
+	if(!lights)
+	{
+		LOG_error("LEDS_updateLeds called but lights is NULL\n");
+		return;
+	}
 	for (int i = 0; i < lightsize; i++)
 	{
-		(*lights)[i].effect = effect;
-		if (color)
-		{
-			(*lights)[i].color1 = color;
-		}
-		(*lights)[i].cycles = cycles;
+		// set brightness of each led
+		if(indicator_only)
+			PLAT_setLedInbrightness(&(*lights)[i]);
+		else
+			PLAT_setLedBrightness(&(*lights)[i]);
 
-		PLAT_setLedInbrightness(&(*lights)[i]);
-		PLAT_setLedEffectCycles(&(*lights)[i]);
-		PLAT_setLedColor(&(*lights)[i]);
-		PLAT_setLedEffect(&(*lights)[i]);
-	}
-}
-void LEDS_setEffect(int effect)
-{
-	if (pwr.charge > PWR_LOW_CHARGE)
-	{
-		int lightsize = sizeof(*lights) / sizeof(LightSettings);
-		for (int i = 0; i < lightsize; i++)
-		{
-			(*lights)[i].effect = effect;
-			PLAT_setLedEffect(&(*lights)[i]);
-		}
-	}
-}
-void LEDS_setColor(uint32_t color)
-{
-	if (pwr.charge > PWR_LOW_CHARGE)
-	{
-		int lightsize = sizeof(*lights) / sizeof(LightSettings);
-		for (int i = 0; i < lightsize; i++)
-		{
-			(*lights)[i].color1 = color;
-			PLAT_setLedColor(&(*lights)[i]);
-			PLAT_setLedEffect(&(*lights)[i]);
-		}
-	}
-}
-
-void LED_setColor(uint32_t color, int ledindex)
-{
-	if (pwr.charge > PWR_LOW_CHARGE)
-	{
-		(*lights)[ledindex].color1 = color;
-		PLAT_setLedColor(&(*lights)[ledindex]);
-		PLAT_setLedEffect(&(*lights)[ledindex]);
-	}
-}
-
-void LEDS_updateLeds()
-{
-	if (pwr.charge > PWR_LOW_CHARGE)
-	{
-		int lightsize = 3;
-		char *device = getenv("DEVICE");
-		int is_brick = exactMatch("brick", device);
-		if (is_brick)
-			lightsize = 4;
-		for (int i = 0; i < lightsize; i++)
-		{
-			PLAT_setLedBrightness(&(*lights)[i]);	// set brightness of each led
-			PLAT_setLedEffectCycles(&(*lights)[i]); // set how many times animation should loop
-			PLAT_setLedEffectSpeed(&(*lights)[i]);	// set animation speed
-			PLAT_setLedColor(&(*lights)[i]);		// set color
-			PLAT_setLedEffect(&(*lights)[i]);		// finally set the effect, on trimui devices this also applies the settings
-		}
+		PLAT_setLedEffectCycles(&(*lights)[i]); // set how many times animation should loop
+		PLAT_setLedEffectSpeed(&(*lights)[i]);	// set animation speed
+		PLAT_setLedColor(&(*lights)[i]);		// set color
+		PLAT_setLedEffect(&(*lights)[i]);		// finally set the effect, on trimui devices this also applies the settings
 	}
 }
 
 void LEDS_initLeds()
 {
-	PLAT_getBatteryStatusFine(&pwr.is_charging, &pwr.charge);
 	PLAT_initLeds(lightsDefault);
+
+	if(!lightsDefault)
+	{
+		LOG_error("LEDS_initLeds called but lightsDefault is NULL\n");
+		return;
+	}
 
 	int lightsize = sizeof(lightsDefault) / sizeof(LightSettings);
 	for (int i = 0; i < lightsize; i++)
 	{
-		lightsMuted[i] = lightsDefault[i];
-		lightsMuted[i].brightness = 0;
-		lightsMuted[i].inbrightness = 0;
+		// LIGHT_PROFILE_OFF
+		lightsOff[i] = lightsDefault[i];
+		lightsOff[i].brightness = 0;
+		lightsOff[i].inbrightness = 0;
+
+		// LIGHT_PROFILE_LOW_BATTERY
+		lightsLowBattery[i] = lightsDefault[i];
+		lightsLowBattery[i].effect = 3; // blink
+		lightsLowBattery[i].color1 = 0xFF3300;
+		lightsLowBattery[i].cycles = -1; // infinite
+
+		// LIGHT_PROFILE_CRITICAL_BATTERY
+		lightsCriticalBattery[i] = lightsDefault[i];
+		lightsCriticalBattery[i].effect = 3; // blink
+		lightsCriticalBattery[i].color1 = 0xFF0000;
+		lightsCriticalBattery[i].cycles = -1; // infinite
+
+		// LIGHT_PROFILE_CHARGING
+		lightsCharging[i] = lightsDefault[i];
+		lightsCharging[i].effect = 2; // breathe
+		lightsCharging[i].color1 = 0x00FF00;
+		lightsCharging[i].cycles = -1; // infinite	
+
+		// LIGHT_PROFILE_SLEEP
+		lightsSleep[i] = lightsDefault[i];
+		lightsSleep[i].effect = 2; // breathe
+		lightsSleep[i].cycles = 5;
+
+		// LIGHT_PROFILE_AMBIENT
+		// just to have sensible defaults, will be updated by GFX_setAmbientColor
+		lightsAmbient[i] = lightsDefault[i];
 	}
 
-	lights = &lightsDefault;
+	// this might be called more than once (for reasons), so reset to consistent state
+	profile_override_top = -1;
+
+	lights_initialized = 1;
+
+	// once is enough to get us started, will be called by the main loop afterwards
+	LEDS_applyRules();
+}
+
+bool LEDS_pushProfileOverride(int profile)
+{
+	if(profile_override_top == PROFILE_OVERRIDE_SIZE - 1)
+	{
+		LOG_debug("LED_profile stack is full, ignoring.\n");
+		return false;
+	}
+	profile_override[++profile_override_top] = profile;
+	LEDS_applyRules();
+
+	return true;
+}
+
+bool LEDS_popProfileOverride(int profile)
+{
+	if(profile_override_top == -1) {
+		LOG_debug("LED_profile stack is empty, nothing to pop.\n");
+		return false;
+	}
+	if(LEDS_getProfileOverride() != profile) {
+		LOG_debug("LEDS_popProfileOverride attempted to remove %d, but top of stack is %d\n", profile, LEDS_getProfileOverride());
+		return false;
+	}
+	profile_override_top--;
+	LEDS_applyRules();
+
+	return true;
+}
+
+// returns top of stack, or default if stack is empty
+int LEDS_getProfileOverride()
+{
+	if(profile_override_top == -1) {
+		LOG_debug("LED_profile stack is empty, returning default profile.\n");
+		return LIGHT_PROFILE_DEFAULT;
+	}
+	
+	LOG_info("LEDS_getProfileOverride: %i\n", profile_override[profile_override_top]);
+	return profile_override[profile_override_top];
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -4133,5 +4217,3 @@ FALLBACK_IMPLEMENTATION void PLAT_bluetoothStreamEnd() {}
 FALLBACK_IMPLEMENTATION void PLAT_bluetoothStreamQuit() {}
 FALLBACK_IMPLEMENTATION int PLAT_bluetoothVolume() { return 100; }
 FALLBACK_IMPLEMENTATION void PLAT_bluetoothSetVolume(int vol) {}
-FALLBACK_IMPLEMENTATION void PLAT_bluetoothWatchRegister(void (*cb)(bool, int)) {}
-FALLBACK_IMPLEMENTATION void PLAT_bluetoothWatchUnregister(void) {}

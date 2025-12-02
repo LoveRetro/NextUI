@@ -18,7 +18,7 @@ endif
 ###########################################################
 
 BUILD_HASH:=$(shell git rev-parse --short HEAD)
-BUILD_BRANCH:=$(shell git rev-parse --abbrev-ref HEAD)
+BUILD_BRANCH:=$(shell git symbolic-ref --short HEAD)
 RELEASE_TIME:=$(shell TZ=GMT date +%Y%m%d)
 ifeq ($(BUILD_BRANCH),main)
   RELEASE_BETA :=
@@ -161,6 +161,8 @@ endif
 	cp ./workspace/$(PLATFORM)/cores/output/vice_xplus4_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/PLUS4.pak
 	cp ./workspace/$(PLATFORM)/cores/output/vice_xpet_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/PET.pak
 	cp ./workspace/$(PLATFORM)/cores/output/vice_xvic_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/VIC.pak
+	cp ./workspace/$(PLATFORM)/cores/output/bluemsx_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/MSX.pak
+	cp ./workspace/$(PLATFORM)/cores/output/gearcoleco_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/COLECO.pak
 endif
 
 common: build system cores
