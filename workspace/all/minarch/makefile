@@ -41,7 +41,7 @@ CFLAGS   += -DHAS_SRM
 endif
 ifeq ($(PLATFORM), tg5040)
 CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
-LDFLAGS +=  -lwifimg -lwifid
+LDFLAGS +=  -lwifid -lwifimg
 LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -lasound -ljson-c
 endif
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
@@ -73,7 +73,7 @@ endif
 
 libretro-common:
 	git clone https://github.com/libretro/libretro-common
-	
+
 $(PREFIX_LOCAL)/include/msettings.h:
 	cd ../../$(PLATFORM)/libmsettings && make
 
