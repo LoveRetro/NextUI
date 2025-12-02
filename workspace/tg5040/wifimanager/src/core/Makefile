@@ -53,6 +53,6 @@ $(target): $(SRCS)
 #	cp $@ $(PREFIX)/lib
 
 ####################################################################
-all: $(target) install 
+all: $(target) install
 clean:
 	rm -rf $(target)

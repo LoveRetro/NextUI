@@ -72,6 +72,6 @@ int get_best_session_time(sqlite3* bat_log_db, const char* device)
         }
         sqlite3_finalize(stmt);
     }
-    
+
     return best_time;
 }

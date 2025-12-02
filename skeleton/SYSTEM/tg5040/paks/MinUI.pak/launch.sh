@@ -134,7 +134,7 @@ wifion=$(nextval.elf wifi | sed -n 's/.*"wifi": \([0-9]*\).*/\1/p')
 cp -f $SYSTEM_PATH/etc/wifi/wifi_init.sh /etc/wifi/wifi_init.sh
 if [ "$wifion" -eq 0 ]; then
 	/etc/wifi/wifi_init.sh stop > /dev/null 2>&1 &
-else 
+else
 	/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
 fi
 
@@ -155,7 +155,7 @@ touch "$EXEC_PATH"  && sync
 while [ -f $EXEC_PATH ]; do
 	nextui.elf &> $LOGS_PATH/nextui.txt
 	echo $CPU_SPEED_PERF > $CPU_PATH
-	
+
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
 		eval $CMD

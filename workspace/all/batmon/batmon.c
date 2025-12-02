@@ -157,7 +157,7 @@ int get_current_session_time(void)
     int current_session_duration = 0;
 
     sqlite3 *bat_log_db = open_battery_log_db();
-    
+
     if (bat_log_db != NULL)
     {
         const char *sql = "SELECT * FROM bat_activity WHERE device_serial = ? AND is_charging = 1 ORDER BY id DESC LIMIT 1;";
@@ -190,7 +190,7 @@ int get_current_session_time(void)
         sqlite3_finalize(stmt);
     }
     close_battery_log_db(bat_log_db);
-    
+
     return current_session_duration;
 }
 

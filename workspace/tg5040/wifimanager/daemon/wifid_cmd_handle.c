@@ -80,7 +80,7 @@ int aw_wifid_get_status(struct wifi_status *sptr)
 	int ret = handle_command(&req, &cli);
 	if (ret < 0)
 		goto end;
-		
+
 	if(cli.enable_pipe)
 		ret = read_command_message(cli.pipe_fd,(char*)sptr,sizeof(struct wifi_status));
 
@@ -136,7 +136,7 @@ int aw_wifid_connect_ap(const char *ssid, const char *passwd,enum cn_event *ptrE
 
 	if(cli.enable_pipe)
 		ret = read_command_message(cli.pipe_fd,(char*)ptrEvent,sizeof(enum cn_event));
-	
+
 end:
 	handle_command_free(&cli);
 	return ret;

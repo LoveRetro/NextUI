@@ -25,8 +25,8 @@
 #define COMPAT_ATTRIBUTE in
 #define COMPAT_TEXTURE texture
 #else
-#define COMPAT_VARYING varying 
-#define COMPAT_ATTRIBUTE attribute 
+#define COMPAT_VARYING varying
+#define COMPAT_ATTRIBUTE attribute
 #define COMPAT_TEXTURE texture2D
 #endif
 
@@ -117,13 +117,13 @@ uniform COMPAT_PRECISION float amp, phase, lines_black,  lines_white,
 
 void main()
 {
-    float scale = imageSize; if (autoscale == 1.0) scale = InputSize.y; 
+    float scale = imageSize; if (autoscale == 1.0) scale = InputSize.y;
     float angle = (gl_FragCoord.y * OutSize.w) * omega * scale + phase;
     vec3 color = COMPAT_TEXTURE(Source, vTexCoord).xyz;
     float grid;
- 
+
     float lines;
- 
+
     lines = sin(angle);
     lines *= amp;
     lines += offset;
@@ -131,7 +131,7 @@ void main()
     lines *= lines_white - lines_black;
     lines += lines_black;
     color *= lines;
- 
+
     FragColor = vec4(color.xyz, 1.0);
 }
 

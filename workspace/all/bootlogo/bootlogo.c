@@ -45,7 +45,7 @@ int loadImages()
         snprintf(basepath, sizeof(basepath), "%s/Bootlogo.pak/smartpro/", TOOLS_PATH);
     }
 
-    // grab all bmp files in the directory and load them with IMG_Load, 
+    // grab all bmp files in the directory and load them with IMG_Load,
     // keep them in an array of SDL_Surface pointers
     DIR *dir;
     struct dirent *ent;
@@ -143,7 +143,7 @@ int main(int argc, char *argv[])
                 // reboot
                 char* boot_path = "/mnt/boot/";
                 char* logo_path = image_paths[selected];
-                char cmd[256]; 
+                char cmd[256];
                 snprintf(cmd, sizeof(cmd), "mkdir -p %s && mount -t vfat /dev/mmcblk0p1 %s && cp \"%s\" %s/bootlogo.bmp && sync && umount %s && reboot", boot_path, boot_path, logo_path, boot_path, boot_path);
                 system(cmd);
             }

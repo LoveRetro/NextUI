@@ -6,8 +6,8 @@
 #define COMPAT_ATTRIBUTE in
 #define COMPAT_TEXTURE texture
 #else
-#define COMPAT_VARYING varying 
-#define COMPAT_ATTRIBUTE attribute 
+#define COMPAT_VARYING varying
+#define COMPAT_ATTRIBUTE attribute
 #define COMPAT_TEXTURE texture2D
 #endif
 
@@ -32,7 +32,7 @@ COMPAT_ATTRIBUTE vec4 COLOR;
 COMPAT_ATTRIBUTE vec4 TexCoord;
 COMPAT_VARYING vec4 COL0;
 COMPAT_VARYING vec4 TEX0;
- 
+
 uniform mat4 MVPMatrix;
 uniform int FrameDirection;
 uniform int FrameCount;
@@ -53,7 +53,7 @@ void main()
     gl_Position = _r0005;
     COL0 = COLOR;
     TEX0.xy = TexCoord.xy;
-} 
+}
 #elif defined(FRAGMENT)
 
 #if __VERSION__ >= 130
@@ -103,7 +103,7 @@ vec3 _a0040;
 vec3 _b0040;
 vec3 _TMP49;
 COMPAT_VARYING vec4 TEX0;
- 
+
 uniform int FrameDirection;
 uniform int FrameCount;
 uniform COMPAT_PRECISION vec2 OutputSize;
@@ -146,5 +146,5 @@ void main()
     _OUT._color = vec4(_TMP49.x, _TMP49.y, _TMP49.z, 1.00000000E+00);
     FragColor = _OUT._color;
     return;
-} 
+}
 #endif

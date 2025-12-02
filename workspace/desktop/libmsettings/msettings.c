@@ -32,7 +32,7 @@ typedef struct SettingsV4 {
 	int speaker;
 	int mute;
 	int unused[2];
-	int jack; 
+	int jack;
 } SettingsV4;
 
 // Current NextUI settings format
@@ -45,7 +45,7 @@ typedef struct SettingsV5 {
 	int mute;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV5;
 
 
@@ -62,7 +62,7 @@ typedef struct SettingsV6 {
 	int exposure;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV6;
 
 typedef struct SettingsV7 {
@@ -82,7 +82,7 @@ typedef struct SettingsV7 {
 	int mutedexposure;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV7;
 
 typedef struct SettingsV8 {
@@ -103,7 +103,7 @@ typedef struct SettingsV8 {
 	int toggled_volume;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV8;
 
 typedef struct SettingsV9 {
@@ -134,7 +134,7 @@ typedef struct SettingsV9 {
 	int turbo_r2;
 	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
-	int jack; 
+	int jack;
 } SettingsV9;
 
 // When incrementing SETTINGS_VERSION, update the Settings typedef and add
@@ -190,7 +190,7 @@ void InitSettings(void){
 	sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));
 	//sprintf(SettingsPath, "%s/msettings.bin", SDCARD_PATH "/.userdata");
 	msettings = (Settings*)malloc(sizeof(Settings));
-	
+
 	int version = peekVersion(SettingsPath);
 	if(version > 0) {
 		// fopen file pointer
@@ -202,7 +202,7 @@ void InitSettings(void){
 			else {
 				// initialize with defaults
 				memcpy(msettings, &DefaultSettings, sizeof(Settings));
-				
+
 				// overwrite with migrated data
 				if(version==8) {
 					printf("Found settings v8.\n");
@@ -216,7 +216,7 @@ void InitSettings(void){
 					msettings->toggled_contrast = old.toggled_contrast;
 					msettings->toggled_exposure = old.toggled_exposure;
 					msettings->toggled_saturation = old.toggled_saturation;
-					
+
 					msettings->saturation = old.saturation;
 					msettings->contrast = old.contrast;
 					msettings->exposure = old.exposure;
@@ -256,7 +256,7 @@ void InitSettings(void){
 					printf("Found settings v6.\n");
 					SettingsV6 old;
 					read(fd, &old, sizeof(SettingsV6));
-					
+
 					msettings->saturation = old.saturation;
 					msettings->contrast = old.contrast;
 					msettings->exposure = old.exposure;

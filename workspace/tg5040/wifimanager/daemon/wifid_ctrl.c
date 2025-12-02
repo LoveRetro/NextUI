@@ -143,7 +143,7 @@ static void wifid_connect(const struct da_requst *r, const aw_wifi_interface_t *
 			if(ret == 0)
 				// connect with stored credentials
 				p_wifi_interface->connect_ap_with_netid(net_id, fd);
-			else 
+			else
 				// try empty password
 				p_wifi_interface->connect_ap(r->ssid,r->pwd,fd);
 		}

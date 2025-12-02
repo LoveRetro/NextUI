@@ -166,10 +166,10 @@ SDL_Surface *loadRomImage(char *image_path)
 
     if(img->format->format != SDL_PIXELFORMAT_RGBA32) {
         SDL_Surface *optimized = SDL_ConvertSurfaceFormat(img, SDL_PIXELFORMAT_RGBA32, 0);
-        SDL_FreeSurface(img); 
+        SDL_FreeSurface(img);
         img = optimized;
     }
-    
+
     SDL_PixelFormat *ft = img->format;
     SDL_Surface *dst = SDL_CreateRGBSurface(0, SCALE1(IMG_MAX_WIDTH), SCALE1(IMG_MAX_HEIGHT), ft->BitsPerPixel, ft->Rmask, ft->Gmask, ft->Bmask, ft->Amask);
     SDL_Rect imgRect = GFX_blitScaled(GFX_SCALE_FILL, img, dst);
@@ -220,27 +220,27 @@ void renderList(int count, int start, int end, int selected)
         ROM *rom = entry->rom;
 
         renderRoundedRectangle((SDL_Rect){
-            layout.list_display_start_x, 
-            layout.list_display_start_y + row * elemHeight, 
-            layout.list_display_size_x, 
+            layout.list_display_start_x,
+            layout.list_display_start_y + row * elemHeight,
+            layout.list_display_size_x,
             elemHeight
         }, isSelected ? RGB_WHITE : RGB_BLACK, SCALE1(24));
 
         SDL_Surface *romImage = romImages[index];
         if (romImage) {
             SDL_Rect rectRomImage = {
-                layout.list_display_start_x + num_width + thumbMargin / 2 + (SCALE1(IMG_MAX_WIDTH) - romImage->w) / 2, 
-                layout.list_display_start_y + elemHeight * row + thumbMargin / 2, 
-                SCALE1(IMG_MAX_WIDTH), 
+                layout.list_display_start_x + num_width + thumbMargin / 2 + (SCALE1(IMG_MAX_WIDTH) - romImage->w) / 2,
+                layout.list_display_start_y + elemHeight * row + thumbMargin / 2,
+                SCALE1(IMG_MAX_WIDTH),
                 SCALE1(IMG_MAX_HEIGHT)
             };
             SDL_BlitSurface(romImage, NULL, screen, &rectRomImage);
         }
         else {
             SDL_Rect rectRomImage = {
-                layout.list_display_start_x + num_width + thumbMargin / 2, 
-                layout.list_display_start_y + elemHeight * row + thumbMargin / 2, 
-                SCALE1(IMG_MAX_WIDTH), 
+                layout.list_display_start_x + num_width + thumbMargin / 2,
+                layout.list_display_start_y + elemHeight * row + thumbMargin / 2,
+                SCALE1(IMG_MAX_WIDTH),
                 SCALE1(IMG_MAX_HEIGHT)
             };
 
@@ -264,9 +264,9 @@ void renderList(int count, int start, int end, int selected)
             textColor = COLOR_BLACK;
         }
         renderText(rom_name, font.medium, textColor, &(SDL_Rect){
-            layout.list_display_start_x + num_width + thumbMargin + SCALE1(IMG_MAX_WIDTH), 
-            layout.list_display_start_y + thumbMargin / 2 + elemHeight * row, 
-            layout.list_display_size_x, 
+            layout.list_display_start_x + num_width + thumbMargin + SCALE1(IMG_MAX_WIDTH),
+            layout.list_display_start_y + thumbMargin / 2 + elemHeight * row,
+            layout.list_display_size_x,
             textHeight});
 
         serializeTime(total, entry->play_time_total);
@@ -275,9 +275,9 @@ void renderList(int count, int start, int end, int selected)
 
         const char *details[] = {"TOTAL ", total, "  AVERAGE ", average, "  # PLAYS ", plays};
         SDL_Rect detailsRect = {
-            layout.list_display_start_x + num_width + thumbMargin + SCALE1(IMG_MAX_WIDTH), 
-            layout.list_display_start_y + thumbMargin + textHeight + elemHeight * row, 
-            layout.list_display_size_x, 
+            layout.list_display_start_x + num_width + thumbMargin + SCALE1(IMG_MAX_WIDTH),
+            layout.list_display_start_y + thumbMargin + textHeight + elemHeight * row,
+            layout.list_display_size_x,
             textHeight
         };
         for (int i = 0; i < 6; i++) {
@@ -293,9 +293,9 @@ void renderList(int count, int start, int end, int selected)
         #define SCROLL_HEIGHT 4
         int ox = (screen->w - SCALE1(SCROLL_WIDTH)) / 2;
         int oy = SCALE1((PILL_SIZE - SCROLL_HEIGHT) / 2);
-        if (start>0) 
+        if (start>0)
             GFX_blitAsset(ASSET_SCROLL_UP,   NULL, screen, &(SDL_Rect){ox, SCALE1(PADDING + PILL_SIZE)});
-        if (end<count) 
+        if (end<count)
             GFX_blitAsset(ASSET_SCROLL_DOWN, NULL, screen, &(SDL_Rect){ox, screen->h - SCALE1(PADDING + PILL_SIZE + BUTTON_SIZE) + oy});
     }
 }
@@ -320,9 +320,9 @@ void initLayout()
     layout.list_display_size_x = hw - SCALE1(PADDING * 2);
     layout.list_display_size_y = hh - SCALE1(PADDING * 2 + PILL_SIZE * 2 + BUTTON_MARGIN * 2);
 
-    layout.list_display_rect.x = layout.list_display_start_x, 
-    layout.list_display_rect.y = layout.list_display_start_y, 
-    layout.list_display_rect.w = layout.list_display_size_x, 
+    layout.list_display_rect.x = layout.list_display_start_x,
+    layout.list_display_rect.y = layout.list_display_start_y,
+    layout.list_display_rect.w = layout.list_display_size_x,
     layout.list_display_rect.h = layout.list_display_size_y;
 
     layout.items_per_page = layout.list_display_size_y / SCALE1(BIG_PILL_SIZE);

@@ -17,9 +17,9 @@ typedef std::shared_lock< Lock >  ReadLock;
 
 MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string &desc,
                    const std::vector<std::any> &values, const std::vector<std::string> &labels,
-                   ValueGetCallback on_get, ValueSetCallback on_set, ValueResetCallback on_reset, 
+                   ValueGetCallback on_get, ValueSetCallback on_set, ValueResetCallback on_reset,
                    MenuListCallback on_confirm, MenuList *submenu)
-    : AbstractMenuItem(type, name, desc, on_get, on_set, on_reset, on_confirm, submenu), 
+    : AbstractMenuItem(type, name, desc, on_get, on_set, on_reset, on_confirm, submenu),
     values(values), labels(labels)
 {
     initSelection();
@@ -28,14 +28,14 @@ MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string
 MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string &desc, const std::vector<std::any> &values,
                    ValueGetCallback on_get, ValueSetCallback on_set, ValueResetCallback on_reset,
                    MenuListCallback on_confirm, MenuList *submenu)
-    : AbstractMenuItem(type, name, desc, on_get, on_set, on_reset, on_confirm, submenu), 
+    : AbstractMenuItem(type, name, desc, on_get, on_set, on_reset, on_confirm, submenu),
     values(values) /*labels({}),*/
 {
     generateDefaultLabels();
     initSelection();
 }
 
-MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string &desc, 
+MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string &desc,
                    int min, int max, const std::string suffix,
                    ValueGetCallback on_get, ValueSetCallback on_set, ValueResetCallback on_reset,
                    MenuListCallback on_confirm, MenuList *submenu)

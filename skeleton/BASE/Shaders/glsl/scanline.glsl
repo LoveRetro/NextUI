@@ -38,7 +38,7 @@ COMPAT_VARYING vec4 COL0;
 COMPAT_ATTRIBUTE vec4 TexCoord;
 COMPAT_VARYING vec4 TEX0;
 COMPAT_VARYING vec4 TEX2;
- 
+
 uniform mat4 MVPMatrix;
 uniform int FrameDirection;
 uniform int FrameCount;
@@ -62,7 +62,7 @@ void main()
     COL0 = COLOR;
     TEX0.xy = TexCoord.xy;
     TEX2.xy = _coords._omega;
-} 
+}
 #elif defined(FRAGMENT)
 
 #if __VERSION__ >= 130
@@ -109,7 +109,7 @@ vec2 _x0009;
 vec2 _a0015;
 COMPAT_VARYING vec4 TEX2;
 COMPAT_VARYING vec4 TEX0;
- 
+
 uniform int FrameDirection;
 uniform int FrameCount;
 uniform COMPAT_PRECISION vec2 OutputSize;
@@ -129,5 +129,5 @@ void main()
     _ret_0 = vec4(_scanline.x, _scanline.y, _scanline.z, 1.00000000E+00);
     FragColor = _ret_0;
     return;
-} 
+}
 #endif

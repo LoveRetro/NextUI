@@ -113,18 +113,18 @@ std::string getUsbAudioCardNumber(struct udev_device* dev) {
     // Look for the card number in the device path or properties
     const char* devnode = udev_device_get_devnode(dev);
     if (!devnode) return "";
-    
+
     // Extract card number from device node like /dev/snd/controlC1
     std::string devnode_str(devnode);
     auto pos = devnode_str.find("controlC");
     if (pos != std::string::npos) {
         return devnode_str.substr(pos + 8); // Extract number after "controlC"
     }
-    
+
     // Alternative: check ALSA card property
     const char* card = udev_device_get_property_value(dev, "SOUND_CARD");
     if (card) return std::string(card);
-    
+
     return "";
 }
 
@@ -132,26 +132,26 @@ bool isUsbAudioDevice(struct udev_device* dev) {
     const char* subsystem = udev_device_get_subsystem(dev);
     const char* devnode = udev_device_get_devnode(dev);
     const char* devpath = udev_device_get_devpath(dev);
-    
+
     if (!subsystem || strcmp(subsystem, "sound") != 0) {
         return false;
     }
-    
+
     if (!devnode) {
         return false;
     }
-    
+
     // Check if it's a control device (indicates audio capability)
     std::string devnode_str(devnode);
     if (devnode_str.find("controlC") == std::string::npos) {
         return false;
     }
-    
+
     // Check if it's USB-connected by looking at the device path
     if (devpath && strstr(devpath, "usb")) {
         return true;
     }
-    
+
     return false;
 }
 
@@ -244,24 +244,24 @@ void signalHandler(int sig) {
 
 void scanExistingUsbAudioDevices(struct udev* udev) {
     log("Scanning for existing USB audio devices...");
-    
+
     struct udev_enumerate* enumerate = udev_enumerate_new(udev);
     if (!enumerate) {
         log("Failed to create udev enumerator");
         return;
     }
-    
+
     // Filter for sound subsystem
     udev_enumerate_add_match_subsystem(enumerate, "sound");
     udev_enumerate_scan_devices(enumerate);
-    
+
     struct udev_list_entry* devices = udev_enumerate_get_list_entry(enumerate);
     struct udev_list_entry* entry;
-    
+
     udev_list_entry_foreach(entry, devices) {
         const char* path = udev_list_entry_get_name(entry);
         struct udev_device* dev = udev_device_new_from_syspath(udev, path);
-        
+
         if (dev) {
             if (isUsbAudioDevice(dev)) {
                 log("Found existing USB audio device at startup");
@@ -270,7 +270,7 @@ void scanExistingUsbAudioDevices(struct udev* udev) {
             udev_device_unref(dev);
         }
     }
-    
+
     udev_enumerate_unref(enumerate);
     log("Finished scanning for existing USB audio devices");
 }
@@ -326,47 +326,47 @@ int main(int argc, char* argv[]) {
     // Don't filter initially - let's see all events
     // udev_monitor_filter_add_match_subsystem_devtype(mon, "sound", NULL);
     udev_monitor_enable_receiving(mon);
-    
+
     // Scan for existing USB audio devices before starting event monitoring
     scanExistingUsbAudioDevices(udev);
-    
+
     int udev_fd = udev_monitor_get_fd(mon);
     int dbus_fd = -1;
-    
+
     // Try to get D-Bus file descriptor
     if (!dbus_connection_get_unix_fd(conn, &dbus_fd)) {
         log("Warning: Could not get D-Bus file descriptor, will use polling");
         dbus_fd = -1;
     }
-    
+
     log("Monitoring for Bluetooth and USB audio device events");
 
     while (running) {
         fd_set readfds;
         FD_ZERO(&readfds);
-        
+
         // Add D-Bus file descriptor
         if (dbus_fd >= 0) {
             FD_SET(dbus_fd, &readfds);
         }
-        
+
         // Add udev file descriptor
         FD_SET(udev_fd, &readfds);
-        
+
         int max_fd = (dbus_fd > udev_fd) ? dbus_fd : udev_fd;
-        
+
         struct timeval timeout;
         timeout.tv_sec = 1;
         timeout.tv_usec = 0;
-        
+
         int ret = select(max_fd + 1, &readfds, NULL, NULL, &timeout);
-        
+
         if (ret < 0) {
             if (errno == EINTR) continue;
             log("select() error");
             break;
         }
-        
+
         // Handle D-Bus events
         if (dbus_fd >= 0 && FD_ISSET(dbus_fd, &readfds)) {
             dbus_connection_read_write(conn, 0);
@@ -417,14 +417,14 @@ int main(int argc, char* argv[]) {
                 dbus_message_unref(msg);
             }
         }
-        
+
         // Handle udev events
         if (FD_ISSET(udev_fd, &readfds)) {
             struct udev_device* dev = udev_monitor_receive_device(mon);
             if (dev) {
                 const char* action = udev_device_get_action(dev);
                 const char* subsystem = udev_device_get_subsystem(dev);
-                
+
                 // Only process sound events
                 if (subsystem && strcmp(subsystem, "sound") == 0) {
                     if (isUsbAudioDevice(dev)) {
