@@ -53,6 +53,9 @@ else
 	cd ./all/settings/ && make
 	cd ./all/ledcontrol/ && make
 	cd ./all/bootlogo/ && make
+ifeq ($(PLATFORM), tg5040)
+	cd ./tg5040/poweroff_next/ && make
+endif
 endif
 ifdef COMPILE_CORES
 	make cores
@@ -80,6 +83,9 @@ ifneq ($(PLATFORM), desktop)
 	cd ./all/syncsettings/ && make clean
 	cd ./all/ledcontrol/ && make clean
 	cd ./all/bootlogo/ && make clean
+ifeq ($(PLATFORM), tg5040)
+	cd ./tg5040/poweroff_next/ && make clean
+endif
 endif
 	cd ./$(PLATFORM)/libmsettings && make clean
 	cd ./all/nextui/ && make clean

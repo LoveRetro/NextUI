@@ -96,6 +96,7 @@ typedef struct
 	// Power
 	uint32_t screenTimeoutSecs;
 	uint32_t suspendTimeoutSecs;
+	bool powerOffProtection;
 
 	// Emulator
 	int saveFormat;
@@ -134,6 +135,7 @@ typedef struct
 #define CFG_DEFAULT_GAMESWITCHERSCALING GFX_SCALE_FULLSCREEN
 #define CFG_DEFAULT_SCREENTIMEOUTSECS 60
 #define CFG_DEFAULT_SUSPENDTIMEOUTSECS 30
+#define CFG_DEFAULT_POWEROFFPROTECTION true
 #define CFG_DEFAULT_HAPTICS false
 #define CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND true
 #define CFG_DEFAULT_SAVEFORMAT SAVE_FORMAT_SAV
@@ -172,6 +174,9 @@ void CFG_setScreenTimeoutSecs(uint32_t secs);
 // Time in secs before the device enters suspend mode (aka deep sleep).
 uint32_t CFG_getSuspendTimeoutSecs(void);
 void CFG_setSuspendTimeoutSecs(uint32_t secs);
+// Enable/disable PMIC power-off protection mode.
+bool CFG_getPowerOffProtection(void);
+void CFG_setPowerOffProtection(bool enable);
 // Show/hide clock in the status pill.
 bool CFG_getShowClock(void);
 void CFG_setShowClock(bool show);
