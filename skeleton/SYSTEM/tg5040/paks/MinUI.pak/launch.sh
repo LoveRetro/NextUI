@@ -11,17 +11,6 @@
 # 	reboot
 # fi
 
-#######################################
-
-if [ -f "/tmp/poweroff" ]; then
-	poweroff_next
-	exit 0
-fi
-if [ -f "/tmp/reboot" ]; then
-	reboot_next
-	exit 0
-fi
-
 export PLATFORM="tg5040"
 export SDCARD_PATH="/mnt/SDCARD"
 export BIOS_PATH="$SDCARD_PATH/Bios"
@@ -34,6 +23,19 @@ export USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
 export SHARED_USERDATA_PATH="$SDCARD_PATH/.userdata/shared"
 export LOGS_PATH="$USERDATA_PATH/logs"
 export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
+
+#######################################
+
+if [ -f "/tmp/poweroff" ]; then
+	poweroff_next
+	exit 0
+fi
+if [ -f "/tmp/reboot" ]; then
+	reboot_next
+	exit 0
+fi
+
+#######################################
 
 mkdir -p "$BIOS_PATH"
 mkdir -p "$ROMS_PATH"
