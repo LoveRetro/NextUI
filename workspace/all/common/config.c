@@ -60,6 +60,10 @@ void CFG_defaults(NextUISettings *cfg)
         .saveFormat = CFG_DEFAULT_SAVEFORMAT,
         .stateFormat = CFG_DEFAULT_STATEFORMAT,
         .useExtractedFileName = CFG_DEFAULT_EXTRACTEDFILENAME,
+        .rewindEnable = CFG_DEFAULT_REWIND_ENABLE,
+        .rewindBufferMB = CFG_DEFAULT_REWIND_BUFFER_MB,
+        .rewindGranularity = CFG_DEFAULT_REWIND_GRANULARITY,
+        .rewindMuteAudio = CFG_DEFAULT_REWIND_MUTE_AUDIO,
 
         .wifi = CFG_DEFAULT_WIFI,
         .wifiDiagnostics = CFG_DEFAULT_WIFI_DIAG,
@@ -228,6 +232,26 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "useExtractedFileName=%i", &temp_value) == 1)
             {
                 CFG_setUseExtractedFileName((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "rewindEnable=%i", &temp_value) == 1)
+            {
+                CFG_setRewindEnable((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "rewindBufferMB=%i", &temp_value) == 1)
+            {
+                CFG_setRewindBufferMB(temp_value);
+                continue;
+            }
+            if (sscanf(line, "rewindGranularity=%i", &temp_value) == 1)
+            {
+                CFG_setRewindGranularity(temp_value);
+                continue;
+            }
+            if (sscanf(line, "rewindMuteAudio=%i", &temp_value) == 1)
+            {
+                CFG_setRewindMuteAudio((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "muteLeds=%i", &temp_value) == 1)
@@ -583,6 +607,50 @@ void CFG_setUseExtractedFileName(bool use)
     CFG_sync();
 }
 
+bool CFG_getRewindEnable(void)
+{
+    return settings.rewindEnable;
+}
+
+void CFG_setRewindEnable(bool enable)
+{
+    settings.rewindEnable = enable;
+    CFG_sync();
+}
+
+int CFG_getRewindBufferMB(void)
+{
+    return settings.rewindBufferMB;
+}
+
+void CFG_setRewindBufferMB(int mb)
+{
+    settings.rewindBufferMB = clamp(mb, 1, 256);
+    CFG_sync();
+}
+
+int CFG_getRewindGranularity(void)
+{
+    return settings.rewindGranularity;
+}
+
+void CFG_setRewindGranularity(int granularity)
+{
+    settings.rewindGranularity = clamp(granularity, 1, 60);
+    CFG_sync();
+}
+
+bool CFG_getRewindMuteAudio(void)
+{
+    return settings.rewindMuteAudio;
+}
+
+void CFG_setRewindMuteAudio(bool enable)
+{
+    settings.rewindMuteAudio = enable;
+    CFG_sync();
+}
+
 bool CFG_getMuteLEDs(void)
 {
     return settings.muteLeds;
@@ -885,6 +953,10 @@ void CFG_sync(void)
     fprintf(file, "saveFormat=%i\n", settings.saveFormat);
     fprintf(file, "stateFormat=%i\n", settings.stateFormat);
     fprintf(file, "useExtractedFileName=%i\n", settings.useExtractedFileName);
+    fprintf(file, "rewindEnable=%i\n", settings.rewindEnable);
+    fprintf(file, "rewindBufferMB=%i\n", settings.rewindBufferMB);
+    fprintf(file, "rewindGranularity=%i\n", settings.rewindGranularity);
+    fprintf(file, "rewindMuteAudio=%i\n", settings.rewindMuteAudio);
     fprintf(file, "muteLeds=%i\n", settings.muteLeds);
     fprintf(file, "artWidth=%i\n", (int)(settings.gameArtWidth * 100));
     fprintf(file, "wifi=%i\n", settings.wifi);
@@ -928,6 +1000,10 @@ void CFG_print(void)
     printf("\t\"saveFormat\": %i,\n", settings.saveFormat);
     printf("\t\"stateFormat\": %i,\n", settings.stateFormat);
     printf("\t\"useExtractedFileName\": %i,\n", settings.useExtractedFileName);
+    printf("\t\"rewindEnable\": %i,\n", settings.rewindEnable);
+    printf("\t\"rewindBufferMB\": %i,\n", settings.rewindBufferMB);
+    printf("\t\"rewindGranularity\": %i,\n", settings.rewindGranularity);
+    printf("\t\"rewindMuteAudio\": %i,\n", settings.rewindMuteAudio);
     printf("\t\"muteLeds\": %i,\n", settings.muteLeds);
     printf("\t\"artWidth\": %i,\n", (int)(settings.gameArtWidth * 100));
     printf("\t\"wifi\": %i,\n", settings.wifi);

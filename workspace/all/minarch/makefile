@@ -31,12 +31,12 @@ LDFLAGS	 += -lmsettings -lsamplerate
 ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
 CFLAGS += `pkg-config --cflags libzip`
-LDFLAGS += `pkg-config --libs libzip`
+LDFLAGS += `pkg-config --libs libzip` -lz
 else
-LDFLAGS += -lzip
+LDFLAGS += -lzip -lz
 endif
 else
-LDFLAGS	 +=  -Llibretro-common -lsrm -lzip
+LDFLAGS	 +=  -Llibretro-common -lsrm -lzip -lz
 CFLAGS   += -DHAS_SRM
 endif
 ifeq ($(PLATFORM), tg5040)

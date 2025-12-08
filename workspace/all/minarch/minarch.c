@@ -13,6 +13,7 @@
 #include <zip.h> 
 #include <pthread.h>
 #include <glob.h>
+#include <zlib.h>
 
 // libretro-common
 #include "libretro.h"
@@ -70,6 +71,8 @@ static int show_debug = 0;
 static int max_ff_speed = 3; // 4x
 static int ff_audio = 0;
 static int fast_forward = 0;
+static int rewind_pressed = 0;
+static int rewinding = 0;
 static int overclock = 3; // auto
 static int has_custom_controllers = 0;
 static int gamepad_type = 0; // index in gamepad_labels/gamepad_values
@@ -1082,6 +1085,7 @@ static void State_autosave(void) {
 	State_write();
 	state_slot = last_state_slot;
 }
+static void Rewind_on_state_change(void);
 static void State_resume(void) {
 	if (!exists(RESUME_SLOT_PATH)) return;
 	
@@ -1090,9 +1094,251 @@ static void State_resume(void) {
 	unlink(RESUME_SLOT_PATH);
 	State_read();
 	state_slot = last_state_slot;
+	Rewind_on_state_change();
 }
 
 ///////////////////////////////
+// Rewind buffer (in-memory, compressed)
+
+typedef struct {
+	size_t offset;
+	size_t size;
+} RewindEntry;
+
+typedef struct {
+	uint8_t *buffer;
+	size_t capacity;
+	size_t head;
+	size_t tail;
+
+	RewindEntry *entries;
+	int entry_capacity;
+	int entry_head;
+	int entry_tail;
+	int entry_count;
+
+	uint8_t *state_buf;
+	size_t state_size;
+	uint8_t *scratch;
+	size_t scratch_size;
+
+	int granularity;
+	int frame_counter;
+	int enabled;
+	int mute_audio;
+} RewindContext;
+
+static RewindContext rewind_ctx = {0};
+static int rewind_warn_empty = 0;
+static int last_rewind_pressed = 0;
+
+static void Rewind_free(void) {
+	if (rewind_ctx.buffer) free(rewind_ctx.buffer);
+	if (rewind_ctx.entries) free(rewind_ctx.entries);
+	if (rewind_ctx.state_buf) free(rewind_ctx.state_buf);
+	if (rewind_ctx.scratch) free(rewind_ctx.scratch);
+	memset(&rewind_ctx, 0, sizeof(rewind_ctx));
+	rewinding = 0;
+}
+
+static void Rewind_reset(void) {
+	if (!rewind_ctx.enabled) return;
+	rewind_ctx.head = rewind_ctx.tail = 0;
+	rewind_ctx.entry_head = rewind_ctx.entry_tail = rewind_ctx.entry_count = 0;
+	rewind_ctx.frame_counter = 0;
+	rewinding = 0;
+	rewind_warn_empty = 0;
+}
+
+static size_t Rewind_free_space(void) {
+	if (rewind_ctx.entry_count>0 && rewind_ctx.head==rewind_ctx.tail) return 0;
+	if (rewind_ctx.head >= rewind_ctx.tail)
+		return rewind_ctx.capacity - (rewind_ctx.head - rewind_ctx.tail);
+	else
+		return rewind_ctx.tail - rewind_ctx.head;
+}
+
+static void Rewind_drop_oldest(void) {
+	if (!rewind_ctx.entry_count) return;
+	RewindEntry *e = &rewind_ctx.entries[rewind_ctx.entry_tail];
+	rewind_ctx.tail = (e->offset + e->size) % rewind_ctx.capacity;
+	rewind_ctx.entry_tail = (rewind_ctx.entry_tail + 1) % rewind_ctx.entry_capacity;
+	rewind_ctx.entry_count -= 1;
+	if (rewind_ctx.entry_count==0) {
+		rewind_ctx.head = rewind_ctx.tail = 0;
+	}
+}
+
+static int Rewind_init(size_t state_size) {
+	Rewind_free();
+	int enable = CFG_getRewindEnable();
+	int buf_mb = CFG_getRewindBufferMB();
+	int gran = CFG_getRewindGranularity();
+	int mute = CFG_getRewindMuteAudio();
+	const char *force_path = SHARED_USERDATA_PATH "/rewind.force";
+	if (exists((char*)force_path)) {
+		enable = 1;
+		LOG_info("Rewind: force enable via %s\n", force_path);
+	}
+	LOG_info("Rewind: config enable=%i bufferMB=%i granularity=%i mute=%i\n", enable, buf_mb, gran, mute);
+	if (!enable) {
+		LOG_info("Rewind: disabled via config\n");
+		return 0;
+	}
+	if (!state_size) {
+		LOG_info("Rewind: core reported zero serialize size, disabling\n");
+		return 0;
+	}
+
+	size_t buffer_mb = CFG_getRewindBufferMB();
+	if (buffer_mb < 1) buffer_mb = 1;
+	if (buffer_mb > 256) buffer_mb = 256;
+
+	rewind_ctx.capacity = buffer_mb * 1024 * 1024;
+	rewind_ctx.buffer = calloc(1, rewind_ctx.capacity);
+	if (!rewind_ctx.buffer) {
+		LOG_error("Rewind: failed to allocate buffer\n");
+		return 0;
+	}
+
+	rewind_ctx.state_size = state_size;
+	rewind_ctx.state_buf = calloc(1, state_size);
+	if (!rewind_ctx.state_buf) {
+		LOG_error("Rewind: failed to allocate state buffer\n");
+		Rewind_free();
+		return 0;
+	}
+
+	rewind_ctx.scratch_size = compressBound(state_size);
+	rewind_ctx.scratch = calloc(1, rewind_ctx.scratch_size);
+	if (!rewind_ctx.scratch) {
+		LOG_error("Rewind: failed to allocate scratch buffer\n");
+		Rewind_free();
+		return 0;
+	}
+
+	int entry_cap = rewind_ctx.capacity / 4096;
+	if (entry_cap < 8) entry_cap = 8;
+	rewind_ctx.entry_capacity = entry_cap;
+	rewind_ctx.entries = calloc(entry_cap, sizeof(RewindEntry));
+	if (!rewind_ctx.entries) {
+		LOG_error("Rewind: failed to allocate entry table\n");
+		Rewind_free();
+		return 0;
+	}
+
+	rewind_ctx.granularity = CFG_getRewindGranularity();
+	if (rewind_ctx.granularity < 1) rewind_ctx.granularity = 1;
+	rewind_ctx.mute_audio = CFG_getRewindMuteAudio();
+	rewind_ctx.enabled = 1;
+
+	LOG_info("Rewind: enabled (%zu bytes buffer, granularity %i)\n", rewind_ctx.capacity, rewind_ctx.granularity);
+	return 1;
+}
+
+static void Rewind_push(int force) {
+	if (!rewind_ctx.enabled) return;
+	if (!rewind_ctx.buffer || !rewind_ctx.state_buf) return;
+
+	if (!force) {
+		rewind_ctx.frame_counter += 1;
+		if (rewind_ctx.frame_counter < rewind_ctx.granularity) return;
+		rewind_ctx.frame_counter = 0;
+	} else {
+		rewind_ctx.frame_counter = 0;
+	}
+
+	if (!core.serialize || !core.serialize_size) return;
+
+	if (!core.serialize(rewind_ctx.state_buf, rewind_ctx.state_size)) {
+		LOG_error("Rewind: serialize failed\n");
+		return;
+	}
+
+	uLongf dest_len = rewind_ctx.scratch_size;
+	int res = compress2(rewind_ctx.scratch, &dest_len, rewind_ctx.state_buf, rewind_ctx.state_size, Z_BEST_SPEED);
+	if (res != Z_OK) {
+		LOG_error("Rewind: compression failed (%i)\n", res);
+		return;
+	}
+
+	if (dest_len >= rewind_ctx.capacity) {
+		LOG_error("Rewind: state does not fit in buffer\n");
+		return;
+	}
+
+	// wrap write position if needed
+	if (rewind_ctx.head + dest_len > rewind_ctx.capacity) {
+		rewind_ctx.head = 0;
+		if (rewind_ctx.entry_count==0) rewind_ctx.tail = 0;
+	}
+
+	// make room
+	while (Rewind_free_space() <= dest_len) {
+		Rewind_drop_oldest();
+	}
+
+	memcpy(rewind_ctx.buffer + rewind_ctx.head, rewind_ctx.scratch, dest_len);
+
+	RewindEntry *e = &rewind_ctx.entries[rewind_ctx.entry_head];
+	e->offset = rewind_ctx.head;
+	e->size = dest_len;
+
+	rewind_ctx.head += dest_len;
+	if (rewind_ctx.head >= rewind_ctx.capacity) rewind_ctx.head = 0;
+
+	rewind_ctx.entry_head = (rewind_ctx.entry_head + 1) % rewind_ctx.entry_capacity;
+	if (rewind_ctx.entry_count < rewind_ctx.entry_capacity) rewind_ctx.entry_count += 1;
+	else Rewind_drop_oldest();
+	rewind_warn_empty = 0;
+}
+
+static bool Rewind_step_back(void) {
+	if (!rewind_ctx.enabled) return false;
+	if (!rewind_ctx.entry_count) {
+		if (!rewind_warn_empty) {
+			LOG_info("Rewind: no buffered states yet\n");
+			rewind_warn_empty = 1;
+		}
+		return false;
+	}
+
+	int idx = rewind_ctx.entry_head - 1;
+	if (idx < 0) idx += rewind_ctx.entry_capacity;
+	RewindEntry *e = &rewind_ctx.entries[idx];
+
+	uLongf dest_len = rewind_ctx.state_size;
+	int res = uncompress(rewind_ctx.state_buf, &dest_len, rewind_ctx.buffer + e->offset, e->size);
+	if (res != Z_OK || dest_len < rewind_ctx.state_size) {
+		LOG_error("Rewind: decompress failed (%i)\n", res);
+		Rewind_drop_oldest();
+		return false;
+	}
+
+	if (!core.unserialize(rewind_ctx.state_buf, rewind_ctx.state_size)) {
+		LOG_error("Rewind: unserialize failed\n");
+		Rewind_drop_oldest();
+		return false;
+	}
+
+	// pop newest
+	rewind_ctx.entry_head = idx;
+	rewind_ctx.entry_count -= 1;
+	if (rewind_ctx.entry_count==0) {
+		rewind_ctx.head = rewind_ctx.tail = 0;
+	}
+	rewinding = 1;
+	LOG_info("Rewind: stepped back, entries remaining %i\n", rewind_ctx.entry_count);
+	return true;
+}
+
+static void Rewind_on_state_change(void) {
+	Rewind_reset();
+	Rewind_push(1);
+	LOG_info("Rewind: state changed, buffer re-seeded\n");
+}
+
+	///////////////////////////////
 
 typedef struct Option {
 	char* key;
@@ -1391,6 +1637,7 @@ enum {
 	SHORTCUT_CYCLE_EFFECT,
 	SHORTCUT_TOGGLE_FF,
 	SHORTCUT_HOLD_FF,
+	SHORTCUT_HOLD_REWIND,
 	SHORTCUT_GAMESWITCHER,
 	SHORTCUT_SCREENSHOT,
 	// Trimui only
@@ -1951,10 +2198,11 @@ static struct Config {
 		[SHORTCUT_SAVE_QUIT]			= {"Save & Quit",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_CYCLE_SCALE]			= {"Cycle Scaling",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_CYCLE_EFFECT]			= {"Cycle Effect",		-1, BTN_ID_NONE, 0},
-		[SHORTCUT_TOGGLE_FF]			= {"Toggle FF",			-1, BTN_ID_NONE, 0},
-		[SHORTCUT_HOLD_FF]				= {"Hold FF",			-1, BTN_ID_NONE, 0},
-		[SHORTCUT_GAMESWITCHER]			= {"Game Switcher",		-1, BTN_ID_NONE, 0},
-		[SHORTCUT_SCREENSHOT]           = {"Screenshot",        -1, BTN_ID_NONE, 0},
+			[SHORTCUT_TOGGLE_FF]			= {"Toggle FF",			-1, BTN_ID_NONE, 0},
+			[SHORTCUT_HOLD_FF]				= {"Hold FF",			-1, BTN_ID_NONE, 0},
+			[SHORTCUT_HOLD_REWIND]			= {"Hold Rewind",		-1, BTN_ID_NONE, 0},
+			[SHORTCUT_GAMESWITCHER]			= {"Game Switcher",		-1, BTN_ID_NONE, 0},
+			[SHORTCUT_SCREENSHOT]           = {"Screenshot",        -1, BTN_ID_NONE, 0},
 		// Trimui only
 		[SHORTCUT_TOGGLE_TURBO_A]		= {"Toggle Turbo A",	-1, BTN_ID_NONE, 0},
 		[SHORTCUT_TOGGLE_TURBO_B]		= {"Toggle Turbo B",	-1, BTN_ID_NONE, 0},
@@ -3173,7 +3421,7 @@ static void input_poll_callback(void) {
 		GFX_clear(screen);
 		
 	}
-	
+		
 	if (PAD_justPressed(BTN_POWER)) {
 		
 	}
@@ -3182,6 +3430,7 @@ static void input_poll_callback(void) {
 	}
 	
 	static int toggled_ff_on = 0; // this logic only works because TOGGLE_FF is before HOLD_FF in the menu...
+	rewind_pressed = 0;
 	for (int i=0; i<SHORTCUT_COUNT; i++) {
 		ButtonMapping* mapping = &config.shortcuts[i];
 		int btn = 1 << mapping->local;
@@ -3198,7 +3447,7 @@ static void input_poll_callback(void) {
 					break;
 				}
 			}
-			else if (i==SHORTCUT_HOLD_FF) {
+				else if (i==SHORTCUT_HOLD_FF) {
 				// don't allow turn off fast_forward with a release of the hold button 
 				// if it was initially turned on with the toggle button
 				if (PAD_justPressed(btn) || (!toggled_ff_on && PAD_justReleased(btn))) {
@@ -3206,9 +3455,17 @@ static void input_poll_callback(void) {
 					if (mapping->mod) ignore_menu = 1; // very unlikely but just in case
 				}
 			}
+			else if (i==SHORTCUT_HOLD_REWIND) {
+				rewind_pressed = PAD_isPressed(btn);
+				if (rewind_pressed != last_rewind_pressed) {
+					LOG_info("Rewind hotkey %s\n", rewind_pressed ? "pressed" : "released");
+					last_rewind_pressed = rewind_pressed;
+				}
+				if (mapping->mod && rewind_pressed) ignore_menu = 1;
+			}
 			// Trimui only
 			else if (PLAT_canTurbo() && i>=SHORTCUT_TOGGLE_TURBO_A && i<=SHORTCUT_TOGGLE_TURBO_R2) {
-				if (PAD_justPressed(btn)) {
+					if (PAD_justPressed(btn)) {
 					switch(i) {
 						case SHORTCUT_TOGGLE_TURBO_A:  PLAT_toggleTurbo(BTN_ID_A); break;
 						case SHORTCUT_TOGGLE_TURBO_B:  PLAT_toggleTurbo(BTN_ID_B); break;
@@ -4760,6 +5017,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 ///////////////////////////////
 
 static void audio_sample_callback(int16_t left, int16_t right) {
+	if (rewinding && rewind_ctx.mute_audio) return;
 	if (!fast_forward || ff_audio) {
 		if (use_core_fps || fast_forward) {
 			SND_batchSamples_fixed_rate(&(const SND_Frame){left,right}, 1);
@@ -4770,6 +5028,7 @@ static void audio_sample_callback(int16_t left, int16_t right) {
 	}
 }
 static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) { 
+	if (rewinding && rewind_ctx.mute_audio) return frames;
 	if (!fast_forward || ff_audio) {
 		if (use_core_fps || fast_forward) {
 			return SND_batchSamples_fixed_rate((const SND_Frame*)data, frames);
@@ -4920,6 +5179,7 @@ void Core_load(void) {
 }
 void Core_reset(void) {
 	core.reset();
+	Rewind_on_state_change();
 }
 void Core_unload(void) {
 	// Disabling this is a dumb hack for bluetooth, we should really be using 
@@ -6533,11 +6793,11 @@ static void Menu_saveState(void) {
 }
 static void Menu_loadState(void) {
 	Menu_updateState();
-	
-	if (menu.save_exists) {
-		if (menu.total_discs) {
-			char slot_disc_name[256];
-			getFile(menu.txt_path, slot_disc_name, 256);
+		
+		if (menu.save_exists) {
+			if (menu.total_discs) {
+				char slot_disc_name[256];
+				getFile(menu.txt_path, slot_disc_name, 256);
 		
 			char slot_disc_path[256];
 			if (slot_disc_name[0]=='/') strcpy(slot_disc_path, slot_disc_name);
@@ -6548,12 +6808,13 @@ static void Menu_loadState(void) {
 				Game_changeDisc(slot_disc_path);
 			}
 		}
-	
-		state_slot = menu.slot;
-		putInt(menu.slot_path, menu.slot);
-		State_read();
+		
+			state_slot = menu.slot;
+			putInt(menu.slot_path, menu.slot);
+			State_read();
+			Rewind_on_state_change();
+		}
 	}
-}
 
 static void Menu_loop(void) {
 
@@ -7120,6 +7381,8 @@ int main(int argc , char* argv[]) {
 	Menu_init();
 	State_resume();
 	Menu_initState(); // make ready for state shortcuts
+	Rewind_init(core.serialize_size());
+	Rewind_on_state_change();
 
 	PWR_warn(1);
 	PWR_disableAutosleep();
@@ -7154,14 +7417,27 @@ int main(int argc , char* argv[]) {
 	// release config when all is loaded
 	Config_free();
 
-	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
-	while (!quit) {
-		GFX_startFrame();
-	
-		core.run();
-		limitFF();
-		trackFPS();
+		LOG_info("total startup time %ims\n\n",SDL_GetTicks());
+		while (!quit) {
+			GFX_startFrame();
 		
+	if (rewind_pressed) {
+		bool did_rewind = Rewind_step_back();
+		rewinding = did_rewind;
+		if (did_rewind) fast_forward = 0;
+		core.run(); // render from the restored state
+		if (!did_rewind) {
+			Rewind_push(0);
+		}
+	}
+			else {
+				rewinding = 0;
+				core.run();
+				Rewind_push(0);
+			}
+			limitFF();
+			trackFPS();
+			
 
 		if (has_pending_opt_change) {
 			has_pending_opt_change = 0;
@@ -7211,10 +7487,11 @@ int main(int argc , char* argv[]) {
 
 	Menu_quit();
 	QuitSettings();
-	
+
 finish:
 
 	Game_close();
+	Rewind_free();
 	Core_unload();
 	Core_quit();
 	Core_close();
