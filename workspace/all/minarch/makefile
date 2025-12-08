@@ -43,12 +43,12 @@ endif
 ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
 CFLAGS += `pkg-config --cflags libzip`
-LDFLAGS += `pkg-config --libs libzip`
+LDFLAGS += `pkg-config --libs libzip` -lz
 else
-LDFLAGS += -lzip
+LDFLAGS += -lzip -lz
 endif # Linux
-else # all handheld platfoms
-LDFLAGS	 +=  -Llibretro-common -lsrm -lzip
+else # all handheld platforms
+LDFLAGS	 +=  -Llibretro-common -lsrm -lzip -lz
 CFLAGS   += -DHAS_SRM
 LDFLAGS +=  -lasound
 endif
