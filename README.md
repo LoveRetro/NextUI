@@ -119,7 +119,7 @@ Our community has currated a [list of favorite Paks](https://nextui.loveretro.ga
 
 ## Credits
 
-[@josegonzalez](https://github.com/josegonzalez) for [minui-keyboard](https://github.com/josegonzalez/minui-keyboard/t)
+[@josegonzalez](https://github.com/josegonzalez) for [minui-keyboard](https://github.com/josegonzalez/minui-keyboard)
 
 ---
 
