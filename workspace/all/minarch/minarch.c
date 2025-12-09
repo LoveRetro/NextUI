@@ -73,6 +73,9 @@ static int ff_audio = 0;
 static int fast_forward = 0;
 static int rewind_pressed = 0;
 static int rewind_toggle = 0;
+static int ff_toggled = 0;
+static int ff_hold_active = 0;
+static int ff_paused_by_rewind_hold = 0;
 static int rewinding = 0;
 static int rewind_cfg_enable = CFG_DEFAULT_REWIND_ENABLE;
 static int rewind_cfg_buffer_mb = CFG_DEFAULT_REWIND_BUFFER_MB;
@@ -1176,6 +1179,7 @@ static void Rewind_drop_oldest(void) {
 
 static int Rewind_init(size_t state_size) {
 	Rewind_free();
+	// pull current option values directly
 	int enable = rewind_cfg_enable;
 	int buf_mb = rewind_cfg_buffer_mb;
 	int gran = rewind_cfg_granularity;
@@ -2450,6 +2454,13 @@ static void Config_syncFrontend(char* key, int value) {
 			case FE_OPT_REWIND_MUTE: rewind_cfg_mute_audio = parsed; break;
 		}
 		Rewind_init(core.serialize_size ? core.serialize_size() : 0);
+		if (i==FE_OPT_REWIND_ENABLE) {
+			// ensure runtime toggles don't linger when enabling/disabling feature
+			rewind_toggle = 0;
+			rewind_pressed = 0;
+			rewinding = 0;
+			ff_paused_by_rewind_hold = 0;
+		}
 		if (core.initialized) Rewind_on_state_change();
 	}
 }
@@ -3495,8 +3506,12 @@ static void Menu_saveState(void);
 static void Menu_loadState(void);
 
 static int setFastForward(int enable) {
-	fast_forward = enable;
-	return enable;
+	int val = enable ? 1 : 0;
+	if (fast_forward != val) {
+		LOG_info("FF state -> %i\n", val);
+	}
+	fast_forward = val;
+	return val;
 }
 
 static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
@@ -3541,6 +3556,14 @@ static void input_poll_callback(void) {
 			if (i==SHORTCUT_TOGGLE_FF) {
 				if (PAD_justPressed(btn)) {
 					toggled_ff_on = setFastForward(!fast_forward);
+					ff_toggled = toggled_ff_on;
+					ff_hold_active = 0;
+					if (ff_toggled && rewind_toggle) {
+						// last toggle wins: disable rewind toggle when FF toggle is enabled
+						rewind_toggle = 0;
+						rewind_pressed = 0;
+						rewinding = 0;
+					}
 					if (mapping->mod) ignore_menu = 1;
 					break;
 				}
@@ -3549,31 +3572,50 @@ static void input_poll_callback(void) {
 					break;
 				}
 			}
-				else if (i==SHORTCUT_HOLD_FF) {
-				// don't allow turn off fast_forward with a release of the hold button 
-				// if it was initially turned on with the toggle button
-				if (PAD_justPressed(btn) || (!toggled_ff_on && PAD_justReleased(btn))) {
-					fast_forward = setFastForward(PAD_isPressed(btn));
-					if (mapping->mod) ignore_menu = 1; // very unlikely but just in case
-				}
+			else if (i==SHORTCUT_HOLD_FF) {
+			// don't allow turn off fast_forward with a release of the hold button 
+			// if it was initially turned on with the toggle button
+			if (PAD_justPressed(btn) || (!toggled_ff_on && PAD_justReleased(btn))) {
+				int pressed = PAD_isPressed(btn);
+				fast_forward = setFastForward(pressed);
+				ff_hold_active = pressed ? 1 : 0;
+				if (mapping->mod) ignore_menu = 1; // very unlikely but just in case
 			}
-				else if (i==SHORTCUT_HOLD_REWIND) {
-					rewind_pressed = PAD_isPressed(btn);
-					if (rewind_pressed != last_rewind_pressed) {
-						LOG_info("Rewind hotkey %s\n", rewind_pressed ? "pressed" : "released");
-						last_rewind_pressed = rewind_pressed;
-					}
-					if (mapping->mod && rewind_pressed) ignore_menu = 1;
+			if (PAD_justReleased(btn) && toggled_ff_on) {
+				ff_hold_active = 0;
+			}
+			}
+			else if (i==SHORTCUT_HOLD_REWIND) {
+				rewind_pressed = PAD_isPressed(btn) ? 1 : 0;
+				if (rewind_pressed != last_rewind_pressed) {
+					LOG_info("Rewind hotkey %s\n", rewind_pressed ? "pressed" : "released");
+					last_rewind_pressed = rewind_pressed;
 				}
-				else if (i==SHORTCUT_TOGGLE_REWIND) {
-					if (PAD_justPressed(btn)) {
-						rewind_toggle = !rewind_toggle;
-						LOG_info("Rewind toggle %s\n", rewind_toggle ? "on" : "off");
-						if (mapping->mod) ignore_menu = 1;
-						break;
+				if (rewind_pressed && ff_toggled && !ff_paused_by_rewind_hold) {
+					ff_paused_by_rewind_hold = 1;
+					fast_forward = setFastForward(0);
+				}
+				else if (!rewind_pressed && ff_paused_by_rewind_hold) {
+					ff_paused_by_rewind_hold = 0;
+					if (ff_toggled) fast_forward = setFastForward(1);
+				}
+				if (mapping->mod && rewind_pressed) ignore_menu = 1;
+			}
+			else if (i==SHORTCUT_TOGGLE_REWIND) {
+				if (PAD_justPressed(btn)) {
+					rewind_toggle = !rewind_toggle;
+					LOG_info("Rewind toggle %s\n", rewind_toggle ? "on" : "off");
+					if (rewind_toggle && ff_toggled) {
+						// disable fast forward toggle when rewinding is toggled on
+						ff_toggled = 0;
+						fast_forward = setFastForward(0);
+						ff_paused_by_rewind_hold = 0;
 					}
-					else if (PAD_justReleased(btn)) {
-						if (mapping->mod) ignore_menu = 1;
+					if (mapping->mod) ignore_menu = 1;
+					break;
+				}
+				else if (PAD_justReleased(btn)) {
+					if (mapping->mod) ignore_menu = 1;
 						break;
 					}
 				}
@@ -7495,8 +7537,6 @@ int main(int argc , char* argv[]) {
 	Menu_init();
 	State_resume();
 	Menu_initState(); // make ready for state shortcuts
-	Rewind_init(core.serialize_size());
-	Rewind_on_state_change();
 
 	PWR_warn(1);
 	PWR_disableAutosleep();
@@ -7528,6 +7568,8 @@ int main(int argc , char* argv[]) {
 	initShaders();
 	Config_readOptions();
 	applyShaderSettings();
+	Rewind_init(core.serialize_size());
+	Rewind_on_state_change();
 	// release config when all is loaded
 	Config_free();
 
@@ -7535,21 +7577,48 @@ int main(int argc , char* argv[]) {
 		while (!quit) {
 			GFX_startFrame();
 		
-			int do_rewind = rewind_pressed || rewind_toggle;
-			if (do_rewind) {
-				bool did_rewind = Rewind_step_back();
-				rewinding = did_rewind;
-				if (did_rewind) fast_forward = 0;
+				// if rewind is toggled, fast-forward toggle must stay off; fast-forward hold pauses rewind
+				int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
+				if (do_rewind) {
+					bool did_rewind = Rewind_step_back();
+					rewinding = did_rewind;
+					if (did_rewind) {
+						fast_forward = 0;
+					}
+					else {
+						// buffer empty: auto untoggle rewind, resume FF if it was paused for a hold
+						if (rewind_toggle) rewind_toggle = 0;
+						if (ff_paused_by_rewind_hold && ff_toggled) {
+							ff_paused_by_rewind_hold = 0;
+							fast_forward = setFastForward(1);
+						}
+					}
 				core.run(); // render from the restored state
 				if (!did_rewind) {
-			Rewind_push(0);
-		}
-	}
-			else {
-				rewinding = 0;
-				core.run();
-				Rewind_push(0);
+					Rewind_push(0);
+				}
 			}
+				else {
+					rewinding = 0;
+					if (ff_paused_by_rewind_hold && !rewind_pressed) {
+						// resume fast forward after hold rewind ends
+						if (ff_toggled) fast_forward = setFastForward(1);
+						ff_paused_by_rewind_hold = 0;
+					}
+
+					int ff_runs = 1;
+					if (fast_forward) {
+						// when "None" is selected, assume a modest 2x instead of unbounded spam
+						ff_runs = max_ff_speed ? max_ff_speed + 1 : 2;
+					}
+
+					for (int ff_step = 0; ff_step < ff_runs; ff_step++) {
+						core.run();
+						if (!fast_forward) {
+							Rewind_push(0);
+						}
+					}
+				}
 			limitFF();
 			trackFPS();
 			
