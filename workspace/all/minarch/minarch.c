@@ -72,7 +72,12 @@ static int max_ff_speed = 3; // 4x
 static int ff_audio = 0;
 static int fast_forward = 0;
 static int rewind_pressed = 0;
+static int rewind_toggle = 0;
 static int rewinding = 0;
+static int rewind_cfg_enable = CFG_DEFAULT_REWIND_ENABLE;
+static int rewind_cfg_buffer_mb = CFG_DEFAULT_REWIND_BUFFER_MB;
+static int rewind_cfg_granularity = CFG_DEFAULT_REWIND_GRANULARITY;
+static int rewind_cfg_mute_audio = CFG_DEFAULT_REWIND_MUTE_AUDIO;
 static int overclock = 3; // auto
 static int has_custom_controllers = 0;
 static int gamepad_type = 0; // index in gamepad_labels/gamepad_values
@@ -1171,10 +1176,10 @@ static void Rewind_drop_oldest(void) {
 
 static int Rewind_init(size_t state_size) {
 	Rewind_free();
-	int enable = CFG_getRewindEnable();
-	int buf_mb = CFG_getRewindBufferMB();
-	int gran = CFG_getRewindGranularity();
-	int mute = CFG_getRewindMuteAudio();
+	int enable = rewind_cfg_enable;
+	int buf_mb = rewind_cfg_buffer_mb;
+	int gran = rewind_cfg_granularity;
+	int mute = rewind_cfg_mute_audio;
 	const char *force_path = SHARED_USERDATA_PATH "/rewind.force";
 	if (exists((char*)force_path)) {
 		enable = 1;
@@ -1190,7 +1195,7 @@ static int Rewind_init(size_t state_size) {
 		return 0;
 	}
 
-	size_t buffer_mb = CFG_getRewindBufferMB();
+	size_t buffer_mb = buf_mb;
 	if (buffer_mb < 1) buffer_mb = 1;
 	if (buffer_mb > 256) buffer_mb = 256;
 
@@ -1227,9 +1232,9 @@ static int Rewind_init(size_t state_size) {
 		return 0;
 	}
 
-	rewind_ctx.granularity = CFG_getRewindGranularity();
+	rewind_ctx.granularity = gran;
 	if (rewind_ctx.granularity < 1) rewind_ctx.granularity = 1;
-	rewind_ctx.mute_audio = CFG_getRewindMuteAudio();
+	rewind_ctx.mute_audio = mute;
 	rewind_ctx.enabled = 1;
 
 	LOG_info("Rewind: enabled (%zu bytes buffer, granularity %i)\n", rewind_ctx.capacity, rewind_ctx.granularity);
@@ -1390,6 +1395,26 @@ static char* resample_labels[] = {
 	"Medium",
 	"High",
 	"Max",
+	NULL
+};
+static char* rewind_enable_labels[] = {
+	"Off",
+	"On",
+	NULL
+};
+static char* rewind_buffer_labels[] = {
+	"8",
+	"16",
+	"32",
+	"64",
+	NULL
+};
+static char* rewind_granularity_labels[] = {
+	"1",
+	"2",
+	"3",
+	"4",
+	"5",
 	NULL
 };
 static char* ambient_labels[] = {
@@ -1625,6 +1650,10 @@ enum {
 	FE_OPT_DEBUG,
 	FE_OPT_MAXFF,
 	FE_OPT_FF_AUDIO,
+	FE_OPT_REWIND_ENABLE,
+	FE_OPT_REWIND_BUFFER,
+	FE_OPT_REWIND_GRANULARITY,
+	FE_OPT_REWIND_MUTE,
 	FE_OPT_COUNT,
 };
 
@@ -1638,6 +1667,7 @@ enum {
 	SHORTCUT_TOGGLE_FF,
 	SHORTCUT_HOLD_FF,
 	SHORTCUT_HOLD_REWIND,
+	SHORTCUT_TOGGLE_REWIND,
 	SHORTCUT_GAMESWITCHER,
 	SHORTCUT_SCREENSHOT,
 	// Trimui only
@@ -1988,6 +2018,46 @@ static struct Config {
 				.values = onoff_labels,
 				.labels = onoff_labels,
 			},
+			[FE_OPT_REWIND_ENABLE] = {
+				.key	= "minarch_rewind_enable",
+				.name	= "Rewind",
+				.desc	= "Enable in-memory rewind buffer.",
+				.default_value = CFG_DEFAULT_REWIND_ENABLE ? 1 : 0,
+				.value = CFG_DEFAULT_REWIND_ENABLE ? 1 : 0,
+				.count = 2,
+				.values = rewind_enable_labels,
+				.labels = rewind_enable_labels,
+			},
+			[FE_OPT_REWIND_BUFFER] = {
+				.key	= "minarch_rewind_buffer_mb",
+				.name	= "Rewind Buffer (MB)",
+				.desc	= "Memory reserved for rewind snapshots.",
+				.default_value = 1, // 16MB
+				.value = 1,
+				.count = 4,
+				.values = rewind_buffer_labels,
+				.labels = rewind_buffer_labels,
+			},
+			[FE_OPT_REWIND_GRANULARITY] = {
+				.key	= "minarch_rewind_granularity",
+				.name	= "Rewind Granularity",
+				.desc	= "Frames between rewind snapshots.",
+				.default_value = 0, // 1 frame
+				.value = 0,
+				.count = 5,
+				.values = rewind_granularity_labels,
+				.labels = rewind_granularity_labels,
+			},
+			[FE_OPT_REWIND_MUTE] = {
+				.key	= "minarch_rewind_mute_audio",
+				.name	= "Rewind Mute Audio",
+				.desc	= "Mute audio while rewinding.",
+				.default_value = CFG_DEFAULT_REWIND_MUTE_AUDIO ? 1 : 0,
+				.value = CFG_DEFAULT_REWIND_MUTE_AUDIO ? 1 : 0,
+				.count = 2,
+				.values = onoff_labels,
+				.labels = onoff_labels,
+			},
 			[FE_OPT_COUNT] = {NULL}
 		}
 	},
@@ -2201,6 +2271,7 @@ static struct Config {
 			[SHORTCUT_TOGGLE_FF]			= {"Toggle FF",			-1, BTN_ID_NONE, 0},
 			[SHORTCUT_HOLD_FF]				= {"Hold FF",			-1, BTN_ID_NONE, 0},
 			[SHORTCUT_HOLD_REWIND]			= {"Hold Rewind",		-1, BTN_ID_NONE, 0},
+			[SHORTCUT_TOGGLE_REWIND]		= {"Toggle Rewind",		-1, BTN_ID_NONE, 0},
 			[SHORTCUT_GAMESWITCHER]			= {"Game Switcher",		-1, BTN_ID_NONE, 0},
 			[SHORTCUT_SCREENSHOT]           = {"Screenshot",        -1, BTN_ID_NONE, 0},
 		// Trimui only
@@ -2347,9 +2418,40 @@ static void Config_syncFrontend(char* key, int value) {
 		ff_audio = value;
 		i = FE_OPT_FF_AUDIO;
 	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_ENABLE].key)) {
+		i = FE_OPT_REWIND_ENABLE;
+	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_BUFFER].key)) {
+		i = FE_OPT_REWIND_BUFFER;
+	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_GRANULARITY].key)) {
+		i = FE_OPT_REWIND_GRANULARITY;
+	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_MUTE].key)) {
+		i = FE_OPT_REWIND_MUTE;
+	}
 	if (i==-1) return;
 	Option* option = &config.frontend.options[i];
 	option->value = value;
+	if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_BUFFER || i==FE_OPT_REWIND_GRANULARITY || i==FE_OPT_REWIND_MUTE) {
+		const char* sval = option->values && option->values[value] ? option->values[value] : "0";
+		int parsed = 0;
+		if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_MUTE) {
+			// use option index (Off/On)
+			parsed = value;
+		}
+		else {
+			parsed = strtol(sval, NULL, 10);
+		}
+		switch (i) {
+			case FE_OPT_REWIND_ENABLE: rewind_cfg_enable = parsed; break;
+			case FE_OPT_REWIND_BUFFER: rewind_cfg_buffer_mb = parsed; break;
+			case FE_OPT_REWIND_GRANULARITY: rewind_cfg_granularity = parsed; break;
+			case FE_OPT_REWIND_MUTE: rewind_cfg_mute_audio = parsed; break;
+		}
+		Rewind_init(core.serialize_size ? core.serialize_size() : 0);
+		if (core.initialized) Rewind_on_state_change();
+	}
 }
 
 char** list_files_in_folder(const char* folderPath, int* fileCount, const char* extensionFilter) {
@@ -3455,16 +3557,28 @@ static void input_poll_callback(void) {
 					if (mapping->mod) ignore_menu = 1; // very unlikely but just in case
 				}
 			}
-			else if (i==SHORTCUT_HOLD_REWIND) {
-				rewind_pressed = PAD_isPressed(btn);
-				if (rewind_pressed != last_rewind_pressed) {
-					LOG_info("Rewind hotkey %s\n", rewind_pressed ? "pressed" : "released");
-					last_rewind_pressed = rewind_pressed;
+				else if (i==SHORTCUT_HOLD_REWIND) {
+					rewind_pressed = PAD_isPressed(btn);
+					if (rewind_pressed != last_rewind_pressed) {
+						LOG_info("Rewind hotkey %s\n", rewind_pressed ? "pressed" : "released");
+						last_rewind_pressed = rewind_pressed;
+					}
+					if (mapping->mod && rewind_pressed) ignore_menu = 1;
 				}
-				if (mapping->mod && rewind_pressed) ignore_menu = 1;
-			}
-			// Trimui only
-			else if (PLAT_canTurbo() && i>=SHORTCUT_TOGGLE_TURBO_A && i<=SHORTCUT_TOGGLE_TURBO_R2) {
+				else if (i==SHORTCUT_TOGGLE_REWIND) {
+					if (PAD_justPressed(btn)) {
+						rewind_toggle = !rewind_toggle;
+						LOG_info("Rewind toggle %s\n", rewind_toggle ? "on" : "off");
+						if (mapping->mod) ignore_menu = 1;
+						break;
+					}
+					else if (PAD_justReleased(btn)) {
+						if (mapping->mod) ignore_menu = 1;
+						break;
+					}
+				}
+				// Trimui only
+				else if (PLAT_canTurbo() && i>=SHORTCUT_TOGGLE_TURBO_A && i<=SHORTCUT_TOGGLE_TURBO_R2) {
 					if (PAD_justPressed(btn)) {
 					switch(i) {
 						case SHORTCUT_TOGGLE_TURBO_A:  PLAT_toggleTurbo(BTN_ID_A); break;
@@ -7421,12 +7535,13 @@ int main(int argc , char* argv[]) {
 		while (!quit) {
 			GFX_startFrame();
 		
-	if (rewind_pressed) {
-		bool did_rewind = Rewind_step_back();
-		rewinding = did_rewind;
-		if (did_rewind) fast_forward = 0;
-		core.run(); // render from the restored state
-		if (!did_rewind) {
+			int do_rewind = rewind_pressed || rewind_toggle;
+			if (do_rewind) {
+				bool did_rewind = Rewind_step_back();
+				rewinding = did_rewind;
+				if (did_rewind) fast_forward = 0;
+				core.run(); // render from the restored state
+				if (!did_rewind) {
 			Rewind_push(0);
 		}
 	}
