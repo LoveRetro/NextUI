@@ -1616,13 +1616,14 @@ static void Rewind_push(int force) {
 	rewind_ctx.drop_warned = 0;
 }
 
-static bool Rewind_step_back(void) {
-	if (!rewind_ctx.enabled) return false;
+// Returns: 0 = buffer empty/disabled, 1 = stepped back successfully, 2 = waiting for cadence (don't run core)
+static int Rewind_step_back(void) {
+	if (!rewind_ctx.enabled) return 0;
 	uint32_t now_ms = SDL_GetTicks();
 	if (rewind_ctx.playback_interval_ms > 0 && rewind_ctx.last_step_ms &&
 		(int)(now_ms - rewind_ctx.last_step_ms) < rewind_ctx.playback_interval_ms) {
-		// still rewinding, just waiting for cadence; do not push new snapshots
-		return true;
+		// still rewinding, just waiting for cadence; don't run core, just re-render
+		return 2;
 	}
 
 	pthread_mutex_lock(&rewind_ctx.lock);
@@ -1632,7 +1633,7 @@ static bool Rewind_step_back(void) {
 			LOG_info("Rewind: no buffered states yet\n");
 			rewind_warn_empty = 1;
 		}
-		return false;
+		return 0;
 	}
 
 	int idx = rewind_ctx.entry_head - 1;
@@ -1651,14 +1652,14 @@ static bool Rewind_step_back(void) {
 			rewind_ctx.head = rewind_ctx.tail = 0;
 		}
 		pthread_mutex_unlock(&rewind_ctx.lock);
-		return false;
+		return 0;
 	}
 
 	if (!core.unserialize(rewind_ctx.state_buf, rewind_ctx.state_size)) {
 		LOG_error("Rewind: unserialize failed\n");
 		Rewind_drop_oldest_locked();
 		pthread_mutex_unlock(&rewind_ctx.lock);
-		return false;
+		return 0;
 	}
 
 	// pop newest
@@ -1672,7 +1673,7 @@ static bool Rewind_step_back(void) {
 
 	rewinding = 1;
 	rewind_ctx.last_step_ms = now_ms;
-	return true;
+	return 1;
 }
 
 static void Rewind_on_state_change(void) {
@@ -1745,6 +1746,7 @@ static char* rewind_buffer_labels[] = {
 	"16",
 	"32",
 	"64",
+	"128",
 	NULL
 };
 static char* rewind_granularity_values[] = {
@@ -2388,7 +2390,7 @@ static struct Config {
 				.desc	= "Memory reserved for rewind snapshots.",
 				.default_value = 1, // 16MB
 				.value = 1,
-				.count = 4,
+				.count = 5,
 				.values = rewind_buffer_labels,
 				.labels = rewind_buffer_labels,
 			},
@@ -7930,23 +7932,29 @@ int main(int argc , char* argv[]) {
 				// if rewind is toggled, fast-forward toggle must stay off; fast-forward hold pauses rewind
 				int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
 				if (do_rewind) {
-					bool did_rewind = Rewind_step_back();
-					rewinding = did_rewind;
-					if (did_rewind) {
+					// Rewind_step_back returns: 0=buffer empty, 1=stepped back, 2=waiting for cadence
+					int rewind_result = Rewind_step_back();
+					rewinding = (rewind_result != 0);
+					if (rewind_result == 1) {
+						// Actually stepped back - run one frame to render the restored state
 						fast_forward = 0;
+						core.run();
+					}
+					else if (rewind_result == 2) {
+						// Waiting for cadence - don't run core, just re-render current frame
+						fast_forward = 0;
+						// Skip core.run() entirely to avoid advancing the game
 					}
 					else {
-						// buffer empty: auto untoggle rewind, resume FF if it was paused for a hold
+						// Buffer empty: auto untoggle rewind, resume FF if it was paused for a hold
 						if (rewind_toggle) rewind_toggle = 0;
 						if (ff_paused_by_rewind_hold && ff_toggled) {
 							ff_paused_by_rewind_hold = 0;
 							fast_forward = setFastForward(1);
 						}
+						core.run();
+						Rewind_push(0);
 					}
-				core.run(); // render from the restored state
-				if (!did_rewind) {
-					Rewind_push(0);
-				}
 			}
 				else {
 					rewinding = 0;
