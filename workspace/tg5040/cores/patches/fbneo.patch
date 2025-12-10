@@ -1,10 +1,10 @@
 diff --git a/src/burner/libretro/Makefile b/src/burner/libretro/Makefile
 old mode 100644
 new mode 100755
-index 0b7d646c7..2784aa150
+index 0f097af..8a96517
 --- a/src/burner/libretro/Makefile
 +++ b/src/burner/libretro/Makefile
-@@ -346,6 +346,22 @@ else ifeq ($(platform), classic_armv7_a7)
+@@ -359,6 +359,22 @@ else ifeq ($(platform), classic_armv7_a7)
  	CFLAGS += $(PLATFORM_FLAGS)
  	CXXFLAGS += $(PLATFORM_FLAGS)
  
@@ -28,10 +28,10 @@ index 0b7d646c7..2784aa150
  # Playstation Classic
  else ifeq ($(platform), classic_armv8_a35)
 diff --git a/src/burner/libretro/libretro.cpp b/src/burner/libretro/libretro.cpp
-index 3726ec60f..30a6c8cd6 100644
+index 265ce39..7f0ef60 100644
 --- a/src/burner/libretro/libretro.cpp
 +++ b/src/burner/libretro/libretro.cpp
-@@ -78,7 +78,7 @@ INT32 nAudSegLen = 0;
+@@ -79,7 +79,7 @@ INT32 nAudSegLen = 0;
  
  static UINT8* pVidImage              = NULL;
  static bool bVidImageNeedRealloc     = false;
@@ -40,7 +40,7 @@ index 3726ec60f..30a6c8cd6 100644
  static int16_t *pAudBuffer           = NULL;
  static char text_missing_files[2048] = "";
  
-@@ -1550,8 +1550,46 @@ void retro_run()
+@@ -1565,8 +1565,46 @@ void retro_run()
  		// current frame will be corrupted, let's dupe instead
  		pBurnDraw = NULL;
  	}
@@ -88,7 +88,7 @@ index 3726ec60f..30a6c8cd6 100644
  
  	bool updated = false;
  	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
-@@ -1567,7 +1605,7 @@ void retro_run()
+@@ -1584,7 +1622,7 @@ void retro_run()
  		// change orientation/geometry if vertical mode was toggled on/off
  		if (old_nVerticalMode != nVerticalMode)
  		{
@@ -97,12 +97,36 @@ index 3726ec60f..30a6c8cd6 100644
  			struct retro_system_av_info av_info;
  			retro_get_system_av_info(&av_info);
  			environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &av_info);
-@@ -2184,7 +2222,7 @@ static bool retro_load_game_common()
+@@ -2211,7 +2249,7 @@ static bool retro_load_game_common()
  
  		// Initializing display, autorotate if needed
  		BurnDrvGetFullSize(&nGameWidth, &nGameHeight);
 -		SetRotation();
 +		//SetRotation();
+ 		BurnSetResolution(nNewWidth, nNewHeight);
  		SetColorDepth();
  
- 		VideoBufferInit();
+diff --git a/src/burner/libretro/retro_common.cpp b/src/burner/libretro/retro_common.cpp
+index 0424dd2..caca6fb 100644
+--- a/src/burner/libretro/retro_common.cpp
++++ b/src/burner/libretro/retro_common.cpp
+@@ -134,16 +134,16 @@ static struct retro_core_option_v2_definition var_fbneo_resolution = {
+ 	{
+ 		{ "640x480",        NULL },
+ 		{ "800x600",        NULL },
+-		{ "1024x768",       NULL },
++		{ "1024x768",       NULL }/*,
+ 		{ "1080x810",       NULL },
+ 		{ "1280x960",       NULL },
+ 		{ "1440x1080",      NULL },
+ 		{ "1600x1200",      NULL },
+ 		{ "1920x1440",      NULL },
+ 		{ "2160x1620",      NULL },
+-		{ "2880x2160",      NULL },
++		{ "2880x2160",      NULL },*/
+ 	},
+-	"640x480"
++	"800x600"
+ };
+ static struct retro_core_option_v2_definition var_fbneo_fixed_frameskip = {
+ 	"fbneo-fixed-frameskip",
