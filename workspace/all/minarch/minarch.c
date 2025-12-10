@@ -1130,43 +1130,130 @@ typedef struct {
 	uint8_t *scratch;
 	size_t scratch_size;
 
-	int granularity;
+	int granularity_frames;
+	int interval_ms;
+	uint32_t last_push_ms;
+	int use_time_cadence;
 	int frame_counter;
+	unsigned int generation;
 	int enabled;
 	int mute_audio;
+
+	// async capture/compression
+	pthread_t worker;
+	pthread_mutex_t lock;
+	pthread_mutex_t queue_mx;
+	pthread_cond_t queue_cv;
+	int worker_stop;
+	int worker_running;
+	int drop_warned;
+	int locks_ready;
+
+	uint8_t **capture_pool;
+	unsigned int *capture_gen;
+	uint8_t *capture_busy;
+	int pool_size;
+	int free_count;
+	int *free_stack;
+
+	int queue_capacity;
+	int queue_head;
+	int queue_tail;
+	int queue_count;
+	int *queue;
+
+	z_stream zstream;
+	int zstream_ready;
 } RewindContext;
 
 static RewindContext rewind_ctx = {0};
 static int rewind_warn_empty = 0;
 static int last_rewind_pressed = 0;
 
+static void* Rewind_worker_thread(void *arg);
+static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len);
+static int Rewind_compress_state(const uint8_t *src, uLongf *dest_len);
+
 static void Rewind_free(void) {
+	if (rewind_ctx.worker_running) {
+		pthread_mutex_lock(&rewind_ctx.queue_mx);
+		rewind_ctx.worker_stop = 1;
+		pthread_cond_signal(&rewind_ctx.queue_cv);
+		pthread_mutex_unlock(&rewind_ctx.queue_mx);
+		pthread_join(rewind_ctx.worker, NULL);
+		rewind_ctx.worker_running = 0;
+	}
+
+	if (rewind_ctx.zstream_ready) {
+		deflateEnd(&rewind_ctx.zstream);
+		rewind_ctx.zstream_ready = 0;
+	}
+
+	if (rewind_ctx.capture_pool) {
+		for (int i = 0; i < rewind_ctx.pool_size; i++) {
+			if (rewind_ctx.capture_pool[i]) free(rewind_ctx.capture_pool[i]);
+		}
+		free(rewind_ctx.capture_pool);
+	}
+	if (rewind_ctx.capture_gen) free(rewind_ctx.capture_gen);
+	if (rewind_ctx.capture_busy) free(rewind_ctx.capture_busy);
+	if (rewind_ctx.free_stack) free(rewind_ctx.free_stack);
+	if (rewind_ctx.queue) free(rewind_ctx.queue);
 	if (rewind_ctx.buffer) free(rewind_ctx.buffer);
 	if (rewind_ctx.entries) free(rewind_ctx.entries);
 	if (rewind_ctx.state_buf) free(rewind_ctx.state_buf);
 	if (rewind_ctx.scratch) free(rewind_ctx.scratch);
+	if (rewind_ctx.locks_ready) {
+		pthread_mutex_destroy(&rewind_ctx.lock);
+		pthread_mutex_destroy(&rewind_ctx.queue_mx);
+		pthread_cond_destroy(&rewind_ctx.queue_cv);
+	}
 	memset(&rewind_ctx, 0, sizeof(rewind_ctx));
 	rewinding = 0;
 }
 
 static void Rewind_reset(void) {
 	if (!rewind_ctx.enabled) return;
+	pthread_mutex_lock(&rewind_ctx.lock);
 	rewind_ctx.head = rewind_ctx.tail = 0;
 	rewind_ctx.entry_head = rewind_ctx.entry_tail = rewind_ctx.entry_count = 0;
+	pthread_mutex_unlock(&rewind_ctx.lock);
 	rewind_ctx.frame_counter = 0;
+	rewind_ctx.last_push_ms = 0;
+	rewind_ctx.generation += 1;
+	rewind_ctx.drop_warned = 0;
+	rewind_ctx.worker_stop = 0;
+	if (!rewind_ctx.generation) rewind_ctx.generation = 1; // avoid zero if it wrapped
+	// clear pending async work so new snapshots don't mix with stale ones
+	if (rewind_ctx.pool_size) {
+		pthread_mutex_lock(&rewind_ctx.queue_mx);
+		while (rewind_ctx.queue_count > 0) {
+			int slot = rewind_ctx.queue[rewind_ctx.queue_head];
+			rewind_ctx.queue_head = (rewind_ctx.queue_head + 1) % rewind_ctx.queue_capacity;
+			rewind_ctx.queue_count -= 1;
+			rewind_ctx.capture_busy[slot] = 0;
+		}
+		rewind_ctx.queue_head = rewind_ctx.queue_tail = 0;
+		rewind_ctx.free_count = 0;
+		for (int i = 0; i < rewind_ctx.pool_size; i++) {
+			if (!rewind_ctx.capture_busy[i] && rewind_ctx.free_count < rewind_ctx.pool_size) {
+				rewind_ctx.free_stack[rewind_ctx.free_count++] = i;
+			}
+		}
+		pthread_mutex_unlock(&rewind_ctx.queue_mx);
+	}
 	rewinding = 0;
 	rewind_warn_empty = 0;
 }
 
-static size_t Rewind_free_space(void) {
+static size_t Rewind_free_space_locked(void) {
 	if (rewind_ctx.entry_count>0 && rewind_ctx.head==rewind_ctx.tail) return 0;
 	if (rewind_ctx.head >= rewind_ctx.tail)
 		return rewind_ctx.capacity - (rewind_ctx.head - rewind_ctx.tail);
 	else
 		return rewind_ctx.tail - rewind_ctx.head;
 }
-
-static void Rewind_drop_oldest(void) {
+static void Rewind_drop_oldest_locked(void) {
 	if (!rewind_ctx.entry_count) return;
 	RewindEntry *e = &rewind_ctx.entries[rewind_ctx.entry_tail];
 	rewind_ctx.tail = (e->offset + e->size) % rewind_ctx.capacity;
@@ -1175,6 +1262,76 @@ static void Rewind_drop_oldest(void) {
 	if (rewind_ctx.entry_count==0) {
 		rewind_ctx.head = rewind_ctx.tail = 0;
 	}
+}
+static void Rewind_drop_oldest(void) {
+	pthread_mutex_lock(&rewind_ctx.lock);
+	Rewind_drop_oldest_locked();
+	pthread_mutex_unlock(&rewind_ctx.lock);
+}
+
+static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len) {
+	if (dest_len >= rewind_ctx.capacity) {
+		LOG_error("Rewind: state does not fit in buffer\n");
+		return 0;
+	}
+
+	// wrap write position if needed
+	if (rewind_ctx.head + dest_len > rewind_ctx.capacity) {
+		rewind_ctx.head = 0;
+		if (rewind_ctx.entry_count==0) rewind_ctx.tail = 0;
+	}
+
+	// make room
+	while (Rewind_free_space_locked() <= dest_len) {
+		Rewind_drop_oldest_locked();
+	}
+
+	memcpy(rewind_ctx.buffer + rewind_ctx.head, compressed, dest_len);
+
+	RewindEntry *e = &rewind_ctx.entries[rewind_ctx.entry_head];
+	e->offset = rewind_ctx.head;
+	e->size = dest_len;
+
+	rewind_ctx.head += dest_len;
+	if (rewind_ctx.head >= rewind_ctx.capacity) rewind_ctx.head = 0;
+
+	rewind_ctx.entry_head = (rewind_ctx.entry_head + 1) % rewind_ctx.entry_capacity;
+	if (rewind_ctx.entry_count < rewind_ctx.entry_capacity) rewind_ctx.entry_count += 1;
+	else Rewind_drop_oldest_locked();
+	rewind_warn_empty = 0;
+	return 1;
+}
+
+static int Rewind_compress_state(const uint8_t *src, uLongf *dest_len) {
+	int res = Z_OK;
+	if (!rewind_ctx.scratch || !dest_len) return Z_MEM_ERROR;
+
+	if (!rewind_ctx.zstream_ready) {
+		memset(&rewind_ctx.zstream, 0, sizeof(rewind_ctx.zstream));
+		res = deflateInit2(&rewind_ctx.zstream, Z_BEST_SPEED, Z_DEFLATED, 15, 8, Z_RLE);
+		if (res == Z_OK) rewind_ctx.zstream_ready = 1;
+	}
+
+	if (rewind_ctx.zstream_ready) {
+		rewind_ctx.zstream.next_in = (Bytef *)src;
+		rewind_ctx.zstream.avail_in = rewind_ctx.state_size;
+		rewind_ctx.zstream.next_out = rewind_ctx.scratch;
+		rewind_ctx.zstream.avail_out = rewind_ctx.scratch_size;
+
+		res = deflateReset(&rewind_ctx.zstream);
+		if (res == Z_OK) {
+			res = deflate(&rewind_ctx.zstream, Z_FINISH);
+		}
+		if (res == Z_STREAM_END) {
+			*dest_len = rewind_ctx.scratch_size - rewind_ctx.zstream.avail_out;
+			return Z_OK;
+		}
+	}
+
+	// fallback to plain compress2 if the streaming path fails
+	*dest_len = rewind_ctx.scratch_size;
+	res = compress2(rewind_ctx.scratch, dest_len, src, rewind_ctx.state_size, Z_BEST_SPEED);
+	return res;
 }
 
 static int Rewind_init(size_t state_size) {
@@ -1189,7 +1346,8 @@ static int Rewind_init(size_t state_size) {
 		enable = 1;
 		LOG_info("Rewind: force enable via %s\n", force_path);
 	}
-	LOG_info("Rewind: config enable=%i bufferMB=%i granularity=%i mute=%i\n", enable, buf_mb, gran, mute);
+	LOG_info("Rewind: config enable=%i bufferMB=%i interval=%i%s mute=%i\n",
+		enable, buf_mb, gran, gran > 60 ? "ms" : " frames", mute);
 	if (!enable) {
 		LOG_info("Rewind: disabled via config\n");
 		return 0;
@@ -1236,75 +1394,202 @@ static int Rewind_init(size_t state_size) {
 		return 0;
 	}
 
-	rewind_ctx.granularity = gran;
-	if (rewind_ctx.granularity < 1) rewind_ctx.granularity = 1;
+	rewind_ctx.granularity_frames = gran;
+	rewind_ctx.interval_ms = 0;
+	rewind_ctx.use_time_cadence = gran > 60;
+	if (gran < 1) gran = 1;
+	if (rewind_ctx.use_time_cadence) {
+		rewind_ctx.interval_ms = gran;
+		rewind_ctx.granularity_frames = 1;
+	}
+	if (rewind_ctx.granularity_frames < 1) rewind_ctx.granularity_frames = 1;
 	rewind_ctx.mute_audio = mute;
 	rewind_ctx.enabled = 1;
+	rewind_ctx.generation = 1;
+	rewind_ctx.worker_stop = 0;
+	rewind_ctx.queue_head = rewind_ctx.queue_tail = rewind_ctx.queue_count = 0;
+	rewind_ctx.drop_warned = 0;
 
-	LOG_info("Rewind: enabled (%zu bytes buffer, granularity %i)\n", rewind_ctx.capacity, rewind_ctx.granularity);
+	pthread_mutex_init(&rewind_ctx.lock, NULL);
+	pthread_mutex_init(&rewind_ctx.queue_mx, NULL);
+	pthread_cond_init(&rewind_ctx.queue_cv, NULL);
+	rewind_ctx.locks_ready = 1;
+
+	// set up async capture buffers
+	rewind_ctx.pool_size = 3;
+	if (state_size > 2 * 1024 * 1024) rewind_ctx.pool_size = 2;
+	if (rewind_ctx.pool_size < 1) rewind_ctx.pool_size = 1;
+	rewind_ctx.capture_pool = calloc(rewind_ctx.pool_size, sizeof(uint8_t*));
+	rewind_ctx.capture_gen = calloc(rewind_ctx.pool_size, sizeof(unsigned int));
+	rewind_ctx.capture_busy = calloc(rewind_ctx.pool_size, sizeof(uint8_t));
+	rewind_ctx.free_stack = calloc(rewind_ctx.pool_size, sizeof(int));
+	rewind_ctx.queue = calloc(rewind_ctx.pool_size, sizeof(int));
+	if (!rewind_ctx.capture_pool || !rewind_ctx.capture_gen || !rewind_ctx.capture_busy || !rewind_ctx.free_stack || !rewind_ctx.queue) {
+		LOG_error("Rewind: failed to allocate async capture buffers\n");
+		Rewind_free();
+		return 0;
+	}
+	for (int i = 0; i < rewind_ctx.pool_size; i++) {
+		rewind_ctx.capture_pool[i] = calloc(1, state_size);
+		if (!rewind_ctx.capture_pool[i]) {
+			LOG_error("Rewind: failed to allocate capture slot %i\n", i);
+			Rewind_free();
+			return 0;
+		}
+		rewind_ctx.free_stack[i] = i;
+	}
+	rewind_ctx.queue_capacity = rewind_ctx.pool_size;
+	rewind_ctx.free_count = rewind_ctx.pool_size;
+
+	if (pthread_create(&rewind_ctx.worker, NULL, Rewind_worker_thread, NULL) != 0) {
+		// fallback to synchronous path
+		LOG_error("Rewind: failed to start worker thread, falling back to synchronous capture\n");
+		rewind_ctx.pool_size = 0;
+		rewind_ctx.queue_capacity = 0;
+		rewind_ctx.free_count = 0;
+	}
+	else {
+		rewind_ctx.worker_running = 1;
+	}
+
+	LOG_info("Rewind: enabled (%zu bytes buffer, cadence %i %s)\n", rewind_ctx.capacity,
+		rewind_ctx.use_time_cadence ? rewind_ctx.interval_ms : rewind_ctx.granularity_frames,
+		rewind_ctx.use_time_cadence ? "ms" : "frames");
 	return 1;
+}
+
+static void* Rewind_worker_thread(void *arg) {
+	(void)arg;
+
+	while (1) {
+		pthread_mutex_lock(&rewind_ctx.queue_mx);
+		while (!rewind_ctx.worker_stop && rewind_ctx.queue_count == 0) {
+			pthread_cond_wait(&rewind_ctx.queue_cv, &rewind_ctx.queue_mx);
+		}
+		if (rewind_ctx.worker_stop && rewind_ctx.queue_count == 0) {
+			pthread_mutex_unlock(&rewind_ctx.queue_mx);
+			break;
+		}
+
+		int slot = rewind_ctx.queue[rewind_ctx.queue_head];
+		rewind_ctx.queue_head = (rewind_ctx.queue_head + 1) % rewind_ctx.queue_capacity;
+		rewind_ctx.queue_count -= 1;
+		unsigned int gen = rewind_ctx.capture_gen[slot];
+		pthread_mutex_unlock(&rewind_ctx.queue_mx);
+
+		if (gen != rewind_ctx.generation) {
+			// stale snapshot, drop quietly
+			pthread_mutex_lock(&rewind_ctx.queue_mx);
+			rewind_ctx.capture_busy[slot] = 0;
+			rewind_ctx.free_stack[rewind_ctx.free_count++] = slot;
+			pthread_mutex_unlock(&rewind_ctx.queue_mx);
+			continue;
+		}
+
+		uLongf dest_len = rewind_ctx.scratch_size;
+		int res = Rewind_compress_state(rewind_ctx.capture_pool[slot], &dest_len);
+		if (res == Z_OK) {
+			pthread_mutex_lock(&rewind_ctx.lock);
+			Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
+			pthread_mutex_unlock(&rewind_ctx.lock);
+		}
+		else {
+			LOG_error("Rewind: compression failed (%i)\n", res);
+		}
+
+		pthread_mutex_lock(&rewind_ctx.queue_mx);
+		rewind_ctx.capture_busy[slot] = 0;
+		rewind_ctx.free_stack[rewind_ctx.free_count++] = slot;
+		pthread_mutex_unlock(&rewind_ctx.queue_mx);
+	}
+
+	return NULL;
 }
 
 static void Rewind_push(int force) {
 	if (!rewind_ctx.enabled) return;
 	if (!rewind_ctx.buffer || !rewind_ctx.state_buf) return;
 
+	uint32_t now_ms = SDL_GetTicks();
 	if (!force) {
-		rewind_ctx.frame_counter += 1;
-		if (rewind_ctx.frame_counter < rewind_ctx.granularity) return;
-		rewind_ctx.frame_counter = 0;
+		if (rewind_ctx.use_time_cadence) {
+			if (rewind_ctx.last_push_ms && (int)(now_ms - rewind_ctx.last_push_ms) < rewind_ctx.interval_ms) return;
+			rewind_ctx.last_push_ms = now_ms;
+		}
+		else {
+			rewind_ctx.frame_counter += 1;
+			if (rewind_ctx.frame_counter < rewind_ctx.granularity_frames) return;
+			rewind_ctx.frame_counter = 0;
+		}
 	} else {
 		rewind_ctx.frame_counter = 0;
+		rewind_ctx.last_push_ms = now_ms;
 	}
 
 	if (!core.serialize || !core.serialize_size) return;
 
+	if (rewind_ctx.worker_running && rewind_ctx.pool_size) {
+		int slot = -1;
+		pthread_mutex_lock(&rewind_ctx.queue_mx);
+		if (rewind_ctx.free_count && rewind_ctx.queue_count < rewind_ctx.queue_capacity) {
+			slot = rewind_ctx.free_stack[--rewind_ctx.free_count];
+			rewind_ctx.capture_busy[slot] = 1;
+		}
+		pthread_mutex_unlock(&rewind_ctx.queue_mx);
+
+		if (slot < 0) {
+			if (!rewind_ctx.drop_warned) {
+				LOG_info("Rewind: skipping snapshot (worker busy)\n");
+				rewind_ctx.drop_warned = 1;
+			}
+			return;
+		}
+
+		uint8_t *buf = rewind_ctx.capture_pool[slot];
+		if (!core.serialize(buf, rewind_ctx.state_size)) {
+			LOG_error("Rewind: serialize failed\n");
+			pthread_mutex_lock(&rewind_ctx.queue_mx);
+			rewind_ctx.capture_busy[slot] = 0;
+			rewind_ctx.free_stack[rewind_ctx.free_count++] = slot;
+			pthread_mutex_unlock(&rewind_ctx.queue_mx);
+			return;
+		}
+
+		rewind_ctx.capture_gen[slot] = rewind_ctx.generation;
+		pthread_mutex_lock(&rewind_ctx.queue_mx);
+		rewind_ctx.queue[rewind_ctx.queue_tail] = slot;
+		rewind_ctx.queue_tail = (rewind_ctx.queue_tail + 1) % rewind_ctx.queue_capacity;
+		rewind_ctx.queue_count += 1;
+		pthread_cond_signal(&rewind_ctx.queue_cv);
+		pthread_mutex_unlock(&rewind_ctx.queue_mx);
+		rewind_ctx.drop_warned = 0;
+		return;
+	}
+
+	// synchronous fallback (thread not available)
 	if (!core.serialize(rewind_ctx.state_buf, rewind_ctx.state_size)) {
 		LOG_error("Rewind: serialize failed\n");
 		return;
 	}
 
 	uLongf dest_len = rewind_ctx.scratch_size;
-	int res = compress2(rewind_ctx.scratch, &dest_len, rewind_ctx.state_buf, rewind_ctx.state_size, Z_BEST_SPEED);
+	int res = Rewind_compress_state(rewind_ctx.state_buf, &dest_len);
 	if (res != Z_OK) {
 		LOG_error("Rewind: compression failed (%i)\n", res);
 		return;
 	}
 
-	if (dest_len >= rewind_ctx.capacity) {
-		LOG_error("Rewind: state does not fit in buffer\n");
-		return;
-	}
-
-	// wrap write position if needed
-	if (rewind_ctx.head + dest_len > rewind_ctx.capacity) {
-		rewind_ctx.head = 0;
-		if (rewind_ctx.entry_count==0) rewind_ctx.tail = 0;
-	}
-
-	// make room
-	while (Rewind_free_space() <= dest_len) {
-		Rewind_drop_oldest();
-	}
-
-	memcpy(rewind_ctx.buffer + rewind_ctx.head, rewind_ctx.scratch, dest_len);
-
-	RewindEntry *e = &rewind_ctx.entries[rewind_ctx.entry_head];
-	e->offset = rewind_ctx.head;
-	e->size = dest_len;
-
-	rewind_ctx.head += dest_len;
-	if (rewind_ctx.head >= rewind_ctx.capacity) rewind_ctx.head = 0;
-
-	rewind_ctx.entry_head = (rewind_ctx.entry_head + 1) % rewind_ctx.entry_capacity;
-	if (rewind_ctx.entry_count < rewind_ctx.entry_capacity) rewind_ctx.entry_count += 1;
-	else Rewind_drop_oldest();
-	rewind_warn_empty = 0;
+	pthread_mutex_lock(&rewind_ctx.lock);
+	Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
+	pthread_mutex_unlock(&rewind_ctx.lock);
+	rewind_ctx.drop_warned = 0;
 }
 
 static bool Rewind_step_back(void) {
 	if (!rewind_ctx.enabled) return false;
+	pthread_mutex_lock(&rewind_ctx.lock);
 	if (!rewind_ctx.entry_count) {
+		pthread_mutex_unlock(&rewind_ctx.lock);
 		if (!rewind_warn_empty) {
 			LOG_info("Rewind: no buffered states yet\n");
 			rewind_warn_empty = 1;
@@ -1320,13 +1605,15 @@ static bool Rewind_step_back(void) {
 	int res = uncompress(rewind_ctx.state_buf, &dest_len, rewind_ctx.buffer + e->offset, e->size);
 	if (res != Z_OK || dest_len < rewind_ctx.state_size) {
 		LOG_error("Rewind: decompress failed (%i)\n", res);
-		Rewind_drop_oldest();
+		Rewind_drop_oldest_locked();
+		pthread_mutex_unlock(&rewind_ctx.lock);
 		return false;
 	}
 
 	if (!core.unserialize(rewind_ctx.state_buf, rewind_ctx.state_size)) {
 		LOG_error("Rewind: unserialize failed\n");
-		Rewind_drop_oldest();
+		Rewind_drop_oldest_locked();
+		pthread_mutex_unlock(&rewind_ctx.lock);
 		return false;
 	}
 
@@ -1336,8 +1623,11 @@ static bool Rewind_step_back(void) {
 	if (rewind_ctx.entry_count==0) {
 		rewind_ctx.head = rewind_ctx.tail = 0;
 	}
+	int remaining = rewind_ctx.entry_count;
+	pthread_mutex_unlock(&rewind_ctx.lock);
+
 	rewinding = 1;
-	LOG_info("Rewind: stepped back, entries remaining %i\n", rewind_ctx.entry_count);
+	LOG_info("Rewind: stepped back, entries remaining %i\n", remaining);
 	return true;
 }
 
@@ -1413,12 +1703,20 @@ static char* rewind_buffer_labels[] = {
 	"64",
 	NULL
 };
+static char* rewind_granularity_values[] = {
+	"150",
+	"300",
+	"450",
+	"600",
+	"900",
+	NULL
+};
 static char* rewind_granularity_labels[] = {
-	"1",
-	"2",
-	"3",
-	"4",
-	"5",
+	"150 ms",
+	"300 ms",
+	"450 ms",
+	"600 ms",
+	"900 ms",
 	NULL
 };
 static char* ambient_labels[] = {
@@ -2044,12 +2342,12 @@ static struct Config {
 			},
 			[FE_OPT_REWIND_GRANULARITY] = {
 				.key	= "minarch_rewind_granularity",
-				.name	= "Rewind Granularity",
-				.desc	= "Frames between rewind snapshots.",
-				.default_value = 0, // 1 frame
-				.value = 0,
+				.name	= "Rewind Interval",
+				.desc	= "Milliseconds between rewind snapshots.",
+				.default_value = 1, // 300ms
+				.value = 1,
 				.count = 5,
-				.values = rewind_granularity_labels,
+				.values = rewind_granularity_values,
 				.labels = rewind_granularity_labels,
 			},
 			[FE_OPT_REWIND_MUTE] = {

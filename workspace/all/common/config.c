@@ -636,7 +636,9 @@ int CFG_getRewindGranularity(void)
 
 void CFG_setRewindGranularity(int granularity)
 {
-    settings.rewindGranularity = clamp(granularity, 1, 60);
+    // Granularity is interpreted as milliseconds once it exceeds the legacy
+    // frame-based range, so allow a wider range to cover slower cadences.
+    settings.rewindGranularity = clamp(granularity, 1, 2000);
     CFG_sync();
 }
 
