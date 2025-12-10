@@ -13,7 +13,11 @@
 #include <zip.h> 
 #include <pthread.h>
 #include <glob.h>
-#include <zlib.h>
+
+// minimal LZ4 API forward declarations (linked via -llz4)
+int LZ4_compress_default(const char* src, char* dst, int srcSize, int dstCapacity);
+int LZ4_decompress_safe(const char* src, char* dst, int compressedSize, int dstCapacity);
+int LZ4_compressBound(int inputSize);
 
 // libretro-common
 #include "libretro.h"
@@ -1133,6 +1137,8 @@ typedef struct {
 	int granularity_frames;
 	int interval_ms;
 	uint32_t last_push_ms;
+	uint32_t last_step_ms;
+	int playback_interval_ms;
 	int use_time_cadence;
 	int frame_counter;
 	unsigned int generation;
@@ -1161,9 +1167,6 @@ typedef struct {
 	int queue_tail;
 	int queue_count;
 	int *queue;
-
-	z_stream zstream;
-	int zstream_ready;
 } RewindContext;
 
 static RewindContext rewind_ctx = {0};
@@ -1172,7 +1175,7 @@ static int last_rewind_pressed = 0;
 
 static void* Rewind_worker_thread(void *arg);
 static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len);
-static int Rewind_compress_state(const uint8_t *src, uLongf *dest_len);
+static int Rewind_compress_state(const uint8_t *src, size_t *dest_len);
 
 static void Rewind_free(void) {
 	if (rewind_ctx.worker_running) {
@@ -1182,11 +1185,6 @@ static void Rewind_free(void) {
 		pthread_mutex_unlock(&rewind_ctx.queue_mx);
 		pthread_join(rewind_ctx.worker, NULL);
 		rewind_ctx.worker_running = 0;
-	}
-
-	if (rewind_ctx.zstream_ready) {
-		deflateEnd(&rewind_ctx.zstream);
-		rewind_ctx.zstream_ready = 0;
 	}
 
 	if (rewind_ctx.capture_pool) {
@@ -1220,6 +1218,7 @@ static void Rewind_reset(void) {
 	pthread_mutex_unlock(&rewind_ctx.lock);
 	rewind_ctx.frame_counter = 0;
 	rewind_ctx.last_push_ms = 0;
+	rewind_ctx.last_step_ms = 0;
 	rewind_ctx.generation += 1;
 	rewind_ctx.drop_warned = 0;
 	rewind_ctx.worker_stop = 0;
@@ -1302,36 +1301,13 @@ static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len)
 	return 1;
 }
 
-static int Rewind_compress_state(const uint8_t *src, uLongf *dest_len) {
-	int res = Z_OK;
-	if (!rewind_ctx.scratch || !dest_len) return Z_MEM_ERROR;
-
-	if (!rewind_ctx.zstream_ready) {
-		memset(&rewind_ctx.zstream, 0, sizeof(rewind_ctx.zstream));
-		res = deflateInit2(&rewind_ctx.zstream, Z_BEST_SPEED, Z_DEFLATED, 15, 8, Z_RLE);
-		if (res == Z_OK) rewind_ctx.zstream_ready = 1;
-	}
-
-	if (rewind_ctx.zstream_ready) {
-		rewind_ctx.zstream.next_in = (Bytef *)src;
-		rewind_ctx.zstream.avail_in = rewind_ctx.state_size;
-		rewind_ctx.zstream.next_out = rewind_ctx.scratch;
-		rewind_ctx.zstream.avail_out = rewind_ctx.scratch_size;
-
-		res = deflateReset(&rewind_ctx.zstream);
-		if (res == Z_OK) {
-			res = deflate(&rewind_ctx.zstream, Z_FINISH);
-		}
-		if (res == Z_STREAM_END) {
-			*dest_len = rewind_ctx.scratch_size - rewind_ctx.zstream.avail_out;
-			return Z_OK;
-		}
-	}
-
-	// fallback to plain compress2 if the streaming path fails
-	*dest_len = rewind_ctx.scratch_size;
-	res = compress2(rewind_ctx.scratch, dest_len, src, rewind_ctx.state_size, Z_BEST_SPEED);
-	return res;
+static int Rewind_compress_state(const uint8_t *src, size_t *dest_len) {
+	if (!rewind_ctx.scratch || !dest_len) return -1;
+	int max_dst = (int)rewind_ctx.scratch_size;
+	int res = LZ4_compress_default((const char*)src, (char*)rewind_ctx.scratch, (int)rewind_ctx.state_size, max_dst);
+	if (res <= 0) return -1;
+	*dest_len = (size_t)res;
+	return 0;
 }
 
 static int Rewind_init(size_t state_size) {
@@ -1376,7 +1352,7 @@ static int Rewind_init(size_t state_size) {
 		return 0;
 	}
 
-	rewind_ctx.scratch_size = compressBound(state_size);
+	rewind_ctx.scratch_size = LZ4_compressBound((int)state_size);
 	rewind_ctx.scratch = calloc(1, rewind_ctx.scratch_size);
 	if (!rewind_ctx.scratch) {
 		LOG_error("Rewind: failed to allocate scratch buffer\n");
@@ -1403,6 +1379,18 @@ static int Rewind_init(size_t state_size) {
 		rewind_ctx.granularity_frames = 1;
 	}
 	if (rewind_ctx.granularity_frames < 1) rewind_ctx.granularity_frames = 1;
+	double fps = core.fps > 1.0 ? core.fps : 60.0;
+	int frame_ms = (int)(1000.0 / fps);
+	if (frame_ms < 1) frame_ms = 1;
+	// Try to play back at roughly the cadence snapshots were captured.
+	int capture_ms = rewind_ctx.use_time_cadence
+		? rewind_ctx.interval_ms
+		: rewind_ctx.granularity_frames * frame_ms;
+	if (capture_ms < frame_ms) capture_ms = frame_ms;
+	// Play back faster than capture to smooth motion while avoiding runaway speed.
+	int playback_ms = capture_ms / 4;
+	if (playback_ms < frame_ms) playback_ms = frame_ms;
+	rewind_ctx.playback_interval_ms = playback_ms;
 	rewind_ctx.mute_audio = mute;
 	rewind_ctx.enabled = 1;
 	rewind_ctx.generation = 1;
@@ -1486,9 +1474,9 @@ static void* Rewind_worker_thread(void *arg) {
 			continue;
 		}
 
-		uLongf dest_len = rewind_ctx.scratch_size;
+		size_t dest_len = rewind_ctx.scratch_size;
 		int res = Rewind_compress_state(rewind_ctx.capture_pool[slot], &dest_len);
-		if (res == Z_OK) {
+		if (res == 0) {
 			pthread_mutex_lock(&rewind_ctx.lock);
 			Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
 			pthread_mutex_unlock(&rewind_ctx.lock);
@@ -1572,9 +1560,9 @@ static void Rewind_push(int force) {
 		return;
 	}
 
-	uLongf dest_len = rewind_ctx.scratch_size;
+	size_t dest_len = rewind_ctx.scratch_size;
 	int res = Rewind_compress_state(rewind_ctx.state_buf, &dest_len);
-	if (res != Z_OK) {
+	if (res != 0) {
 		LOG_error("Rewind: compression failed (%i)\n", res);
 		return;
 	}
@@ -1587,6 +1575,13 @@ static void Rewind_push(int force) {
 
 static bool Rewind_step_back(void) {
 	if (!rewind_ctx.enabled) return false;
+	uint32_t now_ms = SDL_GetTicks();
+	if (rewind_ctx.playback_interval_ms > 0 && rewind_ctx.last_step_ms &&
+		(int)(now_ms - rewind_ctx.last_step_ms) < rewind_ctx.playback_interval_ms) {
+		// still rewinding, just waiting for cadence; do not push new snapshots
+		return true;
+	}
+
 	pthread_mutex_lock(&rewind_ctx.lock);
 	if (!rewind_ctx.entry_count) {
 		pthread_mutex_unlock(&rewind_ctx.lock);
@@ -1601,9 +1596,9 @@ static bool Rewind_step_back(void) {
 	if (idx < 0) idx += rewind_ctx.entry_capacity;
 	RewindEntry *e = &rewind_ctx.entries[idx];
 
-	uLongf dest_len = rewind_ctx.state_size;
-	int res = uncompress(rewind_ctx.state_buf, &dest_len, rewind_ctx.buffer + e->offset, e->size);
-	if (res != Z_OK || dest_len < rewind_ctx.state_size) {
+	int res = LZ4_decompress_safe((const char*)rewind_ctx.buffer + e->offset,
+		(char*)rewind_ctx.state_buf, (int)e->size, (int)rewind_ctx.state_size);
+	if (res < (int)rewind_ctx.state_size) {
 		LOG_error("Rewind: decompress failed (%i)\n", res);
 		Rewind_drop_oldest_locked();
 		pthread_mutex_unlock(&rewind_ctx.lock);
@@ -1627,6 +1622,7 @@ static bool Rewind_step_back(void) {
 	pthread_mutex_unlock(&rewind_ctx.lock);
 
 	rewinding = 1;
+	rewind_ctx.last_step_ms = now_ms;
 	LOG_info("Rewind: stepped back, entries remaining %i\n", remaining);
 	return true;
 }

@@ -28,6 +28,7 @@ CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(OPT) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS	 += -lmsettings -lsamplerate
+LDFLAGS  += -llz4
 ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
 CFLAGS += `pkg-config --cflags libzip`
@@ -68,6 +69,7 @@ all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	cp $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
 	cp $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
 	cp $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
+	cp $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
 

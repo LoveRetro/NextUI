@@ -11,7 +11,8 @@ GUEST_WORKSPACE=/root/workspace
 
 GIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain
 INIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain/.build
-IMAGE_NAME=ghcr.io/loveretro/$(PLATFORM)-toolchain:modernize
+# Use local image if it exists, otherwise use remote
+IMAGE_NAME=$(shell docker images -q $(PLATFORM)-toolchain:latest 2>/dev/null | head -1 | grep -q . && echo "$(PLATFORM)-toolchain:latest" || echo "ghcr.io/loveretro/$(PLATFORM)-toolchain:modernize")
 
 all: $(INIT_IF_NECESSARY)
 	docker run -it --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) $(IMAGE_NAME) /bin/bash
