@@ -1,0 +1,58 @@
+#!/bin/sh
+set -euo pipefail
+exec 0<&-
+
+#logfile="/mnt/SDCARD/.userdata/tg5040/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
+#exec >> "$logfile" 2>&1
+
+wifid_running=
+bluetoothd_running=
+
+asound_state_dir=/tmp/asound-suspend
+
+before() {
+	>&2 echo "Preparing for suspend..."
+
+	>&2 echo "Saving mixer state..."
+	mkdir -p "$asound_state_dir"
+	alsactl --file "$asound_state_dir/asound.state.pre" store || true
+
+	if pgrep bluetoothd; then
+		bluetoothd_running=1
+		>&2 echo "Stopping bluetoothd..."
+		/etc/bluetooth/bt_init.sh stop || true
+	fi
+
+	if pgrep wpa_supplicant; then
+		wifid_running=1
+		>&2 echo "Stopping wifi_daemon..."
+		killall -15 wifi_daemon || true
+		/etc/wifi/wifi_init.sh stop || true
+	fi
+}
+
+after() {
+	>&2 echo "Resumed from suspend."
+
+	if [ -n "$wifid_running" ]; then
+		>&2 echo "Starting wpa_supplicant..."
+		/etc/wifi/wifi_init.sh start || true
+	fi
+
+	if [ -n "$bluetoothd_running" ]; then
+		>&2 echo "Starting bluetoothd..."
+		/etc/bluetooth/bt_init.sh start || true
+	fi
+
+	# >&2 echo "Restoring mixer state..."
+	# alsactl --file "$asound_state_dir/asound.state.post" store || true
+	# alsactl --file "$asound_state_dir/asound.state.pre" restore || true
+}
+
+before
+
+>&2 echo "Suspending..."
+echo mem >/sys/power/state
+
+# Resume services in background to reduce UI latency
+after &

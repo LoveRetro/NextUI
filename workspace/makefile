@@ -16,7 +16,6 @@ endif
 
 all:
 ifeq ($(PLATFORM), desktop)
-	cd ./$(PLATFORM)/libmsettings && make
 	cd ./$(PLATFORM) && make early # eg. other libs
 	cd ./all/nextui/ && make
 	cd ./all/minarch/ && make
@@ -31,10 +30,6 @@ ifeq ($(PLATFORM), desktop)
 	cd ./all/nextval/ && make
 	cd ./all/settings/ && make
 else 
-	cd ./$(PLATFORM)/rfkill && make all
-	cd ./$(PLATFORM)/btmanager && make all
-	cd ./$(PLATFORM)/audiomon && make all
-	cd ./$(PLATFORM)/wifimanager && make all
 	cd ./$(PLATFORM)/libmsettings && make
 	cd ./$(PLATFORM) && make early # eg. other libs
 	cd ./$(PLATFORM)/keymon && make
@@ -54,7 +49,11 @@ else
 	cd ./all/ledcontrol/ && make
 	cd ./all/bootlogo/ && make
 ifeq ($(PLATFORM), tg5040)
-	cd ./tg5040/poweroff_next/ && make
+	cd ./$(PLATFORM)/rfkill && make all
+	cd ./$(PLATFORM)/btmanager && make all
+	cd ./$(PLATFORM)/wifimanager && make all
+	cd ./$(PLATFORM)/audiomon && make all
+	cd ./$(PLATFORM)/poweroff_next/ && make
 endif
 endif
 ifdef COMPILE_CORES
@@ -75,16 +74,16 @@ endif
 
 clean:
 ifneq ($(PLATFORM), desktop)
-	cd ./$(PLATFORM)/rfkill && make clean
-	cd ./$(PLATFORM)/wifimanager && make clean
-	cd ./$(PLATFORM)/audiomon && make clean
-	cd ./$(PLATFORM)/btmanager && make clean
 	cd ./$(PLATFORM)/keymon && make clean
 	cd ./all/syncsettings/ && make clean
 	cd ./all/ledcontrol/ && make clean
 	cd ./all/bootlogo/ && make clean
 ifeq ($(PLATFORM), tg5040)
-	cd ./tg5040/poweroff_next/ && make clean
+	cd ./$(PLATFORM)/rfkill && make clean
+	cd ./$(PLATFORM)/wifimanager && make clean
+	cd ./$(PLATFORM)/audiomon && make clean
+	cd ./$(PLATFORM)/btmanager && make clean
+	cd ./$(PLATFORM)/poweroff_next/ && make clean
 endif
 endif
 	cd ./$(PLATFORM)/libmsettings && make clean

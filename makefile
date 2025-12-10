@@ -12,7 +12,7 @@ endif
 
 ifeq (,$(PLATFORMS))
 #PLATFORMS = miyoomini trimuismart rg35xx rg35xxplus my355 tg5040 zero28 rgb30 m17 gkdpixel my282 magicmini
-PLATFORMS = tg5040
+PLATFORMS = tg5050
 endif
 
 ###########################################################
