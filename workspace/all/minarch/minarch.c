@@ -1268,35 +1268,70 @@ static void Rewind_drop_oldest(void) {
 	pthread_mutex_unlock(&rewind_ctx.lock);
 }
 
+// Check if an entry overlaps with range [range_start, range_end) in a non-wrapping buffer region
+static int Rewind_entry_overlaps_range(int entry_idx, size_t range_start, size_t range_end) {
+	RewindEntry *e = &rewind_ctx.entries[entry_idx];
+	size_t e_start = e->offset;
+	size_t e_end = e->offset + e->size;
+	// Check for overlap: ranges overlap if start < other_end AND other_start < end
+	return (e_start < range_end) && (range_start < e_end);
+}
+
 static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len) {
 	if (dest_len >= rewind_ctx.capacity) {
 		LOG_error("Rewind: state does not fit in buffer\n");
 		return 0;
 	}
 
-	// wrap write position if needed
-	if (rewind_ctx.head + dest_len > rewind_ctx.capacity) {
+	size_t write_offset = rewind_ctx.head;
+
+	// If this write would go past the end of the buffer, wrap to 0
+	if (write_offset + dest_len > rewind_ctx.capacity) {
+		write_offset = 0;
 		rewind_ctx.head = 0;
-		if (rewind_ctx.entry_count==0) rewind_ctx.tail = 0;
+		if (rewind_ctx.entry_count == 0) {
+			rewind_ctx.tail = 0;
+		}
 	}
 
-	// make room
-	while (Rewind_free_space_locked() <= dest_len) {
+	// Drop any entries that overlap with the region we're about to write: [write_offset, write_offset + dest_len)
+	// We need to check all entries from tail to head and drop any that overlap.
+	// Since entries are stored oldest-to-newest, we drop from oldest while they overlap.
+	while (rewind_ctx.entry_count > 0) {
+		int oldest_idx = rewind_ctx.entry_tail;
+		if (Rewind_entry_overlaps_range(oldest_idx, write_offset, write_offset + dest_len)) {
+			Rewind_drop_oldest_locked();
+		} else {
+			break;
+		}
+	}
+
+	// Still need to make room based on free space calculation
+	while (rewind_ctx.entry_count > 0 && Rewind_free_space_locked() <= dest_len) {
 		Rewind_drop_oldest_locked();
 	}
 
-	memcpy(rewind_ctx.buffer + rewind_ctx.head, compressed, dest_len);
+	// Safety check: if we still can't fit, there's a logic error
+	if (Rewind_free_space_locked() <= dest_len && rewind_ctx.entry_count > 0) {
+		LOG_error("Rewind: unable to make room for entry (need %zu, have %zu)\n", dest_len, Rewind_free_space_locked());
+		return 0;
+	}
+
+	memcpy(rewind_ctx.buffer + write_offset, compressed, dest_len);
 
 	RewindEntry *e = &rewind_ctx.entries[rewind_ctx.entry_head];
-	e->offset = rewind_ctx.head;
+	e->offset = write_offset;
 	e->size = dest_len;
 
-	rewind_ctx.head += dest_len;
+	rewind_ctx.head = write_offset + dest_len;
 	if (rewind_ctx.head >= rewind_ctx.capacity) rewind_ctx.head = 0;
 
 	rewind_ctx.entry_head = (rewind_ctx.entry_head + 1) % rewind_ctx.entry_capacity;
-	if (rewind_ctx.entry_count < rewind_ctx.entry_capacity) rewind_ctx.entry_count += 1;
-	else Rewind_drop_oldest_locked();
+	if (rewind_ctx.entry_count < rewind_ctx.entry_capacity) {
+		rewind_ctx.entry_count += 1;
+	} else {
+		Rewind_drop_oldest_locked();
+	}
 	rewind_warn_empty = 0;
 	return 1;
 }
@@ -1322,8 +1357,8 @@ static int Rewind_init(size_t state_size) {
 		enable = 1;
 		LOG_info("Rewind: force enable via %s\n", force_path);
 	}
-	LOG_info("Rewind: config enable=%i bufferMB=%i interval=%i%s mute=%i\n",
-		enable, buf_mb, gran, gran > 60 ? "ms" : " frames", mute);
+	LOG_info("Rewind: config enable=%i bufferMB=%i interval=%ims mute=%i\n",
+		enable, buf_mb, gran, mute);
 	if (!enable) {
 		LOG_info("Rewind: disabled via config\n");
 		return 0;
@@ -1370,27 +1405,21 @@ static int Rewind_init(size_t state_size) {
 		return 0;
 	}
 
-	rewind_ctx.granularity_frames = gran;
-	rewind_ctx.interval_ms = 0;
-	rewind_ctx.use_time_cadence = gran > 60;
-	if (gran < 1) gran = 1;
-	if (rewind_ctx.use_time_cadence) {
-		rewind_ctx.interval_ms = gran;
-		rewind_ctx.granularity_frames = 1;
-	}
-	if (rewind_ctx.granularity_frames < 1) rewind_ctx.granularity_frames = 1;
+	rewind_ctx.granularity_frames = 1;
+	rewind_ctx.interval_ms = gran < 1 ? 1 : gran; // treat granularity as milliseconds always
+	rewind_ctx.use_time_cadence = 1;
 	double fps = core.fps > 1.0 ? core.fps : 60.0;
 	int frame_ms = (int)(1000.0 / fps);
 	if (frame_ms < 1) frame_ms = 1;
-	// Try to play back at roughly the cadence snapshots were captured.
-	int capture_ms = rewind_ctx.use_time_cadence
-		? rewind_ctx.interval_ms
-		: rewind_ctx.granularity_frames * frame_ms;
+	// Capture interval in milliseconds (time-based only)
+	int capture_ms = rewind_ctx.interval_ms;
 	if (capture_ms < frame_ms) capture_ms = frame_ms;
-	// Play back faster than capture to smooth motion while avoiding runaway speed.
-	int playback_ms = capture_ms / 4;
+	// Play back at the capture cadence (match recorded speed) but never faster than native frame time
+	int playback_ms = capture_ms;
 	if (playback_ms < frame_ms) playback_ms = frame_ms;
 	rewind_ctx.playback_interval_ms = playback_ms;
+	LOG_info("Rewind: capture_ms=%d, playback_ms=%d (state size=%zu bytes, buffer=%zu bytes, entries=%d)\n",
+		capture_ms, playback_ms, state_size, rewind_ctx.capacity, rewind_ctx.entry_capacity);
 	rewind_ctx.mute_audio = mute;
 	rewind_ctx.enabled = 1;
 	rewind_ctx.generation = 1;
@@ -1404,8 +1433,8 @@ static int Rewind_init(size_t state_size) {
 	rewind_ctx.locks_ready = 1;
 
 	// set up async capture buffers
-	rewind_ctx.pool_size = 3;
-	if (state_size > 2 * 1024 * 1024) rewind_ctx.pool_size = 2;
+	// Larger states need a deeper pool to avoid drops; cap to a modest size to limit RAM
+	rewind_ctx.pool_size = (state_size > 2 * 1024 * 1024) ? 4 : 3;
 	if (rewind_ctx.pool_size < 1) rewind_ctx.pool_size = 1;
 	rewind_ctx.capture_pool = calloc(rewind_ctx.pool_size, sizeof(uint8_t*));
 	rewind_ctx.capture_gen = calloc(rewind_ctx.pool_size, sizeof(unsigned int));
@@ -1475,15 +1504,15 @@ static void* Rewind_worker_thread(void *arg) {
 		}
 
 		size_t dest_len = rewind_ctx.scratch_size;
+		pthread_mutex_lock(&rewind_ctx.lock);
 		int res = Rewind_compress_state(rewind_ctx.capture_pool[slot], &dest_len);
 		if (res == 0) {
-			pthread_mutex_lock(&rewind_ctx.lock);
 			Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
-			pthread_mutex_unlock(&rewind_ctx.lock);
 		}
 		else {
 			LOG_error("Rewind: compression failed (%i)\n", res);
 		}
+		pthread_mutex_unlock(&rewind_ctx.lock);
 
 		pthread_mutex_lock(&rewind_ctx.queue_mx);
 		rewind_ctx.capture_busy[slot] = 0;
@@ -1526,10 +1555,23 @@ static void Rewind_push(int force) {
 		pthread_mutex_unlock(&rewind_ctx.queue_mx);
 
 		if (slot < 0) {
-			if (!rewind_ctx.drop_warned) {
-				LOG_info("Rewind: skipping snapshot (worker busy)\n");
-				rewind_ctx.drop_warned = 1;
+			// worker is busy; fall back to synchronous capture so we don't miss cadence
+			if (!core.serialize(rewind_ctx.state_buf, rewind_ctx.state_size)) {
+				LOG_error("Rewind: serialize failed (sync fallback)\n");
+				return;
 			}
+
+			size_t dest_len = rewind_ctx.scratch_size;
+			pthread_mutex_lock(&rewind_ctx.lock);
+			int res = Rewind_compress_state(rewind_ctx.state_buf, &dest_len);
+			if (res != 0) {
+				pthread_mutex_unlock(&rewind_ctx.lock);
+				LOG_error("Rewind: compression failed (sync fallback) (%i)\n", res);
+				return;
+			}
+
+			Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
+			pthread_mutex_unlock(&rewind_ctx.lock);
 			return;
 		}
 
@@ -1561,13 +1603,14 @@ static void Rewind_push(int force) {
 	}
 
 	size_t dest_len = rewind_ctx.scratch_size;
+	pthread_mutex_lock(&rewind_ctx.lock);
 	int res = Rewind_compress_state(rewind_ctx.state_buf, &dest_len);
 	if (res != 0) {
+		pthread_mutex_unlock(&rewind_ctx.lock);
 		LOG_error("Rewind: compression failed (%i)\n", res);
 		return;
 	}
 
-	pthread_mutex_lock(&rewind_ctx.lock);
 	Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
 	pthread_mutex_unlock(&rewind_ctx.lock);
 	rewind_ctx.drop_warned = 0;
@@ -1599,8 +1642,14 @@ static bool Rewind_step_back(void) {
 	int res = LZ4_decompress_safe((const char*)rewind_ctx.buffer + e->offset,
 		(char*)rewind_ctx.state_buf, (int)e->size, (int)rewind_ctx.state_size);
 	if (res < (int)rewind_ctx.state_size) {
-		LOG_error("Rewind: decompress failed (%i)\n", res);
-		Rewind_drop_oldest_locked();
+		LOG_error("Rewind: decompress failed (res=%i, want=%zu, compressed=%zu, offset=%zu, idx=%d head=%d tail=%d count=%d buf_head=%zu buf_tail=%zu)\n",
+			res, rewind_ctx.state_size, e->size, e->offset, idx, rewind_ctx.entry_head, rewind_ctx.entry_tail, rewind_ctx.entry_count, rewind_ctx.head, rewind_ctx.tail);
+		// On decompression failure, drop the corrupted newest entry instead of oldest
+		rewind_ctx.entry_head = idx;
+		rewind_ctx.entry_count -= 1;
+		if (rewind_ctx.entry_count == 0) {
+			rewind_ctx.head = rewind_ctx.tail = 0;
+		}
 		pthread_mutex_unlock(&rewind_ctx.lock);
 		return false;
 	}
@@ -1623,7 +1672,6 @@ static bool Rewind_step_back(void) {
 
 	rewinding = 1;
 	rewind_ctx.last_step_ms = now_ms;
-	LOG_info("Rewind: stepped back, entries remaining %i\n", remaining);
 	return true;
 }
 
@@ -1700,19 +1748,27 @@ static char* rewind_buffer_labels[] = {
 	NULL
 };
 static char* rewind_granularity_values[] = {
+	"33",
+	"50",
+	"66",
+	"100",
 	"150",
+	"200",
 	"300",
 	"450",
 	"600",
-	"900",
 	NULL
 };
 static char* rewind_granularity_labels[] = {
-	"150 ms",
+	"33 ms (~30 fps)",
+	"50 ms (~20 fps)",
+	"66 ms (~15 fps)",
+	"100 ms (~10 fps)",
+	"150 ms (~7 fps)",
+	"200 ms (~5 fps)",
 	"300 ms",
 	"450 ms",
 	"600 ms",
-	"900 ms",
 	NULL
 };
 static char* ambient_labels[] = {
