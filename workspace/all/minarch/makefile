@@ -27,6 +27,8 @@ SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../
 CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(OPT)
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
+LDFLAGS	 += -lmsettings -lsamplerate
+LDFLAGS  += -llz4
 LDFLAGS += -lmsettings -lsamplerate
 LDFLAGS += -llz4
 
@@ -86,6 +88,7 @@ all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	cp -L $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
 	cp $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
