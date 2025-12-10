@@ -3754,6 +3754,9 @@ static void PWR_exitSleep(void)
 	// system("killall -CONT wifi_daemon");
 	system("killall -CONT audiomon.elf");
 
+	// Immediately update battery status after waking to detect charging state
+	PWR_updateBatteryStatus();
+
 	if (GetHDMI())
 	{
 		// buh

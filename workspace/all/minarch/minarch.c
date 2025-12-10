@@ -344,16 +344,28 @@ int extract_zip(char** extensions)
 				}
 				//LOG_info("Writing: %s\n", game.tmp_path);
 
+				// Optimized: use larger buffer for better I/O performance on Cortex-A53
+				// 4KB aligns with typical page size and cache line boundaries
+				char large_buf[4096];
 				sum = 0;
-				while (sum != sb.size) {
-					len = zip_fread(zf, buf, 100);
+				while (sum < sb.size) {
+					size_t remaining = sb.size - sum;
+					size_t read_size = (remaining > sizeof(large_buf)) ? sizeof(large_buf) : remaining;
+					len = zip_fread(zf, large_buf, read_size);
 					if (len < 0) {
 						LOG_error( "zip_fread failed\n");
 						close(fd);
 						zip_fclose(zf);
 						return 0;
 					}
-					write(fd, buf, len);
+					if (len == 0) break; // EOF
+					ssize_t written = write(fd, large_buf, len);
+					if (written < 0) {
+						LOG_error( "write failed\n");
+						close(fd);
+						zip_fclose(zf);
+						return 0;
+					}
 					sum += len;
 				}
 				close(fd);

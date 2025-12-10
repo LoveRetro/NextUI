@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>  // For memmove, memcpy
 #include <msettings.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -54,9 +55,12 @@ static void Array_remove(Array* self, void* item) {
 	if (self->count==0 || item == NULL)
 		return;
 	int i = 0;
-	while (self->items[i] != item) i++;
-	for (int j = i; j < self->count-1; j++)
-		self->items[j] = self->items[j+1];
+	while (i < self->count && self->items[i] != item) i++;
+	if (i >= self->count) return; // Item not found
+	// Optimized memmove for better cache performance
+	if (i < self->count - 1) {
+		memmove(&self->items[i], &self->items[i+1], (self->count - i - 1) * sizeof(void*));
+	}
 	self->count--;
 }
 static void Array_reverse(Array* self) {
@@ -73,10 +77,19 @@ static void Array_free(Array* self) {
 	free(self);
 }
 static void Array_yoink(Array* self, Array* other) {
-	// append entries to self and take ownership
-	for (int i = 0; i < other->count; i++)
-        Array_push(self, other->items[i]);
-    Array_free(other); // `self` now owns the entries
+	// Optimized: pre-allocate capacity to avoid multiple reallocs
+	int new_count = self->count + other->count;
+	if (new_count > self->capacity) {
+		// Grow to at least new_count, but use power-of-2 for efficiency
+		int new_capacity = self->capacity;
+		while (new_capacity < new_count) new_capacity *= 2;
+		self->items = realloc(self->items, sizeof(void*) * new_capacity);
+		self->capacity = new_capacity;
+	}
+	// Bulk copy for better cache performance
+	memcpy(&self->items[self->count], other->items, other->count * sizeof(void*));
+	self->count = new_count;
+	Array_free(other); // `self` now owns the entries
 }
 
 static int StringArray_indexOf(Array* self, char* str) {

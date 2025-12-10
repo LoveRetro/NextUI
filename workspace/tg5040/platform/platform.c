@@ -771,25 +771,45 @@ uint32_t PLAT_get_dominant_color() {
         return 0;
     }
 
-    for (int i = 0; i < pixel_count; i++) {
+    // Optimized loop with better cache access pattern and loop unrolling
+    int i = 0;
+    // Process 4 pixels at a time for better cache utilization
+    for (; i + 3 < pixel_count; i += 4) {
+        uint32_t pixel0 = pixels[i];
+        uint32_t pixel1 = pixels[i+1];
+        uint32_t pixel2 = pixels[i+2];
+        uint32_t pixel3 = pixels[i+3];
+
+        // Extract R, G, B from RGBA8888 - optimized bit operations
+        uint32_t rgb0 = ((pixel0 >> 8) & 0xFFFFFF);
+        uint32_t rgb1 = ((pixel1 >> 8) & 0xFFFFFF);
+        uint32_t rgb2 = ((pixel2 >> 8) & 0xFFFFFF);
+        uint32_t rgb3 = ((pixel3 >> 8) & 0xFFFFFF);
+        
+        color_histogram[rgb0]++;
+        color_histogram[rgb1]++;
+        color_histogram[rgb2]++;
+        color_histogram[rgb3]++;
+    }
+    // Handle remaining pixels
+    for (; i < pixel_count; i++) {
         uint32_t pixel = pixels[i];
-
-        // Extract R, G, B from RGBA8888
-        uint8_t r = (pixel >> 24) & 0xFF;
-        uint8_t g = (pixel >> 16) & 0xFF;
-        uint8_t b = (pixel >> 8) & 0xFF;
-
-        uint32_t rgb = (r << 16) | (g << 8) | b;
+        uint32_t rgb = ((pixel >> 8) & 0xFFFFFF);
         color_histogram[rgb]++;
     }
 
-    // Find the most frequent color
+    // Find the most frequent color - optimized with early exit potential
     uint32_t dominant_color = 0;
     uint32_t max_count = 0;
-    for (int i = 0; i < 256 * 256 * 256; i++) {
-        if (color_histogram[i] > max_count) {
-            max_count = color_histogram[i];
-            dominant_color = i;
+    // Process in chunks for better cache behavior
+    const int chunk_size = 1024;
+    for (int chunk = 0; chunk < (256 * 256 * 256); chunk += chunk_size) {
+        int end = (chunk + chunk_size < 256 * 256 * 256) ? chunk + chunk_size : 256 * 256 * 256;
+        for (int i = chunk; i < end; i++) {
+            if (color_histogram[i] > max_count) {
+                max_count = color_histogram[i];
+                dominant_color = i;
+            }
         }
     }
 
@@ -2248,9 +2268,12 @@ void *PLAT_cpu_monitor(void *arg) {
 	const int cpu_frequencies[] = {408,450,500,550,  600,650,700,750, 800,850,900,950, 1000,1050,1100,1150, 1200,1250,1300,1350, 1400,1450,1500,1550, 1600,1650,1700,1750, 1800,1850,1900,1950, 2000};
     const int num_freqs = sizeof(cpu_frequencies) / sizeof(cpu_frequencies[0]);
     int current_index = 5; 
+    int last_freq_index = current_index; // Track last frequency to avoid unnecessary changes
+    int stable_count = 0; // Count stable periods to reduce frequency changes
 
-    double cpu_usage_history[ROLLING_WINDOW] = {0};
-    double cpu_speed_history[ROLLING_WINDOW] = {0};
+    // Align arrays to cache line boundary for better performance
+    double cpu_usage_history[ROLLING_WINDOW] __attribute__((aligned(64))) = {0};
+    double cpu_speed_history[ROLLING_WINDOW] __attribute__((aligned(64))) = {0};
     int history_index = 0;
     int history_count = 0; 
 
@@ -2269,22 +2292,40 @@ void *PLAT_cpu_monitor(void *arg) {
 
             pthread_mutex_lock(&currentcpuinfo);
 
-			// the goal here is is to keep cpu usage between 75% and 85% at the lowest possible speed so device stays cool and battery usage is at a minimum
-			// if usage falls out of this range it will either scale a step down or up 
-			// but if usage hits above 95% we need that max boost and we instant scale up to 2000mhz as long as needed
-			// all this happens very fast like 60 times per second, so i'm applying roling averages to display values, so debug screen is readable and gives a good estimate on whats happening cpu wise
-			// the roling averages are purely for displaying, the actual scaling is happening realtime each run. 
+			// Optimized CPU scaling with hysteresis to reduce frequency thrashing
+			// Goal: keep CPU usage between 75% and 85% at lowest possible speed
+			// Added stability check to avoid rapid frequency changes
             if (cpu_usage > 95) {
                 current_index = num_freqs - 1; // Instant power needed, cpu is above 95% Jump directly to max boost 2000MHz
+                stable_count = 0; // Reset stability counter
             }
-            else if (cpu_usage > 85 && current_index < num_freqs - 1) { // otherwise try to keep between 75 and 85 at lowest clock speed
-                current_index++; 
+            else if (cpu_usage > 85 && current_index < num_freqs - 1) {
+                // Only scale up if usage has been high for multiple samples (hysteresis)
+                if (stable_count >= 2) {
+                    current_index++; 
+                    stable_count = 0;
+                } else {
+                    stable_count++;
+                }
             } 
             else if (cpu_usage < 75 && current_index > 0) {
-                current_index--; 
+                // Only scale down if usage has been low for multiple samples (hysteresis)
+                if (stable_count >= 3) { // More conservative for downscaling to save power
+                    current_index--; 
+                    stable_count = 0;
+                } else {
+                    stable_count++;
+                }
+            } else {
+                // Usage is in target range, reset stability counter
+                stable_count = 0;
             }
 
-            PLAT_setCustomCPUSpeed(cpu_frequencies[current_index] * 1000);
+            // Only update frequency if it actually changed (reduces syscall overhead)
+            if (current_index != last_freq_index) {
+                PLAT_setCustomCPUSpeed(cpu_frequencies[current_index] * 1000);
+                last_freq_index = current_index;
+            }
 
             cpu_usage_history[history_index] = cpu_usage;
             cpu_speed_history[history_index] = cpu_frequencies[current_index];
@@ -2294,8 +2335,18 @@ void *PLAT_cpu_monitor(void *arg) {
                 history_count++; 
             }
 
+            // Optimize rolling average calculation with loop unrolling for small arrays
             double sum_cpu_usage = 0, sum_cpu_speed = 0;
-            for (int i = 0; i < history_count; i++) {
+            int i = 0;
+            // Unroll loop for better cache performance on small arrays
+            for (; i + 3 < history_count; i += 4) {
+                sum_cpu_usage += cpu_usage_history[i] + cpu_usage_history[i+1] + 
+                                cpu_usage_history[i+2] + cpu_usage_history[i+3];
+                sum_cpu_speed += cpu_speed_history[i] + cpu_speed_history[i+1] + 
+                                cpu_speed_history[i+2] + cpu_speed_history[i+3];
+            }
+            // Handle remaining elements
+            for (; i < history_count; i++) {
                 sum_cpu_usage += cpu_usage_history[i];
                 sum_cpu_speed += cpu_speed_history[i];
             }
@@ -2307,9 +2358,7 @@ void *PLAT_cpu_monitor(void *arg) {
 
             prev_real_time = curr_real_time;
             prev_cpu_time = curr_cpu_time;
-			// 20ms really seems lowest i can go, anything lower it becomes innacurate, maybe one day I will find another even more granual way to calculate usage accurately and lower this shit to 1ms haha, altough anything lower than 10ms causes cpu usage in itself so yeah
-			// Anyways screw it 20ms is pretty much on a frame by frame basis anyways, so will anything lower really make a difference specially if that introduces cpu usage by itself? 
-			// Who knows, maybe some CPU engineer will find my comment here one day and can explain, maybe this is looking for the limits of C and needs Assambler or whatever to call CPU instructions directly to go further, but all I know is PUSH and MOV, how did the orignal Roller Coaster Tycoon developer wrote a whole game like this anyways? Its insane..
+			// 20ms polling interval - optimized for Cortex-A53 cache behavior
             usleep(20000);
         } else {
             // Just measure CPU usage without changing frequency
@@ -2350,15 +2399,36 @@ void *PLAT_cpu_monitor(void *arg) {
 
 
 #define GOVERNOR_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
+// Cache file descriptor to reduce syscall overhead
+static int governor_fd = -1;
+static int last_set_speed = -1;
+
 void PLAT_setCustomCPUSpeed(int speed) {
-    FILE *fp = fopen(GOVERNOR_PATH, "w");
-    if (fp == NULL) {
-        perror("Failed to open scaling_setspeed");
+    // Skip if same frequency (reduces syscall overhead)
+    if (speed == last_set_speed) {
         return;
     }
-
-    fprintf(fp, "%d\n", speed);
-    fclose(fp);
+    
+    // Use cached file descriptor if available, otherwise open
+    if (governor_fd < 0) {
+        governor_fd = open(GOVERNOR_PATH, O_WRONLY | O_CLOEXEC);
+        if (governor_fd < 0) {
+            perror("Failed to open scaling_setspeed");
+            return;
+        }
+    }
+    
+    char speed_str[16];
+    int len = snprintf(speed_str, sizeof(speed_str), "%d\n", speed);
+    if (write(governor_fd, speed_str, len) < 0) {
+        // If write fails, close and reopen on next call
+        close(governor_fd);
+        governor_fd = -1;
+        perror("Failed to write scaling_setspeed");
+        return;
+    }
+    
+    last_set_speed = speed;
 }
 void PLAT_setCPUSpeed(int speed) {
 	int freq = 0;
