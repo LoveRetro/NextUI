@@ -59,6 +59,12 @@ enum {
 	SCALE_COUNT,
 };
 
+// defaults for rewind UI options (frontend-only)
+#define MINARCH_DEFAULT_REWIND_ENABLE 0
+#define MINARCH_DEFAULT_REWIND_BUFFER_MB 16
+#define MINARCH_DEFAULT_REWIND_GRANULARITY 66
+#define MINARCH_DEFAULT_REWIND_AUDIO 0
+
 // default frontend options
 static int screen_scaling = SCALE_ASPECT;
 static int resampling_quality = 2;
@@ -81,10 +87,11 @@ static int ff_toggled = 0;
 static int ff_hold_active = 0;
 static int ff_paused_by_rewind_hold = 0;
 static int rewinding = 0;
-static int rewind_cfg_enable = CFG_DEFAULT_REWIND_ENABLE;
-static int rewind_cfg_buffer_mb = CFG_DEFAULT_REWIND_BUFFER_MB;
-static int rewind_cfg_granularity = CFG_DEFAULT_REWIND_GRANULARITY;
-static int rewind_cfg_mute_audio = CFG_DEFAULT_REWIND_MUTE_AUDIO;
+static int rewind_cfg_enable = MINARCH_DEFAULT_REWIND_ENABLE;
+static int rewind_cfg_buffer_mb = MINARCH_DEFAULT_REWIND_BUFFER_MB;
+static int rewind_cfg_granularity = MINARCH_DEFAULT_REWIND_GRANULARITY;
+static int rewind_cfg_audio = MINARCH_DEFAULT_REWIND_AUDIO;
+static int rewind_cfg_skip_compress = 0;
 static int overclock = 3; // auto
 static int has_custom_controllers = 0;
 static int gamepad_type = 0; // index in gamepad_labels/gamepad_values
@@ -1143,7 +1150,9 @@ typedef struct {
 	int frame_counter;
 	unsigned int generation;
 	int enabled;
-	int mute_audio;
+	int audio;
+	int compress;
+	int logged_first;
 
 	// async capture/compression
 	pthread_t worker;
@@ -1338,10 +1347,24 @@ static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len)
 
 static int Rewind_compress_state(const uint8_t *src, size_t *dest_len) {
 	if (!rewind_ctx.scratch || !dest_len) return -1;
+	if (!rewind_ctx.compress) {
+		*dest_len = rewind_ctx.state_size;
+		memcpy(rewind_ctx.scratch, src, rewind_ctx.state_size);
+		if (!rewind_ctx.logged_first) {
+			rewind_ctx.logged_first = 1;
+			LOG_info("Rewind: compression disabled, storing %zu bytes per snapshot\n", rewind_ctx.state_size);
+		}
+		return 0;
+	}
 	int max_dst = (int)rewind_ctx.scratch_size;
 	int res = LZ4_compress_default((const char*)src, (char*)rewind_ctx.scratch, (int)rewind_ctx.state_size, max_dst);
 	if (res <= 0) return -1;
 	*dest_len = (size_t)res;
+	if (!rewind_ctx.logged_first) {
+		rewind_ctx.logged_first = 1;
+		LOG_info("Rewind: state size before compression=%zu bytes, after=%zu bytes (%.1f%%)\n",
+			rewind_ctx.state_size, *dest_len, 100.0 * (double)*dest_len / (double)rewind_ctx.state_size);
+	}
 	return 0;
 }
 
@@ -1351,14 +1374,8 @@ static int Rewind_init(size_t state_size) {
 	int enable = rewind_cfg_enable;
 	int buf_mb = rewind_cfg_buffer_mb;
 	int gran = rewind_cfg_granularity;
-	int mute = rewind_cfg_mute_audio;
-	const char *force_path = SHARED_USERDATA_PATH "/rewind.force";
-	if (exists((char*)force_path)) {
-		enable = 1;
-		LOG_info("Rewind: force enable via %s\n", force_path);
-	}
-	LOG_info("Rewind: config enable=%i bufferMB=%i interval=%ims mute=%i\n",
-		enable, buf_mb, gran, mute);
+	int audio = rewind_cfg_audio;
+	int skip_compress = rewind_cfg_skip_compress;
 	if (!enable) {
 		LOG_info("Rewind: disabled via config\n");
 		return 0;
@@ -1373,6 +1390,15 @@ static int Rewind_init(size_t state_size) {
 	if (buffer_mb > 256) buffer_mb = 256;
 
 	rewind_ctx.capacity = buffer_mb * 1024 * 1024;
+	rewind_ctx.compress = skip_compress ? 0 : 1;
+	if (!rewind_ctx.compress && rewind_ctx.capacity <= state_size) {
+		LOG_warn("Rewind: raw snapshots (%zu bytes) do not fit in %zu-byte buffer; falling back to compression\n",
+			state_size, rewind_ctx.capacity);
+		rewind_ctx.compress = 1;
+	}
+	rewind_ctx.logged_first = 0;
+	LOG_info("Rewind: config enable=%i bufferMB=%i interval=%ims audio=%i compression=%s\n",
+		enable, buf_mb, gran, audio, rewind_ctx.compress ? "lz4" : "raw");
 	rewind_ctx.buffer = calloc(1, rewind_ctx.capacity);
 	if (!rewind_ctx.buffer) {
 		LOG_error("Rewind: failed to allocate buffer\n");
@@ -1388,6 +1414,7 @@ static int Rewind_init(size_t state_size) {
 	}
 
 	rewind_ctx.scratch_size = LZ4_compressBound((int)state_size);
+	if (!rewind_ctx.compress) rewind_ctx.scratch_size = state_size;
 	rewind_ctx.scratch = calloc(1, rewind_ctx.scratch_size);
 	if (!rewind_ctx.scratch) {
 		LOG_error("Rewind: failed to allocate scratch buffer\n");
@@ -1420,7 +1447,7 @@ static int Rewind_init(size_t state_size) {
 	rewind_ctx.playback_interval_ms = playback_ms;
 	LOG_info("Rewind: capture_ms=%d, playback_ms=%d (state size=%zu bytes, buffer=%zu bytes, entries=%d)\n",
 		capture_ms, playback_ms, state_size, rewind_ctx.capacity, rewind_ctx.entry_capacity);
-	rewind_ctx.mute_audio = mute;
+	rewind_ctx.audio = audio;
 	rewind_ctx.enabled = 1;
 	rewind_ctx.generation = 1;
 	rewind_ctx.worker_stop = 0;
@@ -1640,12 +1667,26 @@ static int Rewind_step_back(void) {
 	if (idx < 0) idx += rewind_ctx.entry_capacity;
 	RewindEntry *e = &rewind_ctx.entries[idx];
 
-	int res = LZ4_decompress_safe((const char*)rewind_ctx.buffer + e->offset,
-		(char*)rewind_ctx.state_buf, (int)e->size, (int)rewind_ctx.state_size);
-	if (res < (int)rewind_ctx.state_size) {
-		LOG_error("Rewind: decompress failed (res=%i, want=%zu, compressed=%zu, offset=%zu, idx=%d head=%d tail=%d count=%d buf_head=%zu buf_tail=%zu)\n",
-			res, rewind_ctx.state_size, e->size, e->offset, idx, rewind_ctx.entry_head, rewind_ctx.entry_tail, rewind_ctx.entry_count, rewind_ctx.head, rewind_ctx.tail);
-		// On decompression failure, drop the corrupted newest entry instead of oldest
+	int decode_ok = 1;
+	if (rewind_ctx.compress) {
+		int res = LZ4_decompress_safe((const char*)rewind_ctx.buffer + e->offset,
+			(char*)rewind_ctx.state_buf, (int)e->size, (int)rewind_ctx.state_size);
+		if (res < (int)rewind_ctx.state_size) {
+			LOG_error("Rewind: decompress failed (res=%i, want=%zu, compressed=%zu, offset=%zu, idx=%d head=%d tail=%d count=%d buf_head=%zu buf_tail=%zu)\n",
+				res, rewind_ctx.state_size, e->size, e->offset, idx, rewind_ctx.entry_head, rewind_ctx.entry_tail, rewind_ctx.entry_count, rewind_ctx.head, rewind_ctx.tail);
+			decode_ok = 0;
+		}
+	} else {
+		if (e->size != rewind_ctx.state_size) {
+			LOG_error("Rewind: raw snapshot size mismatch (got=%zu, want=%zu, offset=%zu)\n",
+				e->size, rewind_ctx.state_size, e->offset);
+			decode_ok = 0;
+		} else {
+			memcpy(rewind_ctx.state_buf, rewind_ctx.buffer + e->offset, rewind_ctx.state_size);
+		}
+	}
+	if (!decode_ok) {
+		// On decode failure, drop the corrupted newest entry instead of oldest
 		rewind_ctx.entry_head = idx;
 		rewind_ctx.entry_count -= 1;
 		if (rewind_ctx.entry_count == 0) {
@@ -1750,6 +1791,9 @@ static char* rewind_buffer_labels[] = {
 	NULL
 };
 static char* rewind_granularity_values[] = {
+	"16",
+	"22",
+	"25",
 	"33",
 	"50",
 	"66",
@@ -1762,6 +1806,9 @@ static char* rewind_granularity_values[] = {
 	NULL
 };
 static char* rewind_granularity_labels[] = {
+	"16 ms (~60 fps)",
+	"22 ms (~45 fps)",
+	"25 ms (~40 fps)",
 	"33 ms (~30 fps)",
 	"50 ms (~20 fps)",
 	"66 ms (~15 fps)",
@@ -2009,7 +2056,8 @@ enum {
 	FE_OPT_REWIND_ENABLE,
 	FE_OPT_REWIND_BUFFER,
 	FE_OPT_REWIND_GRANULARITY,
-	FE_OPT_REWIND_MUTE,
+	FE_OPT_REWIND_AUDIO,
+	FE_OPT_REWIND_SKIP_COMPRESSION,
 	FE_OPT_COUNT,
 };
 
@@ -2022,8 +2070,8 @@ enum {
 	SHORTCUT_CYCLE_EFFECT,
 	SHORTCUT_TOGGLE_FF,
 	SHORTCUT_HOLD_FF,
-	SHORTCUT_HOLD_REWIND,
 	SHORTCUT_TOGGLE_REWIND,
+	SHORTCUT_HOLD_REWIND,
 	SHORTCUT_GAMESWITCHER,
 	SHORTCUT_SCREENSHOT,
 	// Trimui only
@@ -2378,8 +2426,8 @@ static struct Config {
 				.key	= "minarch_rewind_enable",
 				.name	= "Rewind",
 				.desc	= "Enable in-memory rewind buffer.",
-				.default_value = CFG_DEFAULT_REWIND_ENABLE ? 1 : 0,
-				.value = CFG_DEFAULT_REWIND_ENABLE ? 1 : 0,
+				.default_value = MINARCH_DEFAULT_REWIND_ENABLE ? 1 : 0,
+				.value = MINARCH_DEFAULT_REWIND_ENABLE ? 1 : 0,
 				.count = 2,
 				.values = rewind_enable_labels,
 				.labels = rewind_enable_labels,
@@ -2398,18 +2446,28 @@ static struct Config {
 				.key	= "minarch_rewind_granularity",
 				.name	= "Rewind Interval",
 				.desc	= "Milliseconds between rewind snapshots.",
-				.default_value = 1, // 300ms
-				.value = 1,
-				.count = 5,
+				.default_value = 5, // 66ms
+				.value = 5,
+				.count = 12,
 				.values = rewind_granularity_values,
 				.labels = rewind_granularity_labels,
 			},
-			[FE_OPT_REWIND_MUTE] = {
-				.key	= "minarch_rewind_mute_audio",
-				.name	= "Rewind Mute Audio",
-				.desc	= "Mute audio while rewinding.",
-				.default_value = CFG_DEFAULT_REWIND_MUTE_AUDIO ? 1 : 0,
-				.value = CFG_DEFAULT_REWIND_MUTE_AUDIO ? 1 : 0,
+			[FE_OPT_REWIND_AUDIO] = {
+				.key	= "minarch_rewind_audio",
+				.name	= "Rewind audio",
+				.desc	= "Play or mute audio when rewinding.",
+				.default_value = MINARCH_DEFAULT_REWIND_AUDIO ? 1 : 0,
+				.value = MINARCH_DEFAULT_REWIND_AUDIO ? 1 : 0,
+				.count = 2,
+				.values = onoff_labels,
+				.labels = onoff_labels,
+			},
+			[FE_OPT_REWIND_SKIP_COMPRESSION] = {
+				.key	= "minarch_rewind_skip_compression",
+				.name	= "Skip Rewind Compression",
+				.desc	= "Store raw rewind snapshots instead of compressing them. Uses more memory but less CPU.",
+				.default_value = 0,
+				.value = 0,
 				.count = 2,
 				.values = onoff_labels,
 				.labels = onoff_labels,
@@ -2624,12 +2682,12 @@ static struct Config {
 		[SHORTCUT_SAVE_QUIT]			= {"Save & Quit",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_CYCLE_SCALE]			= {"Cycle Scaling",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_CYCLE_EFFECT]			= {"Cycle Effect",		-1, BTN_ID_NONE, 0},
-			[SHORTCUT_TOGGLE_FF]			= {"Toggle FF",			-1, BTN_ID_NONE, 0},
-			[SHORTCUT_HOLD_FF]				= {"Hold FF",			-1, BTN_ID_NONE, 0},
-			[SHORTCUT_HOLD_REWIND]			= {"Hold Rewind",		-1, BTN_ID_NONE, 0},
-			[SHORTCUT_TOGGLE_REWIND]		= {"Toggle Rewind",		-1, BTN_ID_NONE, 0},
-			[SHORTCUT_GAMESWITCHER]			= {"Game Switcher",		-1, BTN_ID_NONE, 0},
-			[SHORTCUT_SCREENSHOT]           = {"Screenshot",        -1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_FF]			= {"Toggle FF",			-1, BTN_ID_NONE, 0},
+		[SHORTCUT_HOLD_FF]				= {"Hold FF",			-1, BTN_ID_NONE, 0},
+		[SHORTCUT_TOGGLE_REWIND]		= {"Toggle Rewind",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_HOLD_REWIND]			= {"Hold Rewind",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_GAMESWITCHER]			= {"Game Switcher",		-1, BTN_ID_NONE, 0},
+		[SHORTCUT_SCREENSHOT]           = {"Screenshot",        -1, BTN_ID_NONE, 0},
 		// Trimui only
 		[SHORTCUT_TOGGLE_TURBO_A]		= {"Toggle Turbo A",	-1, BTN_ID_NONE, 0},
 		[SHORTCUT_TOGGLE_TURBO_B]		= {"Toggle Turbo B",	-1, BTN_ID_NONE, 0},
@@ -2783,16 +2841,19 @@ static void Config_syncFrontend(char* key, int value) {
 	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_GRANULARITY].key)) {
 		i = FE_OPT_REWIND_GRANULARITY;
 	}
-	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_MUTE].key)) {
-		i = FE_OPT_REWIND_MUTE;
+	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_AUDIO].key)) {
+		i = FE_OPT_REWIND_AUDIO;
+	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_SKIP_COMPRESSION].key)) {
+		i = FE_OPT_REWIND_SKIP_COMPRESSION;
 	}
 	if (i==-1) return;
 	Option* option = &config.frontend.options[i];
 	option->value = value;
-	if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_BUFFER || i==FE_OPT_REWIND_GRANULARITY || i==FE_OPT_REWIND_MUTE) {
+	if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_BUFFER || i==FE_OPT_REWIND_GRANULARITY || i==FE_OPT_REWIND_AUDIO || i==FE_OPT_REWIND_SKIP_COMPRESSION) {
 		const char* sval = option->values && option->values[value] ? option->values[value] : "0";
 		int parsed = 0;
-		if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_MUTE) {
+		if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_AUDIO || i==FE_OPT_REWIND_SKIP_COMPRESSION) {
 			// use option index (Off/On)
 			parsed = value;
 		}
@@ -2803,7 +2864,8 @@ static void Config_syncFrontend(char* key, int value) {
 			case FE_OPT_REWIND_ENABLE: rewind_cfg_enable = parsed; break;
 			case FE_OPT_REWIND_BUFFER: rewind_cfg_buffer_mb = parsed; break;
 			case FE_OPT_REWIND_GRANULARITY: rewind_cfg_granularity = parsed; break;
-			case FE_OPT_REWIND_MUTE: rewind_cfg_mute_audio = parsed; break;
+			case FE_OPT_REWIND_AUDIO: rewind_cfg_audio = parsed; break;
+			case FE_OPT_REWIND_SKIP_COMPRESSION: rewind_cfg_skip_compress = parsed; break;
 		}
 		Rewind_init(core.serialize_size ? core.serialize_size() : 0);
 		if (i==FE_OPT_REWIND_ENABLE) {
@@ -5525,7 +5587,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 ///////////////////////////////
 
 static void audio_sample_callback(int16_t left, int16_t right) {
-	if (rewinding && rewind_ctx.mute_audio) return;
+	if (rewinding && !rewind_ctx.audio) return;
 	if (!fast_forward || ff_audio) {
 		if (use_core_fps || fast_forward) {
 			SND_batchSamples_fixed_rate(&(const SND_Frame){left,right}, 1);
@@ -5536,7 +5598,7 @@ static void audio_sample_callback(int16_t left, int16_t right) {
 	}
 }
 static size_t audio_sample_batch_callback(const int16_t *data, size_t frames) { 
-	if (rewinding && rewind_ctx.mute_audio) return frames;
+	if (rewinding && !rewind_ctx.audio) return frames;
 	if (!fast_forward || ff_audio) {
 		if (use_core_fps || fast_forward) {
 			return SND_batchSamples_fixed_rate((const SND_Frame*)data, frames);
@@ -7972,9 +8034,7 @@ int main(int argc , char* argv[]) {
 
 					for (int ff_step = 0; ff_step < ff_runs; ff_step++) {
 						core.run();
-						if (!fast_forward) {
-							Rewind_push(0);
-						}
+						Rewind_push(0);
 					}
 				}
 			limitFF();
