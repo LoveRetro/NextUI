@@ -102,10 +102,6 @@ typedef struct
 	int saveFormat;
 	int stateFormat;
 	bool useExtractedFileName;
-	bool rewindEnable;
-	int rewindBufferMB;
-	int rewindGranularity;
-	bool rewindMuteAudio;
 
 	// Haptic
 	bool haptics;
@@ -238,15 +234,6 @@ void CFG_setStateFormat(int);
 // use extracted file name instead of archive name (for cores that do not support archives natively)
 bool CFG_getUseExtractedFileName(void);
 void CFG_setUseExtractedFileName(bool);
-// Rewind controls
-bool CFG_getRewindEnable(void);
-void CFG_setRewindEnable(bool enable);
-int CFG_getRewindBufferMB(void);
-void CFG_setRewindBufferMB(int mb);
-int CFG_getRewindGranularity(void);
-void CFG_setRewindGranularity(int granularity);
-bool CFG_getRewindMuteAudio(void);
-void CFG_setRewindMuteAudio(bool enable);
 // Enable/disable mute also shutting off LEDs.
 bool CFG_getMuteLEDs(void);
 void CFG_setMuteLEDs(bool);
