@@ -2867,7 +2867,11 @@ static void Config_syncFrontend(char* key, int value) {
 			case FE_OPT_REWIND_AUDIO: rewind_cfg_audio = parsed; break;
 			case FE_OPT_REWIND_SKIP_COMPRESSION: rewind_cfg_skip_compress = parsed; break;
 		}
-		Rewind_init(core.serialize_size ? core.serialize_size() : 0);
+		// Only call Rewind_init if core is initialized; early config reads happen before
+		// the core is ready and will be followed by an explicit Rewind_init later
+		if (core.initialized) {
+			Rewind_init(core.serialize_size ? core.serialize_size() : 0);
+		}
 		if (i==FE_OPT_REWIND_ENABLE) {
 			// ensure runtime toggles don't linger when enabling/disabling feature
 			rewind_toggle = 0;
