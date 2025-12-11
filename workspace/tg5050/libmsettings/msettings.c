@@ -783,27 +783,6 @@ int scaleExposure(int value) {
 
 ///////// Platform specific, unscaled accessors
 
-#define DISP_LCD_SET_BRIGHTNESS  0x102
-void SetRawBrightness(int val) { // 0 - 255
-	printf("SetRawBrightness(%i)\n", val); fflush(stdout);
-
-    int fd = open("/dev/disp", O_RDWR);
-	if (fd) {
-	    unsigned long param[4]={0,val,0,0};
-		ioctl(fd, DISP_LCD_SET_BRIGHTNESS, &param);
-		close(fd);
-	}
-}
-void SetRawColortemp(int val) { // 0 - 255
-	printf("SetRawColortemp(%i)\n", val); fflush(stdout);
-
-	FILE *fd = fopen("/sys/class/disp/disp/attr/color_temperature", "w");
-	if (fd) {
-		fprintf(fd, "%i", val);
-		fclose(fd);
-	}
-}
-
 // Find the first A2DP playback volume control via amixer
 static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
     FILE *fp = popen("amixer scontrols", "r");
@@ -917,10 +896,22 @@ void SetRawVolume(int val) { // in: 0-100
 	}*/
 }
 
+#define DISP_LCD_SET_BRIGHTNESS  0x102
+void SetRawBrightness(int val) { // 0 - 255
+	printf("SetRawBrightness(%i)\n", val); fflush(stdout);
+
+    int fd = open("/dev/disp", O_RDWR);
+	if (fd) {
+	    unsigned long param[4]={0,val,0,0};
+		ioctl(fd, DISP_LCD_SET_BRIGHTNESS, &param);
+		close(fd);
+	}
+}
+
 void SetRawContrast(int val){
 	printf("SetRawContrast(%i)\n", val); fflush(stdout);
 
-	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_contrast", "w");
+	FILE *fd = fopen("/sys/devices/virtual/disp/disp/attr/enhance_contrast", "w");
 	if (fd) {
 		fprintf(fd, "%i", val);
 		fclose(fd);
@@ -929,7 +920,7 @@ void SetRawContrast(int val){
 void SetRawSaturation(int val){
 	printf("SetRawSaturation(%i)\n", val); fflush(stdout);
 
-	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_saturation", "w");
+	FILE *fd = fopen("/sys/devices/virtual/disp/disp/attr/enhance_saturation", "w");
 	if (fd) {
 		fprintf(fd, "%i", val);
 		fclose(fd);
@@ -938,7 +929,17 @@ void SetRawSaturation(int val){
 void SetRawExposure(int val){
 	printf("SetRawExposure(%i)\n", val); fflush(stdout);
 
-	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_bright", "w");
+	FILE *fd = fopen("/sys/devices/virtual/disp/disp/attr/enhance_bright", "w");
+	if (fd) {
+		fprintf(fd, "%i", val);
+		fclose(fd);
+	}
+}
+
+void SetRawColortemp(int val) { // 0 - 255
+	printf("SetRawColortemp(%i)\n", val); fflush(stdout);
+
+	FILE *fd = fopen("/sys/devices/virtual/disp/disp/attr/color_temperature", "w");
 	if (fd) {
 		fprintf(fd, "%i", val);
 		fclose(fd);

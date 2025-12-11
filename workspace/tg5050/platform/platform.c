@@ -68,13 +68,9 @@ Shader* shaders[MAXSHADERS] = {
 static int nrofshaders = 0; // choose between 1 and 3 pipelines, > pipelines = more cpu usage, but more shader options and shader upscaling stuff
 ///////////////////////////////
 
-int is_brick = 0;
-
 static SDL_Joystick **joysticks = NULL;
 static int num_joysticks = 0;
 void PLAT_initInput(void) {
-	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
 	if(SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0)
 		LOG_error("Failed initializing joysticks: %s\n", SDL_GetError());
 	num_joysticks = SDL_NumJoysticks();
@@ -500,41 +496,35 @@ void PLAT_initShaders() {
 
 
 SDL_Surface* PLAT_initVideo(void) {
-	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
-	// LOG_info("DEVICE: %s is_brick: %i\n", device, is_brick);
-	
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
 	
-	// SDL_version compiled;
-	// SDL_version linked;
-	// SDL_VERSION(&compiled);
-	// SDL_GetVersion(&linked);
-	// LOG_info("Compiled SDL version %d.%d.%d ...\n", compiled.major, compiled.minor, compiled.patch);
-	// LOG_info("Linked SDL version %d.%d.%d.\n", linked.major, linked.minor, linked.patch);
-	//
-	// LOG_info("Available video drivers:\n");
-	// for (int i=0; i<SDL_GetNumVideoDrivers(); i++) {
-	// 	LOG_info("- %s\n", SDL_GetVideoDriver(i));
-	// }
-	// LOG_info("Current video driver: %s\n", SDL_GetCurrentVideoDriver());
-	//
-	// LOG_info("Available render drivers:\n");
-	// for (int i=0; i<SDL_GetNumRenderDrivers(); i++) {
-	// 	SDL_RendererInfo info;
-	// 	SDL_GetRenderDriverInfo(i,&info);
-	// 	LOG_info("- %s\n", info.name);
-	// }
-	//
-	// LOG_info("Available display modes:\n");
-	// SDL_DisplayMode mode;
-	// for (int i=0; i<SDL_GetNumDisplayModes(0); i++) {
-	// 	SDL_GetDisplayMode(0, i, &mode);
-	// 	LOG_info("- %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
-	// }
-	// SDL_GetCurrentDisplayMode(0, &mode);
-	// LOG_info("Current display mode: %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
+	SDL_version compiled;
+	SDL_version linked;
+	SDL_VERSION(&compiled);
+	SDL_GetVersion(&linked);
+	LOG_info("Compiled SDL version %d.%d.%d ...\n", compiled.major, compiled.minor, compiled.patch);
+	LOG_info("Linked SDL version %d.%d.%d.\n", linked.major, linked.minor, linked.patch);
+		LOG_info("Available video drivers:\n");
+	for (int i=0; i<SDL_GetNumVideoDrivers(); i++) {
+		LOG_info("- %s\n", SDL_GetVideoDriver(i));
+	}
+	LOG_info("Current video driver: %s\n", SDL_GetCurrentVideoDriver());
+	LOG_info("Available render drivers:\n");
+	for (int i=0; i<SDL_GetNumRenderDrivers(); i++) {
+		SDL_RendererInfo info;
+		SDL_GetRenderDriverInfo(i,&info);
+		LOG_info("- %s\n", info.name);
+	}
+	LOG_info("Available video displays: %d\n", SDL_GetNumVideoDisplays());
+	LOG_info("Available display modes:\n");
+	SDL_DisplayMode mode;
+	for (int i=0; i<SDL_GetNumDisplayModes(0); i++) {
+		SDL_GetDisplayMode(0, i, &mode);
+		LOG_info("- %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
+	}
+	SDL_GetCurrentDisplayMode(0, &mode);
+	LOG_info("Current display mode: %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
 	
 	int w = FIXED_WIDTH;
 	int h = FIXED_HEIGHT;
@@ -551,26 +541,26 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w,h, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN);
 	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
 	SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
-	// SDL_RendererInfo info;
-	// SDL_GetRendererInfo(vid.renderer, &info);
-	// LOG_info("Current render driver: %s\n", info.name);
+	SDL_RendererInfo info;
+	SDL_GetRendererInfo(vid.renderer, &info);
+	LOG_info("Current render driver: %s\n", info.name);
 	
 
-
+	
 	vid.gl_context = SDL_GL_CreateContext(vid.window);
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
 
-	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
-	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer2 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer3 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer4 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer5 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w,h);
+	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer2 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer3 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer4 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer5 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	
 	vid.target	= NULL; // only needed for non-native sizes
 	
-	vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
+	vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
 
 	SDL_SetSurfaceBlendMode(vid.screen, SDL_BLENDMODE_BLEND);
 	SDL_SetTextureBlendMode(vid.stream_layer1, SDL_BLENDMODE_BLEND);
@@ -749,7 +739,7 @@ uint32_t PLAT_get_dominant_color() {
         return 0;
     }
 
-    if (vid.screen->format->format != SDL_PIXELFORMAT_RGBA8888) {
+    if (vid.screen->format->format != SDL_PIXELFORMAT_ARGB8888) {
         fprintf(stderr, "Error: Surface is not in RGBA8888 format.\n");
         return 0;
     }
@@ -874,12 +864,12 @@ static void resizeVideo(int w, int h, int p) {
 	if (vid.target) SDL_DestroyTexture(vid.target);
 	
 	// SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, vid.sharpness==SHARPNESS_SOFT?"1":"0", SDL_HINT_OVERRIDE);
-	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
+	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	SDL_SetTextureBlendMode(vid.stream_layer1, SDL_BLENDMODE_BLEND);
 	
 	if (vid.sharpness==SHARPNESS_CRISP) {
 		// SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, "1", SDL_HINT_OVERRIDE);
-		vid.target = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w * hard_scale,h * hard_scale);
+		vid.target = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w * hard_scale,h * hard_scale);
 	}
 	else {
 		vid.target = NULL;
@@ -1102,7 +1092,7 @@ void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, flo
     if (!inputSurface || !vid.target_layer1 || !vid.renderer) return; 
 
     SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-                                                 SDL_PIXELFORMAT_RGBA8888, 
+                                                 SDL_PIXELFORMAT_ARGB8888, 
                                                  SDL_TEXTUREACCESS_TARGET,  
                                                  inputSurface->w, inputSurface->h); 
 
@@ -1177,7 +1167,7 @@ void PLAT_animateSurface(
 	if (!inputSurface || !vid.target_layer2 || !vid.renderer) return;
 
 	SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
+		SDL_PIXELFORMAT_ARGB8888,
 		SDL_TEXTUREACCESS_TARGET,
 		inputSurface->w, inputSurface->h);
 
@@ -1265,7 +1255,7 @@ void PLAT_scrollTextTexture(
 
     // Create a surface to hold two copies side by side with padding
     SDL_Surface* text_surface = SDL_CreateRGBSurfaceWithFormat(0,
-        single_width * 2 + padding, single_height, 32, SDL_PIXELFORMAT_RGBA8888);
+        single_width * 2 + padding, single_height, 32, SDL_PIXELFORMAT_ARGB8888);
 
     SDL_FillRect(text_surface, NULL, THEME_COLOR1);
     SDL_BlitSurface(singleSur, NULL, text_surface, NULL);
@@ -1332,7 +1322,7 @@ void PLAT_animateSurfaceOpacity(
 	if (!inputSurface) return;
 
 	SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
+		SDL_PIXELFORMAT_ARGB8888,
 		SDL_TEXTUREACCESS_TARGET,
 		inputSurface->w, inputSurface->h);
 
@@ -1385,7 +1375,7 @@ SDL_Surface* PLAT_captureRendererToSurface() {
 	int width, height;
 	SDL_GetRendererOutputSize(vid.renderer, &width, &height);
 
-	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA8888);
+	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
 	if (!surface) {
 		printf("Failed to create surface: %s\n", SDL_GetError());
 		return NULL;
@@ -1394,7 +1384,7 @@ SDL_Surface* PLAT_captureRendererToSurface() {
 	Uint32 black = SDL_MapRGBA(surface->format, 0, 0, 0, 255);
 	SDL_FillRect(surface, NULL, black);
 
-	if (SDL_RenderReadPixels(vid.renderer, NULL, SDL_PIXELFORMAT_RGBA8888, surface->pixels, surface->pitch) != 0) {
+	if (SDL_RenderReadPixels(vid.renderer, NULL, SDL_PIXELFORMAT_ARGB8888, surface->pixels, surface->pitch) != 0) {
 		printf("Failed to read pixels from renderer: %s\n", SDL_GetError());
 		SDL_FreeSurface(surface);
 		return NULL;
@@ -1424,7 +1414,7 @@ void PLAT_animateAndFadeSurface(
 	if (!inputSurface || !vid.renderer) return;
 
 	SDL_Texture* moveTexture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
+		SDL_PIXELFORMAT_ARGB8888,
 		SDL_TEXTUREACCESS_TARGET,
 		inputSurface->w, inputSurface->h);
 
@@ -2182,7 +2172,6 @@ void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
 
 void PLAT_enableBacklight(int enable) {
 	if (enable) {
-		if (is_brick) SetRawBrightness(8);
 		SetBrightness(GetBrightness());
 	}
 	else {
@@ -2435,66 +2424,6 @@ ConnectionStrength PLAT_connectionStrength(void) {
 }
 
 void PLAT_initDefaultLeds() {
-	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
-	if(is_brick) {
-	lightsDefault[0] = (LightSettings) {
-		"FN 1 key",
-		"f1",
-		4,
-		1000,
-		100,
-		0xFFFFFF,
-		0xFFFFFF,
-		0,
-		{},
-		1,
-		100,
-		0
-	};
-	lightsDefault[1] = (LightSettings) {
-		"FN 2 key",
-		"f2",
-		4,
-		1000,
-		100,
-		0xFFFFFF,
-		0xFFFFFF,
-		0,
-		{},
-		1,
-		100,
-		0
-	};
-	lightsDefault[2] = (LightSettings) {
-		"Topbar",
-		"m",
-		4,
-		1000,
-		100,
-		0xFFFFFF,
-		0xFFFFFF,
-		0,
-		{},
-		1,
-		100,
-		0
-	};
-	lightsDefault[3] = (LightSettings) {
-		"L/R triggers",
-		"lr",
-		4,
-		1000,
-		100,
-		0xFFFFFF,
-		0xFFFFFF,
-		0,
-		{},
-		1,
-		100,
-		0
-	};
-} else {
 	lightsDefault[0] = (LightSettings) {
 		"Joystick L",
 		"l",
@@ -2538,20 +2467,10 @@ void PLAT_initDefaultLeds() {
 		0
 	};
 }
-}
 void PLAT_initLeds(LightSettings *lights) 
 {
-	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
-
 	PLAT_initDefaultLeds();
-	FILE *file;
-	if(is_brick) {
-		file = PLAT_OpenSettings("ledsettings_brick.txt");
-	}
-	else {
-		file = PLAT_OpenSettings("ledsettings.txt");
-	}
+	FILE *file = PLAT_OpenSettings("ledsettings.txt");
 
     if (file == NULL)
     {
@@ -2643,17 +2562,7 @@ void PLAT_setLedInbrightness(LightSettings *led)
     char filepath[256];
     FILE *file;
     // first set brightness
-	if(is_brick) {
-		if (strcmp(led->filename, "m") == 0) {
-			snprintf(filepath, sizeof(filepath), LED_PATH1);
-		} else if (strcmp(led->filename, "f1") == 0) {
-			snprintf(filepath, sizeof(filepath),LED_PATH3);
-		} else  {
-			snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/max_scale_%s", led->filename);
-		}
-	} else {
-		snprintf(filepath, sizeof(filepath), LED_PATH1);
-	}
+	snprintf(filepath, sizeof(filepath), LED_PATH1);
 	if (strcmp(led->filename, "f2") != 0) {
 		// do nothhing for f2
 		file = fopen(filepath, "w");
@@ -2669,17 +2578,7 @@ void PLAT_setLedBrightness(LightSettings *led)
     char filepath[256];
     FILE *file;
     // first set brightness
-	if(is_brick) {
-		if (strcmp(led->filename, "m") == 0) {
-			snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/max_scale");
-		} else if (strcmp(led->filename, "f1") == 0) {
-			snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/max_scale_f1f2");
-		} else  {
-			snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/max_scale_%s", led->filename);
-		}
-	} else {
-		snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/max_scale");
-	}
+	snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/max_scale");
 	if (strcmp(led->filename, "f2") != 0) {
 		// do nothhing for f2
 		file = fopen(filepath, "w");

@@ -53,6 +53,11 @@ export IS_NEXT="yes"
 echo 1 > /sys/class/drm/card0-DSI-1/rotate
 echo 1 > /sys/class/drm/card0-DSI-1/force_rotate
 
+# taken from stock launch sequence
+sync
+echo 3 > /proc/sys/vm/drop_caches
+sync
+
 #5V enable
 # echo 335 > /sys/class/gpio/export
 # echo -n out > /sys/class/gpio/gpio335/direction
@@ -89,8 +94,42 @@ export PATH=$SYSTEM_PATH/bin:/usr/trimui/bin:$PATH
 # leds_off
 echo 0 > /sys/class/led_anim/max_scale
 
-# start stock gpio input daemon
+# Disable sleep from inputd until it is patched
+#touch /tmp/stay_awake
+#touch /tmp/stay_alive
+
+# start gpio input daemon
 trimui_inputd &
+
+echo ondemand > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+echo ondemand > /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor
+echo 408000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
+echo 1200000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
+echo 408000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq
+echo 1200000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_max_freq
+
+# little Cortex-A55 CPU0
+echo 1 > /sys/devices/system/cpu/cpu0/online
+echo 1 > /sys/devices/system/cpu/cpu1/online
+
+echo 0 > /sys/devices/system/cpu/cpu3/online
+echo 0 > /sys/devices/system/cpu/cpu2/online
+
+# big Cortex-A55 CPU4
+echo 1 > /sys/devices/system/cpu/cpu4/online
+
+echo 0 > /sys/devices/system/cpu/cpu7/online
+echo 0 > /sys/devices/system/cpu/cpu6/online
+echo 0 > /sys/devices/system/cpu/cpu5/online
+
+# stuff and strings todo
+#/sys/class/backlight/backlight0/brightness
+#set cpu fan level %s
+#/sys/class/thermal/cooling_device0/cur_state
+#/sys/class/power_supply/axp2202-battery/capacity
+#/sys/class/thermal/thermal_zone0/temp
+#/sys/class/thermal/thermal_zone1/temp
+#/sys/class/thermal/thermal_zone2/temp
 
 #echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 #CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed

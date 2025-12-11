@@ -10,10 +10,26 @@ SYSTEM_PATH="$SDCARD_PATH/.system"
 echo 1 > /sys/class/drm/card0-DSI-1/rotate
 echo 1 > /sys/class/drm/card0-DSI-1/force_rotate
 
-#echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-#CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
-#CPU_SPEED_PERF=2000000
-#echo $CPU_SPEED_PERF > $CPU_PATH
+echo ondemand > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+echo ondemand > /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor
+echo 408000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
+echo 2000000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
+echo 408000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq
+echo 2160000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_max_freq
+
+# little Cortex-A55 CPU0
+echo 1 > /sys/devices/system/cpu/cpu0/online
+echo 1 > /sys/devices/system/cpu/cpu1/online
+
+echo 0 > /sys/devices/system/cpu/cpu3/online
+echo 0 > /sys/devices/system/cpu/cpu2/online
+
+# big Cortex-A55 CPU4
+echo 1 > /sys/devices/system/cpu/cpu4/online
+
+echo 0 > /sys/devices/system/cpu/cpu7/online
+echo 0 > /sys/devices/system/cpu/cpu6/online
+echo 0 > /sys/devices/system/cpu/cpu5/online
 
 export LD_LIBRARY_PATH=/usr/trimui/lib:$LD_LIBRARY_PATH
 export PATH=/usr/trimui/bin:$PATH
@@ -22,6 +38,10 @@ TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
 
 # leds_off
 echo 0 > /sys/class/led_anim/max_scale
+
+# splash
+/usr/trimui/bin/pic2fb_drm /usr/trimui/bin/splash.png 5000
+#/usr/trimui/bin/sdl2display /usr/trimui/res/skin/bootlogo.png &
 
 # generic NextUI package install
 for pakz in $PAKZ_PATH; do
