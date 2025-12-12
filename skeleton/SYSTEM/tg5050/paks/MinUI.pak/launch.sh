@@ -91,6 +91,8 @@ echo -n 0 > /sys/class/gpio/gpio236/value
 export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/trimui/lib:$LD_LIBRARY_PATH
 export PATH=$SYSTEM_PATH/bin:/usr/trimui/bin:$PATH
 
+echo before leds `cat /proc/uptime` >> /tmp/nextui_boottime
+
 # leds_off
 echo 0 > /sys/class/led_anim/max_scale
 
@@ -141,8 +143,12 @@ batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 
 # TODO
 # load bt/wifi modules
-# fb rotate
 # thermald for fan control
+
+echo before modprobe `cat /proc/uptime` >> /tmp/nextui_boottime
+modprobe aic8800_fdrv.ko
+modprobe aic8800_btlpm.ko
+echo after modprobe `cat /proc/uptime` >> /tmp/nextui_boottime
 
 # start fresh, will be populated on the next connect
 #rm -f $USERDATA_PATH/.asoundrc
@@ -152,30 +158,38 @@ batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 
 # BT handling
 # on by default, disable based on systemval setting
-#bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')
-# somehow trimui deploys aic?
-#cp -f $SYSTEM_PATH/etc/bluetooth/bt_init.sh /etc/bluetooth/bt_init.sh
-#if [ "$bluetoothon" -eq 0 ]; then
-#	/etc/bluetooth/bt_init.sh stop > /dev/null 2>&1 &
-#else
-#	/etc/bluetooth/bt_init.sh start > /dev/null 2>&1 &
-#fi
+# TODO: still the case here, do we need to handle the off state explicitly?
+bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')
+if [ "$bluetoothon" -eq 0 ]; then
+	/etc/bluetooth/bt_init.sh stop # > /dev/null 2>&1 &
+else
+	/etc/bluetooth/bt_init.sh start #  > /dev/null 2>&1 &
+	hpid=`pgrep hciattach`
+    if [ "$hpid" == "" ] ; then
+        hciattach -n ttyAS1 aic &
+    fi        
+    /etc/bluetooth/bluetoothd start
+fi
+echo after bluetooth `cat /proc/uptime` >> /tmp/nextui_boottime
 
 # wifi handling
 # on by default, disable based on systemval setting
-#wifion=$(nextval.elf wifi | sed -n 's/.*"wifi": \([0-9]*\).*/\1/p')
-#cp -f $SYSTEM_PATH/etc/wifi/wifi_init.sh /etc/wifi/wifi_init.sh
-#if [ "$wifion" -eq 0 ]; then
-#	/etc/wifi/wifi_init.sh stop > /dev/null 2>&1 &
-#else 
-#	/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
-#fi
+# TODO: still the case here, do we need to handle the off state explicitly?
+wifion=$(nextval.elf wifi | sed -n 's/.*"wifi": \([0-9]*\).*/\1/p')
+if [ "$wifion" -eq 0 ]; then
+	/etc/wifi/wifi_init.sh stop > /dev/null 2>&1 &
+else 
+	/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
+fi
+echo after wifi `cat /proc/uptime` >> /tmp/nextui_boottime
 
 #######################################
 
 AUTO_PATH=$USERDATA_PATH/auto.sh
 if [ -f "$AUTO_PATH" ]; then
+	echo before auto.sh `cat /proc/uptime` >> /tmp/nextui_boottime
 	"$AUTO_PATH"
+	echo after auto.sh `cat /proc/uptime` >> /tmp/nextui_boottime
 fi
 
 cd $(dirname "$0")
