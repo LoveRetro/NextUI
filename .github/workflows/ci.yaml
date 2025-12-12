@@ -41,6 +41,7 @@ jobs:
       matrix:
         toolchain:
           - tg5040
+          - tg5050
 
     steps:
       - name: Checkout
@@ -62,6 +63,7 @@ jobs:
       matrix:
         toolchain:
           - tg5040
+          - tg5050
         core: ${{ fromJson(needs.core-matrix.outputs.cores) }}
     steps:
       - name: Checkout
@@ -92,6 +94,7 @@ jobs:
       matrix:
         toolchain:
           - tg5040
+          - tg5050
 
     steps:
       - name: Checkout
