@@ -21,7 +21,7 @@ $(INIT_IF_NECESSARY): $(GIT_IF_NECESSARY)
 
 $(GIT_IF_NECESSARY):
 	mkdir -p toolchains
-	git clone -b modernize https://github.com/LoveRetro/$(PLATFORM)-toolchain/ toolchains/$(PLATFORM)-toolchain
+	git clone https://github.com/LoveRetro/$(PLATFORM)-toolchain/ toolchains/$(PLATFORM)-toolchain
 	docker pull $(IMAGE_NAME) && touch toolchains/$(PLATFORM)-toolchain/.build
 
 clean:
