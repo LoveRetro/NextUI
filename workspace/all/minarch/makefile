@@ -34,16 +34,23 @@ CFLAGS += `pkg-config --cflags libzip`
 LDFLAGS += `pkg-config --libs libzip`
 else
 LDFLAGS += -lzip
-endif
-else
+endif # Linux
+else # all handheld platfoms
 LDFLAGS	 +=  -Llibretro-common -lsrm -lzip
 CFLAGS   += -DHAS_SRM
-endif
+LDFLAGS +=  -lasound
 ifeq ($(PLATFORM), tg5040)
 CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
 LDFLAGS +=  -lwifimg -lwifid
-LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -lasound -ljson-c
+LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -ljson-c
 endif
+ifeq ($(PLATFORM), tg5050)
+#CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
+#LDFLAGS +=  -lwifimg -lwifid
+#LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -ljson-c
+endif
+endif
+
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 # CFLAGS  += -fsanitize=address -fno-common
 # LDFLAGS += -lasan
@@ -65,9 +72,9 @@ all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	cp $(PREFIX)/lib/libsamplerate.so.* build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
 	cp $(PREFIX)/lib/libzip.so.* build/$(PLATFORM)
-	cp $(PREFIX)/lib/libbz2.so.* build/$(PLATFORM)
-	cp $(PREFIX)/lib/liblzma.so.* build/$(PLATFORM)
-	cp $(PREFIX)/lib/libzstd.so.* build/$(PLATFORM)
+	cp $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
+	cp $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
+	cp $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
 

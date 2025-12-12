@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <dlfcn.h>
 #include <string.h>
-//#include <tinyalsa/mixer.h>
+#include <tinyalsa/mixer.h>
 
 #include "msettings.h"
 
@@ -203,9 +203,8 @@ void InitSettings(void) {
 
 	// make sure all these volume-influencing controls are set to defaults, we will set volume with 'digital volume'
 	if(GetAudioSink() == AUDIO_SINK_DEFAULT) {
-		system("amixer sset 'Headphone' 0");	  // 100%
-		system("amixer sset 'digital volume' 0"); // 100%
-		system("amixer sset 'DAC Swap' Off"); // Fix L/R channels
+		system("amixer sset 'HPOUT' unmute");
+		system("amixer sset 'SPK' unmute");
 	}
 
 	// This will implicitly update all other settings based on FN switch state
@@ -658,25 +657,15 @@ void turboR2(int value) {
 ///////// Platform specific scaling
 
 int scaleVolume(int value) {
-	return value * 5; // scale 0-20 to 0-100
+    if (value <= 0) return 0;
+    if (value >= 20) return 63;
+    return 23 + 2 * value;
 }
 
 int scaleBrightness(int value) {
-	int raw;
-	switch (value) {
-		case 0: raw=4; break; 		//  0
-		case 1: raw=6; break; 		//  2
-		case 2: raw=10; break; 		//  4
-		case 3: raw=16; break; 		//  6
-		case 4: raw=32; break;		// 16
-		case 5: raw=48; break;		// 16
-		case 6: raw=64; break;		// 16
-		case 7: raw=96; break;		// 32
-		case 8: raw=128; break;		// 32
-		case 9: raw=192; break;		// 64
-		case 10: raw=255; break;	// 64
-	}
-	return raw;
+	if (value <= 0) return 10;
+    if (value >= 10) return 220;
+    return 10 + 21 * value;
 }
 int scaleColortemp(int value) {
 	int raw;
@@ -828,7 +817,7 @@ void SetRawVolume(int val) { // in: 0-100
 	if (settings->mute) 
 		val = scaleVolume(GetMutedVolume());
 
-    /*if (GetAudioSink() == AUDIO_SINK_BLUETOOTH) {
+    if (GetAudioSink() == AUDIO_SINK_BLUETOOTH) {
         // bluealsa is a mixer plugin, not exposed as a separate card
         char ctl_name[128] = {0};
         if (get_a2dp_simple_control_name(ctl_name, sizeof(ctl_name))) {
@@ -874,37 +863,35 @@ void SetRawVolume(int val) { // in: 0-100
             return;
         }
 
-        struct mixer_ctl *digital = mixer_get_ctl_by_name(mixer, "digital volume");
+        struct mixer_ctl *digital = mixer_get_ctl_by_name(mixer, "DAC Volume");
         if (digital) {
-			mixer_ctl_set_percent(digital, 0, 100 - val); // reversed mapping
+			mixer_ctl_set_percent(digital, 0, val);
 			//printf("Set 'digital volume' to %d%%\n", val); fflush(stdout);
 		}
 		
 		// Digital volume does not quite go to 0, so also mute the DAC volume
-		struct mixer_ctl *dac     = mixer_get_ctl_by_name(mixer, "DAC volume");
-        if (dac) {
-            int dac_val = (val == 0 ? 0 : 160);
-            unsigned int num_values = mixer_ctl_get_num_values(dac);
-            for (unsigned int i = 0; i < num_values; i++)
-                mixer_ctl_set_value(dac, i, dac_val);
-			//printf("Set 'DAC volume' to %d\n", dac_val); fflush(stdout);
-		}
+		//struct mixer_ctl *dac     = mixer_get_ctl_by_name(mixer, "DAC volume");
+        //if (dac) {
+        //    int dac_val = (val == 0 ? 0 : 160);
+        //    unsigned int num_values = mixer_ctl_get_num_values(dac);
+        //    for (unsigned int i = 0; i < num_values; i++)
+        //        mixer_ctl_set_value(dac, i, dac_val);
+		//	//printf("Set 'DAC volume' to %d\n", dac_val); fflush(stdout);
+		//}
 		mixer_close(mixer);
 
 		// Really, actually, finally turn the speaker off - including the hissing
 		putInt("/sys/class/speaker/mute", val == 0 ? 1 : 0);
-	}*/
+	}
 }
 
-#define DISP_LCD_SET_BRIGHTNESS  0x102
-void SetRawBrightness(int val) { // 0 - 255
+void SetRawBrightness(int val) { // 0 - 255 - stock clamps to 10-220
 	printf("SetRawBrightness(%i)\n", val); fflush(stdout);
 
-    int fd = open("/dev/disp", O_RDWR);
+    FILE *fd = fopen("/sys/class/backlight/backlight0/brightness", "w");
 	if (fd) {
-	    unsigned long param[4]={0,val,0,0};
-		ioctl(fd, DISP_LCD_SET_BRIGHTNESS, &param);
-		close(fd);
+	    fprintf(fd, "%i", val);
+		fclose(fd);
 	}
 }
 
