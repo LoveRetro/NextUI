@@ -39,7 +39,7 @@
 #define PRESSED		1
 #define REPEAT		2
 
-#define MUTE_STATE_PATH "/sys/class/gpio/gpio243/value"
+#define MUTE_STATE_PATH "/sys/class/gpio/gpio363/value"
 
 #define INPUT_COUNT 5
 static int inputs[INPUT_COUNT] = {};
@@ -76,13 +76,13 @@ static void* watchMute(void *arg) {
 			if (GetMute()) {
 				// tmp solution
 				system("echo 1500000 > /sys/class/motor/voltage");
-				system("echo 1 > /sys/class/gpio/gpio227/value");
+				system("echo 1 > /sys/class/gpio/gpio236/value");
 				usleep(100000);
-				system("echo 0 > /sys/class/gpio/gpio227/value");
+				system("echo 0 > /sys/class/gpio/gpio236/value");
 				usleep(100000);
-				system("echo 1 > /sys/class/gpio/gpio227/value");
+				system("echo 1 > /sys/class/gpio/gpio236/value");
 				usleep(100000);
-				system("echo 0 > /sys/class/gpio/gpio227/value");
+				system("echo 0 > /sys/class/gpio/gpio236/value");
 			}
 		}
 	}
