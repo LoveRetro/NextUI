@@ -61,8 +61,8 @@ enum {
 
 // defaults for rewind UI options (frontend-only)
 #define MINARCH_DEFAULT_REWIND_ENABLE 0
-#define MINARCH_DEFAULT_REWIND_BUFFER_MB 16
-#define MINARCH_DEFAULT_REWIND_GRANULARITY 66
+#define MINARCH_DEFAULT_REWIND_BUFFER_MB 64
+#define MINARCH_DEFAULT_REWIND_GRANULARITY 16
 #define MINARCH_DEFAULT_REWIND_AUDIO 0
 
 // default frontend options
@@ -2436,8 +2436,8 @@ static struct Config {
 				.key	= "minarch_rewind_buffer_mb",
 				.name	= "Rewind Buffer (MB)",
 				.desc	= "Memory reserved for rewind snapshots.",
-				.default_value = 1, // 16MB
-				.value = 1,
+				.default_value = 3, // 64MB
+				.value = 3,
 				.count = 5,
 				.values = rewind_buffer_labels,
 				.labels = rewind_buffer_labels,
@@ -2446,8 +2446,8 @@ static struct Config {
 				.key	= "minarch_rewind_granularity",
 				.name	= "Rewind Interval",
 				.desc	= "Milliseconds between rewind snapshots.",
-				.default_value = 5, // 66ms
-				.value = 5,
+				.default_value = 0, // 16ms
+				.value = 0,
 				.count = 12,
 				.values = rewind_granularity_values,
 				.labels = rewind_granularity_labels,
