@@ -16,6 +16,7 @@
 
 // minimal LZ4 API forward declarations (linked via -llz4)
 int LZ4_compress_default(const char* src, char* dst, int srcSize, int dstCapacity);
+int LZ4_compress_fast(const char* src, char* dst, int srcSize, int dstCapacity, int acceleration);
 int LZ4_decompress_safe(const char* src, char* dst, int compressedSize, int dstCapacity);
 int LZ4_compressBound(int inputSize);
 
@@ -1141,6 +1142,13 @@ typedef struct {
 	uint8_t *scratch;
 	size_t scratch_size;
 
+	// Delta compression: store XOR of current vs previous state
+	uint8_t *prev_state_enc;   // previous state for delta encoding (compression)
+	uint8_t *prev_state_dec;   // previous state for delta decoding (decompression)
+	uint8_t *delta_buf;        // scratch buffer for XOR result
+	int has_prev_enc;          // 1 if prev_state_enc is valid
+	int has_prev_dec;          // 1 if prev_state_dec is valid
+
 	int granularity_frames;
 	int interval_ms;
 	uint32_t last_push_ms;
@@ -1210,6 +1218,9 @@ static void Rewind_free(void) {
 	if (rewind_ctx.entries) free(rewind_ctx.entries);
 	if (rewind_ctx.state_buf) free(rewind_ctx.state_buf);
 	if (rewind_ctx.scratch) free(rewind_ctx.scratch);
+	if (rewind_ctx.prev_state_enc) free(rewind_ctx.prev_state_enc);
+	if (rewind_ctx.prev_state_dec) free(rewind_ctx.prev_state_dec);
+	if (rewind_ctx.delta_buf) free(rewind_ctx.delta_buf);
 	if (rewind_ctx.locks_ready) {
 		pthread_mutex_destroy(&rewind_ctx.lock);
 		pthread_mutex_destroy(&rewind_ctx.queue_mx);
@@ -1224,6 +1235,8 @@ static void Rewind_reset(void) {
 	pthread_mutex_lock(&rewind_ctx.lock);
 	rewind_ctx.head = rewind_ctx.tail = 0;
 	rewind_ctx.entry_head = rewind_ctx.entry_tail = rewind_ctx.entry_count = 0;
+	rewind_ctx.has_prev_enc = 0;
+	rewind_ctx.has_prev_dec = 0;
 	pthread_mutex_unlock(&rewind_ctx.lock);
 	rewind_ctx.frame_counter = 0;
 	rewind_ctx.last_push_ms = 0;
@@ -1356,15 +1369,42 @@ static int Rewind_compress_state(const uint8_t *src, size_t *dest_len) {
 		}
 		return 0;
 	}
+
+	// Delta compression: XOR current state with previous state
+	// The result is mostly zeros for similar consecutive states, which compresses much faster
+	const uint8_t *compress_src = src;
+	int used_delta = 0;
+	if (rewind_ctx.has_prev_enc && rewind_ctx.prev_state_enc && rewind_ctx.delta_buf) {
+		size_t i = 0;
+		size_t state_size = rewind_ctx.state_size;
+		uint8_t *delta = rewind_ctx.delta_buf;
+		const uint8_t *prev = rewind_ctx.prev_state_enc;
+		// Process 8 bytes at a time for better performance
+		for (; i + 8 <= state_size; i += 8) {
+			*(uint64_t*)(delta + i) = *(const uint64_t*)(src + i) ^ *(const uint64_t*)(prev + i);
+		}
+		// Handle remaining bytes
+		for (; i < state_size; i++) {
+			delta[i] = src[i] ^ prev[i];
+		}
+		compress_src = delta;
+		used_delta = 1;
+	}
+
 	int max_dst = (int)rewind_ctx.scratch_size;
-	int res = LZ4_compress_default((const char*)src, (char*)rewind_ctx.scratch, (int)rewind_ctx.state_size, max_dst);
+	// Use LZ4_compress_fast with acceleration=2 for faster compression
+	// acceleration: 1=default speed, higher=faster but slightly lower ratio
+	// For rewind states that compress extremely well (often <5%), speed is more valuable
+	int res = LZ4_compress_fast((const char*)compress_src, (char*)rewind_ctx.scratch, (int)rewind_ctx.state_size, max_dst, 2);
 	if (res <= 0) return -1;
 	*dest_len = (size_t)res;
-	if (!rewind_ctx.logged_first) {
-		rewind_ctx.logged_first = 1;
-		LOG_info("Rewind: state size before compression=%zu bytes, after=%zu bytes (%.1f%%)\n",
-			rewind_ctx.state_size, *dest_len, 100.0 * (double)*dest_len / (double)rewind_ctx.state_size);
+
+	// Update prev_state_enc with the current state for next delta
+	if (rewind_ctx.prev_state_enc) {
+		memcpy(rewind_ctx.prev_state_enc, src, rewind_ctx.state_size);
+		rewind_ctx.has_prev_enc = 1;
 	}
+
 	return 0;
 }
 
@@ -1421,6 +1461,18 @@ static int Rewind_init(size_t state_size) {
 		Rewind_free();
 		return 0;
 	}
+
+	// Allocate delta compression buffers (separate for encode/decode to avoid race conditions)
+	rewind_ctx.prev_state_enc = calloc(1, state_size);
+	rewind_ctx.prev_state_dec = calloc(1, state_size);
+	rewind_ctx.delta_buf = calloc(1, state_size);
+	if (!rewind_ctx.prev_state_enc || !rewind_ctx.prev_state_dec || !rewind_ctx.delta_buf) {
+		LOG_error("Rewind: failed to allocate delta buffers\n");
+		Rewind_free();
+		return 0;
+	}
+	rewind_ctx.has_prev_enc = 0;
+	rewind_ctx.has_prev_dec = 0;
 
 	int entry_cap = rewind_ctx.capacity / 4096;
 	if (entry_cap < 8) entry_cap = 8;
@@ -1653,6 +1705,34 @@ static int Rewind_step_back(void) {
 		return 2;
 	}
 
+	// On first rewind step, we need to:
+	// 1. Wait for any pending compression to finish (so entry indices are stable)
+	// 2. Copy the last compressed state as our delta reference
+	if (!rewinding && rewind_ctx.compress && rewind_ctx.prev_state_dec) {
+		// Wait for worker to finish all pending compressions
+		if (rewind_ctx.worker_running && rewind_ctx.locks_ready) {
+			pthread_mutex_lock(&rewind_ctx.queue_mx);
+			while (rewind_ctx.queue_count > 0) {
+				pthread_mutex_unlock(&rewind_ctx.queue_mx);
+				struct timespec ts = {0, 1000000}; // 1ms
+				nanosleep(&ts, NULL);
+				pthread_mutex_lock(&rewind_ctx.queue_mx);
+			}
+			pthread_mutex_unlock(&rewind_ctx.queue_mx);
+		}
+		
+		// Copy the encoder's prev_state (which is the last state that was compressed)
+		// This is the state we need to XOR against to decode the most recent entry
+		pthread_mutex_lock(&rewind_ctx.lock);
+		if (rewind_ctx.has_prev_enc && rewind_ctx.prev_state_enc) {
+			memcpy(rewind_ctx.prev_state_dec, rewind_ctx.prev_state_enc, rewind_ctx.state_size);
+			rewind_ctx.has_prev_dec = 1;
+		} else {
+			rewind_ctx.has_prev_dec = 0;
+		}
+		pthread_mutex_unlock(&rewind_ctx.lock);
+	}
+
 	pthread_mutex_lock(&rewind_ctx.lock);
 	if (!rewind_ctx.entry_count) {
 		pthread_mutex_unlock(&rewind_ctx.lock);
@@ -1669,12 +1749,40 @@ static int Rewind_step_back(void) {
 
 	int decode_ok = 1;
 	if (rewind_ctx.compress) {
+		// Decompress into delta_buf first (it contains the XOR delta)
 		int res = LZ4_decompress_safe((const char*)rewind_ctx.buffer + e->offset,
-			(char*)rewind_ctx.state_buf, (int)e->size, (int)rewind_ctx.state_size);
+			(char*)rewind_ctx.delta_buf, (int)e->size, (int)rewind_ctx.state_size);
 		if (res < (int)rewind_ctx.state_size) {
 			LOG_error("Rewind: decompress failed (res=%i, want=%zu, compressed=%zu, offset=%zu, idx=%d head=%d tail=%d count=%d buf_head=%zu buf_tail=%zu)\n",
 				res, rewind_ctx.state_size, e->size, e->offset, idx, rewind_ctx.entry_head, rewind_ctx.entry_tail, rewind_ctx.entry_count, rewind_ctx.head, rewind_ctx.tail);
 			decode_ok = 0;
+		} else if (rewind_ctx.has_prev_dec && rewind_ctx.prev_state_dec) {
+			// Delta decompression: XOR the delta with prev_state_dec to recover the actual state
+			// prev_state_dec holds the current state (state N), delta = state_N XOR state_(N-1)
+			// So: state_(N-1) = delta XOR state_N = delta XOR prev_state_dec
+			size_t i = 0;
+			size_t state_size = rewind_ctx.state_size;
+			uint8_t *result = rewind_ctx.state_buf;
+			const uint8_t *delta = rewind_ctx.delta_buf;
+			const uint8_t *prev = rewind_ctx.prev_state_dec;
+			// Process 8 bytes at a time for better performance
+			for (; i + 8 <= state_size; i += 8) {
+				*(uint64_t*)(result + i) = *(const uint64_t*)(delta + i) ^ *(const uint64_t*)(prev + i);
+			}
+			// Handle remaining bytes
+			for (; i < state_size; i++) {
+				result[i] = delta[i] ^ prev[i];
+			}
+			// Update prev_state_dec to the state we just recovered (for next rewind step)
+			memcpy(rewind_ctx.prev_state_dec, result, state_size);
+		} else {
+			// No previous state for delta - this is the first frame or after reset
+			// The compressed data is the full state, just copy it
+			memcpy(rewind_ctx.state_buf, rewind_ctx.delta_buf, rewind_ctx.state_size);
+			if (rewind_ctx.prev_state_dec) {
+				memcpy(rewind_ctx.prev_state_dec, rewind_ctx.state_buf, rewind_ctx.state_size);
+				rewind_ctx.has_prev_dec = 1;
+			}
 		}
 	} else {
 		if (e->size != rewind_ctx.state_size) {
@@ -1715,6 +1823,29 @@ static int Rewind_step_back(void) {
 	rewinding = 1;
 	rewind_ctx.last_step_ms = now_ms;
 	return 1;
+}
+
+// Call this when rewind ends to sync the encode buffer with the last decoded state
+// Also clears old entries that were compressed with a different delta chain
+static void Rewind_sync_encode_state(void) {
+	if (!rewind_ctx.enabled || !rewind_ctx.compress) return;
+	if (!rewinding) return; // Only sync if we were actually rewinding
+	
+	pthread_mutex_lock(&rewind_ctx.lock);
+	
+	// Clear all existing entries - they were compressed against a different delta chain
+	// and cannot be decompressed correctly after we resume with a new chain
+	rewind_ctx.head = rewind_ctx.tail = 0;
+	rewind_ctx.entry_head = rewind_ctx.entry_tail = rewind_ctx.entry_count = 0;
+	
+	// The decoder's prev_state_dec contains the state we rewound to
+	// This becomes the new reference for future compressions
+	if (rewind_ctx.has_prev_dec && rewind_ctx.prev_state_dec && rewind_ctx.prev_state_enc) {
+		memcpy(rewind_ctx.prev_state_enc, rewind_ctx.prev_state_dec, rewind_ctx.state_size);
+		rewind_ctx.has_prev_enc = 1;
+	}
+	
+	pthread_mutex_unlock(&rewind_ctx.lock);
 }
 
 static void Rewind_on_state_change(void) {
@@ -2876,6 +3007,7 @@ static void Config_syncFrontend(char* key, int value) {
 			// ensure runtime toggles don't linger when enabling/disabling feature
 			rewind_toggle = 0;
 			rewind_pressed = 0;
+			Rewind_sync_encode_state();
 			rewinding = 0;
 			ff_paused_by_rewind_hold = 0;
 		}
@@ -3980,6 +4112,7 @@ static void input_poll_callback(void) {
 						// last toggle wins: disable rewind toggle when FF toggle is enabled
 						rewind_toggle = 0;
 						rewind_pressed = 0;
+						Rewind_sync_encode_state();
 						rewinding = 0;
 					}
 					if (mapping->mod) ignore_menu = 1;
@@ -8023,6 +8156,7 @@ int main(int argc , char* argv[]) {
 					}
 			}
 				else {
+					Rewind_sync_encode_state();
 					rewinding = 0;
 					if (ff_paused_by_rewind_hold && !rewind_pressed) {
 						// resume fast forward after hold rewind ends
