@@ -15,7 +15,6 @@
 #include <glob.h>
 
 // minimal LZ4 API forward declarations (linked via -llz4)
-int LZ4_compress_default(const char* src, char* dst, int srcSize, int dstCapacity);
 int LZ4_compress_fast(const char* src, char* dst, int srcSize, int dstCapacity, int acceleration);
 int LZ4_decompress_safe(const char* src, char* dst, int compressedSize, int dstCapacity);
 int LZ4_compressBound(int inputSize);
@@ -2556,7 +2555,7 @@ static struct Config {
 			[FE_OPT_REWIND_ENABLE] = {
 				.key	= "minarch_rewind_enable",
 				.name	= "Rewind",
-				.desc	= "Enable in-memory rewind buffer.",
+				.desc	= "Enable in-memory rewind buffer.\nMust set a shortcut to access rewind during gameplay.\nUses extra CPU and memory.",
 				.default_value = MINARCH_DEFAULT_REWIND_ENABLE ? 1 : 0,
 				.value = MINARCH_DEFAULT_REWIND_ENABLE ? 1 : 0,
 				.count = 2,
@@ -2566,7 +2565,7 @@ static struct Config {
 			[FE_OPT_REWIND_BUFFER] = {
 				.key	= "minarch_rewind_buffer_mb",
 				.name	= "Rewind Buffer (MB)",
-				.desc	= "Memory reserved for rewind snapshots.",
+				.desc	= "Memory reserved for rewind snapshots.\nIncrease for longer rewind times.",
 				.default_value = 3, // 64MB
 				.value = 3,
 				.count = 5,
@@ -2576,7 +2575,7 @@ static struct Config {
 			[FE_OPT_REWIND_GRANULARITY] = {
 				.key	= "minarch_rewind_granularity",
 				.name	= "Rewind Interval",
-				.desc	= "Milliseconds between rewind snapshots.",
+				.desc	= "Interval between rewind snapshots.\nShorter intervals improve smoothness during rewind,\nbut increase CPU and memory usage.",
 				.default_value = 0, // 16ms
 				.value = 0,
 				.count = 12,
@@ -2596,7 +2595,7 @@ static struct Config {
 			[FE_OPT_REWIND_SKIP_COMPRESSION] = {
 				.key	= "minarch_rewind_skip_compression",
 				.name	= "Skip Rewind Compression",
-				.desc	= "Store raw rewind snapshots instead of compressing them. Uses more memory but less CPU.",
+				.desc	= "Store raw rewind snapshots instead of compressing them.\nUses more memory but less CPU.",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
