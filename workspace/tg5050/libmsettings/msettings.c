@@ -205,6 +205,8 @@ void InitSettings(void) {
 	if(GetAudioSink() == AUDIO_SINK_DEFAULT) {
 		system("amixer sset 'HPOUT' unmute");
 		system("amixer sset 'SPK' unmute");
+		system("amixer sset 'LINEOUTL' unmute");
+		system("amixer sset 'LINEOUTR' unmute");
 	}
 
 	// This will implicitly update all other settings based on FN switch state
