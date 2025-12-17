@@ -154,8 +154,6 @@ echo after modprobe `cat /proc/uptime` >> /tmp/nextui_boottime
 #rm -f $USERDATA_PATH/.asoundrc
 #audiomon.elf & # &> $SDCARD_PATH/audiomon.txt &
 
-#killall MtpDaemon # I dont think we need to micro manage this one
-
 # BT handling
 # on by default, disable based on systemval setting
 # TODO: still the case here, do we need to handle the off state explicitly?

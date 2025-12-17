@@ -75,14 +75,13 @@ static void* watchMute(void *arg) {
 			SetMute(is_muted);
 			if (GetMute()) {
 				// tmp solution
-				system("echo 1500000 > /sys/class/motor/voltage");
-				system("echo 1 > /sys/class/gpio/gpio236/value");
+				system("echo 32768 > /sys/class/motor/level");
 				usleep(100000);
-				system("echo 0 > /sys/class/gpio/gpio236/value");
+				system("echo 0 > /sys/class/motor/level");
 				usleep(100000);
-				system("echo 1 > /sys/class/gpio/gpio236/value");
+				system("echo 32768 > /sys/class/motor/level");
 				usleep(100000);
-				system("echo 0 > /sys/class/gpio/gpio236/value");
+				system("echo 0 > /sys/class/motor/level");
 			}
 		}
 	}
