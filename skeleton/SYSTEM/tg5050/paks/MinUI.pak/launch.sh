@@ -65,6 +65,8 @@ sync
 
 #fan off
 #echo 0 > /sys/class/thermal/cooling_device0/cur_state 
+# pretty much silent to me, and better that heat death
+echo 13 > /sys/class/thermal/cooling_device0/cur_state
 
 #rumble motor PH12
 echo 236 > /sys/class/gpio/export
@@ -110,14 +112,14 @@ echo 1200000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
 echo 408000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq
 echo 1200000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_max_freq
 
-# little Cortex-A55 CPU0
+# little Cortex-A55 CPU0 - 408Mhz to 1416Mhz
 echo 1 > /sys/devices/system/cpu/cpu0/online
 echo 1 > /sys/devices/system/cpu/cpu1/online
 
 echo 0 > /sys/devices/system/cpu/cpu3/online
 echo 0 > /sys/devices/system/cpu/cpu2/online
 
-# big Cortex-A55 CPU4
+# big Cortex-A55 CPU4 - 408Mhz to 2160Mhz
 echo 1 > /sys/devices/system/cpu/cpu4/online
 
 echo 0 > /sys/devices/system/cpu/cpu7/online
