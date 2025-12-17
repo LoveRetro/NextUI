@@ -18,5 +18,5 @@ $(PLATFORM):
 	#cp ./workspace/$@/audiomon/audiomon.elf ./build/SYSTEM/$@/bin/
 
 	# extras
-	#cp ./workspace/$@/other/NextCommander/output/NextCommander ./build/EXTRAS/Tools/$@/Files.pak/
-	#cp -r ./workspace/$@/other/NextCommander/res ./build/EXTRAS/Tools/$@/Files.pak/
+	cp ./workspace/$@/other/NextCommander/output/NextCommander ./build/EXTRAS/Tools/$@/Files.pak/
+	cp -r ./workspace/$@/other/NextCommander/res ./build/EXTRAS/Tools/$@/Files.pak/
