@@ -40,8 +40,7 @@ TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
 echo 0 > /sys/class/led_anim/max_scale
 
 # splash
-/usr/trimui/bin/pic2fb_drm /usr/trimui/bin/splash.png 5000
-#/usr/trimui/bin/sdl2display /usr/trimui/res/skin/bootlogo.png &
+/usr/trimui/bin/sdl2display /usr/trimui/bin/splash.png &
 
 # generic NextUI package install
 for pakz in $PAKZ_PATH; do
