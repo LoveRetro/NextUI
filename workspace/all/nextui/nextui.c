@@ -1817,7 +1817,7 @@ int BGLoadWorker(void* unused) {
         if (access(task->imagePath, F_OK) == 0) {
             SDL_Surface* image = IMG_Load(task->imagePath);
             if (image) {
-                SDL_Surface* imageRGBA = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGBA8888, 0);
+                SDL_Surface* imageRGBA = SDL_ConvertSurfaceFormat(image, screen->format->format, 0);
                 SDL_FreeSurface(image);
                 result = imageRGBA;
             }
@@ -1853,7 +1853,7 @@ int ThumbLoadWorker(void* unused) {
         if (access(task->imagePath, F_OK) == 0) {
             SDL_Surface* image = IMG_Load(task->imagePath);
             if (image) {
-                SDL_Surface* imageRGBA = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGBA8888, 0);
+                SDL_Surface* imageRGBA = SDL_ConvertSurfaceFormat(image, screen->format->format, 0);
                 SDL_FreeSurface(image);
                 result = imageRGBA;
             }
@@ -1928,7 +1928,8 @@ void onThumbLoaded(SDL_Surface* surface) {
 		new_h = max_h;
 		new_w = (int)(new_h / aspect_ratio);
 	}
-	GFX_ApplyRoundedCorners_RGBA8888(
+
+	GFX_ApplyRoundedCorners_8888(
 		thumbbmp,
 		&(SDL_Rect){0, 0, thumbbmp->w, thumbbmp->h},
 		SCALE1((float)CFG_getThumbnailRadius() * ((float)img_w / (float)new_w))
@@ -1953,12 +1954,12 @@ void animcallback(finishedTask *task) {
 			SDL_Color text_color = uintToColour(THEME_COLOR5_255);
 			SDL_Surface *tmp = TTF_RenderUTF8_Blended(font.large, task->entry_name, text_color);
 
-			SDL_Surface *converted = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA8888, 0);
+			SDL_Surface *converted = SDL_ConvertSurfaceFormat(tmp, screen->format->format, 0);
 			SDL_FreeSurface(tmp); // tmp no longer needed
 
 			SDL_Rect crop_rect = { 0, 0, task->move_w - SCALE1(BUTTON_PADDING * 2), converted->h };
 			SDL_Surface *cropped = SDL_CreateRGBSurfaceWithFormat(
-				0, crop_rect.w, crop_rect.h, 32, SDL_PIXELFORMAT_RGBA8888
+				0, crop_rect.w, crop_rect.h, screen->format->BitsPerPixel, screen->format->format
 			);
 			if (!cropped) {
 				SDL_FreeSurface(converted);
@@ -2170,12 +2171,12 @@ int main (int argc, char *argv[]) {
 	char folderBgPath[1024];
 	folderbgbmp = NULL;
 
-	SDL_Surface * blackBG = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
+	SDL_Surface * blackBG = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,screen->format->BitsPerPixel,screen->format->format);
 	SDL_FillRect(blackBG,NULL,SDL_MapRGBA(screen->format,0,0,0,255));
 
 	SDL_LockMutex(animMutex);
-	globalpill = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, screen->w, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888);
-	globalText = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, screen->w, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888);
+	globalpill = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, screen->w, SCALE1(PILL_SIZE), FIXED_DEPTH, screen->format->format);
+	globalText = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, screen->w, SCALE1(PILL_SIZE), FIXED_DEPTH, screen->format->format);
 	static int globallpillW = 0;
 	SDL_UnlockMutex(animMutex);
 
@@ -2581,7 +2582,7 @@ int main (int argc, char *argv[]) {
 						sprintf(icon_path, SDCARD_PATH "/.system/res/%s@%ix.png", item->name, FIXED_SCALE);
 						SDL_Surface* bmp = IMG_Load(icon_path);
 						if(bmp) {
-							SDL_Surface* converted = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888, 0);
+							SDL_Surface* converted = SDL_ConvertSurfaceFormat(bmp, screen->format->format, 0);
 							if (converted) {
 								SDL_FreeSurface(bmp); 
 								bmp = converted; 
@@ -2711,7 +2712,7 @@ int main (int argc, char *argv[]) {
 						// lotta memory churn here
 					
 						SDL_Surface* bmp = IMG_Load(preview_path);
-						SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888, 0);
+						SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, screen->format->format, 0);
 						if (raw_preview) {
 							SDL_FreeSurface(bmp); 
 							bmp = raw_preview; 
@@ -2770,7 +2771,7 @@ int main (int argc, char *argv[]) {
 					}
 					else {
 						SDL_Rect preview_rect = {ox,oy,screen->w,screen->h};
-						SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,32,SDL_PIXELFORMAT_RGBA8888);
+						SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,screen->format->BitsPerPixel,screen->format->format);
 						SDL_FillRect(tmpsur, &preview_rect, SDL_MapRGBA(screen->format,0,0,0,255));
 						if(lastScreen == SCREEN_GAME) {
 							GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,LAYER_BACKGROUND);
@@ -2937,7 +2938,7 @@ int main (int argc, char *argv[]) {
 							bool is_scrolling = remember_depth == stack->count;
 							SDL_LockMutex(animMutex);
 							if(globalpill) { SDL_FreeSurface(globalpill); globalpill=NULL; }
-							globalpill = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, SDL_PIXELFORMAT_RGBA8888);
+							globalpill = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, screen->format->format);
 							GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){0,0, max_width, SCALE1(PILL_SIZE)});
 							globallpillW =  max_width;
 							SDL_UnlockMutex(animMutex);

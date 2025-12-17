@@ -494,8 +494,22 @@ void PLAT_initShaders() {
 	LOG_info("default shaders loaded, %i\n\n",g_shader_default);
 }
 
+static void sdl_log_stdout(
+    void *userdata,
+    int category,
+    SDL_LogPriority priority,
+    const char *message)
+{
+    (void)userdata;
+    (void)category;
+    (void)priority;
+
+    LOG_info("[SDL] %s\n", message);
+}
 
 SDL_Surface* PLAT_initVideo(void) {
+	SDL_LogSetOutputFunction(sdl_log_stdout, NULL);
+	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
 	
@@ -533,7 +547,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"1");
-	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengl");
+	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengles2");
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");
 
 	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -544,8 +558,6 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_RendererInfo info;
 	SDL_GetRendererInfo(vid.renderer, &info);
 	LOG_info("Current render driver: %s\n", info.name);
-	
-
 	
 	vid.gl_context = SDL_GL_CreateContext(vid.window);
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
@@ -739,8 +751,10 @@ uint32_t PLAT_get_dominant_color() {
         return 0;
     }
 
+	// TODO: There is really no reason to limit to a single format, unless its a packed format
+	// its al very easy to accomodate other formats here.
     if (vid.screen->format->format != SDL_PIXELFORMAT_ARGB8888) {
-        fprintf(stderr, "Error: Surface is not in RGBA8888 format.\n");
+        fprintf(stderr, "Error: Surface is not in ARGB8888 format.\n");
         return 0;
     }
 
@@ -754,6 +768,7 @@ uint32_t PLAT_get_dominant_color() {
     int height = vid.screen->h;
     int pixel_count = width * height;
 
+	// TODO: this can be way more efficient. No need to realloc each frame.
     // Use dynamic memory allocation for the histogram
     uint32_t *color_histogram = (uint32_t *)calloc(256 * 256 * 256, sizeof(uint32_t));
     if (!color_histogram) {
@@ -764,13 +779,9 @@ uint32_t PLAT_get_dominant_color() {
     for (int i = 0; i < pixel_count; i++) {
         uint32_t pixel = pixels[i];
 
-        // Extract R, G, B from RGBA8888
-        uint8_t r = (pixel >> 24) & 0xFF;
-        uint8_t g = (pixel >> 16) & 0xFF;
-        uint8_t b = (pixel >> 8) & 0xFF;
-
-        uint32_t rgb = (r << 16) | (g << 8) | b;
-        color_histogram[rgb]++;
+		// Extract RGB from ARGB8888
+		uint32_t rgb = pixel & 0x00FFFFFF;
+		color_histogram[rgb]++;
     }
 
     // Find the most frequent color

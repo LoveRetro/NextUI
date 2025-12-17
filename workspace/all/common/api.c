@@ -1347,19 +1347,20 @@ void GFX_ApplyRoundedCorners(SDL_Surface *surface, SDL_Rect *rect, int radius)
 	}
 }
 
-// Need a roundercorners for rgba4444 now too to have transparant rounder corners :D
-void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface *surface, SDL_Rect *rect, int radius)
+void GFX_ApplyRoundedCorners_4444(SDL_Surface *surface, SDL_Rect *rect, int radius)
 {
-	if (!surface || surface->format->format != SDL_PIXELFORMAT_RGBA4444)
+	if (!surface || 
+		(surface->format->format != SDL_PIXELFORMAT_RGBA4444 && surface->format->format != SDL_PIXELFORMAT_ARGB4444))
 		return;
 
 	Uint16 *pixels = (Uint16 *)surface->pixels;
+	SDL_PixelFormat *fmt = surface->format;
 	int pitch = surface->pitch / 2;
 	SDL_Rect target = {0, 0, surface->w, surface->h};
 	if (rect)
 		target = *rect;
 
-	Uint16 transparent_black = 0x0000;
+	Uint16 transparent_black = SDL_MapRGB(fmt, 0, 0, 0); // Fully transparent black
 
 	const int xBeg = target.x;
 	const int xEnd = target.x + target.w;
@@ -1381,19 +1382,21 @@ void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface *surface, SDL_Rect *rect, int 
 	}
 }
 
-void GFX_ApplyRoundedCorners_RGBA8888(SDL_Surface *surface, SDL_Rect *rect, int radius)
+void GFX_ApplyRoundedCorners_8888(SDL_Surface *surface, SDL_Rect *rect, int radius)
 {
-	if (!surface || surface->format->format != SDL_PIXELFORMAT_RGBA8888)
+	if (!surface || 
+		(surface->format->format != SDL_PIXELFORMAT_RGBA8888 && surface->format->format != SDL_PIXELFORMAT_ARGB8888))
 		return;
 
 	Uint32 *pixels = (Uint32 *)surface->pixels;
+	SDL_PixelFormat *fmt = surface->format;
 	int pitch = surface->pitch / 4; // Since each pixel is 4 bytes in RGBA8888
 
 	SDL_Rect target = {0, 0, surface->w, surface->h};
 	if (rect)
 		target = *rect;
 
-	Uint32 transparent_black = 0x00000000; // Fully transparent (RGBA8888: 0xAARRGGBB)
+	Uint32 transparent_black = SDL_MapRGBA(fmt, 0, 0, 0, 0); // Fully transparent black
 
 	const int xBeg = target.x;
 	const int xEnd = target.x + target.w;
@@ -1413,66 +1416,6 @@ void GFX_ApplyRoundedCorners_RGBA8888(SDL_Surface *surface, SDL_Rect *rect, int 
 			if (dx * dx + dy * dy > radius * radius)
 			{
 				pixels[y * pitch + x] = transparent_black;
-			}
-		}
-	}
-}
-
-// i wrote my own blit function cause its faster at converting rgba4444 to rgba565 then SDL's one lol
-void BlitRGBA4444toRGB565(SDL_Surface *src, SDL_Surface *dest, SDL_Rect *dest_rect)
-{
-	Uint8 *srcPixels = (Uint8 *)src->pixels;
-	Uint8 *destPixels = (Uint8 *)dest->pixels;
-
-	int width = src->w;
-	int height = src->h;
-
-	for (int y = 0; y < height; ++y)
-	{
-		Uint16 *srcRow = (Uint16 *)(srcPixels + y * src->pitch);
-		Uint16 *destRow = (Uint16 *)(destPixels + (y + dest_rect->y) * dest->pitch);
-
-		for (int x = 0; x < width; ++x)
-		{
-			Uint16 srcPixel = srcRow[x];
-
-			Uint8 r = (srcPixel >> 12) & 0xF;
-			Uint8 g = (srcPixel >> 8) & 0xF;
-			Uint8 b = (srcPixel >> 4) & 0xF;
-			Uint8 a = (srcPixel) & 0xF;
-
-			r = (r * 255 / 15) >> 3;
-			g = (g * 255 / 15) >> 2;
-			b = (b * 255 / 15) >> 3;
-
-			int destX = x + dest_rect->x;
-			int destY = y + dest_rect->y;
-
-			if (destX >= 0 && destX < dest->w && destY >= 0 && destY < dest->h)
-			{
-				Uint16 *destPixelPtr = &destRow[destX];
-
-				if (a == 0)
-					continue;
-
-				if (a == 15)
-				{
-					*destPixelPtr = (r << 11) | (g << 5) | b;
-				}
-				else
-				{
-					Uint16 existingPixel = *destPixelPtr;
-
-					Uint8 destR = (existingPixel >> 11) & 0x1F;
-					Uint8 destG = (existingPixel >> 5) & 0x3F;
-					Uint8 destB = existingPixel & 0x1F;
-
-					destR = ((r * a) + (destR * (15 - a))) / 15;
-					destG = ((g * a) + (destG * (15 - a))) / 15;
-					destB = ((b * a) + (destB * (15 - a))) / 15;
-
-					*destPixelPtr = (destR << 11) | (destG << 5) | destB;
-				}
 			}
 		}
 	}
