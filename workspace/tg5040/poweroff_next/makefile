@@ -24,7 +24,7 @@ SOURCE = $(TARGET).c ../../all/common/utils.c ../../all/common/config.c
 
 CC = $(CROSS_COMPILE)gcc
 # Override CFLAGS and LDFLAGS to not include SDL2 dependencies
-CFLAGS = $(ARCH) -g -std=gnu11 -Wall -Wextra
+CFLAGS = $(OPT) -g -std=gnu11 -Wall -Wextra
 CFLAGS += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\"
 LDFLAGS = -lpthread -ldl
 
