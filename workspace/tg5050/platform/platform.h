@@ -83,8 +83,8 @@
 #define JOY_R1			5
 #define JOY_L2			JOY_NA
 #define JOY_R2			JOY_NA
-#define JOY_L3			JOY_NA
-#define JOY_R3			JOY_NA
+#define JOY_L3			9
+#define JOY_R3			10
 
 #define JOY_MENU		8
 #define JOY_POWER		102
