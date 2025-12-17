@@ -2245,9 +2245,13 @@ void *PLAT_cpu_monitor(void *arg) {
     double prev_real_time = get_time_sec();
     double prev_cpu_time = get_process_cpu_time_sec();
 
-	const int cpu_frequencies[] = {408,450,500,550,  600,650,700,750, 800,850,900,950, 1000,1050,1100,1150, 1200,1250,1300,1350, 1400,1450,1500,1550, 1600,1650,1700,1750, 1800,1850,1900,1950, 2000};
+	// little Cortex-A55 CPU0 - 408Mhz to 1416Mhz
+	// 408000 672000 792000 936000 1032000 1128000 1224000 1320000 1416000
+	// big Cortex-A55 CPU4 - 408Mhz to 2160Mhz
+	// 408000 672000 840000 1008000 1200000 1344000 1488000 1584000 1680000 1800000 1992000 2088000 2160000
+	const int cpu_frequencies[] = {408,672,840,1008,1200,1344,1488,1584,1680,1800,1992,2088,2160};
     const int num_freqs = sizeof(cpu_frequencies) / sizeof(cpu_frequencies[0]);
-    int current_index = 5; 
+    int current_index = 1; // 672Mhz start 
 
     double cpu_usage_history[ROLLING_WINDOW] = {0};
     double cpu_speed_history[ROLLING_WINDOW] = {0};
@@ -2349,7 +2353,7 @@ void *PLAT_cpu_monitor(void *arg) {
 }
 
 
-#define GOVERNOR_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
+#define GOVERNOR_PATH "/sys/devices/system/cpu/cpu4/cpufreq/scaling_setspeed"
 void PLAT_setCustomCPUSpeed(int speed) {
     FILE *fp = fopen(GOVERNOR_PATH, "w");
     if (fp == NULL) {
@@ -2363,10 +2367,10 @@ void PLAT_setCustomCPUSpeed(int speed) {
 void PLAT_setCPUSpeed(int speed) {
 	int freq = 0;
 	switch (speed) {
-		case CPU_SPEED_MENU: 		freq =  600000; currentcpuspeed = 600; break;
+		case CPU_SPEED_MENU: 		freq =  672000; currentcpuspeed = 672; break;
 		case CPU_SPEED_POWERSAVE:	freq = 1200000; currentcpuspeed = 1200; break;
-		case CPU_SPEED_NORMAL: 		freq = 1608000; currentcpuspeed = 1600; break;
-		case CPU_SPEED_PERFORMANCE: freq = 2000000; currentcpuspeed = 2000; break;
+		case CPU_SPEED_NORMAL: 		freq = 1680000; currentcpuspeed = 1680; break;
+		case CPU_SPEED_PERFORMANCE: freq = 2160000; currentcpuspeed = 2160; break;
 	}
 	putInt(GOVERNOR_PATH, freq);
 }
