@@ -561,16 +561,16 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
 
-	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
-	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer2 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer3 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer4 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer5 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w,h);
+	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer2 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer3 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer4 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer5 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	
 	vid.target	= NULL; // only needed for non-native sizes
 	
-	vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
+	vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
 
 	SDL_SetSurfaceBlendMode(vid.screen, SDL_BLENDMODE_BLEND);
 	SDL_SetTextureBlendMode(vid.stream_layer1, SDL_BLENDMODE_BLEND);
@@ -748,9 +748,9 @@ uint32_t PLAT_get_dominant_color() {
         fprintf(stderr, "Error: vid.screen is NULL.\n");
         return 0;
     }
-
-    if (vid.screen->format->format != SDL_PIXELFORMAT_RGBA8888) {
-        fprintf(stderr, "Error: Surface is not in RGBA8888 format.\n");
+	
+    if (vid.screen->format->format != SDL_PIXELFORMAT_ARGB8888) {
+        fprintf(stderr, "Error: Surface is not in ARGB8888 format.\n");
         return 0;
     }
 
@@ -874,12 +874,12 @@ static void resizeVideo(int w, int h, int p) {
 	if (vid.target) SDL_DestroyTexture(vid.target);
 	
 	// SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, vid.sharpness==SHARPNESS_SOFT?"1":"0", SDL_HINT_OVERRIDE);
-	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
+	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	SDL_SetTextureBlendMode(vid.stream_layer1, SDL_BLENDMODE_BLEND);
 	
 	if (vid.sharpness==SHARPNESS_CRISP) {
 		// SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, "1", SDL_HINT_OVERRIDE);
-		vid.target = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w * hard_scale,h * hard_scale);
+		vid.target = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w * hard_scale,h * hard_scale);
 	}
 	else {
 		vid.target = NULL;
@@ -1102,7 +1102,7 @@ void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, flo
     if (!inputSurface || !vid.target_layer1 || !vid.renderer) return; 
 
     SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-                                                 SDL_PIXELFORMAT_RGBA8888, 
+                                                 SDL_PIXELFORMAT_ARGB8888, 
                                                  SDL_TEXTUREACCESS_TARGET,  
                                                  inputSurface->w, inputSurface->h); 
 
@@ -1177,7 +1177,7 @@ void PLAT_animateSurface(
 	if (!inputSurface || !vid.target_layer2 || !vid.renderer) return;
 
 	SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
+		SDL_PIXELFORMAT_ARGB8888,
 		SDL_TEXTUREACCESS_TARGET,
 		inputSurface->w, inputSurface->h);
 
@@ -1265,7 +1265,7 @@ void PLAT_scrollTextTexture(
 
     // Create a surface to hold two copies side by side with padding
     SDL_Surface* text_surface = SDL_CreateRGBSurfaceWithFormat(0,
-        single_width * 2 + padding, single_height, 32, SDL_PIXELFORMAT_RGBA8888);
+        single_width * 2 + padding, single_height, 32, SDL_PIXELFORMAT_ARGB8888);
 
     SDL_FillRect(text_surface, NULL, THEME_COLOR1);
     SDL_BlitSurface(singleSur, NULL, text_surface, NULL);
@@ -1332,7 +1332,7 @@ void PLAT_animateSurfaceOpacity(
 	if (!inputSurface) return;
 
 	SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
+		SDL_PIXELFORMAT_ARGB8888,
 		SDL_TEXTUREACCESS_TARGET,
 		inputSurface->w, inputSurface->h);
 
@@ -1385,7 +1385,7 @@ SDL_Surface* PLAT_captureRendererToSurface() {
 	int width, height;
 	SDL_GetRendererOutputSize(vid.renderer, &width, &height);
 
-	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA8888);
+	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
 	if (!surface) {
 		printf("Failed to create surface: %s\n", SDL_GetError());
 		return NULL;
@@ -1394,7 +1394,7 @@ SDL_Surface* PLAT_captureRendererToSurface() {
 	Uint32 black = SDL_MapRGBA(surface->format, 0, 0, 0, 255);
 	SDL_FillRect(surface, NULL, black);
 
-	if (SDL_RenderReadPixels(vid.renderer, NULL, SDL_PIXELFORMAT_RGBA8888, surface->pixels, surface->pitch) != 0) {
+	if (SDL_RenderReadPixels(vid.renderer, NULL, SDL_PIXELFORMAT_ARGB8888, surface->pixels, surface->pitch) != 0) {
 		printf("Failed to read pixels from renderer: %s\n", SDL_GetError());
 		SDL_FreeSurface(surface);
 		return NULL;
@@ -1424,7 +1424,7 @@ void PLAT_animateAndFadeSurface(
 	if (!inputSurface || !vid.renderer) return;
 
 	SDL_Texture* moveTexture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
+		SDL_PIXELFORMAT_ARGB8888,
 		SDL_TEXTUREACCESS_TARGET,
 		inputSurface->w, inputSurface->h);
 
