@@ -44,6 +44,7 @@ typedef struct SettingsV1 {
 	// NOTE: doesn't really need to be persisted but still needs to be shared
 	int jack; 
 	int audiosink; // was bluetooth true/false before
+	int fanSpeed; // 0-100, -1 for auto
 } SettingsV1;
 
 // When incrementing SETTINGS_VERSION, update the Settings typedef and add
@@ -76,6 +77,7 @@ static Settings DefaultSettings = {
 	.turbo_r2 = 0,
 	.jack = 0,
 	.audiosink = AUDIO_SINK_DEFAULT,
+	.fanSpeed = SETTINGS_DEFAULT_FAN_SPEED,
 };
 static Settings* settings;
 
@@ -91,6 +93,7 @@ int scaleContrast(int);
 int scaleSaturation(int);
 int scaleExposure(int);
 int scaleVolume(int);
+int scaleFanSpeed(int);
 
 void disableDpad(int);
 void emulateJoystick(int);
@@ -211,6 +214,8 @@ void InitSettings(void) {
 
 	// This will implicitly update all other settings based on FN switch state
 	SetMute(settings->mute);
+
+	SetFanSpeed(settings->fanSpeed);
 }
 int InitializedSettings(void) {
 	return (settings != NULL);
@@ -336,6 +341,9 @@ int GetMuteTurboR1(void)
 int GetMuteTurboR2(void)
 {
 	return settings->turbo_r2;
+}
+int GetFanSpeed(void) {
+	return settings->fanSpeed;
 }
 
 ///////// Setters exposed in public API
@@ -546,6 +554,12 @@ void SetMuteTurboR1(int value)
 void SetMuteTurboR2(int value)
 {
 	settings->turbo_r2 = value;
+	SaveSettings();
+}
+
+void SetFanSpeed(int value) {
+	settings->fanSpeed = value;
+	SetRawFanSpeed(scaleFanSpeed(value));
 	SaveSettings();
 }
 
@@ -772,6 +786,15 @@ int scaleExposure(int value) {
 	return raw;
 }
 
+int scaleFanSpeed(int value) {
+	if(value < 0) return -1; // auto
+	if(value > 100) return 100;
+	
+	// map 0-100 to 0-31
+	int raw = (value * 31) / 100;
+	return raw;
+}
+
 ///////// Platform specific, unscaled accessors
 
 // Find the first A2DP playback volume control via amixer
@@ -929,6 +952,18 @@ void SetRawColortemp(int val) { // 0 - 255
 	printf("SetRawColortemp(%i)\n", val); fflush(stdout);
 
 	FILE *fd = fopen("/sys/devices/virtual/disp/disp/attr/color_temperature", "w");
+	if (fd) {
+		fprintf(fd, "%i", val);
+		fclose(fd);
+	}
+}
+
+void SetRawFanSpeed(int val) { // 0-31, -1 for auto
+	printf("SetRawFanSpeed(%i)\n", val); fflush(stdout);
+
+	// TODO: handle auto fan speed
+
+	FILE *fd = fopen("/sys/class/thermal/cooling_device0/cur_state", "w");
 	if (fd) {
 		fprintf(fd, "%i", val);
 		fclose(fd);
