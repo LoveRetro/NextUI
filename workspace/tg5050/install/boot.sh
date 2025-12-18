@@ -31,6 +31,8 @@ echo 0 > /sys/devices/system/cpu/cpu7/online
 echo 0 > /sys/devices/system/cpu/cpu6/online
 echo 0 > /sys/devices/system/cpu/cpu5/online
 
+echo after cpugov `cat /proc/uptime` >> /tmp/nextui_boottime
+
 export LD_LIBRARY_PATH=/usr/trimui/lib:$LD_LIBRARY_PATH
 export PATH=/usr/trimui/bin:$PATH
 
@@ -39,8 +41,12 @@ TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
 # leds_off
 echo 0 > /sys/class/led_anim/max_scale
 
+echo before splash `cat /proc/uptime` >> /tmp/nextui_boottime
+
 # splash
 /usr/trimui/bin/sdl2display /usr/trimui/bin/splash.png &
+
+echo after splash `cat /proc/uptime` >> /tmp/nextui_boottime
 
 # generic NextUI package install
 for pakz in $PAKZ_PATH; do
@@ -58,6 +64,8 @@ for pakz in $PAKZ_PATH; do
 		rm -f $SDCARD_PATH/post_install.sh
 	fi
 done
+
+echo after pkg install `cat /proc/uptime` >> /tmp/nextui_boottime
 
 # install/update
 if [ -f "$UPDATE_PATH" ]; then 
@@ -82,6 +90,8 @@ if [ -f "$UPDATE_PATH" ]; then
 		$SYSTEM_PATH/$PLATFORM/bin/install.sh # &> $SDCARD_PATH/log.txt
 	fi
 fi
+
+echo after update install `cat /proc/uptime` >> /tmp/nextui_boottime
 
 LAUNCH_PATH="$SYSTEM_PATH/$PLATFORM/paks/MinUI.pak/launch.sh"
 if [ -f "$LAUNCH_PATH" ] ; then
