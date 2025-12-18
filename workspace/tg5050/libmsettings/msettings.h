@@ -8,6 +8,7 @@
 #define SETTINGS_DEFAULT_EXPOSURE 0
 #define SETTINGS_DEFAULT_VOLUME 8
 #define SETTINGS_DEFAULT_HEADPHONE_VOLUME 4
+#define SETTINGS_DEFAULT_FAN_SPEED 40 // 12 (approx 39%) is quiet but effective
 
 #define SETTINGS_DEFAULT_MUTE_NO_CHANGE -69
 
@@ -21,6 +22,7 @@ int GetContrast(void);
 int GetSaturation(void);
 int GetExposure(void);
 int GetVolume(void);
+int GetFanSpeed(void);
 
 void SetRawBrightness(int value); // 0-255
 void SetRawColortemp(int value); // 0-255
@@ -28,6 +30,7 @@ void SetRawContrast(int value); // 0-100
 void SetRawSaturation(int value); // 0-100
 void SetRawExposure(int value); // 0-100
 void SetRawVolume(int value); // 0-100
+void SetRawFanSpeed(int value); // 0-31, -1 for auto
 
 void SetBrightness(int value); // 0-10
 void SetColortemp(int value); // 0-40
@@ -35,6 +38,7 @@ void SetContrast(int value); // -4-5
 void SetSaturation(int value); // -5-5
 void SetExposure(int value); // -4-5
 void SetVolume(int value); // 0-20
+void SetFanSpeed(int value); // 0-100, -1 for auto
 
 int GetJack(void);
 void SetJack(int value); // 0-1
