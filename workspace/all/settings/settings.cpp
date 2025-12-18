@@ -110,6 +110,7 @@ int main(int argc, char *argv[])
     {
         char* device = getenv("DEVICE");
         bool is_brick = exactMatch("brick", device);
+        bool is_smartpro_s = exactMatch("smartpros", device);
 
         char version[128];
         PLAT_getOsVersionInfo(version, 128);
@@ -126,7 +127,7 @@ int main(int argc, char *argv[])
         PWR_init();
         TIME_init();
         WIFI_init();
-        // This will briefly tear down existing connections
+        // This will (potentially) briefly tear down existing connections
         BT_init();
 
         signal(SIGINT, sigHandler);
@@ -238,34 +239,44 @@ int main(int argc, char *argv[])
                 new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
         });
 
-        auto displayMenu = new MenuList(MenuItemType::Fixed, "Display",
-        {
+        std::vector<AbstractMenuItem*> displayItems = {
             new MenuItem{ListItemType::Generic, "Brightness", "Display brightness (0 to 10)", 0, 10, "",[]() -> std::any
             { return GetBrightness(); }, [](const std::any &value)
             { SetBrightness(std::any_cast<int>(value)); },
             []() { SetBrightness(SETTINGS_DEFAULT_BRIGHTNESS);}},
-            new MenuItem{ListItemType::Generic, "Color temperature", "Color temperature (0 to 40)", 0, 40, "",[]() -> std::any
-            { return GetColortemp(); }, [](const std::any &value)
-            { SetColortemp(std::any_cast<int>(value)); },
-            []() { SetColortemp(SETTINGS_DEFAULT_COLORTEMP);}},
-            new MenuItem{ListItemType::Generic, "Contrast", "Contrast enhancement (-4 to 5)", -4, 5, "",[]() -> std::any
-            { return GetContrast(); }, [](const std::any &value)
-            { SetContrast(std::any_cast<int>(value)); },
-            []() { SetContrast(SETTINGS_DEFAULT_CONTRAST);}},
-            new MenuItem{ListItemType::Generic, "Saturation", "Saturation enhancement (-5 to 5)", -5, 5, "",[]() -> std::any
-            { return GetSaturation(); }, [](const std::any &value)
-            { SetSaturation(std::any_cast<int>(value)); },
-            []() { SetSaturation(SETTINGS_DEFAULT_SATURATION);}},
-            new MenuItem{ListItemType::Generic, "Exposure", "Exposure enhancement (-4 to 5)", -4, 5, "",[]() -> std::any
-            { return GetExposure(); }, [](const std::any &value)
-            { SetExposure(std::any_cast<int>(value)); },
-            []() { SetExposure(SETTINGS_DEFAULT_EXPOSURE);}},
 
-            new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
-        });
+        };
 
-        auto systemMenu = new MenuList(MenuItemType::Fixed, "System",
+        // tg5050 does not have display engine, no contrast/saturation/exposure/colortemp for now
+        if(exactMatch("smartpro", device) || exactMatch("brick", device))
         {
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "Color temperature", "Color temperature (0 to 40)", 0, 40, "",[]() -> std::any
+                { return GetColortemp(); }, [](const std::any &value)
+                { SetColortemp(std::any_cast<int>(value)); },
+                []() { SetColortemp(SETTINGS_DEFAULT_COLORTEMP);}});
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "Contrast", "Contrast enhancement (-4 to 5)", -4, 5, "",[]() -> std::any
+                { return GetContrast(); }, [](const std::any &value)
+                { SetContrast(std::any_cast<int>(value)); },
+                []() { SetContrast(SETTINGS_DEFAULT_CONTRAST);}});
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "Saturation", "Saturation enhancement (-5 to 5)", -5, 5, "",[]() -> std::any
+                { return GetSaturation(); }, [](const std::any &value)
+                { SetSaturation(std::any_cast<int>(value)); },
+                []() { SetSaturation(SETTINGS_DEFAULT_SATURATION);}});
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "Exposure", "Exposure enhancement (-4 to 5)", -4, 5, "",[]() -> std::any
+                { return GetExposure(); }, [](const std::any &value)
+                { SetExposure(std::any_cast<int>(value)); },
+                []() { SetExposure(SETTINGS_DEFAULT_EXPOSURE);}});
+        }
+        displayItems.push_back(
+            new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu});
+
+        auto displayMenu = new MenuList(MenuItemType::Fixed, "Display", displayItems);
+
+        std::vector<AbstractMenuItem*> systemItems = {
             new MenuItem{ListItemType::Generic, "Volume", "Speaker volume", 
             {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}, 
             {"Muted", "5%","10%","15%","20%","25%","30%","35%","40%","45%","50%","55%","60%","65%","70%","75%","80%","85%","90%","95%","100%"}, 
@@ -323,13 +334,23 @@ int main(int argc, char *argv[])
             new MenuItem{ListItemType::Generic, "Use extracted file name", "Use the extracted file name instead of the archive name.\nOnly applies to cores that do not handle archives natively", {false, true}, on_off, 
             []() -> std::any{ return CFG_getUseExtractedFileName(); },
             [](const std::any &value){ CFG_setUseExtractedFileName(std::any_cast<bool>(value)); },
-            []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}},
-            new MenuItem{ListItemType::Generic, "Safe poweroff", "Bypasses the stock shutdown procedure to avoid the \"limbo bug\".\nInstructs the PMIC directly to soft disconnect the battery.", {false, true}, on_off, 
-            []() -> std::any { return CFG_getPowerOffProtection(); },
-            [](const std::any &value) { CFG_setPowerOffProtection(std::any_cast<bool>(value)); },
-            []() { CFG_setPowerOffProtection(CFG_DEFAULT_POWEROFFPROTECTION); }},
-            new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
-        });
+            []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}}
+        };
+
+        if(exactMatch("smartpro", device) || exactMatch("brick", device))
+        {
+            systemItems.push_back(
+                new MenuItem{ListItemType::Generic, "Safe poweroff", "Bypasses the stock shutdown procedure to avoid the \"limbo bug\".\nInstructs the PMIC directly to soft disconnect the battery.", {false, true}, on_off, 
+                []() -> std::any { return CFG_getPowerOffProtection(); },
+                [](const std::any &value) { CFG_setPowerOffProtection(std::any_cast<bool>(value)); },
+                []() { CFG_setPowerOffProtection(CFG_DEFAULT_POWEROFFPROTECTION); }}
+            );
+        }
+
+        systemItems.push_back(
+            new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu});
+
+        auto systemMenu = new MenuList(MenuItemType::Fixed, "System", systemItems);
 
         std::vector<AbstractMenuItem*> muteItems = 
         {
@@ -349,30 +370,38 @@ int main(int argc, char *argv[])
             []() -> std::any { return GetMutedBrightness(); }, [](const std::any &value)
             { SetMutedBrightness(std::any_cast<int>(value)); },
             []() { SetMutedBrightness(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
-            new MenuItem{ListItemType::Generic, "Color temperature when toggled", "Color temperature (0 to 40)", 
-            {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40}, 
-            {"Unchanged","0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40"},
-            []() -> std::any{ return GetMutedColortemp(); }, [](const std::any &value)
-            { SetMutedColortemp(std::any_cast<int>(value)); },
-            []() { SetMutedColortemp(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
-            new MenuItem{ListItemType::Generic, "Contrast when toggled", "Contrast enhancement (-4 to 5)", 
-            {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
-            {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
-            []() -> std::any  { return GetMutedContrast(); }, [](const std::any &value)
-            { SetMutedContrast(std::any_cast<int>(value)); },
-            []() { SetMutedContrast(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
-            new MenuItem{ListItemType::Generic, "Saturation when toggled", "Saturation enhancement (-5 to 5)", 
-            {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -5,-4,-3,-2,-1,0,1,2,3,4,5}, 
-            {"Unchanged","-5","-4","-3","-2","-1","0","1","2","3","4","5"}, 
-            []() -> std::any{ return GetMutedSaturation(); }, [](const std::any &value)
-            { SetMutedSaturation(std::any_cast<int>(value)); },
-            []() { SetMutedSaturation(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
-            new MenuItem{ListItemType::Generic, "Exposure when toggled", "Exposure enhancement (-4 to 5)", 
-            {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
-            {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
-            []() -> std::any  { return GetMutedExposure(); }, [](const std::any &value)
-            { SetMutedExposure(std::any_cast<int>(value)); },
-            []() { SetMutedExposure(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+        };
+        
+        if(exactMatch("smartpro", device) || exactMatch("brick", device))
+        {
+            muteItems.insert(muteItems.end(), {
+                new MenuItem{ListItemType::Generic, "Color temperature when toggled", "Color temperature (0 to 40)", 
+                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40}, 
+                {"Unchanged","0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40"},
+                []() -> std::any{ return GetMutedColortemp(); }, [](const std::any &value)
+                { SetMutedColortemp(std::any_cast<int>(value)); },
+                []() { SetMutedColortemp(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+                new MenuItem{ListItemType::Generic, "Contrast when toggled", "Contrast enhancement (-4 to 5)", 
+                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
+                {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+                []() -> std::any  { return GetMutedContrast(); }, [](const std::any &value)
+                { SetMutedContrast(std::any_cast<int>(value)); },
+                []() { SetMutedContrast(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+                new MenuItem{ListItemType::Generic, "Saturation when toggled", "Saturation enhancement (-5 to 5)", 
+                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -5,-4,-3,-2,-1,0,1,2,3,4,5}, 
+                {"Unchanged","-5","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+                []() -> std::any{ return GetMutedSaturation(); }, [](const std::any &value)
+                { SetMutedSaturation(std::any_cast<int>(value)); },
+                []() { SetMutedSaturation(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+                new MenuItem{ListItemType::Generic, "Exposure when toggled", "Exposure enhancement (-4 to 5)", 
+                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
+                {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+                []() -> std::any  { return GetMutedExposure(); }, [](const std::any &value)
+                { SetMutedExposure(std::any_cast<int>(value)); },
+                []() { SetMutedExposure(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}}});
+        }
+
+        muteItems.insert(muteItems.end(), {
             new MenuItem{ListItemType::Generic, "Turbo fire A", "Enable turbo fire A", {0, 1}, on_off, []() -> std::any
             { return GetMuteTurboA(); },
             [](const std::any &value) { SetMuteTurboA(std::any_cast<int>(value));},
@@ -404,8 +433,9 @@ int main(int argc, char *argv[])
             new MenuItem{ListItemType::Generic, "Turbo fire R2", "Enable turbo fire R2", {0, 1}, on_off, []() -> std::any
             { return GetMuteTurboR2(); },
             [](const std::any &value) { SetMuteTurboR2(std::any_cast<int>(value));},
-            []() { SetMuteTurboR2(0);}},
-        };
+            []() { SetMuteTurboR2(0);}}
+        });
+
         if(is_brick) {
             muteItems.push_back(
                 new MenuItem{ListItemType::Generic, "Dpad mode when toggled", "Dpad: default. Joystick: Dpad exclusively acts as analog stick.\nBoth: Dpad and Joystick inputs at the same time.", {0, 1, 2}, {"Dpad", "Joystick", "Both"}, []() -> std::any

@@ -46,6 +46,10 @@ mkdir -p "$LOGS_PATH"
 mkdir -p "$SHARED_USERDATA_PATH/.minui"
 
 export TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
+if [ "$TRIMUI_MODEL" = "Trimui Smart Pro S" ]; then
+	export DEVICE="smartpros"
+fi
+
 export IS_NEXT="yes"
 
 #######################################
