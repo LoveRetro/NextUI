@@ -151,10 +151,10 @@ batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 # load bt/wifi modules
 # thermald for fan control
 
-echo before modprobe `cat /proc/uptime` >> /tmp/nextui_boottime
-modprobe aic8800_fdrv.ko
-modprobe aic8800_btlpm.ko
-echo after modprobe `cat /proc/uptime` >> /tmp/nextui_boottime
+#echo before modprobe `cat /proc/uptime` >> /tmp/nextui_boottime
+#modprobe aic8800_fdrv.ko
+#modprobe aic8800_btlpm.ko
+#echo after modprobe `cat /proc/uptime` >> /tmp/nextui_boottime
 
 # start fresh, will be populated on the next connect
 #rm -f $USERDATA_PATH/.asoundrc
@@ -181,9 +181,9 @@ echo after bluetooth `cat /proc/uptime` >> /tmp/nextui_boottime
 # TODO: still the case here, do we need to handle the off state explicitly?
 wifion=$(nextval.elf wifi | sed -n 's/.*"wifi": \([0-9]*\).*/\1/p')
 if [ "$wifion" -eq 0 ]; then
-	/etc/wifi/wifi_init.sh stop > /dev/null 2>&1 &
+	$SYSTEM_PATH/etc/wifi/wifi_init.sh stop > /dev/null 2>&1 &
 else 
-	/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
+	$SYSTEM_PATH/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
 fi
 echo after wifi `cat /proc/uptime` >> /tmp/nextui_boottime
 
