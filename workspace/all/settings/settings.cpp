@@ -126,9 +126,12 @@ int main(int argc, char *argv[])
         PAD_init();
         PWR_init();
         TIME_init();
-        WIFI_init();
-        // This will (potentially) briefly tear down existing connections
-        BT_init();
+        // Native wifi and BT do not need explicit init here, and it saves us waiting for it
+        if(!is_smartpro_s) {
+            WIFI_init();
+            // This will (potentially) briefly tear down existing connections
+            BT_init();
+        }
 
         signal(SIGINT, sigHandler);
         signal(SIGTERM, sigHandler);
