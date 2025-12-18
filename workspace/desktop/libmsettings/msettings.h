@@ -46,6 +46,14 @@ void SetHDMI(int value); // 0-1
 
 int GetMute(void);
 
+// unused
+inline int GetFanSpeed(void) {
+    return 0;
+}
+inline void SetFanSpeed(int value) {
+    // do nothing
+}
+
 // custom mute mode persistence layer
 
 int GetMutedBrightness(void);
