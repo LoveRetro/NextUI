@@ -1,24 +1,50 @@
 #!/bin/sh
 
-start() {
-	echo "disable_scan_offload=1" > /etc/wifi/wpa_supplicant_overlay.conf
-	rfkill.elf unblock wifi
+WIFI_INTERFACE="wlan0"
+WPA_SUPPLICANT_CONF="/etc/wifi/wpa_supplicant/wpa_supplicant.conf"
 
-	/etc/init.d/wpa_supplicant start
+start() {
+	# Load WiFi driver module if not loaded
+	if ! lsmod | grep -q aic8800_fdrv; then
+		modprobe aic8800_fdrv.ko 2>/dev/null
+		sleep 0.5
+	fi
 	
-	wifi_daemon -s &
+	# Unblock wifi via rfkill
+	rfkill unblock wifi 2>/dev/null
+	
+	# Bring up the interface
+	ip link set $WIFI_INTERFACE up 2>/dev/null
+	
+	# Create default wpa_supplicant.conf if it doesn't exist
+	if [ ! -f "$WPA_SUPPLICANT_CONF" ]; then
+		mkdir -p "$(dirname "$WPA_SUPPLICANT_CONF")"
+		cat > "$WPA_SUPPLICANT_CONF" << 'EOF'
+# cat /etc/wifi/wpa_supplicant/wpa_supplicant.conf
+ctrl_interface=/etc/wifi/sockets
+disable_scan_offload=1
+update_config=1
+wowlan_triggers=any
+
+EOF
+	fi
+	
+	# Start wpa_supplicant if not running
+	if ! pidof wpa_supplicant > /dev/null 2>&1; then
+		wpa_supplicant -B -i $WIFI_INTERFACE -c $WPA_SUPPLICANT_CONF -D nl80211 2>/dev/null
+		sleep 0.5
+	fi
 }
 
 stop() {
-	d=`ps | grep wifi_daemon | grep -v grep`
-	[ -n "$d" ] && {
-		killall wifi_daemon
-		sleep 1
-	}
-
-	/etc/init.d/wpa_supplicant stop
-
-	rfkill.elf block wifi
+	# Disconnect and disable
+	wpa_cli -i $WIFI_INTERFACE disconnect 2>/dev/null
+	
+	# Bring down interface
+	ip link set $WIFI_INTERFACE down 2>/dev/null
+	
+	# Block wifi to save power
+	rfkill block wifi 2>/dev/null
 }
 
 case "$1" in
