@@ -2398,7 +2398,7 @@ int PLAT_pickSampleRate(int requested, int max) {
 char* PLAT_getModel(void) {
 	char* model = getenv("TRIMUI_MODEL");
 	if (model) return model;
-	return "Trimui Smart Pro";
+	return "Trimui Smart Pro S";
 }
 
 void PLAT_getOsVersionInfo(char* output_str, size_t max_len)

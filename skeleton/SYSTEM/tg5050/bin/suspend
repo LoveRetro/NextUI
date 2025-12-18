@@ -20,14 +20,13 @@ before() {
 	if pgrep bluetoothd; then
 		bluetoothd_running=1
 		>&2 echo "Stopping bluetoothd..."
-		/etc/bluetooth/bt_init.sh stop || true
+		$SYSTEM_PATH/etc/bluetooth/bt_init.sh stop || true
 	fi
 
 	if pgrep wpa_supplicant; then
 		wifid_running=1
-		>&2 echo "Stopping wifi_daemon..."
-		killall -15 wifi_daemon || true
-		/etc/wifi/wifi_init.sh stop || true
+		>&2 echo "Stopping wpa_supplicant..."
+		$SYSTEM_PATH/etc/wifi/wifi_init.sh stop || true
 	fi
 }
 
@@ -36,7 +35,7 @@ after() {
 
 	if [ -n "$wifid_running" ]; then
 		>&2 echo "Starting wpa_supplicant..."
-		/etc/wifi/wifi_init.sh start || true
+		$SYSTEM_PATH/etc/wifi/wifi_init.sh start || true
 	fi
 
 	if [ -n "$bluetoothd_running" ]; then

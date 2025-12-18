@@ -422,35 +422,6 @@ void GFX_startFrame(void)
 	frame_start = SDL_GetTicks();
 }
 
-void chmodfile(const char *file, int writable)
-{
-	struct stat statbuf;
-	if (stat(file, &statbuf) == 0)
-	{
-		mode_t newMode;
-		if (writable)
-		{
-			// Add write permissions for all users
-			newMode = statbuf.st_mode | S_IWUSR | S_IWGRP | S_IWOTH;
-		}
-		else
-		{
-			// Remove write permissions for all users
-			newMode = statbuf.st_mode & ~(S_IWUSR | S_IWGRP | S_IWOTH);
-		}
-
-		// Apply the new permissions
-		if (chmod(file, newMode) != 0)
-		{
-			printf("chmod error %d %s", writable, file);
-		}
-	}
-	else
-	{
-		printf("stat error %d %s", writable, file);
-	}
-}
-
 uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned height, size_t pitch)
 {
 	if (!data)
@@ -3648,7 +3619,6 @@ void PWR_powerOff(int reboot)
 
 		system("killall -STOP keymon.elf");
 		system("killall -STOP batmon.elf");
-		system("killall -STOP wifi_daemon");
 		system("killall -STOP audiomon.elf");
 
 		PWR_updateFrequency(-1, false);
@@ -3677,8 +3647,6 @@ static void PWR_enterSleep(void)
 	}
 	system("killall -STOP keymon.elf");
 	system("killall -STOP batmon.elf");
-	// this is currently handled in wifi_init.sh from suspend script, doing this double or at same time causes problems
-	// system("killall -STOP wifi_daemon");
 	system("killall -STOP audiomon.elf");
 
 	PWR_updateFrequency(-1, false);
@@ -3693,8 +3661,6 @@ static void PWR_exitSleep(void)
 
 	system("killall -CONT keymon.elf");
 	system("killall -CONT batmon.elf");
-	// this is currently handled in wifi_init.sh from suspend script, doing this double or at same time causes problems
-	// system("killall -CONT wifi_daemon");
 	system("killall -CONT audiomon.elf");
 
 	if (GetHDMI())
