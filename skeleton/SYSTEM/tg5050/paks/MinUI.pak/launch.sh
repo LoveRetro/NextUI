@@ -54,9 +54,6 @@ export IS_NEXT="yes"
 
 #######################################
 
-echo 1 > /sys/class/drm/card0-DSI-1/rotate
-echo 1 > /sys/class/drm/card0-DSI-1/force_rotate
-
 # taken from stock launch sequence
 sync
 echo 3 > /proc/sys/vm/drop_caches
@@ -102,10 +99,6 @@ echo before leds `cat /proc/uptime` >> /tmp/nextui_boottime
 # leds_off
 echo 0 > /sys/class/led_anim/max_scale
 
-# Disable sleep from inputd until it is patched
-#touch /tmp/stay_awake
-#touch /tmp/stay_alive
-
 # start gpio input daemon
 trimui_inputd &
 
@@ -134,7 +127,6 @@ echo 0 > /sys/devices/system/cpu/cpu5/online
 #/sys/class/backlight/backlight0/brightness
 #set cpu fan level %s
 #/sys/class/thermal/cooling_device0/cur_state
-#/sys/class/power_supply/axp2202-battery/capacity
 #/sys/class/thermal/thermal_zone0/temp
 #/sys/class/thermal/thermal_zone1/temp
 #/sys/class/thermal/thermal_zone2/temp
@@ -148,13 +140,7 @@ keymon.elf & # &> $SDCARD_PATH/keymon.txt &
 batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 
 # TODO
-# load bt/wifi modules
 # thermald for fan control
-
-#echo before modprobe `cat /proc/uptime` >> /tmp/nextui_boottime
-#modprobe aic8800_fdrv.ko
-#modprobe aic8800_btlpm.ko
-#echo after modprobe `cat /proc/uptime` >> /tmp/nextui_boottime
 
 # start fresh, will be populated on the next connect
 #rm -f $USERDATA_PATH/.asoundrc

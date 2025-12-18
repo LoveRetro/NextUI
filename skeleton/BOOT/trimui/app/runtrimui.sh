@@ -4,12 +4,12 @@
 
 #wait for SDCARD mounted
 echo before mount `cat /proc/uptime` >> /tmp/nextui_boottime
-mounted=`cat /proc/mounts | grep SDCARD`
+mounted=`cat /proc/mounts | grep -i SDCARD`
 cnt=0
 while [ "$mounted" == "" ] && [ $cnt -lt 6 ] ; do
    sleep 0.5
    cnt=`expr $cnt + 1`
-   mounted=`cat /proc/mounts | grep SDCARD`
+   mounted=`cat /proc/mounts | grep -i SDCARD`
 done
 echo after mount `cat /proc/uptime` >> /tmp/nextui_boottime 
 
