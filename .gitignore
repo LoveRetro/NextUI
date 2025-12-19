@@ -32,7 +32,7 @@ libretro-common
 bl_enable
 bl_disable
 workspace/tg5040/wifimanager/daemon/wifi_daemon
-workspace/tg5040/audiomon/audiomon.elf
+audiomon.elf
 
 **/tmp
 
