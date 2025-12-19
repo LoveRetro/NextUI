@@ -744,64 +744,6 @@ void PLAT_setShaders(int nr) {
 	reloadShaderTextures = 1;
 }
 
-
-uint32_t PLAT_get_dominant_color() {
-    if (!vid.screen) {
-        fprintf(stderr, "Error: vid.screen is NULL.\n");
-        return 0;
-    }
-
-	// TODO: There is really no reason to limit to a single format, unless its a packed format
-	// its al very easy to accomodate other formats here.
-    if (vid.screen->format->format != SDL_PIXELFORMAT_ARGB8888) {
-        fprintf(stderr, "Error: Surface is not in ARGB8888 format.\n");
-        return 0;
-    }
-
-    uint32_t *pixels = (uint32_t *)vid.screen->pixels;
-    if (!pixels) {
-        fprintf(stderr, "Error: Unable to access pixel data.\n");
-        return 0;
-    }
-
-    int width = vid.screen->w;
-    int height = vid.screen->h;
-    int pixel_count = width * height;
-
-	// TODO: this can be way more efficient. No need to realloc each frame.
-    // Use dynamic memory allocation for the histogram
-    uint32_t *color_histogram = (uint32_t *)calloc(256 * 256 * 256, sizeof(uint32_t));
-    if (!color_histogram) {
-        fprintf(stderr, "Error: Memory allocation failed.\n");
-        return 0;
-    }
-
-    for (int i = 0; i < pixel_count; i++) {
-        uint32_t pixel = pixels[i];
-
-		// Extract RGB from ARGB8888
-		uint32_t rgb = pixel & 0x00FFFFFF;
-		color_histogram[rgb]++;
-    }
-
-    // Find the most frequent color
-    uint32_t dominant_color = 0;
-    uint32_t max_count = 0;
-    for (int i = 0; i < 256 * 256 * 256; i++) {
-        if (color_histogram[i] > max_count) {
-            max_count = color_histogram[i];
-            dominant_color = i;
-        }
-    }
-
-    free(color_histogram);
-
-    // Return as RGBA8888 with full alpha
-    return (dominant_color << 8) | 0xFF;
-}
-
-
-
 static void clearVideo(void) {
 	for (int i=0; i<3; i++) {
 		SDL_RenderClear(vid.renderer);
