@@ -7,6 +7,7 @@
 #include <math.h>
 #include <ctype.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include "defines.h"
 #include "utils.h"
 
@@ -414,6 +415,13 @@ void trimSortingMeta(char** str) { // eg. `001) `
 
 int exists(char* path) {
 	return access(path, F_OK)==0;
+}
+int getFileMTime(char* path, time_t* out) {
+	if (!path || !out) return 0;
+	struct stat st;
+	if (stat(path, &st) != 0) return 0;
+	*out = st.st_mtime;
+	return 1;
 }
 void touch(char* path) {
 	close(open(path, O_RDWR|O_CREAT, 0777));
