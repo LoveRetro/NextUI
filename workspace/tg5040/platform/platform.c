@@ -2914,10 +2914,6 @@ void PLAT_setNetworkTimeSync(bool on) {
 
 /////////////////////////
 
-bool PLAT_supportSSH() { return true; }
-
-/////////////////////////
-
 bool PLAT_hasWifi() { return true; }
 
 #define wifilog(fmt, ...) \

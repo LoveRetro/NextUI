@@ -131,6 +131,7 @@ static struct Core {
 
 int extract_zip(char** extensions);
 static bool getAlias(char* path, char* alias);
+static char* findFileInDir(const char *directory, const char *filename);
 
 static struct Game {
 	char path[MAX_PATH];
@@ -154,7 +155,7 @@ static void Game_open(char* path) {
 	// check first if the rom already is alive in tmp folder if so skip unzipping shit
 	char tmpfldr[255];
 	snprintf(tmpfldr, sizeof(tmpfldr), "/tmp/nextarch/%s", core.tag);
-	char *tmppath = PLAT_findFileInDir(tmpfldr, game.name);
+	char *tmppath = findFileInDir(tmpfldr, game.name);
 	if (tmppath) {
 		printf("File exists skipping unzipping and setting game.tmp_path: %s\n", tmppath);
 		strcpy((char*)game.tmp_path, tmppath);
@@ -5862,6 +5863,51 @@ static bool getAlias(char* path, char* alias) {
 		}
 	}
 	return is_alias;
+}
+
+static char* findFileInDir(const char *directory, const char *filename) {
+    char *filename_copy = strdup(filename);
+    if (!filename_copy) {
+        perror("strdup");
+        return NULL;
+    }
+
+    // Strip extension from filename
+    char *dot_pos = strrchr(filename_copy, '.');
+    if (dot_pos) {
+        *dot_pos = '\0';
+    }
+
+    DIR *dir = opendir(directory);
+    if (!dir) {
+        perror("opendir");
+        free(filename_copy);
+        return NULL;
+    }
+
+    struct dirent *entry;
+    char *full_path = NULL;
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strstr(entry->d_name, filename_copy) == entry->d_name) {
+            full_path = (char *)malloc(strlen(directory) + strlen(entry->d_name) + 2); // +1 for slash, +1 for '\0'
+            if (!full_path) {
+                perror("malloc");
+                closedir(dir);
+                free(filename_copy);
+                return NULL;
+            }
+
+            snprintf(full_path, strlen(directory) + strlen(entry->d_name) + 2, "%s/%s", directory, entry->d_name);
+            closedir(dir);
+            free(filename_copy);
+            return full_path;
+        }
+    }
+
+    closedir(dir);
+    free(filename_copy);
+    return NULL;
 }
 
 static int Menu_options(MenuList* list) {
