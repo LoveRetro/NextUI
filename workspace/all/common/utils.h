@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <time.h>
 
 int prefixMatch(char* pre, const char* str);
 int suffixMatch(char* suf,const char* str);
@@ -34,6 +35,7 @@ void trimTrailingNewlines(char* line);
 void trimSortingMeta(char** str);
 
 int exists(char* path);
+int getFileMTime(char* path, time_t* out);
 void touch(char* path);
 int toggle(char *path); // creates or removes file
 void putFile(char *path, char *contents);
