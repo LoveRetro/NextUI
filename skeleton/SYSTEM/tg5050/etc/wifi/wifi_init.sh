@@ -34,6 +34,11 @@ EOF
 		wpa_supplicant -B -i $WIFI_INTERFACE -c $WPA_SUPPLICANT_CONF -D nl80211 2>/dev/null
 		sleep 0.5
 	fi
+
+	# Start DHCP client to obtain IP address
+	if ! pidof udhcpc > /dev/null 2>&1; then	
+		udhcpc -i $WIFI_INTERFACE -b 2>/dev/null
+	fi
 }
 
 stop() {
@@ -45,6 +50,12 @@ stop() {
 	
 	# Block wifi to save power
 	rfkill block wifi 2>/dev/null
+
+	# Kill wpa_supplicant
+	pkill wpa_supplicant 2>/dev/null
+
+	# Kill DHCP client
+	pkill udhcpc 2>/dev/null
 }
 
 case "$1" in
