@@ -34,7 +34,6 @@ ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/rfkill && make all
 	cd ./$(PLATFORM)/btmanager && make all
 	cd ./$(PLATFORM)/wifimanager && make all
-	cd ./$(PLATFORM)/audiomon && make all
 	cd ./$(PLATFORM)/poweroff_next/ && make
 endif
 	cd ./$(PLATFORM)/libmsettings && make
@@ -55,6 +54,7 @@ endif
 	cd ./all/settings/ && make
 	cd ./all/ledcontrol/ && make
 	cd ./all/bootlogo/ && make
+	cd ./all/audiomon && make all
 endif
 ifdef COMPILE_CORES
 	make cores
@@ -81,7 +81,6 @@ ifneq ($(PLATFORM), desktop)
 ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/rfkill && make clean
 	cd ./$(PLATFORM)/wifimanager && make clean
-	cd ./$(PLATFORM)/audiomon && make clean
 	cd ./$(PLATFORM)/btmanager && make clean
 	cd ./$(PLATFORM)/poweroff_next/ && make clean
 endif
@@ -99,4 +98,5 @@ endif
 	cd ./all/minput/ && make clean
 	cd ./all/nextval/ && make clean
 	cd ./all/settings/ && make clean
+	cd ./all/audiomon/ && make clean
 	cd ./$(PLATFORM) && make clean

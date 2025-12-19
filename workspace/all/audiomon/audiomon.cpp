@@ -20,9 +20,10 @@
 extern "C"
 {
 #include "msettings.h"
+#include "defines.h"
 }
 
-#define AUDIO_FILE "/mnt/SDCARD/.userdata/tg5040/.asoundrc"
+#define AUDIO_FILE "/mnt/SDCARD/.userdata/" PLATFORM "/.asoundrc"
 #define UUID_A2DP "0000110b-0000-1000-8000-00805f9b34fb"
 
 enum DeviceType {
@@ -43,8 +44,8 @@ void ensureDirExists(const std::string& path) {
 }
 
 void writeAudioFile(const std::string& device_identifier, DeviceType type) {
-    ensureDirExists("/mnt/SDCARD/.userdata/tg5040");
-    std::ofstream f(AUDIO_FILE);
+    ensureDirExists(std::string(USERDATA_PATH));
+    std::ofstream f(std::string(AUDIO_FILE));
     if (!f) {
         log("Failed to write audio config file");
         return;
@@ -93,7 +94,7 @@ void clearAudioFile() {
     if (unlink(AUDIO_FILE) == 0) {
         log("Removed audio config");
         // Ensure it's flushed to disk
-        int dfd = open("/mnt/SDCARD/.userdata/tg5040", O_DIRECTORY);
+        int dfd = open(USERDATA_PATH, O_DIRECTORY);
         fsync(dfd); // sync the directory entry removal
         close(dfd);
     } else {

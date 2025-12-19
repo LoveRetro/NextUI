@@ -83,6 +83,7 @@ system:
 ifneq ($(PLATFORM), desktop)
 	cp ./workspace/$(PLATFORM)/keymon/keymon.elf ./build/SYSTEM/$(PLATFORM)/bin/
 	cp ./workspace/all/syncsettings/build/$(PLATFORM)/syncsettings.elf ./build/SYSTEM/$(PLATFORM)/bin/
+	cp ./workspace/all/audiomon/build/$(PLATFORM)/audiomon.elf ./build/SYSTEM/$(PLATFORM)/bin/
 endif
 	cp ./workspace/$(PLATFORM)/libmsettings/libmsettings.so ./build/SYSTEM/$(PLATFORM)/lib
 	cp ./workspace/all/nextui/build/$(PLATFORM)/nextui.elf ./build/SYSTEM/$(PLATFORM)/bin/
