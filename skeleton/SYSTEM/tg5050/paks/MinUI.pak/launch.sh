@@ -144,14 +144,9 @@ batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 # TODO: still the case here, do we need to handle the off state explicitly?
 bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')
 if [ "$bluetoothon" -eq 0 ]; then
-	/etc/bluetooth/bt_init.sh stop # > /dev/null 2>&1 &
+	$SYSTEM_PATH/etc/bluetooth/bt_init.sh stop > /dev/null 2>&1 &
 else
-	/etc/bluetooth/bt_init.sh start #  > /dev/null 2>&1 &
-	hpid=`pgrep hciattach`
-    if [ "$hpid" == "" ] ; then
-        hciattach -n ttyAS1 aic &
-    fi        
-    /etc/bluetooth/bluetoothd start
+	$SYSTEM_PATH/etc/bluetooth/bt_init.sh start > /dev/null 2>&1 &
 fi
 echo after bluetooth `cat /proc/uptime` >> /tmp/nextui_boottime
 
