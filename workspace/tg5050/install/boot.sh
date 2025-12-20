@@ -10,8 +10,13 @@ SYSTEM_PATH="$SDCARD_PATH/.system"
 echo 1 > /sys/class/drm/card0-DSI-1/rotate
 echo 1 > /sys/class/drm/card0-DSI-1/force_rotate
 
-echo ondemand > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-echo ondemand > /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor
+# splash
+/usr/trimui/bin/sdl2display /usr/trimui/bin/splash.png &
+
+echo after splash `cat /proc/uptime` >> /tmp/nextui_boottime
+
+echo schedutil > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+echo schedutil > /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor
 echo 408000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
 echo 2000000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
 echo 408000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq
@@ -42,11 +47,6 @@ TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
 echo 0 > /sys/class/led_anim/max_scale
 
 echo before splash `cat /proc/uptime` >> /tmp/nextui_boottime
-
-# splash
-/usr/trimui/bin/sdl2display /usr/trimui/bin/splash.png &
-
-echo after splash `cat /proc/uptime` >> /tmp/nextui_boottime
 
 # generic NextUI package install
 for pakz in $PAKZ_PATH; do
