@@ -64,11 +64,6 @@ sync
 # echo -n out > /sys/class/gpio/gpio335/direction
 # echo -n 1 > /sys/class/gpio/gpio335/value
 
-#fan off
-#echo 0 > /sys/class/thermal/cooling_device0/cur_state 
-# pretty much silent to me, and better that heat death
-echo 13 > /sys/class/thermal/cooling_device0/cur_state
-
 #rumble motor PH12
 echo 236 > /sys/class/gpio/export
 echo -n out > /sys/class/gpio/gpio236/direction
@@ -102,12 +97,12 @@ echo 0 > /sys/class/led_anim/max_scale
 # start gpio input daemon
 trimui_inputd &
 
-echo ondemand > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-echo ondemand > /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor
+echo schedutil > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+echo schedutil > /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor
 echo 408000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
-echo 1200000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
+echo 2000000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
 echo 408000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq
-echo 1200000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_max_freq
+echo 2160000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_max_freq
 
 # little Cortex-A55 CPU0 - 408Mhz to 1416Mhz
 echo 1 > /sys/devices/system/cpu/cpu0/online
@@ -123,8 +118,6 @@ echo 0 > /sys/devices/system/cpu/cpu7/online
 echo 0 > /sys/devices/system/cpu/cpu6/online
 echo 0 > /sys/devices/system/cpu/cpu5/online
 
-# stuff and strings todo
-#/sys/class/backlight/backlight0/brightness
 #set cpu fan level %s
 #/sys/class/thermal/cooling_device0/cur_state
 #/sys/class/thermal/thermal_zone0/temp
