@@ -140,23 +140,15 @@ batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 #audiomon.elf & # &> $SDCARD_PATH/audiomon.txt &
 
 # BT handling
-# on by default, disable based on systemval setting
-# TODO: still the case here, do we need to handle the off state explicitly?
 bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')
-if [ "$bluetoothon" -eq 0 ]; then
-	$SYSTEM_PATH/etc/bluetooth/bt_init.sh stop > /dev/null 2>&1 &
-else
+if [ "$bluetoothon" -eq 1 ]; then
 	$SYSTEM_PATH/etc/bluetooth/bt_init.sh start > /dev/null 2>&1 &
 fi
 echo after bluetooth `cat /proc/uptime` >> /tmp/nextui_boottime
 
 # wifi handling
-# on by default, disable based on systemval setting
-# TODO: still the case here, do we need to handle the off state explicitly?
 wifion=$(nextval.elf wifi | sed -n 's/.*"wifi": \([0-9]*\).*/\1/p')
-if [ "$wifion" -eq 0 ]; then
-	$SYSTEM_PATH/etc/wifi/wifi_init.sh stop > /dev/null 2>&1 &
-else 
+if [ "$wifion" -eq 1 ]; then
 	$SYSTEM_PATH/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
 fi
 echo after wifi `cat /proc/uptime` >> /tmp/nextui_boottime
