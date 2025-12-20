@@ -385,7 +385,7 @@ int main(int argc, char *argv[])
             GFX_flip(screen);
             dirty = 0;
         }
-        else GFX_delay();
+        else GFX_sync();
     }
 	PWR_quit();
 	PAD_quit();

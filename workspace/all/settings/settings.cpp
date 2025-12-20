@@ -548,7 +548,6 @@ int main(int argc, char *argv[])
         while (!appQuit)
         {
             GFX_startFrame();
-            uint32_t now = SDL_GetTicks();
             PAD_poll();
 
             ctx.menu->handleInput(ctx.dirty, appQuit);
@@ -619,6 +618,8 @@ int main(int argc, char *argv[])
 
                 // hdmimon();
             }
+            else
+                GFX_sync();
         }
 
         delete ctx.menu;
