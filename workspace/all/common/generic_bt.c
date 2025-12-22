@@ -255,7 +255,7 @@ void PLAT_bluetoothDiscovery(int on) {
 		// Clear old discovered devices
 		bt_clear_discovered_devices();
 		// Start scanning
-		system("bluetoothctl --timeout 1 scan on 2>/dev/null &");
+		system("bluetoothctl --timeout 60 scan on 2>/dev/null &");
 		bt_discovering = true;
 	} else {
 		btlog("Stopping BT discovery.\n");
