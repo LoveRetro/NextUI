@@ -52,10 +52,10 @@ stop() {
 	rfkill block wifi 2>/dev/null
 
 	# Kill wpa_supplicant
-	pkill wpa_supplicant 2>/dev/null
+	killall wpa_supplicant 2>/dev/null
 
 	# Kill DHCP client
-	pkill udhcpc 2>/dev/null
+	killall udhcpc 2>/dev/null
 }
 
 case "$1" in
