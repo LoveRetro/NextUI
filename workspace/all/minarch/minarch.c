@@ -13,11 +13,7 @@
 #include <zip.h> 
 #include <pthread.h>
 #include <glob.h>
-
-// minimal LZ4 API forward declarations (linked via -llz4)
-int LZ4_compress_fast(const char* src, char* dst, int srcSize, int dstCapacity, int acceleration);
-int LZ4_decompress_safe(const char* src, char* dst, int compressedSize, int dstCapacity);
-int LZ4_compressBound(int inputSize);
+#include <lz4.h>
 
 // libretro-common
 #include "libretro.h"
@@ -1729,19 +1725,27 @@ static int Rewind_step_back(void) {
 				nanosleep(&ts, NULL);
 				pthread_mutex_lock(&rewind_ctx.queue_mx);
 			}
+			// Hold queue_mx while copying prev_state to prevent new work from racing
+			pthread_mutex_lock(&rewind_ctx.lock);
+			if (rewind_ctx.has_prev_enc && rewind_ctx.prev_state_enc) {
+				memcpy(rewind_ctx.prev_state_dec, rewind_ctx.prev_state_enc, rewind_ctx.state_size);
+				rewind_ctx.has_prev_dec = 1;
+			} else {
+				rewind_ctx.has_prev_dec = 0;
+			}
+			pthread_mutex_unlock(&rewind_ctx.lock);
 			pthread_mutex_unlock(&rewind_ctx.queue_mx);
-		}
-		
-		// Copy the encoder's prev_state (which is the last state that was compressed)
-		// This is the state we need to XOR against to decode the most recent entry
-		pthread_mutex_lock(&rewind_ctx.lock);
-		if (rewind_ctx.has_prev_enc && rewind_ctx.prev_state_enc) {
-			memcpy(rewind_ctx.prev_state_dec, rewind_ctx.prev_state_enc, rewind_ctx.state_size);
-			rewind_ctx.has_prev_dec = 1;
 		} else {
-			rewind_ctx.has_prev_dec = 0;
+			// No worker thread, just copy under lock
+			pthread_mutex_lock(&rewind_ctx.lock);
+			if (rewind_ctx.has_prev_enc && rewind_ctx.prev_state_enc) {
+				memcpy(rewind_ctx.prev_state_dec, rewind_ctx.prev_state_enc, rewind_ctx.state_size);
+				rewind_ctx.has_prev_dec = 1;
+			} else {
+				rewind_ctx.has_prev_dec = 0;
+			}
+			pthread_mutex_unlock(&rewind_ctx.lock);
 		}
-		pthread_mutex_unlock(&rewind_ctx.lock);
 	}
 
 	pthread_mutex_lock(&rewind_ctx.lock);
@@ -4166,17 +4170,17 @@ static void input_poll_callback(void) {
 				}
 			}
 			else if (i==SHORTCUT_HOLD_FF) {
-			// don't allow turn off fast_forward with a release of the hold button 
-			// if it was initially turned on with the toggle button
-			if (PAD_justPressed(btn) || (!toggled_ff_on && PAD_justReleased(btn))) {
-				int pressed = PAD_isPressed(btn);
-				fast_forward = setFastForward(pressed);
-				ff_hold_active = pressed ? 1 : 0;
-				if (mapping->mod) ignore_menu = 1; // very unlikely but just in case
-			}
-			if (PAD_justReleased(btn) && toggled_ff_on) {
-				ff_hold_active = 0;
-			}
+				// don't allow turn off fast_forward with a release of the hold button 
+				// if it was initially turned on with the toggle button
+				if (PAD_justPressed(btn) || (!toggled_ff_on && PAD_justReleased(btn))) {
+					int pressed = PAD_isPressed(btn);
+					fast_forward = setFastForward(pressed);
+					ff_hold_active = pressed ? 1 : 0;
+					if (mapping->mod) ignore_menu = 1; // very unlikely but just in case
+				}
+				if (PAD_justReleased(btn) && toggled_ff_on) {
+					ff_hold_active = 0;
+				}
 			}
 			else if (i==SHORTCUT_HOLD_REWIND) {
 				rewind_pressed = PAD_isPressed(btn) ? 1 : 0;
@@ -4209,12 +4213,12 @@ static void input_poll_callback(void) {
 				}
 				else if (PAD_justReleased(btn)) {
 					if (mapping->mod) ignore_menu = 1;
-						break;
-					}
+					break;
 				}
-				// Trimui only
-				else if (PLAT_canTurbo() && i>=SHORTCUT_TOGGLE_TURBO_A && i<=SHORTCUT_TOGGLE_TURBO_R2) {
-					if (PAD_justPressed(btn)) {
+			}
+			// Trimui only
+			else if (PLAT_canTurbo() && i>=SHORTCUT_TOGGLE_TURBO_A && i<=SHORTCUT_TOGGLE_TURBO_R2) {
+				if (PAD_justPressed(btn)) {
 					switch(i) {
 						case SHORTCUT_TOGGLE_TURBO_A:  PLAT_toggleTurbo(BTN_ID_A); break;
 						case SHORTCUT_TOGGLE_TURBO_B:  PLAT_toggleTurbo(BTN_ID_B); break;
@@ -7542,28 +7546,28 @@ static void Menu_saveState(void) {
 }
 static void Menu_loadState(void) {
 	Menu_updateState();
-		
-		if (menu.save_exists) {
-			if (menu.total_discs) {
-				char slot_disc_name[256];
-				getFile(menu.txt_path, slot_disc_name, 256);
-		
+
+	if (menu.save_exists) {
+		if (menu.total_discs) {
+			char slot_disc_name[256];
+			getFile(menu.txt_path, slot_disc_name, 256);
+
 			char slot_disc_path[256];
 			if (slot_disc_name[0]=='/') strcpy(slot_disc_path, slot_disc_name);
 			else sprintf(slot_disc_path, "%s%s", menu.base_path, slot_disc_name);
-		
+
 			char* disc_path = menu.disc_paths[menu.disc];
 			if (!exactMatch(slot_disc_path, disc_path)) {
 				Game_changeDisc(slot_disc_path);
 			}
 		}
-		
-			state_slot = menu.slot;
-			putInt(menu.slot_path, menu.slot);
-			State_read();
-			Rewind_on_state_change();
-		}
+
+		state_slot = menu.slot;
+		putInt(menu.slot_path, menu.slot);
+		State_read();
+		Rewind_on_state_change();
 	}
+}
 
 static void Menu_loop(void) {
 
@@ -8166,60 +8170,59 @@ int main(int argc , char* argv[]) {
 	// release config when all is loaded
 	Config_free();
 
-		LOG_info("total startup time %ims\n\n",SDL_GetTicks());
-		while (!quit) {
-			GFX_startFrame();
-		
-				// if rewind is toggled, fast-forward toggle must stay off; fast-forward hold pauses rewind
-				int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
-				if (do_rewind) {
-					// Rewind_step_back returns: 0=buffer empty, 1=stepped back, 2=waiting for cadence
-					int rewind_result = Rewind_step_back();
-					rewinding = (rewind_result != 0);
-					if (rewind_result == 1) {
-						// Actually stepped back - run one frame to render the restored state
-						fast_forward = 0;
-						core.run();
-					}
-					else if (rewind_result == 2) {
-						// Waiting for cadence - don't run core, just re-render current frame
-						fast_forward = 0;
-						// Skip core.run() entirely to avoid advancing the game
-					}
-					else {
-						// Buffer empty: auto untoggle rewind, resume FF if it was paused for a hold
-						if (rewind_toggle) rewind_toggle = 0;
-						if (ff_paused_by_rewind_hold && ff_toggled) {
-							ff_paused_by_rewind_hold = 0;
-							fast_forward = setFastForward(1);
-						}
-						core.run();
-						Rewind_push(0);
-					}
+	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
+	while (!quit) {
+		GFX_startFrame();
+
+		// if rewind is toggled, fast-forward toggle must stay off; fast-forward hold pauses rewind
+		int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
+		if (do_rewind) {
+			// Rewind_step_back returns: 0=buffer empty, 1=stepped back, 2=waiting for cadence
+			int rewind_result = Rewind_step_back();
+			rewinding = (rewind_result != 0);
+			if (rewind_result == 1) {
+				// Actually stepped back - run one frame to render the restored state
+				fast_forward = 0;
+				core.run();
 			}
-				else {
-					Rewind_sync_encode_state();
-					rewinding = 0;
-					if (ff_paused_by_rewind_hold && !rewind_pressed) {
-						// resume fast forward after hold rewind ends
-						if (ff_toggled) fast_forward = setFastForward(1);
-						ff_paused_by_rewind_hold = 0;
-					}
-
-					int ff_runs = 1;
-					if (fast_forward) {
-						// when "None" is selected, assume a modest 2x instead of unbounded spam
-						ff_runs = max_ff_speed ? max_ff_speed + 1 : 2;
-					}
-
-					for (int ff_step = 0; ff_step < ff_runs; ff_step++) {
-						core.run();
-						Rewind_push(0);
-					}
+			else if (rewind_result == 2) {
+				// Waiting for cadence - don't run core, just re-render current frame
+				fast_forward = 0;
+				// Skip core.run() entirely to avoid advancing the game
+			}
+			else {
+				// Buffer empty: auto untoggle rewind, resume FF if it was paused for a hold
+				if (rewind_toggle) rewind_toggle = 0;
+				if (ff_paused_by_rewind_hold && ff_toggled) {
+					ff_paused_by_rewind_hold = 0;
+					fast_forward = setFastForward(1);
 				}
-			limitFF();
-			trackFPS();
-			
+				core.run();
+				Rewind_push(0);
+			}
+		}
+		else {
+			Rewind_sync_encode_state();
+			rewinding = 0;
+			if (ff_paused_by_rewind_hold && !rewind_pressed) {
+				// resume fast forward after hold rewind ends
+				if (ff_toggled) fast_forward = setFastForward(1);
+				ff_paused_by_rewind_hold = 0;
+			}
+
+			int ff_runs = 1;
+			if (fast_forward) {
+				// when "None" is selected, assume a modest 2x instead of unbounded spam
+				ff_runs = max_ff_speed ? max_ff_speed + 1 : 2;
+			}
+
+			for (int ff_step = 0; ff_step < ff_runs; ff_step++) {
+				core.run();
+				Rewind_push(0);
+			}
+		}
+		limitFF();
+		trackFPS();
 
 		if (has_pending_opt_change) {
 			has_pending_opt_change = 0;
@@ -8231,7 +8234,6 @@ int main(int argc , char* argv[]) {
 			chooseSyncRef();
 		}
 
-		
 		if (show_menu) {
 			PWR_updateFrequency(PWR_UPDATE_FREQ,1);
 			Menu_loop();
