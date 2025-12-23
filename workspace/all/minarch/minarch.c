@@ -64,6 +64,7 @@ enum {
 #define MINARCH_DEFAULT_REWIND_BUFFER_MB 64
 #define MINARCH_DEFAULT_REWIND_GRANULARITY 16
 #define MINARCH_DEFAULT_REWIND_AUDIO 0
+#define MINARCH_DEFAULT_REWIND_LZ4_ACCELERATION 2
 
 // default frontend options
 static int screen_scaling = SCALE_ASPECT;
@@ -92,6 +93,7 @@ static int rewind_cfg_buffer_mb = MINARCH_DEFAULT_REWIND_BUFFER_MB;
 static int rewind_cfg_granularity = MINARCH_DEFAULT_REWIND_GRANULARITY;
 static int rewind_cfg_audio = MINARCH_DEFAULT_REWIND_AUDIO;
 static int rewind_cfg_skip_compress = 0;
+static int rewind_cfg_lz4_acceleration = MINARCH_DEFAULT_REWIND_LZ4_ACCELERATION;
 static int overclock = 3; // auto
 static int has_custom_controllers = 0;
 static int gamepad_type = 0; // index in gamepad_labels/gamepad_values
@@ -1159,6 +1161,7 @@ typedef struct {
 	int enabled;
 	int audio;
 	int compress;
+	int lz4_acceleration;
 	int logged_first;
 
 	// async capture/compression
@@ -1391,10 +1394,9 @@ static int Rewind_compress_state(const uint8_t *src, size_t *dest_len) {
 	}
 
 	int max_dst = (int)rewind_ctx.scratch_size;
-	// Use LZ4_compress_fast with acceleration=2 for faster compression
 	// acceleration: 1=default speed, higher=faster but slightly lower ratio
-	// For rewind states that compress extremely well (often <5%), speed is more valuable
-	int res = LZ4_compress_fast((const char*)compress_src, (char*)rewind_ctx.scratch, (int)rewind_ctx.state_size, max_dst, 2);
+	int accel = rewind_ctx.lz4_acceleration > 0 ? rewind_ctx.lz4_acceleration : MINARCH_DEFAULT_REWIND_LZ4_ACCELERATION;
+	int res = LZ4_compress_fast((const char*)compress_src, (char*)rewind_ctx.scratch, (int)rewind_ctx.state_size, max_dst, accel);
 	if (res <= 0) return -1;
 	*dest_len = (size_t)res;
 
@@ -1435,9 +1437,19 @@ static int Rewind_init(size_t state_size) {
 			state_size, rewind_ctx.capacity);
 		rewind_ctx.compress = 1;
 	}
+	int accel = rewind_cfg_lz4_acceleration;
+	if (accel < 1) accel = 1;
+	if (accel > 64) accel = 64;
+	rewind_ctx.lz4_acceleration = accel;
 	rewind_ctx.logged_first = 0;
-	LOG_info("Rewind: config enable=%i bufferMB=%i interval=%ims audio=%i compression=%s\n",
-		enable, buf_mb, gran, audio, rewind_ctx.compress ? "lz4" : "raw");
+	if (rewind_ctx.compress) {
+		LOG_info("Rewind: config enable=%i bufferMB=%i interval=%ims audio=%i compression=lz4 (accel=%i)\n",
+			enable, buf_mb, gran, audio, rewind_ctx.lz4_acceleration);
+	}
+	else {
+		LOG_info("Rewind: config enable=%i bufferMB=%i interval=%ims audio=%i compression=raw\n",
+			enable, buf_mb, gran, audio);
+	}
 	rewind_ctx.buffer = calloc(1, rewind_ctx.capacity);
 	if (!rewind_ctx.buffer) {
 		LOG_error("Rewind: failed to allocate buffer\n");
@@ -1950,6 +1962,22 @@ static char* rewind_granularity_labels[] = {
 	"600 ms",
 	NULL
 };
+static char* rewind_compression_accel_values[] = {
+	"1",
+	"2",
+	"4",
+	"8",
+	"12",
+	NULL
+};
+static char* rewind_compression_accel_labels[] = {
+	"1 (best ratio)",
+	"2 (default)",
+	"4 (fast)",
+	"8 (faster)",
+	"12 (fastest)",
+	NULL
+};
 static char* ambient_labels[] = {
 	"Off",
 	"All",
@@ -2186,8 +2214,9 @@ enum {
 	FE_OPT_REWIND_ENABLE,
 	FE_OPT_REWIND_BUFFER,
 	FE_OPT_REWIND_GRANULARITY,
-	FE_OPT_REWIND_AUDIO,
 	FE_OPT_REWIND_SKIP_COMPRESSION,
+	FE_OPT_REWIND_COMPRESSION_ACCEL,
+	FE_OPT_REWIND_AUDIO,
 	FE_OPT_COUNT,
 };
 
@@ -2582,22 +2611,32 @@ static struct Config {
 				.values = rewind_granularity_values,
 				.labels = rewind_granularity_labels,
 			},
-			[FE_OPT_REWIND_AUDIO] = {
-				.key	= "minarch_rewind_audio",
-				.name	= "Rewind audio",
-				.desc	= "Play or mute audio when rewinding.",
-				.default_value = MINARCH_DEFAULT_REWIND_AUDIO ? 1 : 0,
-				.value = MINARCH_DEFAULT_REWIND_AUDIO ? 1 : 0,
-				.count = 2,
-				.values = onoff_labels,
-				.labels = onoff_labels,
-			},
 			[FE_OPT_REWIND_SKIP_COMPRESSION] = {
 				.key	= "minarch_rewind_skip_compression",
 				.name	= "Skip Rewind Compression",
 				.desc	= "Store raw rewind snapshots instead of compressing them.\nUses more memory but less CPU.",
 				.default_value = 0,
 				.value = 0,
+				.count = 2,
+				.values = onoff_labels,
+				.labels = onoff_labels,
+			},
+			[FE_OPT_REWIND_COMPRESSION_ACCEL] = {
+				.key	= "minarch_rewind_compression_speed",
+				.name	= "Rewind Compression Speed",
+				.desc	= "LZ4 acceleration used for rewind snapshots.\nLower values compress more but use more CPU.",
+				.default_value = 1, // value 2
+				.value = 1,
+				.count = 5,
+				.values = rewind_compression_accel_values,
+				.labels = rewind_compression_accel_labels,
+			},
+			[FE_OPT_REWIND_AUDIO] = {
+				.key	= "minarch_rewind_audio",
+				.name	= "Rewind audio",
+				.desc	= "Play or mute audio when rewinding.",
+				.default_value = MINARCH_DEFAULT_REWIND_AUDIO ? 1 : 0,
+				.value = MINARCH_DEFAULT_REWIND_AUDIO ? 1 : 0,
 				.count = 2,
 				.values = onoff_labels,
 				.labels = onoff_labels,
@@ -2977,10 +3016,13 @@ static void Config_syncFrontend(char* key, int value) {
 	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_SKIP_COMPRESSION].key)) {
 		i = FE_OPT_REWIND_SKIP_COMPRESSION;
 	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_COMPRESSION_ACCEL].key)) {
+		i = FE_OPT_REWIND_COMPRESSION_ACCEL;
+	}
 	if (i==-1) return;
 	Option* option = &config.frontend.options[i];
 	option->value = value;
-	if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_BUFFER || i==FE_OPT_REWIND_GRANULARITY || i==FE_OPT_REWIND_AUDIO || i==FE_OPT_REWIND_SKIP_COMPRESSION) {
+	if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_BUFFER || i==FE_OPT_REWIND_GRANULARITY || i==FE_OPT_REWIND_AUDIO || i==FE_OPT_REWIND_SKIP_COMPRESSION || i==FE_OPT_REWIND_COMPRESSION_ACCEL) {
 		const char* sval = option->values && option->values[value] ? option->values[value] : "0";
 		int parsed = 0;
 		if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_AUDIO || i==FE_OPT_REWIND_SKIP_COMPRESSION) {
@@ -2996,6 +3038,7 @@ static void Config_syncFrontend(char* key, int value) {
 			case FE_OPT_REWIND_GRANULARITY: rewind_cfg_granularity = parsed; break;
 			case FE_OPT_REWIND_AUDIO: rewind_cfg_audio = parsed; break;
 			case FE_OPT_REWIND_SKIP_COMPRESSION: rewind_cfg_skip_compress = parsed; break;
+			case FE_OPT_REWIND_COMPRESSION_ACCEL: rewind_cfg_lz4_acceleration = parsed; break;
 		}
 		// Only call Rewind_init if core is initialized; early config reads happen before
 		// the core is ready and will be followed by an explicit Rewind_init later
