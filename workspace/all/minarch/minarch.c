@@ -62,6 +62,15 @@ enum {
 #define MINARCH_DEFAULT_REWIND_AUDIO 0
 #define MINARCH_DEFAULT_REWIND_LZ4_ACCELERATION 2
 
+// rewind implementation constants
+#define REWIND_ENTRY_SIZE_HINT 4096           // assumed avg entry size for capacity calc
+#define REWIND_MIN_ENTRIES 8                  // minimum entry table size
+#define REWIND_POOL_SIZE_SMALL 3              // capture pool size for small states
+#define REWIND_POOL_SIZE_LARGE 4              // capture pool size for large states
+#define REWIND_LARGE_STATE_THRESHOLD (2*1024*1024)  // 2MB threshold for pool sizing
+#define REWIND_MAX_BUFFER_MB 256              // max rewind buffer size
+#define REWIND_MAX_LZ4_ACCELERATION 64        // max LZ4 acceleration value
+
 // default frontend options
 static int screen_scaling = SCALE_ASPECT;
 static int resampling_quality = 2;
@@ -1120,6 +1129,7 @@ static void State_resume(void) {
 typedef struct {
 	size_t offset;
 	size_t size;
+	uint8_t is_keyframe;  // 1 if this entry is a full state, 0 if delta-encoded
 } RewindEntry;
 
 typedef struct {
@@ -1189,8 +1199,8 @@ static int rewind_warn_empty = 0;
 static int last_rewind_pressed = 0;
 
 static void* Rewind_worker_thread(void *arg);
-static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len);
-static int Rewind_compress_state(const uint8_t *src, size_t *dest_len);
+static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len, int is_keyframe);
+static int Rewind_compress_state(const uint8_t *src, size_t *dest_len, int *is_keyframe_out);
 static void Rewind_wait_for_worker_idle(void);
 
 static void Rewind_free(void) {
@@ -1312,7 +1322,7 @@ static int Rewind_entry_overlaps_range(int entry_idx, size_t range_start, size_t
 	return (e_start < range_end) && (range_start < e_end);
 }
 
-static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len) {
+static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len, int is_keyframe) {
 	if (dest_len >= rewind_ctx.capacity) {
 		LOG_error("Rewind: state does not fit in buffer\n");
 		return 0;
@@ -1357,6 +1367,7 @@ static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len)
 	RewindEntry *e = &rewind_ctx.entries[rewind_ctx.entry_head];
 	e->offset = write_offset;
 	e->size = dest_len;
+	e->is_keyframe = is_keyframe ? 1 : 0;
 
 	rewind_ctx.head = write_offset + dest_len;
 	if (rewind_ctx.head >= rewind_ctx.capacity) rewind_ctx.head = 0;
@@ -1371,11 +1382,13 @@ static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len)
 	return 1;
 }
 
-static int Rewind_compress_state(const uint8_t *src, size_t *dest_len) {
+static int Rewind_compress_state(const uint8_t *src, size_t *dest_len, int *is_keyframe_out) {
 	if (!rewind_ctx.scratch || !dest_len) return -1;
+	if (is_keyframe_out) *is_keyframe_out = 1; // default to keyframe
 	if (!rewind_ctx.compress) {
 		*dest_len = rewind_ctx.state_size;
 		memcpy(rewind_ctx.scratch, src, rewind_ctx.state_size);
+		if (is_keyframe_out) *is_keyframe_out = 1; // raw snapshots are always keyframes
 		if (!rewind_ctx.logged_first) {
 			rewind_ctx.logged_first = 1;
 			LOG_info("Rewind: compression disabled, storing %zu bytes per snapshot\n", rewind_ctx.state_size);
@@ -1411,6 +1424,9 @@ static int Rewind_compress_state(const uint8_t *src, size_t *dest_len) {
 	if (res <= 0) return -1;
 	*dest_len = (size_t)res;
 
+	// Report whether this was a keyframe (full state) or delta
+	if (is_keyframe_out) *is_keyframe_out = used_delta ? 0 : 1;
+
 	// Update prev_state_enc with the current state for next delta
 	if (rewind_ctx.prev_state_enc) {
 		memcpy(rewind_ctx.prev_state_enc, src, rewind_ctx.state_size);
@@ -1439,7 +1455,7 @@ static int Rewind_init(size_t state_size) {
 
 	size_t buffer_mb = buf_mb;
 	if (buffer_mb < 1) buffer_mb = 1;
-	if (buffer_mb > 256) buffer_mb = 256;
+	if (buffer_mb > REWIND_MAX_BUFFER_MB) buffer_mb = REWIND_MAX_BUFFER_MB;
 
 	rewind_ctx.capacity = buffer_mb * 1024 * 1024;
 	rewind_ctx.compress = skip_compress ? 0 : 1;
@@ -1450,7 +1466,7 @@ static int Rewind_init(size_t state_size) {
 	}
 	int accel = rewind_cfg_lz4_acceleration;
 	if (accel < 1) accel = 1;
-	if (accel > 64) accel = 64;
+	if (accel > REWIND_MAX_LZ4_ACCELERATION) accel = REWIND_MAX_LZ4_ACCELERATION;
 	rewind_ctx.lz4_acceleration = accel;
 	rewind_ctx.logged_first = 0;
 	if (rewind_ctx.compress) {
@@ -1496,8 +1512,8 @@ static int Rewind_init(size_t state_size) {
 	rewind_ctx.has_prev_enc = 0;
 	rewind_ctx.has_prev_dec = 0;
 
-	int entry_cap = rewind_ctx.capacity / 4096;
-	if (entry_cap < 8) entry_cap = 8;
+	int entry_cap = rewind_ctx.capacity / REWIND_ENTRY_SIZE_HINT;
+	if (entry_cap < REWIND_MIN_ENTRIES) entry_cap = REWIND_MIN_ENTRIES;
 	rewind_ctx.entry_capacity = entry_cap;
 	rewind_ctx.entries = calloc(entry_cap, sizeof(RewindEntry));
 	if (!rewind_ctx.entries) {
@@ -1535,7 +1551,7 @@ static int Rewind_init(size_t state_size) {
 
 	// set up async capture buffers
 	// Larger states need a deeper pool to avoid drops; cap to a modest size to limit RAM
-	rewind_ctx.pool_size = (state_size > 2 * 1024 * 1024) ? 4 : 3;
+	rewind_ctx.pool_size = (state_size > REWIND_LARGE_STATE_THRESHOLD) ? REWIND_POOL_SIZE_LARGE : REWIND_POOL_SIZE_SMALL;
 	if (rewind_ctx.pool_size < 1) rewind_ctx.pool_size = 1;
 	rewind_ctx.capture_pool = calloc(rewind_ctx.pool_size, sizeof(uint8_t*));
 	rewind_ctx.capture_gen = calloc(rewind_ctx.pool_size, sizeof(unsigned int));
@@ -1605,11 +1621,12 @@ static void* Rewind_worker_thread(void *arg) {
 		}
 
 		size_t dest_len = rewind_ctx.scratch_size;
+		int is_keyframe = 1;
 		pthread_mutex_lock(&rewind_ctx.lock);
 		if (gen == rewind_ctx.generation) {
-			int res = Rewind_compress_state(rewind_ctx.capture_pool[slot], &dest_len);
+			int res = Rewind_compress_state(rewind_ctx.capture_pool[slot], &dest_len, &is_keyframe);
 			if (res == 0) {
-				Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
+				Rewind_write_entry_locked(rewind_ctx.scratch, dest_len, is_keyframe);
 			}
 			else {
 				LOG_error("Rewind: compression failed (%i)\n", res);
@@ -1668,11 +1685,12 @@ static void Rewind_push(int force) {
 				pthread_mutex_unlock(&rewind_ctx.queue_mx);
 
 				size_t dest_len = rewind_ctx.scratch_size;
+				int is_keyframe = 1;
 				pthread_mutex_lock(&rewind_ctx.lock);
 				if (gen == rewind_ctx.generation) {
-					int res = Rewind_compress_state(rewind_ctx.capture_pool[queued_slot], &dest_len);
+					int res = Rewind_compress_state(rewind_ctx.capture_pool[queued_slot], &dest_len, &is_keyframe);
 					if (res == 0) {
-						Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
+						Rewind_write_entry_locked(rewind_ctx.scratch, dest_len, is_keyframe);
 					}
 					else {
 						LOG_error("Rewind: compression failed (%i)\n", res);
@@ -1699,15 +1717,16 @@ static void Rewind_push(int force) {
 			}
 
 			size_t dest_len = rewind_ctx.scratch_size;
+			int is_keyframe = 1;
 			pthread_mutex_lock(&rewind_ctx.lock);
-			int res = Rewind_compress_state(rewind_ctx.state_buf, &dest_len);
+			int res = Rewind_compress_state(rewind_ctx.state_buf, &dest_len, &is_keyframe);
 			if (res != 0) {
 				pthread_mutex_unlock(&rewind_ctx.lock);
 				LOG_error("Rewind: compression failed (sync fallback) (%i)\n", res);
 				return;
 			}
 
-			Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
+			Rewind_write_entry_locked(rewind_ctx.scratch, dest_len, is_keyframe);
 			pthread_mutex_unlock(&rewind_ctx.lock);
 			return;
 		}
@@ -1740,15 +1759,16 @@ static void Rewind_push(int force) {
 	}
 
 	size_t dest_len = rewind_ctx.scratch_size;
+	int is_keyframe = 1;
 	pthread_mutex_lock(&rewind_ctx.lock);
-	int res = Rewind_compress_state(rewind_ctx.state_buf, &dest_len);
+	int res = Rewind_compress_state(rewind_ctx.state_buf, &dest_len, &is_keyframe);
 	if (res != 0) {
 		pthread_mutex_unlock(&rewind_ctx.lock);
 		LOG_error("Rewind: compression failed (%i)\n", res);
 		return;
 	}
 
-	Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
+	Rewind_write_entry_locked(rewind_ctx.scratch, dest_len, is_keyframe);
 	pthread_mutex_unlock(&rewind_ctx.lock);
 	rewind_ctx.drop_warned = 0;
 }
@@ -1795,13 +1815,20 @@ static int Rewind_step_back(void) {
 
 	int decode_ok = 1;
 	if (rewind_ctx.compress) {
-		// Decompress into delta_buf first (it contains the XOR delta)
+		// Decompress into delta_buf first (it may contain XOR delta or full state)
 		int res = LZ4_decompress_safe((const char*)rewind_ctx.buffer + e->offset,
 			(char*)rewind_ctx.delta_buf, (int)e->size, (int)rewind_ctx.state_size);
 		if (res < (int)rewind_ctx.state_size) {
 			LOG_error("Rewind: decompress failed (res=%i, want=%zu, compressed=%zu, offset=%zu, idx=%d head=%d tail=%d count=%d buf_head=%zu buf_tail=%zu)\n",
 				res, rewind_ctx.state_size, e->size, e->offset, idx, rewind_ctx.entry_head, rewind_ctx.entry_tail, rewind_ctx.entry_count, rewind_ctx.head, rewind_ctx.tail);
 			decode_ok = 0;
+		} else if (e->is_keyframe) {
+			// This is a keyframe (full state), just copy it directly
+			memcpy(rewind_ctx.state_buf, rewind_ctx.delta_buf, rewind_ctx.state_size);
+			if (rewind_ctx.prev_state_dec) {
+				memcpy(rewind_ctx.prev_state_dec, rewind_ctx.state_buf, rewind_ctx.state_size);
+				rewind_ctx.has_prev_dec = 1;
+			}
 		} else if (rewind_ctx.has_prev_dec && rewind_ctx.prev_state_dec) {
 			// Delta decompression: XOR the delta with prev_state_dec to recover the actual state
 			// prev_state_dec holds the current state (state N), delta = state_N XOR state_(N-1)
@@ -1822,8 +1849,9 @@ static int Rewind_step_back(void) {
 			// Update prev_state_dec to the state we just recovered (for next rewind step)
 			memcpy(rewind_ctx.prev_state_dec, result, state_size);
 		} else {
-			// No previous state for delta - this is the first frame or after reset
-			// The compressed data is the full state, just copy it
+			// Delta frame but no previous state - this shouldn't happen with proper keyframe tracking
+			// Fall back to treating it as a full state (may produce incorrect results)
+			LOG_warn("Rewind: delta frame without previous state, results may be incorrect\n");
 			memcpy(rewind_ctx.state_buf, rewind_ctx.delta_buf, rewind_ctx.state_size);
 			if (rewind_ctx.prev_state_dec) {
 				memcpy(rewind_ctx.prev_state_dec, rewind_ctx.state_buf, rewind_ctx.state_size);
