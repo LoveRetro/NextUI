@@ -1191,6 +1191,7 @@ static int last_rewind_pressed = 0;
 static void* Rewind_worker_thread(void *arg);
 static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len);
 static int Rewind_compress_state(const uint8_t *src, size_t *dest_len);
+static void Rewind_wait_for_worker_idle(void);
 
 static void Rewind_free(void) {
 	if (rewind_ctx.worker_running) {
@@ -1230,6 +1231,7 @@ static void Rewind_free(void) {
 
 static void Rewind_reset(void) {
 	if (!rewind_ctx.enabled) return;
+	Rewind_wait_for_worker_idle();
 	pthread_mutex_lock(&rewind_ctx.lock);
 	rewind_ctx.head = rewind_ctx.tail = 0;
 	rewind_ctx.entry_head = rewind_ctx.entry_tail = rewind_ctx.entry_count = 0;
@@ -1286,6 +1288,19 @@ static void Rewind_drop_oldest(void) {
 	pthread_mutex_lock(&rewind_ctx.lock);
 	Rewind_drop_oldest_locked();
 	pthread_mutex_unlock(&rewind_ctx.lock);
+}
+
+// Block until the worker has drained its queue and is not holding any slots
+static void Rewind_wait_for_worker_idle(void) {
+	if (!rewind_ctx.worker_running || !rewind_ctx.pool_size) return;
+	pthread_mutex_lock(&rewind_ctx.queue_mx);
+	while (rewind_ctx.queue_count > 0 || rewind_ctx.free_count < rewind_ctx.pool_size) {
+		pthread_mutex_unlock(&rewind_ctx.queue_mx);
+		struct timespec ts = {0, 1000000}; // 1ms
+		nanosleep(&ts, NULL);
+		pthread_mutex_lock(&rewind_ctx.queue_mx);
+	}
+	pthread_mutex_unlock(&rewind_ctx.queue_mx);
 }
 
 // Check if an entry overlaps with range [range_start, range_end) in a non-wrapping buffer region
@@ -1591,13 +1606,16 @@ static void* Rewind_worker_thread(void *arg) {
 
 		size_t dest_len = rewind_ctx.scratch_size;
 		pthread_mutex_lock(&rewind_ctx.lock);
-		int res = Rewind_compress_state(rewind_ctx.capture_pool[slot], &dest_len);
-		if (res == 0) {
-			Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
+		if (gen == rewind_ctx.generation) {
+			int res = Rewind_compress_state(rewind_ctx.capture_pool[slot], &dest_len);
+			if (res == 0) {
+				Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
+			}
+			else {
+				LOG_error("Rewind: compression failed (%i)\n", res);
+			}
 		}
-		else {
-			LOG_error("Rewind: compression failed (%i)\n", res);
-		}
+		// If generation changed mid-flight, drop silently after releasing the slot
 		pthread_mutex_unlock(&rewind_ctx.lock);
 
 		pthread_mutex_lock(&rewind_ctx.queue_mx);
@@ -1633,12 +1651,45 @@ static void Rewind_push(int force) {
 
 	if (rewind_ctx.worker_running && rewind_ctx.pool_size) {
 		int slot = -1;
-		pthread_mutex_lock(&rewind_ctx.queue_mx);
-		if (rewind_ctx.free_count && rewind_ctx.queue_count < rewind_ctx.queue_capacity) {
-			slot = rewind_ctx.free_stack[--rewind_ctx.free_count];
-			rewind_ctx.capture_busy[slot] = 1;
+		while (1) {
+			pthread_mutex_lock(&rewind_ctx.queue_mx);
+			if (rewind_ctx.free_count && rewind_ctx.queue_count < rewind_ctx.queue_capacity) {
+				slot = rewind_ctx.free_stack[--rewind_ctx.free_count];
+				rewind_ctx.capture_busy[slot] = 1;
+				pthread_mutex_unlock(&rewind_ctx.queue_mx);
+				break;
+			}
+			// No free slot: synchronously process the oldest queued capture to preserve ordering
+			if (rewind_ctx.queue_count > 0) {
+				int queued_slot = rewind_ctx.queue[rewind_ctx.queue_head];
+				unsigned int gen = rewind_ctx.capture_gen[queued_slot];
+				rewind_ctx.queue_head = (rewind_ctx.queue_head + 1) % rewind_ctx.queue_capacity;
+				rewind_ctx.queue_count -= 1;
+				pthread_mutex_unlock(&rewind_ctx.queue_mx);
+
+				size_t dest_len = rewind_ctx.scratch_size;
+				pthread_mutex_lock(&rewind_ctx.lock);
+				if (gen == rewind_ctx.generation) {
+					int res = Rewind_compress_state(rewind_ctx.capture_pool[queued_slot], &dest_len);
+					if (res == 0) {
+						Rewind_write_entry_locked(rewind_ctx.scratch, dest_len);
+					}
+					else {
+						LOG_error("Rewind: compression failed (%i)\n", res);
+					}
+				}
+				pthread_mutex_unlock(&rewind_ctx.lock);
+
+				pthread_mutex_lock(&rewind_ctx.queue_mx);
+				rewind_ctx.capture_busy[queued_slot] = 0;
+				rewind_ctx.free_stack[rewind_ctx.free_count++] = queued_slot;
+				pthread_mutex_unlock(&rewind_ctx.queue_mx);
+				// loop again to try to grab a free slot for the current frame
+				continue;
+			}
+			pthread_mutex_unlock(&rewind_ctx.queue_mx);
+			break;
 		}
-		pthread_mutex_unlock(&rewind_ctx.queue_mx);
 
 		if (slot < 0) {
 			// worker is busy; fall back to synchronous capture so we don't miss cadence
@@ -1717,35 +1768,15 @@ static int Rewind_step_back(void) {
 	// 2. Copy the last compressed state as our delta reference
 	if (!rewinding && rewind_ctx.compress && rewind_ctx.prev_state_dec) {
 		// Wait for worker to finish all pending compressions
-		if (rewind_ctx.worker_running && rewind_ctx.locks_ready) {
-			pthread_mutex_lock(&rewind_ctx.queue_mx);
-			while (rewind_ctx.queue_count > 0) {
-				pthread_mutex_unlock(&rewind_ctx.queue_mx);
-				struct timespec ts = {0, 1000000}; // 1ms
-				nanosleep(&ts, NULL);
-				pthread_mutex_lock(&rewind_ctx.queue_mx);
-			}
-			// Hold queue_mx while copying prev_state to prevent new work from racing
-			pthread_mutex_lock(&rewind_ctx.lock);
-			if (rewind_ctx.has_prev_enc && rewind_ctx.prev_state_enc) {
-				memcpy(rewind_ctx.prev_state_dec, rewind_ctx.prev_state_enc, rewind_ctx.state_size);
-				rewind_ctx.has_prev_dec = 1;
-			} else {
-				rewind_ctx.has_prev_dec = 0;
-			}
-			pthread_mutex_unlock(&rewind_ctx.lock);
-			pthread_mutex_unlock(&rewind_ctx.queue_mx);
+		Rewind_wait_for_worker_idle();
+		pthread_mutex_lock(&rewind_ctx.lock);
+		if (rewind_ctx.has_prev_enc && rewind_ctx.prev_state_enc) {
+			memcpy(rewind_ctx.prev_state_dec, rewind_ctx.prev_state_enc, rewind_ctx.state_size);
+			rewind_ctx.has_prev_dec = 1;
 		} else {
-			// No worker thread, just copy under lock
-			pthread_mutex_lock(&rewind_ctx.lock);
-			if (rewind_ctx.has_prev_enc && rewind_ctx.prev_state_enc) {
-				memcpy(rewind_ctx.prev_state_dec, rewind_ctx.prev_state_enc, rewind_ctx.state_size);
-				rewind_ctx.has_prev_dec = 1;
-			} else {
-				rewind_ctx.has_prev_dec = 0;
-			}
-			pthread_mutex_unlock(&rewind_ctx.lock);
+			rewind_ctx.has_prev_dec = 0;
 		}
+		pthread_mutex_unlock(&rewind_ctx.lock);
 	}
 
 	pthread_mutex_lock(&rewind_ctx.lock);
