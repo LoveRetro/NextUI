@@ -1,5 +1,8 @@
 #include "btmenu.hpp"
 #include "keyboardprompt.hpp"
+#ifdef HAS_BTAGENT
+#   include "btagent.hpp"
+#endif
 
 #include <unordered_set>
 #include <map>
@@ -35,6 +38,13 @@ Menu::Menu(const int &globalQuit, int &globalDirty) : MenuList(MenuItemType::Fix
     MenuList::performLayout((SDL_Rect){0, 0, FIXED_WIDTH, FIXED_HEIGHT});
     layout_called = false;
 
+#ifdef HAS_BTAGENT
+    // Only NoInputNoOutput for now, but this needs to interact with the UI thread if we 
+    // ever want to show a PIN or passkey
+    pairingAgent = new PairingAgent();
+    pairingAgent->startPairingWindow();
+#endif
+
     worker = std::thread{&Menu::updater, this};
 }
 
@@ -43,6 +53,11 @@ Menu::~Menu()
     quit = true;
     if (worker.joinable())
         worker.join();
+
+#ifdef HAS_BTAGENT
+    pairingAgent->stopPairingWindow();
+    delete pairingAgent;
+#endif
 }
 
 InputReactionHint Menu::handleInput(int &dirty, int &quit)
