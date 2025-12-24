@@ -33,7 +33,7 @@ void save_settings() {
     LOG_debug("saving settings plat\n");
     char diskfilename[256];
     char* device = getenv("DEVICE");
-    is_brick = exactMatch("brick", device);
+    int is_brick = exactMatch("brick", device);
     int maxlights = 4;
     // TODO: this shouldnt be in shared userdata
     if(is_brick) {
@@ -214,7 +214,7 @@ void handle_light_input(LightSettings *light, SDL_Event *event, int selected_set
 int main(int argc, char *argv[])
 {
     char* device = getenv("DEVICE");
-    is_brick = exactMatch("brick", device);
+    int is_brick = exactMatch("brick", device);
     
 	InitSettings();
     PWR_setCPUSpeed(CPU_SPEED_MENU);
@@ -385,7 +385,7 @@ int main(int argc, char *argv[])
             GFX_flip(screen);
             dirty = 0;
         }
-        else GFX_delay();
+        else GFX_sync();
     }
 	PWR_quit();
 	PAD_quit();

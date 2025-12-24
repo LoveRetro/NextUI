@@ -144,8 +144,7 @@ int main(int argc , char* argv[]) {
 	int was_online = PLAT_isOnline();
     int had_bt = PLAT_btIsConnected();
 	while(!quit) {
-		uint32_t frame_start = SDL_GetTicks();
-		
+		GFX_startFrame();
 		PAD_poll();
 		
 		if (PAD_justRepeated(BTN_UP)) {
