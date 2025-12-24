@@ -1478,8 +1478,7 @@ static int Rewind_init(size_t state_size) {
 	if (rewind_ctx.compress) {
 		LOG_info("Rewind: config enable=%i bufferMB=%i interval=%ims audio=%i compression=lz4 (accel=%i)\n",
 			enable, buf_mb, gran, audio, rewind_ctx.lz4_acceleration);
-	}
-	else {
+	} else {
 		LOG_info("Rewind: config enable=%i bufferMB=%i interval=%ims audio=%i compression=raw\n",
 			enable, buf_mb, gran, audio);
 	}
@@ -1587,8 +1586,7 @@ static int Rewind_init(size_t state_size) {
 		rewind_ctx.pool_size = 0;
 		rewind_ctx.queue_capacity = 0;
 		rewind_ctx.free_count = 0;
-	}
-	else {
+	} else {
 		rewind_ctx.worker_running = 1;
 	}
 
@@ -1633,8 +1631,7 @@ static void* Rewind_worker_thread(void *arg) {
 			int res = Rewind_compress_state(rewind_ctx.capture_pool[slot], &dest_len, &is_keyframe);
 			if (res == 0) {
 				Rewind_write_entry_locked(rewind_ctx.scratch, dest_len, is_keyframe);
-			}
-			else {
+			} else {
 				LOG_error("Rewind: compression failed (%i)\n", res);
 			}
 		}
@@ -1659,8 +1656,7 @@ static void Rewind_push(int force) {
 		if (rewind_ctx.use_time_cadence) {
 			if (rewind_ctx.last_push_ms && (int)(now_ms - rewind_ctx.last_push_ms) < rewind_ctx.interval_ms) return;
 			rewind_ctx.last_push_ms = now_ms;
-		}
-		else {
+		} else {
 			rewind_ctx.frame_counter += 1;
 			if (rewind_ctx.frame_counter < rewind_ctx.granularity_frames) return;
 			rewind_ctx.frame_counter = 0;
@@ -1697,8 +1693,7 @@ static void Rewind_push(int force) {
 					int res = Rewind_compress_state(rewind_ctx.capture_pool[queued_slot], &dest_len, &is_keyframe);
 					if (res == 0) {
 						Rewind_write_entry_locked(rewind_ctx.scratch, dest_len, is_keyframe);
-					}
-					else {
+					} else {
 						LOG_error("Rewind: compression failed (%i)\n", res);
 					}
 				}
@@ -1897,7 +1892,6 @@ static int Rewind_step_back(void) {
 	if (rewind_ctx.entry_count==0) {
 		rewind_ctx.head = rewind_ctx.tail = 0;
 	}
-	int remaining = rewind_ctx.entry_count;
 	pthread_mutex_unlock(&rewind_ctx.lock);
 
 	rewinding = 1;
@@ -3120,7 +3114,6 @@ static void Config_syncFrontend(char* key, int value) {
 			rewinding = 0;
 			ff_paused_by_rewind_hold = 0;
 		}
-		if (core.initialized) Rewind_on_state_change();
 	}
 }
 
