@@ -1328,6 +1328,12 @@ static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len,
 		return 0;
 	}
 
+	// If the entry table is full, drop the oldest entry *before* writing so we don't
+	// overwrite its metadata (entry_head == entry_tail when full).
+	if (rewind_ctx.entry_count == rewind_ctx.entry_capacity) {
+		Rewind_drop_oldest_locked();
+	}
+
 	size_t write_offset = rewind_ctx.head;
 
 	// If this write would go past the end of the buffer, wrap to 0
@@ -1906,17 +1912,15 @@ static void Rewind_sync_encode_state(void) {
 	if (!rewinding) return; // Only sync if we were actually rewinding
 	
 	pthread_mutex_lock(&rewind_ctx.lock);
-	
-	// Clear all existing entries - they were compressed against a different delta chain
-	// and cannot be decompressed correctly after we resume with a new chain
-	rewind_ctx.head = rewind_ctx.tail = 0;
-	rewind_ctx.entry_head = rewind_ctx.entry_tail = rewind_ctx.entry_count = 0;
-	
-	// The decoder's prev_state_dec contains the state we rewound to
-	// This becomes the new reference for future compressions
+
+	// The decoder's prev_state_dec contains the state we rewound to.
+	// Use it as the new reference for future compressions so the existing
+	// rewind history remains valid and we can continue rewinding further back.
 	if (rewind_ctx.has_prev_dec && rewind_ctx.prev_state_dec && rewind_ctx.prev_state_enc) {
 		memcpy(rewind_ctx.prev_state_enc, rewind_ctx.prev_state_dec, rewind_ctx.state_size);
 		rewind_ctx.has_prev_enc = 1;
+	} else {
+		rewind_ctx.has_prev_enc = 0;
 	}
 	
 	pthread_mutex_unlock(&rewind_ctx.lock);
