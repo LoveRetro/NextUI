@@ -11,8 +11,7 @@ GUEST_WORKSPACE=/root/workspace
 
 GIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain
 INIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain/.build
-# Use local image if it exists, otherwise use the specified remote image
-IMAGE_NAME=$(shell docker images -q $(PLATFORM)-toolchain:latest 2>/dev/null | head -1 | grep -q . && echo "$(PLATFORM)-toolchain:latest" || echo "ghcr.io/helaas/tg5040-toolchain:modernize-lz4")
+IMAGE_NAME=ghcr.io/loveretro/$(PLATFORM)-toolchain:modernize
 
 
 all: $(INIT_IF_NECESSARY)
