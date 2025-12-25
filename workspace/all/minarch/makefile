@@ -29,8 +29,6 @@ CFLAGS  += $(OPT) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS	 += -lmsettings -lsamplerate
 LDFLAGS  += -llz4
-# In the modernized toolchain image, liblz4 is available under /usr/lib/aarch64-linux-gnu
-LDFLAGS  += -L/usr/lib/aarch64-linux-gnu
 ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
 CFLAGS += `pkg-config --cflags libzip`
