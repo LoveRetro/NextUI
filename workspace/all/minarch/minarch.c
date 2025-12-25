@@ -1278,7 +1278,7 @@ static void Rewind_reset(void) {
 }
 
 static size_t Rewind_free_space_locked(void) {
-	if (rewind_ctx.entry_count>0 && rewind_ctx.head==rewind_ctx.tail) return 0;
+	if (rewind_ctx.entry_count > 0 && rewind_ctx.head == rewind_ctx.tail) return 0;
 	if (rewind_ctx.head >= rewind_ctx.tail)
 		return rewind_ctx.capacity - (rewind_ctx.head - rewind_ctx.tail);
 	else
@@ -1290,14 +1290,9 @@ static void Rewind_drop_oldest_locked(void) {
 	rewind_ctx.tail = (e->offset + e->size) % rewind_ctx.capacity;
 	rewind_ctx.entry_tail = (rewind_ctx.entry_tail + 1) % rewind_ctx.entry_capacity;
 	rewind_ctx.entry_count -= 1;
-	if (rewind_ctx.entry_count==0) {
+	if (rewind_ctx.entry_count == 0) {
 		rewind_ctx.head = rewind_ctx.tail = 0;
 	}
-}
-static void Rewind_drop_oldest(void) {
-	pthread_mutex_lock(&rewind_ctx.lock);
-	Rewind_drop_oldest_locked();
-	pthread_mutex_unlock(&rewind_ctx.lock);
 }
 
 // Block until the worker has drained its queue and is not holding any slots
@@ -1407,16 +1402,11 @@ static int Rewind_compress_state(const uint8_t *src, size_t *dest_len, int *is_k
 	const uint8_t *compress_src = src;
 	int used_delta = 0;
 	if (rewind_ctx.has_prev_enc && rewind_ctx.prev_state_enc && rewind_ctx.delta_buf) {
-		size_t i = 0;
 		size_t state_size = rewind_ctx.state_size;
 		uint8_t *delta = rewind_ctx.delta_buf;
 		const uint8_t *prev = rewind_ctx.prev_state_enc;
-		// Process 8 bytes at a time for better performance
-		for (; i + 8 <= state_size; i += 8) {
-			*(uint64_t*)(delta + i) = *(const uint64_t*)(src + i) ^ *(const uint64_t*)(prev + i);
-		}
-		// Handle remaining bytes
-		for (; i < state_size; i++) {
+		// Byte-by-byte XOR to avoid unaligned memory access issues
+		for (size_t i = 0; i < state_size; i++) {
 			delta[i] = src[i] ^ prev[i];
 		}
 		compress_src = delta;
@@ -1459,9 +1449,10 @@ static int Rewind_init(size_t state_size) {
 		return 0;
 	}
 
-	size_t buffer_mb = buf_mb;
-	if (buffer_mb < 1) buffer_mb = 1;
-	if (buffer_mb > REWIND_MAX_BUFFER_MB) buffer_mb = REWIND_MAX_BUFFER_MB;
+	// Bounds check before size_t conversion to avoid negative int issues
+	if (buf_mb < 1) buf_mb = 1;
+	if (buf_mb > REWIND_MAX_BUFFER_MB) buf_mb = REWIND_MAX_BUFFER_MB;
+	size_t buffer_mb = (size_t)buf_mb;
 
 	rewind_ctx.capacity = buffer_mb * 1024 * 1024;
 	rewind_ctx.compress = skip_compress ? 0 : 1;
@@ -1834,17 +1825,12 @@ static int Rewind_step_back(void) {
 			// Delta decompression: XOR the delta with prev_state_dec to recover the actual state
 			// prev_state_dec holds the current state (state N), delta = state_N XOR state_(N-1)
 			// So: state_(N-1) = delta XOR state_N = delta XOR prev_state_dec
-			size_t i = 0;
 			size_t state_size = rewind_ctx.state_size;
 			uint8_t *result = rewind_ctx.state_buf;
 			const uint8_t *delta = rewind_ctx.delta_buf;
 			const uint8_t *prev = rewind_ctx.prev_state_dec;
-			// Process 8 bytes at a time for better performance
-			for (; i + 8 <= state_size; i += 8) {
-				*(uint64_t*)(result + i) = *(const uint64_t*)(delta + i) ^ *(const uint64_t*)(prev + i);
-			}
-			// Handle remaining bytes
-			for (; i < state_size; i++) {
+			// Byte-by-byte XOR to avoid unaligned memory access issues
+			for (size_t i = 0; i < state_size; i++) {
 				result[i] = delta[i] ^ prev[i];
 			}
 			// Update prev_state_dec to the state we just recovered (for next rewind step)
@@ -1889,7 +1875,7 @@ static int Rewind_step_back(void) {
 	// pop newest
 	rewind_ctx.entry_head = idx;
 	rewind_ctx.entry_count -= 1;
-	if (rewind_ctx.entry_count==0) {
+	if (rewind_ctx.entry_count == 0) {
 		rewind_ctx.head = rewind_ctx.tail = 0;
 	}
 	pthread_mutex_unlock(&rewind_ctx.lock);
@@ -1926,7 +1912,7 @@ static void Rewind_on_state_change(void) {
 	LOG_info("Rewind: state changed, buffer re-seeded\n");
 }
 
-	///////////////////////////////
+///////////////////////////////
 
 typedef struct Option {
 	char* key;
@@ -8221,8 +8207,8 @@ int main(int argc , char* argv[]) {
 	initShaders();
 	Config_readOptions();
 	applyShaderSettings();
-	Rewind_init(core.serialize_size());
-	Rewind_on_state_change();
+	Rewind_init(core.serialize_size ? core.serialize_size() : 0);
+	if (core.serialize_size) Rewind_on_state_change();
 	// release config when all is loaded
 	Config_free();
 
