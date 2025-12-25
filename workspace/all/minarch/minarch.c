@@ -1977,6 +1977,7 @@ static char* rewind_buffer_labels[] = {
 	"32",
 	"64",
 	"128",
+	"256",
 	NULL
 };
 static char* rewind_granularity_values[] = {
@@ -2644,7 +2645,7 @@ static struct Config {
 				.desc	= "Memory reserved for rewind snapshots.\nIncrease for longer rewind times.",
 				.default_value = 3, // 64MB
 				.value = 3,
-				.count = 5,
+				.count = 6,
 				.values = rewind_buffer_labels,
 				.labels = rewind_buffer_labels,
 			},
