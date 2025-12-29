@@ -371,8 +371,8 @@ int main(int argc, char* argv[]) {
         // Handle D-Bus events
         if (dbus_fd >= 0 && FD_ISSET(dbus_fd, &readfds)) {
             dbus_connection_read_write(conn, 0);
-            DBusMessage* msg = dbus_connection_pop_message(conn);
-            if (msg) {
+            
+            while (DBusMessage* msg = dbus_connection_pop_message(conn)) {
                 if (dbus_message_is_signal(msg, "org.freedesktop.DBus.Properties", "PropertiesChanged")) {
                     const char* path = dbus_message_get_path(msg);
                     if (path && std::string(path).find("dev_") != std::string::npos) {
