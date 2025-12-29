@@ -674,8 +674,8 @@ void turboR2(int value) {
 
 int scaleVolume(int value) {
     if (value <= 0) return 0;
-    if (value >= 20) return 63;
-    return 23 + 2 * value;
+    if (value >= 20) return 100;
+    return 5 * value;
 }
 
 int scaleBrightness(int value) {
@@ -851,7 +851,7 @@ void SetRawVolume(int val) { // in: 0-100
             snprintf(cmd, sizeof(cmd), "amixer sset \"%s\" -M %d%% &> /dev/null", ctl_name, val);
             system(cmd);
 			//printf("Set '%s' to %d%%\n", ctl_name, val); fflush(stdout);
-        }
+		}
     } 
 	else if (GetAudioSink() == AUDIO_SINK_USBDAC) {
 		// USB DAC path: use card 1

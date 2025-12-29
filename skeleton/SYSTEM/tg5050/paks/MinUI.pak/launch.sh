@@ -23,6 +23,7 @@ export USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
 export SHARED_USERDATA_PATH="$SDCARD_PATH/.userdata/shared"
 export LOGS_PATH="$USERDATA_PATH/logs"
 export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
+export HOME="$USERDATA_PATH"
 
 #######################################
 
@@ -103,6 +104,10 @@ echo 408000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
 echo 2000000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
 echo 408000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq
 echo 2160000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_max_freq
+
+# Very little libretro cores profit from multithreading, even stock OS is 
+# only very seldomly using more than 1+2 cores. Use as a baseline, the 
+# higher-end cores can just enable more cores themselves if needed.
 
 # little Cortex-A55 CPU0 - 408Mhz to 1416Mhz
 echo 1 > /sys/devices/system/cpu/cpu0/online
