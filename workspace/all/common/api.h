@@ -347,9 +347,10 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 
 void GFX_ApplyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius);
 void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius);
-void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, SDL_Rect* rect, int radius);
-void GFX_ApplyRoundedCorners_RGBA8888(SDL_Surface* surface, SDL_Rect* rect, int radius);
-void BlitRGBA4444toRGB565(SDL_Surface* src, SDL_Surface* dest, SDL_Rect* dest_rect);
+// for both ARGB44444 and RGBA4444
+void GFX_ApplyRoundedCorners_4444(SDL_Surface* surface, SDL_Rect* rect, int radius);
+// for both ARGB8888 and RGBA8888
+void GFX_ApplyRoundedCorners_8888(SDL_Surface* surface, SDL_Rect* rect, int radius);
 ///////////////////////////////
 
 typedef struct SND_Frame {
@@ -547,7 +548,6 @@ int PLAT_shouldWake(void);
 
 SDL_Surface* PLAT_initVideo(void);
 void PLAT_quitVideo(void);
-uint32_t PLAT_get_dominant_color(void);
 void PLAT_clearVideo(SDL_Surface* screen);
 void PLAT_clearAll(void);
 void PLAT_setVsync(int vsync);
@@ -590,7 +590,6 @@ void PLAT_scrollTextTexture(
     SDL_Color color,
     float transparency
 );
-void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
 void PLAT_vsync(int remaining);
 scaler_t PLAT_getScaler(GFX_Renderer* renderer);
 void PLAT_blitRenderer(GFX_Renderer* renderer);
@@ -598,20 +597,10 @@ void PLAT_flip(SDL_Surface* screen, int sync);
 void PLAT_GL_Swap();
 void GFX_GL_Swap();
 unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight);
-unsigned char* PLAT_pixelscaler(const unsigned char* src, int sw, int sh, int scale, int* outW, int* outH);
 void PLAT_GPU_Flip();
 void PLAT_setShaders(int nr);
 void PLAT_resetShaders();
 void PLAT_clearShaders();
-void PLAT_setShader1Filter(int value);
-void PLAT_setShader2Filter(int value);
-void PLAT_setShader3Filter(int value);
-void PLAT_setShaderUpscale1(int nr);
-void PLAT_setShaderUpscale2(int nr);
-void PLAT_setShaderUpscale3(int nr);
-void PLAT_setShader1(const char* filename);
-void PLAT_setShader2(const char* filename);
-void PLAT_setShader3(const char* filename);
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *inputtype);
 void PLAT_initShaders();
 ShaderParam* PLAT_getShaderPragmas(int i);

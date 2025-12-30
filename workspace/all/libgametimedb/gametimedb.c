@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <sys/stat.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
 #include <defines.h>
 #include <utils.h>

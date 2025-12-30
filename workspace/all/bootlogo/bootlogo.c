@@ -106,8 +106,7 @@ int main(int argc, char *argv[])
     int had_bt = PLAT_btIsConnected();
     while (!quit)
     {
-        uint32_t frame_start = SDL_GetTicks();
-
+        GFX_startFrame();
         PAD_poll();
 
         // This might be too harsh, but ignore all combos with MENU (most likely a shortcut for someone else)

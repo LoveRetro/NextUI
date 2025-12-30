@@ -357,8 +357,7 @@ int main(int argc, char *argv[])
     int show_setting = 0;
     while (!quit)
     {
-        uint32_t frame_start = SDL_GetTicks();
-
+        GFX_startFrame();
         PAD_poll();
 
         // This might be too harsh, but ignore all combos with MENU (most likely a shortcut for someone else)
@@ -443,9 +442,8 @@ int main(int argc, char *argv[])
             GFX_flip(screen);
             dirty = 0;
         }
-        else {
+        else
             GFX_sync();
-        }
     }
 
     freeRomImages();

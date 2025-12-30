@@ -131,6 +131,7 @@ static struct Core {
 
 int extract_zip(char** extensions);
 static bool getAlias(char* path, char* alias);
+static char* findFileInDir(const char *directory, const char *filename);
 
 static struct Game {
 	char path[MAX_PATH];
@@ -154,7 +155,7 @@ static void Game_open(char* path) {
 	// check first if the rom already is alive in tmp folder if so skip unzipping shit
 	char tmpfldr[255];
 	snprintf(tmpfldr, sizeof(tmpfldr), "/tmp/nextarch/%s", core.tag);
-	char *tmppath = PLAT_findFileInDir(tmpfldr, game.name);
+	char *tmppath = findFileInDir(tmpfldr, game.name);
 	if (tmppath) {
 		printf("File exists skipping unzipping and setting game.tmp_path: %s\n", tmppath);
 		strcpy((char*)game.tmp_path, tmppath);
@@ -4083,68 +4084,64 @@ static const char* bitmap_font[] = {
         "1   1"
         "1   1",
 
-	};
+};
 
 
-	void drawRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
+void drawRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
+	for (int _x = x; _x < x + w; _x++) {
+		data[_x + y * stride] = c;
+		data[_x + (y + h - 1) * stride] = c;
+	}
+	for (int _y = y; _y < y + h; _y++) {
+		data[x + _y * stride] = c;
+		data[x + w - 1 + _y * stride] = c;
+	}
+}
+
+
+void fillRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
+	for (int _y = y; _y < y + h; _y++) {
 		for (int _x = x; _x < x + w; _x++) {
-			data[_x + y * stride] = c;
-			data[_x + (y + h - 1) * stride] = c;
-		}
-		for (int _y = y; _y < y + h; _y++) {
-			data[x + _y * stride] = c;
-			data[x + w - 1 + _y * stride] = c;
+			data[_x + _y * stride] = c;
 		}
 	}
-	
-	
-	void fillRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
-		for (int _y = y; _y < y + h; _y++) {
-			for (int _x = x; _x < x + w; _x++) {
-				data[_x + _y * stride] = c;
-			}
-		}
-	}
-	
-	static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int stride, int width, int height) {
-		#define CHAR_WIDTH 5
-		#define CHAR_HEIGHT 9
-		#define LETTERSPACING 1
-	
-		int len = strlen(text);
-		int w = ((CHAR_WIDTH + LETTERSPACING) * len) - 1;
-		int h = CHAR_HEIGHT;
-	
-		if (ox < 0) ox = width - w + ox;
-		if (oy < 0) oy = height - h + oy;
-	
-		// Clamp to screen bounds (optional but recommended)
-		if (ox + w > width) w = width - ox;
-		if (oy + h > height) h = height - oy;
-	
-		// Draw background rectangle (black RGBA8888)
-		fillRect(ox, oy, w, h, 0x000000FF, data, stride);
-	
-		data += oy * stride + ox;
-	
-		for (int y = 0; y < CHAR_HEIGHT; y++) {
-			uint32_t* row = data + y * stride;
-			for (int i = 0; i < len; i++) {
-				const char* c = bitmap_font[(unsigned char)text[i]];
-				for (int x = 0; x < CHAR_WIDTH; x++) {
-					if (c[y * CHAR_WIDTH + x] == '1') {
-						*row = 0xFFFFFFFF;  // white RGBA8888
-					}
-					row++;
-				}
-				row += LETTERSPACING;
-			}
-		}
-	}
-	
-	
-	
+}
 
+static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int stride, int width, int height) {
+	#define CHAR_WIDTH 5
+	#define CHAR_HEIGHT 9
+	#define LETTERSPACING 1
+
+	int len = strlen(text);
+	int w = ((CHAR_WIDTH + LETTERSPACING) * len) - 1;
+	int h = CHAR_HEIGHT;
+
+	if (ox < 0) ox = width - w + ox;
+	if (oy < 0) oy = height - h + oy;
+
+	// Clamp to screen bounds (optional but recommended)
+	if (ox + w > width) w = width - ox;
+	if (oy + h > height) h = height - oy;
+
+	// Draw background rectangle (black ARGB8888)
+	fillRect(ox, oy, w, h, 0xFF000000, data, stride);
+
+	data += oy * stride + ox;
+
+	for (int y = 0; y < CHAR_HEIGHT; y++) {
+		uint32_t* row = data + y * stride;
+		for (int i = 0; i < len; i++) {
+			const char* c = bitmap_font[(unsigned char)text[i]];
+			for (int x = 0; x < CHAR_WIDTH; x++) {
+				if (c[y * CHAR_WIDTH + x] == '1') {
+					*row = 0xFFFFFFFF;  // white ARGBB8888
+				}
+				row++;
+			}
+			row += LETTERSPACING;
+		}
+	}
+}
 
 
 void drawGauge(int x, int y, float percent, int width, int height, uint32_t *data, int stride) {
@@ -4703,7 +4700,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 			rgbaDataSize = width * height;
 			rgbaData = (Uint32*)malloc(rgbaDataSize * sizeof(Uint32));
 			if (!rgbaData) {
-				printf("Failed to allocate memory for RGBA8888 data.\n");
+				printf("Failed to allocate memory for ARGB8888 data.\n");
 				return;
 			}
 		}
@@ -4718,7 +4715,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 				return; // No data to display
 			}
 		} else if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
-			// convert XRGB8888 to RGBA8888
+			// convert XRGB8888 to ABGR8888
 			const uint32_t* src = (const uint32_t*)data;
 			for (unsigned i = 0; i < width * height; ++i) {
 				uint32_t pixel = src[i];
@@ -4731,7 +4728,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 			data = rgbaData;
 
 		} else {
-			// convert RGB565 to RGBA8888
+			// convert RGB565 to ABGR8888
 			const uint16_t* srcData = (const uint16_t*)data;
 			unsigned srcPitchInPixels = pitch / sizeof(uint16_t); 
 
@@ -4997,7 +4994,9 @@ static struct {
 };
 
 void Menu_init(void) {
-	menu.overlay = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888);
+	menu.overlay = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE,
+		DEVICE_WIDTH,DEVICE_HEIGHT,
+		screen->format->BitsPerPixel,screen->format->format);
 	SDL_SetSurfaceBlendMode(menu.overlay, SDL_BLENDMODE_BLEND);
 	Uint32 color = SDL_MapRGBA(menu.overlay->format, 0, 0, 0, 0);
 	SDL_FillRect(screen, NULL, color);
@@ -5866,6 +5865,51 @@ static bool getAlias(char* path, char* alias) {
 	return is_alias;
 }
 
+static char* findFileInDir(const char *directory, const char *filename) {
+    char *filename_copy = strdup(filename);
+    if (!filename_copy) {
+        perror("strdup");
+        return NULL;
+    }
+
+    // Strip extension from filename
+    char *dot_pos = strrchr(filename_copy, '.');
+    if (dot_pos) {
+        *dot_pos = '\0';
+    }
+
+    DIR *dir = opendir(directory);
+    if (!dir) {
+        perror("opendir");
+        free(filename_copy);
+        return NULL;
+    }
+
+    struct dirent *entry;
+    char *full_path = NULL;
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strstr(entry->d_name, filename_copy) == entry->d_name) {
+            full_path = (char *)malloc(strlen(directory) + strlen(entry->d_name) + 2); // +1 for slash, +1 for '\0'
+            if (!full_path) {
+                perror("malloc");
+                closedir(dir);
+                free(filename_copy);
+                return NULL;
+            }
+
+            snprintf(full_path, strlen(directory) + strlen(entry->d_name) + 2, "%s/%s", directory, entry->d_name);
+            closedir(dir);
+            free(filename_copy);
+            return full_path;
+        }
+    }
+
+    closedir(dir);
+    free(filename_copy);
+    return NULL;
+}
+
 static int Menu_options(MenuList* list) {
 	MenuItem* items = list->items;
 	int type = list->type;
@@ -6454,7 +6498,7 @@ int save_screenshot_thread(void* data) {
 	SDL_Surface* rawSurface = SDL_CreateRGBSurfaceWithFormatFrom(
 		args->pixels, args->w, args->h, 32, args->w * 4, SDL_PIXELFORMAT_ABGR8888
 	);
-	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, SDL_PIXELFORMAT_RGBA8888, 0);
+	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, SDL_PIXELFORMAT_ARGB8888, 0);
 	SDL_FreeSurface(rawSurface);
 
     SDL_RWops* rw = SDL_RWFromFile(args->path, "wb");
@@ -6564,12 +6608,12 @@ static void Menu_loop(void) {
 	SDL_Surface* rawSurface = SDL_CreateRGBSurfaceWithFormatFrom(
 		pixels, cw, ch, 32, cw * 4, SDL_PIXELFORMAT_ABGR8888
 	);
-	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, SDL_PIXELFORMAT_RGBA8888, 0);
+	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, SDL_PIXELFORMAT_ARGB8888, 0);
 	SDL_FreeSurface(rawSurface);
 	free(pixels); 
 
 	menu.bitmap = converted;
-	SDL_Surface* backing = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
+	SDL_Surface* backing = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_ARGB8888); 
 	
 
 	SDL_Rect dst = {
@@ -6841,7 +6885,7 @@ static void Menu_loop(void) {
 				if (menu.preview_exists) { // has save, has preview
 					// lotta memory churn here
 					SDL_Surface* bmp = IMG_Load(menu.bmp_path);
-					SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888,0);
+					SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, screen->format->format,0);
 					if (raw_preview) {
 						SDL_FreeSurface(bmp); 
 						bmp = raw_preview; 
@@ -7198,7 +7242,7 @@ int main(int argc , char* argv[]) {
 	SDL_Surface* rawSurface = SDL_CreateRGBSurfaceWithFormatFrom(
 		pixels, cw, ch, 32, cw * 4, SDL_PIXELFORMAT_ABGR8888
 	);
-	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, SDL_PIXELFORMAT_RGBA8888, 0);
+	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, screen->format->format, 0);
 	screen = converted;
 	SDL_FreeSurface(rawSurface);
 	free(pixels); 
