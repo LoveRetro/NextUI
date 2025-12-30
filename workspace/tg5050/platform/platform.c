@@ -361,6 +361,7 @@ void PLAT_setCPUSpeed(int speed) {
 }
 
 #define MAX_STRENGTH 0xFFFF
+#define RUMBLE_PATH "/sys/class/gpio/gpio236/value"
 #define RUMBLE_LEVEL_PATH "/sys/class/motor/level"
 
 void PLAT_setRumble(int strength) {
@@ -368,8 +369,10 @@ void PLAT_setRumble(int strength) {
 		putInt(RUMBLE_LEVEL_PATH, strength);
 	}
 	else {
-		putInt(RUMBLE_LEVEL_PATH, MAX_STRENGTH);
+		putInt(RUMBLE_LEVEL_PATH, 0);
 	}
+
+	putInt(RUMBLE_PATH, (strength) ? 1 : 0);
 }
 
 int PLAT_pickSampleRate(int requested, int max) {
