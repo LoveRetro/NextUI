@@ -28,6 +28,10 @@ CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(OPT) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS	 += -lmsettings -lsamplerate
+ifeq ($(PLATFORM), my355)
+LDFLAGS	 +=  -Llibretro-common -lsrm -lzip
+CFLAGS   += -DHAS_SRM
+endif
 ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
 CFLAGS += `pkg-config --cflags libzip`
@@ -55,6 +59,12 @@ BUILD_DATE!=date +%Y.%m.%d
 BUILD_HASH!=cat ../../hash.txt
 CFLAGS += -DBUILD_DATE=\"${BUILD_DATE}\" -DBUILD_HASH=\"${BUILD_HASH}\"
 
+ifeq ($(PLATFORM), my355)
+LIB_PATH=/usr/lib/aarch64-linux-gnu
+else
+LIB_PATH=$(PREFIX)/lib
+endif
+
 ifeq ($(PLATFORM), desktop)
 all: clean libretro-common $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
@@ -62,25 +72,27 @@ all: clean libretro-common $(PREFIX_LOCAL)/include/msettings.h
 else
 all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
-	cp $(PREFIX)/lib/libsamplerate.so.0 build/$(PLATFORM)
+	cp $(LIB_PATH)/libsamplerate.so.0 build/$(PLATFORM)
+	# cp /usr/lib/aarch64-linux-gnu/libsqlite3.so.0 build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
-	cp $(PREFIX)/lib/libzip.so.5 build/$(PLATFORM)
-	cp $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
-	cp $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
-	cp $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
+	# cp $(LIB_PATH)/libzip.so.5 build/$(PLATFORM)
+	cp $(LIB_PATH)/libzip.so.4 build/$(PLATFORM)
+	cp $(LIB_PATH)/libbz2.so.1.0 build/$(PLATFORM)
+	cp $(LIB_PATH)/liblzma.so.5 build/$(PLATFORM)
+	cp $(LIB_PATH)/libzstd.so.1 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
 
 libretro-common:
 	git clone https://github.com/libretro/libretro-common
-	
+
 $(PREFIX_LOCAL)/include/msettings.h:
 	cd ../../$(PLATFORM)/libmsettings && make
 
 ### libsrm stuff
 OBJECTS = streams/rzip_stream.o streams/file_stream.o vfs/vfs_implementation.o file/file_path.o file/file_path_io.o compat/compat_strl.o time/rtime.o string/stdstring.o encodings/encoding_utf.o streams/trans_stream.o streams/trans_stream_pipe.o streams/trans_stream_zlib.o
 
-$(OBJECTS) : 
+$(OBJECTS) :
 	cd libretro-common && $(CC) $(CFLAGS) -DHAVE_ZLIB -c -o $@ $(subst .o,.c,$@) -I include/
 
 libsrm.a: $(OBJECTS)

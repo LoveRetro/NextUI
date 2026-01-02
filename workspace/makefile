@@ -30,7 +30,23 @@ ifeq ($(PLATFORM), desktop)
 	cd ./all/minput/ && make
 	cd ./all/nextval/ && make
 	cd ./all/settings/ && make
-else 
+else ifeq ($(PLATFORM), my355)
+	cd ./$(PLATFORM)/libmsettings && make
+	cd ./$(PLATFORM) && make early # eg. other libs
+	cd ./$(PLATFORM)/keymon && make
+	cd ./all/nextui/ && make
+	cd ./all/minarch/ && make
+	cd ./all/libbatmondb/ && make
+	cd ./all/battery/ && make
+	cd ./all/clock/ && make
+	cd ./all/batmon/ && make
+	cd ./all/libgametimedb/ && make
+	cd ./all/gametimectl/ && make
+	cd ./all/gametime/ && make
+	cd ./all/minput/ && make
+	cd ./all/nextval/ && make
+	cd ./all/settings/ && make
+else
 	cd ./$(PLATFORM)/rfkill && make all
 	cd ./$(PLATFORM)/btmanager && make all
 	cd ./$(PLATFORM)/audiomon && make all
