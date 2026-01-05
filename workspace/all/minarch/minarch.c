@@ -960,7 +960,7 @@ static void State_read(void) { // from picoarch
 	}
 
 	if (!core.unserialize(state, state_size)) {
-	  LOG_error("Error restoring save state: %s (%s)\n", filename, strerror(errno));
+	  LOG_error("Error restoring save state: %s\n", filename);
 	  goto error;
 	}
 
@@ -985,7 +985,7 @@ error:
 	}
 
 	if (!core.unserialize(state, state_size)) {
-		LOG_error("Error restoring save state: %s (%s)\n", filename, strerror(errno));
+		LOG_error("Error restoring save state: %s\n", filename);
 		goto error;
 	}
 
