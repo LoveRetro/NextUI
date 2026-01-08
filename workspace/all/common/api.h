@@ -262,8 +262,9 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateSurfaceOpacity PLAT_animateSurfaceOpacity //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateAndFadeSurface PLAT_animateAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_resetScrollText PLAT_resetScrollText
-#define GFX_scrollTextTexture PLAT_scrollTextTexture
+#define GFX_textShouldScroll PLAT_textShouldScroll // (TTF_Font* font, const char* in_name,int max_width);
+#define GFX_resetScrollText PLAT_resetScrollText // (void);
+#define GFX_scrollTextTexture PLAT_scrollTextTexture // (TTF_Font* font, const char* in_name,int x, int y, int w, int h, SDL_Color color, float transparency);
 #define GFX_flipHidden PLAT_flipHidden //(void)
 #define GFX_GL_screenCapture PLAT_GL_screenCapture //(void)
 
@@ -293,7 +294,8 @@ int GFX_getVsync(void);
 void GFX_setVsync(int vsync);
 
 int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
-int PLAT_resetScrollText(TTF_Font* font, const char* in_name,int max_width);
+int PLAT_textShouldScroll(TTF_Font* font, const char* in_name, int max_width);
+void PLAT_resetScrollText(void);
 void GFX_scrollTextSurface(TTF_Font* font, const char* in_name, SDL_Surface** out_surface, int max_width, int height, int padding, SDL_Color color,float heightratio); // returns final width
 int GFX_getTextWidth(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
 int GFX_getTextHeight(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width

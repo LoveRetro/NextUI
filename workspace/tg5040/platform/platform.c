@@ -1167,20 +1167,19 @@ void PLAT_animateSurface(
 	SDL_DestroyTexture(tempTexture);
 }
 
-static int text_offset = 0;
-
-int PLAT_resetScrollText(TTF_Font* font, const char* in_name,int max_width) {
-	int text_width, text_height;
+int PLAT_textShouldScroll(TTF_Font* font, const char* in_name,int max_width) {
+	int text_width = 0;
+	TTF_SizeUTF8(font, in_name, &text_width, NULL);
 	
-    TTF_SizeUTF8(font, in_name, &text_width, &text_height);
-
-	text_offset = 0;
-
 	if (text_width <= max_width) {
 		return 0;
 	} else {
 		return 1;
 	}
+}
+static int text_offset = 0;
+void PLAT_resetScrollText() {
+	text_offset = 0;
 }
 void PLAT_scrollTextTexture(
     TTF_Font* font,
