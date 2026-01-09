@@ -172,8 +172,8 @@ static struct PWR_Context
 	int resume_tick;
 
 	pthread_t battery_pt;
-	int is_charging;
-	int charge;
+	SDL_atomic_t is_charging;
+	SDL_atomic_t charge;
 
 	int update_secs;
 	int poll_network_status;
@@ -1650,20 +1650,20 @@ void GFX_blitBatteryAtPosition(SDL_Surface *dst, int x, int y)
 {
 	SDL_Rect battery_rect = asset_rects[ASSET_BATTERY];
 
-	if (pwr.is_charging)
+	if (SDL_AtomicGet(&pwr.is_charging))
 	{
 		GFX_blitAssetColor(ASSET_BATTERY, NULL, dst, &(SDL_Rect){x, y}, THEME_COLOR6);
 		GFX_blitAssetColor(ASSET_BATTERY_BOLT, NULL, dst, &(SDL_Rect){x + SCALE1(3), y + SCALE1(2)}, THEME_COLOR6);
 	}
 	else
 	{
-		int percent = pwr.charge;
+		int percent = SDL_AtomicGet(&pwr.charge);
 		GFX_blitAssetColor(percent <= 10 ? ASSET_BATTERY_LOW : ASSET_BATTERY, NULL, dst, &(SDL_Rect){x, y}, THEME_COLOR6);
 
 		if (CFG_getShowBatteryPercent())
 		{
 			char percentage[16];
-			sprintf(percentage, "%i", pwr.charge);
+			sprintf(percentage, "%i", SDL_AtomicGet(&pwr.charge));
 			SDL_Surface *text = TTF_RenderUTF8_Blended(font.micro, percentage, uintToColour(THEME_COLOR6_255));
 			SDL_Rect target = {
 				x + (battery_rect.w - text->w) / 2 + 1,
@@ -3333,7 +3333,10 @@ void VIB_triplePulse(int strength, int duration_ms, int gap_ms)
 
 static void PWR_updateBatteryStatus(void)
 {
-	PLAT_getBatteryStatusFine(&pwr.is_charging, &pwr.charge);
+	int is_charging, charge;
+	PLAT_getBatteryStatusFine(&is_charging, &charge);
+	SDL_AtomicSet(&pwr.is_charging, is_charging);
+	SDL_AtomicSet(&pwr.charge, charge);
 
 	// this is technically redundant, but PWR_update() might not always be called to conserve battery and cycles
 	LEDS_applyRules();
@@ -3374,7 +3377,7 @@ void PWR_init(void)
 	pwr.requested_wake = 0;
 	pwr.resume_tick = 0;
 
-	pwr.charge = PWR_LOW_CHARGE;
+	SDL_AtomicSet(&pwr.charge, PWR_LOW_CHARGE);
 
 	pwr.update_secs = 5;
 	pwr.poll_network_status = 1;
@@ -3418,7 +3421,7 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 		was_muted = GetMute();
 
 	static int was_charging = -1;
-	if (was_charging == -1) was_charging = pwr.is_charging;
+	if (was_charging == -1) was_charging = SDL_AtomicGet(&pwr.is_charging);
 
 	uint32_t now = SDL_GetTicks();
 	if (was_charging || PAD_anyPressed() || last_input_at == 0)
@@ -3427,7 +3430,7 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 #define CHARGE_DELAY 1000
 	if (dirty || now - checked_charge_at >= CHARGE_DELAY)
 	{
-		int is_charging = pwr.is_charging;
+		int is_charging = SDL_AtomicGet(&pwr.is_charging);
 		if (was_charging != is_charging)
 		{
 			was_charging = is_charging;
@@ -3675,7 +3678,7 @@ static void PWR_waitForWake(void)
 			SDL_Delay(200);
 			if (SDL_GetTicks() - sleep_ticks >= sleepDelay)
 			{ // increased to two minutes
-				if (pwr.is_charging)
+				if (SDL_AtomicGet(&pwr.is_charging))
 				{
 					sleep_ticks += 60000; // check again in a minute
 					continue;
@@ -3763,17 +3766,17 @@ void PWR_enableAutosleep(void)
 }
 int PWR_preventAutosleep(void)
 {
-	return pwr.is_charging || !pwr.can_autosleep || GetHDMI();
+	return SDL_AtomicGet(&pwr.is_charging) || !pwr.can_autosleep || GetHDMI();
 }
 
 // updated by PWR_updateBatteryStatus()
 int PWR_isCharging(void)
 {
-	return pwr.is_charging;
+	return SDL_AtomicGet(&pwr.is_charging);
 }
 int PWR_getBattery(void)
 { // 10-100 in 10-20% fragments
-	return pwr.charge;
+	return SDL_AtomicGet(&pwr.charge);
 }
 
 ///////////////////////////////
@@ -3860,12 +3863,12 @@ void LEDS_applyRules()
 	// of LightProfile enum.
 	// e.g.
 	// - if charging and low battery, charging takes priority
-	if (pwr.initialized && pwr.is_charging) {
+	if (pwr.initialized && SDL_AtomicGet(&pwr.is_charging)) {
 		//LOG_info("LEDS_applyRules: charging\n");
 		LEDS_setProfile(LIGHT_PROFILE_CHARGING);
 	}
 	// - if critical battery, critical battery takes priority over everything
-	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE) {
+	else if (pwr.initialized && SDL_AtomicGet(&pwr.charge) < PWR_LOW_CHARGE) {
 		//LOG_info("LEDS_applyRules: critical battery\n");
 		LEDS_setProfile(LIGHT_PROFILE_CRITICAL_BATTERY);
 	}
@@ -3875,7 +3878,7 @@ void LEDS_applyRules()
 		LEDS_setProfile(LIGHT_PROFILE_OFF);
 	}
 	// other rules
-	else if (pwr.initialized && pwr.charge < PWR_LOW_CHARGE + 10 && pwr.charge >= PWR_LOW_CHARGE) {
+	else if (pwr.initialized && SDL_AtomicGet(&pwr.charge) < PWR_LOW_CHARGE + 10 && SDL_AtomicGet(&pwr.charge) >= PWR_LOW_CHARGE) {
 		//LOG_info("LEDS_applyRules: low battery\n");
 		LEDS_setProfile(LIGHT_PROFILE_LOW_BATTERY);
 	}
