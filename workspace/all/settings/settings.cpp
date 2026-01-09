@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
         int tz_count = 0;
         TIME_getTimezones(timezones, &tz_count);
 
-        int was_online = PLAT_isOnline();
+        int was_online = PWR_isOnline();
         int had_bt = PLAT_btIsConnected();
         
         std::vector<std::any> tz_values;
@@ -554,7 +554,7 @@ int main(int argc, char *argv[])
 
             PWR_update(&ctx.dirty, &ctx.show_setting, nullptr, nullptr);
 
-            int is_online = PLAT_isOnline();
+            int is_online = PWR_isOnline();
             if (was_online!=is_online) 
                 ctx.dirty = 1;
             was_online = is_online;

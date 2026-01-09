@@ -33,10 +33,9 @@ void PLAT_quitInput(void) {
 
 ///////////////////////////////
 
-static int online = 1;
-void PLAT_updateNetworkStatus()
+void PLAT_getNetworkStatus(int* is_online)
 {
-	online = 1;
+	*is_online = 0;
 }
 
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
@@ -82,10 +81,6 @@ char* PLAT_getModel(void) {
 void PLAT_getOsVersionInfo(char *output_str, size_t max_len)
 {
 	sprintf(output_str, "%s", "1.2.3");
-}
-
-int PLAT_isOnline(void) {
-	return online;
 }
 
 ConnectionStrength PLAT_connectionStrength(void) {

@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
 
     int dirty = 1;
     int show_setting = 0;
-    int was_online = PLAT_isOnline();
+    int was_online = PWR_isOnline();
     int had_bt = PLAT_btIsConnected();
     while (!quit)
     {
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
 
         PWR_update(&dirty, NULL, NULL, NULL);
 
-        int is_online = PLAT_isOnline();
+        int is_online = PWR_isOnline();
         if (was_online != is_online)
             dirty = 1;
         was_online = is_online;

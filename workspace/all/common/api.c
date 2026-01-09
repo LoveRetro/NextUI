@@ -175,6 +175,8 @@ static struct PWR_Context
 	SDL_atomic_t is_charging;
 	SDL_atomic_t charge;
 
+	SDL_atomic_t is_online;
+
 	int update_secs;
 	int poll_network_status;
 } pwr = {0};
@@ -3344,8 +3346,11 @@ static void PWR_updateBatteryStatus(void)
 
 static void PWR_updateNetworkStatus(void)
 {
-	if (pwr.poll_network_status)
-		PLAT_updateNetworkStatus();
+	if (pwr.poll_network_status) {
+		int is_online;
+		PLAT_getNetworkStatus(&is_online);
+		SDL_AtomicSet(&pwr.is_online, is_online);
+	}
 }
 
 void PWR_updateFrequency(int secs, int updateWifi)
@@ -3777,6 +3782,11 @@ int PWR_isCharging(void)
 int PWR_getBattery(void)
 { // 10-100 in 10-20% fragments
 	return SDL_AtomicGet(&pwr.charge);
+}
+
+int PWR_isOnline(void)
+{
+	return SDL_AtomicGet(&pwr.is_online);
 }
 
 ///////////////////////////////

@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
     int quit = 0;
 	int dirty = 1;
     int show_setting = 0; // 1=brightness,2=volume,3=colortemp
-    int was_online = PLAT_isOnline();
+    int was_online = PWR_isOnline();
     int had_bt = PLAT_btIsConnected();
 
     while (!quit)
@@ -254,7 +254,7 @@ int main(int argc, char *argv[])
 
         PWR_update(&dirty, &show_setting, NULL, NULL);
         
-        int is_online = PLAT_isOnline();
+        int is_online = PWR_isOnline();
 		if (was_online!=is_online) 
             dirty = 1;
 		was_online = is_online;

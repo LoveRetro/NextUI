@@ -2070,12 +2070,15 @@ static inline void connection_reset(struct WIFI_connection *connection_info)
 
 static bool bluetoothConnected = false;
 
-void PLAT_updateNetworkStatus()
+void PLAT_getNetworkStatus(int* is_online)
 {
 	if(WIFI_enabled())
 		WIFI_connectionInfo(&connection);
 	else
 		connection_reset(&connection);
+	
+	if(is_online)
+		*is_online = (connection.valid && connection.ssid[0] != '\0');
 	
 	if(BT_enabled()) {
 		bluetoothConnected = PLAT_bluetoothConnected();
@@ -2331,10 +2334,6 @@ void PLAT_getOsVersionInfo(char* output_str, size_t max_len)
 bool PLAT_btIsConnected(void)
 {
 	return bluetoothConnected;
-}
-
-int PLAT_isOnline(void) {
-	return (connection.valid && connection.ssid[0] != '\0');
 }
 
 ConnectionStrength PLAT_connectionStrength(void) {

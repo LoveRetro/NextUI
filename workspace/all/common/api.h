@@ -483,6 +483,8 @@ int PWR_preventAutosleep(void);
 int PWR_isCharging(void);
 int PWR_getBattery(void);
 
+int PWR_isOnline(void);
+
 // rules-based presets managed and applied by LEDS_applyRules()
 enum LightProfile {
 	LIGHT_PROFILE_DEFAULT = 0, // configured via LedControl
@@ -623,9 +625,8 @@ int PLAT_pickSampleRate(int requested, int max);
 
 char* PLAT_getModel(void);
 void PLAT_getOsVersionInfo(char *output_str, size_t max_len);
-void PLAT_updateNetworkStatus();
+void PLAT_getNetworkStatus(int* is_online);
 bool PLAT_btIsConnected(void);
-int PLAT_isOnline(void);
 typedef enum {
 	SIGNAL_STRENGTH_OFF = -1,
 	SIGNAL_STRENGTH_DISCONNECTED,
