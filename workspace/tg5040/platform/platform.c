@@ -1167,9 +1167,11 @@ void PLAT_animateSurface(
 	SDL_DestroyTexture(tempTexture);
 }
 
-int PLAT_textShouldScroll(TTF_Font* font, const char* in_name,int max_width) {
+int PLAT_textShouldScroll(TTF_Font* font, const char* in_name, int max_width, SDL_mutex* fontMutex) {
 	int text_width = 0;
+	if (fontMutex) SDL_LockMutex(fontMutex);
 	TTF_SizeUTF8(font, in_name, &text_width, NULL);
+	if (fontMutex) SDL_UnlockMutex(fontMutex);
 	
 	if (text_width <= max_width) {
 		return 0;
