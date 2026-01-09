@@ -177,6 +177,199 @@ static void EntryArray_sort(Array* self) {
 	qsort(self->items, self->count, sizeof(void*), EntryArray_sortEntry);
 }
 
+
+// Optional emulator ordering via text file in ROMS_PATH.
+// If present, entries listed in the file will be ordered first (in file order),
+// and any remaining entries will follow in alphabetical order.
+// Supported filenames (first match wins):
+//   - emu_order.txt
+//   - order.txt
+// Lines are matched case-insensitively against either the display name (Entry->name)
+// or the raw folder name (basename of Entry->path).
+// Empty lines and comment lines starting with '#' or ';' are ignored.
+static void stripWhitespaceInPlace(char* s) {
+    if (!s) return;
+    char* p = s;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (p != s) memmove(s, p, strlen(p) + 1);
+
+    size_t n = strlen(s);
+    while (n > 0 && isspace((unsigned char)s[n - 1])) {
+        s[n - 1] = '\0';
+        n--;
+    }
+}
+static int icontains(const char* hay, const char* needle) {
+    if (!hay || !needle || !needle[0]) return 0;
+
+    size_t nlen = strlen(needle);
+    for (const char* p = hay; *p; p++) {
+        size_t i = 0;
+        while (p[i] && i < nlen &&
+               tolower((unsigned char)p[i]) == tolower((unsigned char)needle[i])) {
+            i++;
+        }
+        if (i == nlen) return 1;
+    }
+    return 0;
+}
+
+static int entryMatchesOrderLine(Entry* e, const char* line) {
+    if (!e || !line || !line[0]) return 0;
+
+    const char* base = strrchr(e->path, '/');
+    base = base ? (base + 1) : e->path;
+
+    // Exact match first (fast and unambiguous)
+    if (e->name && strcasecmp(e->name, line) == 0) return 1;
+    if (base && strcasecmp(base, line) == 0) return 1;
+
+    // Fuzzy match: allow the order line to be a distinctive substring of either
+    // the display name or the folder basename. This supports minimal tokens like "(FC)".
+    if (e->name && icontains(e->name, line)) return 1;
+    if (base && icontains(base, line)) return 1;
+
+    return 0;
+}
+
+static void orderDebugLog(const char* msg) {
+    if (!msg) return;
+
+    // Try /tmp first (usually writable). If not, fall back to SD root.
+    const char* paths[] = { "/tmp/nextui_order.log", SDCARD_PATH "/nextui_order.log", NULL };
+    for (int i = 0; paths[i]; i++) {
+        FILE* f = fopen(paths[i], "a");
+        if (!f) continue;
+        fprintf(f, "%s\n", msg);
+        fclose(f);
+        return;
+    }
+}
+
+static Array* loadEmuOrderLines(void) {
+    // Search a few common locations because ROMS_PATH can differ across builds,
+    // and users often place the file alongside the visible ROM folders.
+    const char* dirs[] = {
+        ROMS_PATH,
+        SDCARD_PATH,                 // SD root
+        SDCARD_PATH "/Roms",
+        SDCARD_PATH "/ROMS",
+        SDCARD_PATH "/roms",
+        "/mnt/SDCARD/Roms",
+        "/mnt/SDCARD/ROMS",
+        "/mnt/SDCARD/roms",
+        NULL
+    };
+    const char* files[] = { "emu_order.txt", "order.txt", NULL };
+
+    char path[256];
+    path[0] = '\0';
+
+    for (int d = 0; dirs[d]; d++) {
+        for (int fi = 0; files[fi]; fi++) {
+            snprintf(path, sizeof(path), "%s/%s", dirs[d], files[fi]);
+            if (exists(path)) goto found;
+        }
+    }
+
+    orderDebugLog("Order file not found. Looked for emu_order.txt/order.txt in ROMS_PATH and common SD locations.");
+    return NULL;
+
+found:
+    {
+        char buf[320];
+        snprintf(buf, sizeof(buf), "Order file found: %s", path);
+        orderDebugLog(buf);
+    }
+
+    FILE* f = fopen(path, "r");
+    if (!f) {
+        orderDebugLog("Order file exists but fopen() failed.");
+        return NULL;
+    }
+
+    Array* lines = Array_new();
+    char line[256];
+    while (fgets(line, sizeof(line), f)) {
+        normalizeNewline(line);
+        stripWhitespaceInPlace(line);
+        if (!line[0]) continue;
+        if (line[0] == '#' || line[0] == ';') continue;
+        Array_push(lines, strdup(line));
+    }
+    fclose(f);
+
+    if (lines->count == 0) {
+        orderDebugLog("Order file loaded but contained zero usable lines.");
+        free(lines->items);
+        free(lines);
+        return NULL;
+    }
+
+    {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "Order file loaded: %d lines", lines->count);
+        orderDebugLog(buf);
+    }
+
+    return lines;
+}
+
+static void freeStringArray(Array* a) {
+    if (!a) return;
+    for (int i = 0; i < a->count; i++) free(a->items[i]);
+    free(a->items);
+    free(a);
+}
+static void applyEmuOrder(Array* entries, int alphaResortIfNoOrder) {
+    if (!entries || entries->count <= 1) return;
+
+    Array* order = loadEmuOrderLines();
+    if (!order) {
+        if (alphaResortIfNoOrder) EntryArray_sort(entries);
+        return;
+    }
+
+    char* used = calloc(entries->count, 1);
+    Array* out = Array_new();
+
+    // 1) Place any entries explicitly listed in the order file.
+    for (int li = 0; li < order->count; li++) {
+        const char* want = (const char*)order->items[li];
+        for (int i = 0; i < entries->count; i++) {
+            if (used[i]) continue;
+            Entry* e = entries->items[i];
+            if (entryMatchesOrderLine(e, want)) {
+                Array_push(out, e);
+                used[i] = 1;
+                break;
+            }
+        }
+    }
+
+    // 2) Remaining entries: alphabetical.
+    Array* rem = Array_new();
+    for (int i = 0; i < entries->count; i++) {
+        if (!used[i]) Array_push(rem, entries->items[i]);
+    }
+    EntryArray_sort(rem);
+    for (int i = 0; i < rem->count; i++) Array_push(out, rem->items[i]);
+
+    // Swap into entries.
+    free(entries->items);
+    entries->items = out->items;
+    entries->count = out->count;
+    entries->capacity = out->capacity;
+
+    // Cleanup containers (not entries).
+    free(out);
+    free(rem->items);
+    free(rem);
+    free(used);
+    freeStringArray(order);
+}
+
+
 static void EntryArray_free(Array* self) {
 	for (int i=0; i<self->count; i++) {
 		Entry_free(self->items[i]);
@@ -267,7 +460,8 @@ static void Directory_index(Directory* self) {
             }
             fclose(file);
             
-            int resort = 0;
+            int resort = 0; // legacy local flag
+
             int filter = 0;
             for (int i = 0; i < self->entries->count; i++) {
                 Entry* entry = self->entries->items[i];
@@ -739,6 +933,9 @@ static Array* getRoms()
         Array_free(emus); // Only frees container, entries now owns the items
     }
 
+
+	int need_alpha_resort = 0;
+
 	// Handle mapping logic
     char map_path[256];
     snprintf(map_path, sizeof(map_path), "%s/map.txt", ROMS_PATH);
@@ -763,7 +960,6 @@ static Array* getRoms()
             }
             fclose(file);
 
-            int resort = 0;
             for (int i = 0; i < entries->count; i++) {
                 Entry* entry = entries->items[i];
                 char* filename = strrchr(entry->path, '/') + 1;
@@ -771,13 +967,15 @@ static Array* getRoms()
                 if (alias) {
                     free(entry->name);  // Free before overwriting
                     entry->name = strdup(alias);
-                    resort = 1;
+                    need_alpha_resort = 1;
+                    
                 }
             }
-            if (resort) EntryArray_sort(entries);
             Hash_free(map);
         }
     }
+
+	applyEmuOrder(entries, need_alpha_resort);
 
 	return entries;
 }
