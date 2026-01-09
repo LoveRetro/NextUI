@@ -27,14 +27,20 @@ fi
 # Create target
 mkdir -p "$TARGET"
 
-# Copy structure in specific order: BASE, then EXTRAS, then SYSTEM
+# Copy structure in specific order: BASE, then EXTRAS, then SYSTEM (into .system)
 for SUBDIR in BASE EXTRAS SYSTEM; do
     SOURCE_PATH="$SKELETON_DIR/$SUBDIR"
     if [ -d "$SOURCE_PATH" ]; then
-        if command -v rsync >/dev/null 2>&1; then
-            rsync -a "$SOURCE_PATH"/ "$TARGET"/
+        if [ "$SUBDIR" = "SYSTEM" ]; then
+            DEST="$TARGET/.system"
         else
-            cp -R "$SOURCE_PATH"/. "$TARGET"/
+            DEST="$TARGET"
+        fi
+        mkdir -p "$DEST"
+        if command -v rsync >/dev/null 2>&1; then
+            rsync -a "$SOURCE_PATH"/ "$DEST"/
+        else
+            cp -R "$SOURCE_PATH"/. "$DEST"/
         fi
     fi
 done
