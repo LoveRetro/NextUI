@@ -1707,6 +1707,7 @@ static SDL_mutex* bgMutex = NULL;
 static SDL_mutex* thumbMutex = NULL;
 static SDL_mutex* animMutex = NULL;
 static SDL_mutex* frameMutex = NULL;
+static SDL_mutex* fontMutex = NULL;
 static SDL_cond* flipCond = NULL;
 
 static SDL_Surface* folderbgbmp = NULL;
@@ -1952,7 +1953,10 @@ void animcallback(finishedTask *task) {
 			pilltargetY = task->targetY;
 			pilltargetTextY = task->targetTextY;
 			SDL_Color text_color = uintToColour(THEME_COLOR5_255);
+			
+			SDL_LockMutex(fontMutex);
 			SDL_Surface *tmp = TTF_RenderUTF8_Blended(font.large, task->entry_name, text_color);
+			SDL_UnlockMutex(fontMutex);
 
 			SDL_Surface *converted = SDL_ConvertSurfaceFormat(tmp, screen->format->format, 0);
 			SDL_FreeSurface(tmp); // tmp no longer needed
@@ -2092,6 +2096,7 @@ void initImageLoaderPool() {
 	animqueueMutex = SDL_CreateMutex();
 	animqueueCond = SDL_CreateCond();
 	frameMutex = SDL_CreateMutex();
+	fontMutex = SDL_CreateMutex();
 	flipCond = SDL_CreateCond();
 
     SDL_CreateThread(BGLoadWorker, "BGLoadWorker", NULL);
@@ -2683,7 +2688,9 @@ int main (int argc, char *argv[]) {
 
 						SDL_Surface* text;
 						SDL_Color textColor = uintToColour(THEME_COLOR6_255);
+						SDL_LockMutex(fontMutex);
 						text = TTF_RenderUTF8_Blended(font.large, display_name, textColor);
+						SDL_UnlockMutex(fontMutex);
 						const int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
 						GFX_blitPillLight(ASSET_WHITE_PILL, screen, &(SDL_Rect){
 							SCALE1(PADDING),
@@ -2936,8 +2943,10 @@ int main (int argc, char *argv[]) {
 							text_color = uintToColour(THEME_COLOR5_255); // list text selected color
 							notext = 1;
 						}
+						SDL_LockMutex(fontMutex);
 						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
 						SDL_Surface* text_unique = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_DARK_TEXT);
+						SDL_UnlockMutex(fontMutex);
 						// TODO: Use actual font metrics to center, this only works in simple cases
 						const int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
 						if (row_is_selected) {
