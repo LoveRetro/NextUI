@@ -6633,7 +6633,6 @@ static void Menu_loop(void) {
 
 	SRAM_write();
 	RTC_write();
-	PWR_warn(0);
 	if (!HAS_POWER_BUTTON) PWR_enableSleep();
 	PWR_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
 
@@ -6926,7 +6925,6 @@ static void Menu_loop(void) {
 	PAD_reset();
 
 	GFX_clearAll();
-	PWR_warn(1);
 	
 	int count = 0;
 	char** overlayList = config.frontend.options[FE_OPT_OVERLAY].values;
@@ -7165,7 +7163,6 @@ int main(int argc , char* argv[]) {
 	State_resume();
 	Menu_initState(); // make ready for state shortcuts
 
-	PWR_warn(1);
 	PWR_disableAutosleep();
 	// we dont need five second updates while ingame, and wifi status isnt displayed either
 	PWR_updateFrequency(PWR_UPDATE_FREQ, 0); 

@@ -174,12 +174,9 @@ static struct PWR_Context
 	pthread_t battery_pt;
 	int is_charging;
 	int charge;
-	int should_warn;
 
 	int update_secs;
 	int poll_network_status;
-
-	SDL_Surface *overlay;
 } pwr = {0};
 
 static struct SND_Context
@@ -3334,22 +3331,9 @@ void VIB_triplePulse(int strength, int duration_ms, int gap_ms)
 
 ///////////////////////////////
 
-static void PWR_initOverlay(void)
-{
-	// setup surface
-	pwr.overlay = PLAT_initOverlay();
-
-	// draw battery
-	SDLX_SetAlpha(gfx.assets, 0, 0);
-	GFX_blitAssetColor(ASSET_WHITE_PILL, NULL, pwr.overlay, NULL, THEME_COLOR1);
-	SDLX_SetAlpha(gfx.assets, SDL_SRCALPHA, 0);
-	GFX_blitBattery(pwr.overlay, NULL);
-}
-
 static void PWR_updateBatteryStatus(void)
 {
 	PLAT_getBatteryStatusFine(&pwr.is_charging, &pwr.charge);
-	PLAT_enableOverlay(pwr.should_warn && pwr.charge <= PWR_LOW_CHARGE);
 
 	// this is technically redundant, but PWR_update() might not always be called to conserve battery and cycles
 	LEDS_applyRules();
@@ -3390,7 +3374,6 @@ void PWR_init(void)
 	pwr.requested_wake = 0;
 	pwr.resume_tick = 0;
 
-	pwr.should_warn = 0;
 	pwr.charge = PWR_LOW_CHARGE;
 
 	pwr.update_secs = 5;
@@ -3400,7 +3383,6 @@ void PWR_init(void)
 	if (CFG_getHaptics())
 		VIB_singlePulse(VIB_bootStrength, VIB_bootDuration_ms);
 
-	PWR_initOverlay();
 	PWR_updateBatteryStatus();
 
 	pthread_create(&pwr.battery_pt, NULL, &PWR_monitorBattery, &pwr);
@@ -3411,16 +3393,9 @@ void PWR_quit(void)
 	if (!pwr.initialized)
 		return;
 
-	PLAT_quitOverlay();
-
 	// cancel battery thread
 	pthread_cancel(pwr.battery_pt);
 	pthread_join(pwr.battery_pt, NULL);
-}
-void PWR_warn(int enable)
-{
-	pwr.should_warn = enable;
-	PLAT_enableOverlay(pwr.should_warn && pwr.charge <= PWR_LOW_CHARGE);
 }
 
 int PWR_ignoreSettingInput(int btn, int show_setting)

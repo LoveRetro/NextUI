@@ -461,7 +461,6 @@ void VIB_triplePulse(int strength, int duration_ms, int gap_ms);
 typedef void (*PWR_callback_t)();
 void PWR_init(void);
 void PWR_quit(void);
-void PWR_warn(int enable);
 
 int PWR_ignoreSettingInput(int btn, int show_setting);
 void PWR_update(int* dirty, int* show_setting, PWR_callback_t before_sleep, PWR_callback_t after_sleep);
@@ -608,10 +607,6 @@ void PLAT_initShaders();
 ShaderParam* PLAT_getShaderPragmas(int i);
 int PLAT_supportsOverscan(void);
 
-SDL_Surface* PLAT_initOverlay(void);
-void PLAT_quitOverlay(void);
-void PLAT_enableOverlay(int enable);
-	
 #define PWR_LOW_CHARGE 10
 void PLAT_getBatteryStatus(int* is_charging, int* charge); // 0,1 and 0,10,20,40,60,80,100
 void PLAT_getBatteryStatusFine(int* is_charging, int* charge); // 0,1 and 0-100
