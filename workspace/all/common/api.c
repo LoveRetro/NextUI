@@ -176,9 +176,8 @@ static struct PWR_Context
 	SDL_atomic_t charge;
 
 	SDL_atomic_t is_online;
-
-	int update_secs;
-	int poll_network_status;
+	SDL_atomic_t update_secs;
+	SDL_atomic_t poll_network_status;
 } pwr = {0};
 
 static struct SND_Context
@@ -3346,7 +3345,7 @@ static void PWR_updateBatteryStatus(void)
 
 static void PWR_updateNetworkStatus(void)
 {
-	if (pwr.poll_network_status) {
+	if (SDL_AtomicGet(&pwr.poll_network_status)) {
 		int is_online;
 		PLAT_getNetworkStatus(&is_online);
 		SDL_AtomicSet(&pwr.is_online, is_online);
@@ -3356,8 +3355,8 @@ static void PWR_updateNetworkStatus(void)
 void PWR_updateFrequency(int secs, int updateWifi)
 {
 	if (secs > 0)
-		pwr.update_secs = secs;
-	pwr.poll_network_status = updateWifi;
+		SDL_AtomicSet(&pwr.update_secs, secs);
+	SDL_AtomicSet(&pwr.poll_network_status, updateWifi);
 }
 
 static void *PWR_monitorBattery(void *arg)
@@ -3365,7 +3364,10 @@ static void *PWR_monitorBattery(void *arg)
 	while (1)
 	{
 		struct PWR_Context *pwr_ctx = (struct PWR_Context *)arg;
-		sleep(pwr_ctx->update_secs);
+		int interval = SDL_AtomicGet(&pwr_ctx->update_secs);
+		if (interval <= 0)
+			interval = 1;
+		sleep(interval);
 		PWR_updateBatteryStatus();
 		PWR_updateNetworkStatus();
 	}
@@ -3384,8 +3386,8 @@ void PWR_init(void)
 
 	SDL_AtomicSet(&pwr.charge, PWR_LOW_CHARGE);
 
-	pwr.update_secs = 5;
-	pwr.poll_network_status = 1;
+	SDL_AtomicSet(&pwr.update_secs, 5);
+	SDL_AtomicSet(&pwr.poll_network_status, 1);
 	pwr.initialized = 1;
 
 	if (CFG_getHaptics())

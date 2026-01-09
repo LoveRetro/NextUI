@@ -18,6 +18,16 @@
 #include "platform.h"
 #include "api.h"
 #include "utils.h"
+#include <stdlib.h>
+
+#if defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define NEXTUI_TSAN 1
+#endif
+#endif
+#if defined(__SANITIZE_THREAD__)
+#define NEXTUI_TSAN 1
+#endif
 
 static int finalScaleFilter=GL_LINEAR;
 static int reloadShaderTextures = 1;
@@ -432,6 +442,16 @@ void PLAT_resetShaders() {
 }
 
 SDL_Surface* PLAT_initVideo(void) {
+
+#if NEXTUI_TSAN
+	/*
+	 * Mesa's llvmpipe spawns worker threads that race during teardown under TSAN.
+	 * Softpipe keeps rendering single-threaded, avoiding the contested mutex/cond
+	 * destruction without affecting release builds.
+	 */
+	setenv("GALLIUM_DRIVER", "softpipe", 0);
+	setenv("LP_NUM_THREADS", "1", 1);
+#endif
 	SDL_LogSetOutputFunction(sdl_log_stdout, NULL);
 	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
@@ -637,7 +657,10 @@ static void clearVideo(void) {
 void PLAT_quitVideo(void) {
 	clearVideo();
 
-	// Destroy all textures first while renderer is still valid
+	// Make sure the GL context is current before tearing down textures/renderer
+	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+
+	// Destroy textures while renderer is valid
 	if (vid.target) SDL_DestroyTexture(vid.target);
 	if (vid.effect) SDL_DestroyTexture(vid.effect);
 	if (vid.overlay) SDL_DestroyTexture(vid.overlay);
@@ -646,16 +669,21 @@ void PLAT_quitVideo(void) {
 	if (vid.target_layer2) SDL_DestroyTexture(vid.target_layer2);
 	if (vid.target_layer4) SDL_DestroyTexture(vid.target_layer4);
 	if (vid.target_layer5) SDL_DestroyTexture(vid.target_layer5);
-	SDL_DestroyTexture(vid.stream_layer1);
-	
-	// Ensure all pending GL operations complete
+	if (vid.stream_layer1) SDL_DestroyTexture(vid.stream_layer1);
+
+	// Ensure all pending GL operations complete before destroying renderer/context
+	SDL_RenderFlush(vid.renderer);
 	glFinish();
-	
+
 	// Destroy renderer BEFORE GL context - this stops rendering threads
 	SDL_DestroyRenderer(vid.renderer);
-	
-	// Now safe to destroy GL context
+	vid.renderer = NULL;
+
+	// Drop current context and delete
+	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+	SDL_GL_MakeCurrent(NULL, NULL);
 	SDL_GL_DeleteContext(vid.gl_context);
+	vid.gl_context = NULL;
 	SDL_FreeSurface(vid.screen);
 
 	// Cleanup and shutdown
@@ -1060,9 +1088,11 @@ void PLAT_animateSurface(
 	SDL_DestroyTexture(tempTexture);
 }
 
-int PLAT_textShouldScroll(TTF_Font* font, const char* in_name,int max_width) {
-	int text_width = 0;
+int PLAT_textShouldScroll(TTF_Font* font, const char* in_name,int max_width, SDL_mutex* fontMutex) {
+    int text_width = 0;
+	if (fontMutex) SDL_LockMutex(fontMutex);
 	TTF_SizeUTF8(font, in_name, &text_width, NULL);
+	if (fontMutex) SDL_UnlockMutex(fontMutex);
 	
 	if (text_width <= max_width) {
 		return 0;

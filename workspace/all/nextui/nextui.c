@@ -1723,12 +1723,49 @@ static SDL_atomic_t workerThreadsShutdown; // Flag to signal threads to exit (at
 static SDL_Surface* folderbgbmp = NULL;
 static SDL_Surface* thumbbmp = NULL;
 static SDL_Surface* screen = NULL; // Must be assigned externally
+static SDL_Surface* globalpill = NULL;
+static SDL_Surface* globalText = NULL;
 
 static int had_thumb = 0;
 static int ox;
 static int oy;
-int animationDraw = 1;
-int needDraw = 0;
+static SDL_atomic_t animationDrawAtomic;
+static SDL_atomic_t needDrawAtomic;
+
+static inline void setAnimationDraw(int v) { SDL_AtomicSet(&animationDrawAtomic, v); }
+static inline int getAnimationDraw(void) { return SDL_AtomicGet(&animationDrawAtomic); }
+static inline void setNeedDraw(int v) { SDL_AtomicSet(&needDrawAtomic, v); }
+static inline int getNeedDraw(void) { return SDL_AtomicGet(&needDrawAtomic); }
+
+static void updatePillTextSurface(const char* entry_name, int move_w, SDL_Color text_color) {
+	int crop_w = move_w - SCALE1(BUTTON_PADDING * 2);
+	if (crop_w <= 0) return;
+
+	SDL_LockMutex(fontMutex);
+	SDL_Surface* tmp = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
+	SDL_UnlockMutex(fontMutex);
+	if (!tmp) return;
+
+	SDL_Surface* converted = SDL_ConvertSurfaceFormat(tmp, screen->format->format, 0);
+	SDL_FreeSurface(tmp);
+	if (!converted) return;
+
+	SDL_Rect crop_rect = { 0, 0, crop_w, converted->h };
+	SDL_Surface* cropped = SDL_CreateRGBSurfaceWithFormat(
+		0, crop_rect.w, crop_rect.h, screen->format->BitsPerPixel, screen->format->format
+	);
+	if (cropped) {
+		SDL_SetSurfaceBlendMode(converted, SDL_BLENDMODE_NONE);
+		SDL_BlitSurface(converted, &crop_rect, cropped, NULL);
+	}
+	SDL_FreeSurface(converted);
+	if (!cropped) return;
+
+	SDL_LockMutex(animMutex);
+	if (globalText) SDL_FreeSurface(globalText);
+	globalText = cropped;
+	SDL_UnlockMutex(animMutex);
+}
 int folderbgchanged=0;
 int thumbchanged=0;
 
@@ -1910,7 +1947,7 @@ void onBackgroundLoaded(SDL_Surface* surface) {
 		return;
 	}
     folderbgbmp = surface;
-	needDraw = 1;
+	setNeedDraw(1);
 	SDL_UnlockMutex(bgMutex);
 }
 
@@ -1953,13 +1990,11 @@ void onThumbLoaded(SDL_Surface* surface) {
 		&(SDL_Rect){0, 0, thumbbmp->w, thumbbmp->h},
 		SCALE1((float)CFG_getThumbnailRadius() * ((float)img_w / (float)new_w))
 	);
-	needDraw = 1;
+	setNeedDraw(1);
 	SDL_UnlockMutex(thumbMutex);
 }
 
 SDL_Rect pillRect;
-SDL_Surface *globalpill;
-SDL_Surface *globalText;
 int pilltargetY =0;
 int pilltargetTextY =0;
 void animcallback(finishedTask *task) {
@@ -1970,33 +2005,11 @@ void animcallback(finishedTask *task) {
 		if(task->done) {
 			pilltargetY = task->targetY;
 			pilltargetTextY = task->targetTextY;
-			SDL_Color text_color = uintToColour(THEME_COLOR5_255);
-			
-			SDL_LockMutex(fontMutex);
-			SDL_Surface *tmp = TTF_RenderUTF8_Blended(font.large, task->entry_name, text_color);
-			SDL_UnlockMutex(fontMutex);
-
-			SDL_Surface *converted = SDL_ConvertSurfaceFormat(tmp, screen->format->format, 0);
-			SDL_FreeSurface(tmp); // tmp no longer needed
-
-			SDL_Rect crop_rect = { 0, 0, task->move_w - SCALE1(BUTTON_PADDING * 2), converted->h };
-			SDL_Surface *cropped = SDL_CreateRGBSurfaceWithFormat(
-				0, crop_rect.w, crop_rect.h, screen->format->BitsPerPixel, screen->format->format
-			);
-			if (!cropped) {
-				SDL_FreeSurface(converted);
-			}
-
-			SDL_SetSurfaceBlendMode(converted, SDL_BLENDMODE_NONE); 
-			SDL_BlitSurface(converted, &crop_rect, cropped, NULL);
-			SDL_FreeSurface(converted);
-
-			globalText = cropped;
 		}
-		needDraw = 1;
+		setNeedDraw(1);
 	}
 	SDL_UnlockMutex(animMutex);
-	animationDraw = 1;
+	setAnimationDraw(1);
 }
 bool frameReady = true;
 bool pillanimdone = false;
@@ -2110,6 +2123,8 @@ void animPill(AnimTask *task) {
 void initImageLoaderPool() {
 	// Initialize shutdown flag to 0
 	SDL_AtomicSet(&workerThreadsShutdown, 0);
+	SDL_AtomicSet(&animationDrawAtomic, 1);
+	SDL_AtomicSet(&needDrawAtomic, 0);
 	
     thumbqueueMutex = SDL_CreateMutex();
     bgqueueMutex = SDL_CreateMutex();
@@ -2257,9 +2272,8 @@ int main (int argc, char *argv[]) {
     int had_bt = PLAT_btIsConnected();
 
 	pthread_t cpucheckthread = 0;
-	int cputhread_created = 0;
-    if (pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL) == 0) {
-		cputhread_created = 1;
+	if (pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL) == 0) {
+		pthread_detach(cpucheckthread);
 	}
 
 	int selected_row = top->selected - top->start;
@@ -3045,7 +3059,7 @@ int main (int argc, char *argv[]) {
 						// TODO: Use actual font metrics to center, this only works in simple cases
 						const int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
 						if (row_is_selected) {
-							is_scrolling = GFX_textShouldScroll(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2));
+							is_scrolling = GFX_textShouldScroll(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2), fontMutex);
 							GFX_resetScrollText();
 							bool is_scrolling = previous_depth == stack->count;
 							SDL_LockMutex(animMutex);
@@ -3057,6 +3071,7 @@ int main (int argc, char *argv[]) {
 							GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){0,0, max_width, SCALE1(PILL_SIZE)});
 							globallpillW =  max_width;
 							SDL_UnlockMutex(animMutex);
+							updatePillTextSurface(notext ? " " : entry_name, max_width, uintToColour(THEME_COLOR5_255));
 							AnimTask* task = malloc(sizeof(AnimTask));
 							task->startX = SCALE1(BUTTON_MARGIN);
 							task->startY = SCALE1(previousY+PADDING);
@@ -3184,7 +3199,7 @@ int main (int argc, char *argv[]) {
 				GFX_flip(screen);
 
 			dirty = 0;
-		} else if(animationDraw || folderbgchanged || thumbchanged || is_scrolling) {
+		} else if(getAnimationDraw() || folderbgchanged || thumbchanged || is_scrolling) {
 			// honestly this whole thing is here only for the scrolling text, I set it now to run this at 30fps which is enough for scrolling text, should move this to seperate animation function eventually
 			Uint32 now = SDL_GetTicks();
 			Uint32 frame_start = now;
@@ -3227,11 +3242,11 @@ int main (int argc, char *argv[]) {
 			}
 			SDL_UnlockMutex(thumbMutex);
 			SDL_LockMutex(animMutex);
-			if (animationDraw) {
+			if (getAnimationDraw()) {
 				GFX_clearLayers(LAYER_TRANSITION);
 				if (list_show_entry_names)
 					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
-				animationDraw = 0;
+				setAnimationDraw(0);
 			}
 			SDL_UnlockMutex(animMutex);
 			if (currentScreen != SCREEN_GAMESWITCHER && currentScreen != SCREEN_QUICKMENU) {
@@ -3290,9 +3305,9 @@ int main (int argc, char *argv[]) {
 			SDL_LockMutex(bgqueueMutex);
 			SDL_LockMutex(thumbqueueMutex);
 			SDL_LockMutex(animqueueMutex);
-			if(needDraw) {
+			if(getNeedDraw()) {
 				PLAT_GPU_Flip();
-				needDraw = 0;
+				setNeedDraw(0);
 			} else {
 				// TODO: Why 17? Seems like an odd choice for 60fps, it almost guarantees we miss at least one frame.
 				// This should either be 16(.66666667) or make proper use of SDL_Ticks to only wait for the next render pass.
@@ -3326,9 +3341,6 @@ int main (int argc, char *argv[]) {
 			quit = 1;
 		}
 	}
-	
-	// Join CPU monitor thread before cleanup
-	pthread_join(cpucheckthread, NULL);
 	
 	Menu_quit();
 	PWR_quit();
