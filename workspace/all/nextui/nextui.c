@@ -1469,6 +1469,8 @@ static void closeDirectory(void) {
 	restore_relative = top->selected;
 }
 
+static void cleanupImageLoaderPool(void); // Forward declaration
+
 static void toggleQuick(Entry* self)
 {
 	if(!self)
@@ -1484,9 +1486,11 @@ static void toggleQuick(Entry* self)
 		PWR_sleep();
 	}
 	else if(!strcmp(self->name, "Reboot")) {
+		cleanupImageLoaderPool();  // Stop worker threads before SDL cleanup
 		PWR_powerOff(1);
 	}
 	else if(!strcmp(self->name, "Poweroff")) {
+		cleanupImageLoaderPool();  // Stop worker threads before SDL cleanup
 		PWR_powerOff(0);
 	}
 }
@@ -1710,6 +1714,12 @@ static SDL_mutex* frameMutex = NULL;
 static SDL_mutex* fontMutex = NULL;
 static SDL_cond* flipCond = NULL;
 
+static SDL_Thread* bgLoadThread = NULL;
+static SDL_Thread* thumbLoadThread = NULL;
+static SDL_Thread* animWorkerThread = NULL;
+
+static int workerThreadsShutdown = 0; // Flag to signal threads to exit
+
 static SDL_Surface* folderbgbmp = NULL;
 static SDL_Surface* thumbbmp = NULL;
 static SDL_Surface* screen = NULL; // Must be assigned externally
@@ -1800,10 +1810,14 @@ void enqueueThumbTask(LoadBackgroundTask* task) {
 
 // Worker threadd
 int BGLoadWorker(void* unused) {
-    while (true) {
+    while (!workerThreadsShutdown) {
         SDL_LockMutex(bgqueueMutex);
-        while (!taskBGQueueHead) {
+        while (!taskBGQueueHead && !workerThreadsShutdown) {
         	SDL_CondWait(bgqueueCond, bgqueueMutex);
+        }
+        if (workerThreadsShutdown) {
+            SDL_UnlockMutex(bgqueueMutex);
+            break;
         }
         TaskNode* node = taskBGQueueHead;
         taskBGQueueHead = node->next;
@@ -1836,10 +1850,14 @@ int BGLoadWorker(void* unused) {
     return 0;
 }
 int ThumbLoadWorker(void* unused) {
-    while (true) {
+    while (!workerThreadsShutdown) {
         SDL_LockMutex(thumbqueueMutex);
-        while (!taskThumbQueueHead) {
+        while (!taskThumbQueueHead && !workerThreadsShutdown) {
         	SDL_CondWait(thumbqueueCond, thumbqueueMutex);
+        }
+        if (workerThreadsShutdown) {
+            SDL_UnlockMutex(thumbqueueMutex);
+            break;
         }
         TaskNode* node = taskThumbQueueHead;
         taskThumbQueueHead = node->next;
@@ -1984,10 +2002,14 @@ bool frameReady = true;
 bool pillanimdone = false;
 
 int animWorker(void* unused) {
-	  while (true) {
+	  while (!workerThreadsShutdown) {
  		SDL_LockMutex(animqueueMutex);
-        while (!animTaskQueueHead) {
+        while (!animTaskQueueHead && !workerThreadsShutdown) {
             SDL_CondWait(animqueueCond, animqueueMutex);
+        }
+        if (workerThreadsShutdown) {
+            SDL_UnlockMutex(animqueueMutex);
+            break;
         }
         AnimTaskNode* node = animTaskQueueHead;
         animTaskQueueHead = node->next;
@@ -2099,9 +2121,48 @@ void initImageLoaderPool() {
 	fontMutex = SDL_CreateMutex();
 	flipCond = SDL_CreateCond();
 
-    SDL_CreateThread(BGLoadWorker, "BGLoadWorker", NULL);
-    SDL_CreateThread(ThumbLoadWorker, "ThumbLoadWorker", NULL);
-	SDL_CreateThread(animWorker, "animWorker", NULL);
+    bgLoadThread = SDL_CreateThread(BGLoadWorker, "BGLoadWorker", NULL);
+    thumbLoadThread = SDL_CreateThread(ThumbLoadWorker, "ThumbLoadWorker", NULL);
+	animWorkerThread = SDL_CreateThread(animWorker, "animWorker", NULL);
+}
+
+void cleanupImageLoaderPool() {
+	// Signal all worker threads to exit
+	workerThreadsShutdown = 1;
+	
+	// Wake up all waiting threads
+	if (bgqueueCond) SDL_CondSignal(bgqueueCond);
+	if (thumbqueueCond) SDL_CondSignal(thumbqueueCond);
+	if (animqueueCond) SDL_CondSignal(animqueueCond);
+	
+	// Wait for all worker threads to finish
+	if (bgLoadThread) {
+		SDL_WaitThread(bgLoadThread, NULL);
+		bgLoadThread = NULL;
+	}
+	if (thumbLoadThread) {
+		SDL_WaitThread(thumbLoadThread, NULL);
+		thumbLoadThread = NULL;
+	}
+	if (animWorkerThread) {
+		SDL_WaitThread(animWorkerThread, NULL);
+		animWorkerThread = NULL;
+	}
+	
+	// Destroy mutexes and condition variables
+	if (bgqueueMutex) SDL_DestroyMutex(bgqueueMutex);
+	if (thumbqueueMutex) SDL_DestroyMutex(thumbqueueMutex);
+	if (animqueueMutex) SDL_DestroyMutex(animqueueMutex);
+	if (bgMutex) SDL_DestroyMutex(bgMutex);
+	if (thumbMutex) SDL_DestroyMutex(thumbMutex);
+	if (animMutex) SDL_DestroyMutex(animMutex);
+	if (frameMutex) SDL_DestroyMutex(frameMutex);
+	if (fontMutex) SDL_DestroyMutex(fontMutex);
+	
+	if (bgqueueCond) SDL_DestroyCond(bgqueueCond);
+	if (thumbqueueCond) SDL_DestroyCond(thumbqueueCond);
+	if (animqueueCond) SDL_DestroyCond(animqueueCond);
+	if (flipCond) SDL_DestroyCond(flipCond);
 }
 ///////////////////////////////////////
 
@@ -2164,8 +2225,11 @@ int main (int argc, char *argv[]) {
 	int was_online = PWR_isOnline();
     int had_bt = PLAT_btIsConnected();
 
-	pthread_t cpucheckthread;
-    pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
+	pthread_t cpucheckthread = 0;
+	int cputhread_created = 0;
+    if (pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL) == 0) {
+		cputhread_created = 1;
+	}
 
 	int selected_row = top->selected - top->start;
 	float targetY;
@@ -3231,9 +3295,16 @@ int main (int argc, char *argv[]) {
 		}
 	}
 	
+	// Join CPU monitor thread before cleanup
+	pthread_join(cpucheckthread, NULL);
+	
 	Menu_quit();
 	PWR_quit();
 	PAD_quit();
+	
+	// Cleanup worker threads and their synchronization primitives
+	cleanupImageLoaderPool();
+	
 	GFX_quit(); // Cleanup video subsystem first to stop GPU threads
 	
 	// Now safe to free surfaces after GPU threads are stopped
