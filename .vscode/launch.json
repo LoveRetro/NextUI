@@ -9,29 +9,17 @@
             "request": "launch",
             "type": "cppdbg",
             "osx": {
-              "MIMode": "lldb"
+              "MIMode": "lldb",
+              "environment": []
+            },
+            "linux": {
+              "MIMode": "gdb",
+              "environment": []
             },
             "cwd": "${workspaceFolder}/workspace/all/nextui/build/desktop",
             "program": "${workspaceFolder}/workspace/all/nextui/build/desktop/nextui.elf",
             "preLaunchTask": "make desktop",
-            "environment": [
-              {
-                "name": "SHARED_USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
-              },
-              {
-                "name": "USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/desktop", 
-              },
-              {
-                "name": "LD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-              {
-                "name": "DYLD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-            ]
+            "envFile": "${workspaceFolder}/.env_desktop",
         },
         {
             "name": "App: Battery",
@@ -43,24 +31,7 @@
             "cwd": "${workspaceFolder}/workspace/all/battery/build/desktop",
             "program": "${workspaceFolder}/workspace/all/battery/build/desktop/battery.elf",
             "preLaunchTask": "make desktop",
-            "environment": [
-              {
-                "name": "SHARED_USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
-              },
-              {
-                "name": "USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/desktop", 
-              },
-              {
-                "name": "LD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-              {
-                "name": "DYLD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-            ]
+            "envFile": "${workspaceFolder}/.env_desktop",
         },
         {
             "name": "App: Input",
@@ -72,24 +43,7 @@
             "cwd": "${workspaceFolder}/workspace/all/minput/build/desktop",
             "program": "${workspaceFolder}/workspace/all/minput/build/desktop/minput.elf",
             "preLaunchTask": "make desktop",
-            "environment": [
-              {
-                "name": "SHARED_USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
-              },
-              {
-                "name": "USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/desktop", 
-              },
-              {
-                "name": "LD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-              {
-                "name": "DYLD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-            ]
+            "envFile": "${workspaceFolder}/.env_desktop",
         },
         {
             "name": "App: Gametime",
@@ -101,24 +55,7 @@
             "cwd": "${workspaceFolder}/workspace/all/gametime/build/desktop",
             "program": "${workspaceFolder}/workspace/all/gametime/build/desktop/gametime.elf",
             "preLaunchTask": "make desktop",
-            "environment": [
-              {
-                "name": "SHARED_USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
-              },
-              {
-                "name": "USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/desktop", 
-              },
-              {
-                "name": "LD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-              {
-                "name": "DYLD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-            ]
+            "envFile": "${workspaceFolder}/.env_desktop",
         },
         {
             "name": "App: Gametimectl",
@@ -130,24 +67,7 @@
             "cwd": "${workspaceFolder}/workspace/all/gametimectl/build/desktop",
             "program": "${workspaceFolder}/workspace/all/gametimectl/build/desktop/gametimectl.elf",
             "preLaunchTask": "make desktop",
-            "environment": [
-              {
-                "name": "SHARED_USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
-              },
-              {
-                "name": "USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/desktop", 
-              },
-              {
-                "name": "LD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-              {
-                "name": "DYLD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-            ],
+            "envFile": "${workspaceFolder}/.env_desktop",
             "args": ["start", "foo.txt"],
         },
         {
@@ -160,24 +80,7 @@
             "cwd": "${workspaceFolder}/workspace/all/settings/build/desktop",
             "program": "${workspaceFolder}/workspace/all/settings/build/desktop/settings.elf",
             "preLaunchTask": "make desktop",
-            "environment": [
-              {
-                "name": "SHARED_USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
-              },
-              {
-                "name": "USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/desktop", 
-              },
-              {
-                "name": "LD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-              {
-                "name": "DYLD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-            ]
+            "envFile": "${workspaceFolder}/.env_desktop",
         },
         {
             "name": "Minarch",
@@ -189,27 +92,10 @@
             "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
             "program": "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
             "preLaunchTask": "make desktop",
-            "environment": [
-              {
-                "name": "SHARED_USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/shared", 
-              },
-              {
-                "name": "USERDATA_PATH", 
-                "value": "/Library/Developer/Projects/private/MinUI_FAKESD/.userdata/desktop", 
-              },
-              {
-                "name": "LD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-              {
-                "name": "DYLD_LIBRARY_PATH",
-                "value": "${env:HOME}/nextui/lib"
-              },
-            ],
+            "envFile": "${workspaceFolder}/.env_desktop",
             "args": [
-              "/Library/Developer/Projects/private/MinUI_ro8inmorgan/workspace/desktop/cores/output/gambatte_libretro.so", 
-              "/Library/Developer/Projects/private/MinUI_FAKESD/Roms/Game Boy Color (GBC)/Tetris DX (SGB Enhanced) (GB Compatible).zip"
+              "${workspaceFolder}/workspace/desktop/cores/output/gambatte_libretro.so", 
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Color (GBC)/Tetris DX (SGB Enhanced) (GB Compatible).zip"
             ],
         },
         {
