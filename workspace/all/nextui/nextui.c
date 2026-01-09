@@ -3230,13 +3230,16 @@ int main (int argc, char *argv[]) {
 			quit = 1;
 		}
 	}
-	if(blackBG)	SDL_FreeSurface(blackBG);
-	if (folderbgbmp) SDL_FreeSurface(folderbgbmp);
-	if (thumbbmp) SDL_FreeSurface(thumbbmp);
-
+	
 	Menu_quit();
 	PWR_quit();
 	PAD_quit();
-	GFX_quit();
+	GFX_quit(); // Cleanup video subsystem first to stop GPU threads
+	
+	// Now safe to free surfaces after GPU threads are stopped
+	if(blackBG)	SDL_FreeSurface(blackBG);
+	if (folderbgbmp) SDL_FreeSurface(folderbgbmp);
+	if (thumbbmp) SDL_FreeSurface(thumbbmp);
+	
 	QuitSettings();
 }
