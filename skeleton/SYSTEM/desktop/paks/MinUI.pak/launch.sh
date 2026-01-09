@@ -2,7 +2,13 @@
 # MinUI.pak
 
 export PLATFORM="desktop"
-export SDCARD_PATH="/Library/Developer/Projects/private/MinUI_FAKESD"
+# I put some thinking into what path to use, this is the only one that ticks all the boxes:
+# - writable by normal user
+# - not likely to be accidentally deleted by user
+# - not in home directory to avoid having to expand ~ or $HOME in #defines or scripts
+# - clearly for temporary/debug use only
+# - works on both macOS and Linux
+export SDCARD_PATH="/var/tmp/nextui/sdcard"
 export BIOS_PATH="$SDCARD_PATH/Bios"
 export ROMS_PATH="$SDCARD_PATH/Roms"
 export SAVES_PATH="$SDCARD_PATH/Saves"
