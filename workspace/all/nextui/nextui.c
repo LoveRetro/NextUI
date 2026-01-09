@@ -3024,6 +3024,7 @@ int main (int argc, char *argv[]) {
 					selected_row = top->selected - top->start;
 					previousY = previous_row * PILL_SIZE;
 					targetY = selected_row * PILL_SIZE;
+					SDL_Color text_color = uintToColour(THEME_COLOR4_255); // list text color
 					for (int i = top->start, j = 0; i < top->end; i++, j++) {
 						Entry* entry = top->entries->items[i];
 						char* entry_name = entry->name;
@@ -3041,17 +3042,8 @@ int main (int argc, char *argv[]) {
 						
 						char display_name[256];
 						int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width, SCALE1(BUTTON_PADDING * 2));
-
 						int max_width = MIN(available_width, text_width);
 					
-						SDL_Color text_color = uintToColour(THEME_COLOR4_255); // list text color
-						int notext = 0;
-						// this is useless, second half never matters: !a && b && (c || d || !a) <=> !a && b
-						//if(!row_has_moved && row_is_selected && (selected_row+1 >= (top->end-top->start) || selected_row == 0 || !row_has_moved)) {
-						if(!row_has_moved && row_is_selected) {
-							text_color = uintToColour(THEME_COLOR5_255); // list text selected color
-							notext = 1;
-						}
 						SDL_LockMutex(fontMutex);
 						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
 						SDL_Surface* text_unique = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_DARK_TEXT);
@@ -3071,7 +3063,7 @@ int main (int argc, char *argv[]) {
 							GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){0,0, max_width, SCALE1(PILL_SIZE)});
 							globallpillW =  max_width;
 							SDL_UnlockMutex(animMutex);
-							updatePillTextSurface(notext ? " " : entry_name, max_width, uintToColour(THEME_COLOR5_255));
+							updatePillTextSurface(entry_name, max_width, uintToColour(THEME_COLOR5_255));
 							AnimTask* task = malloc(sizeof(AnimTask));
 							task->startX = SCALE1(BUTTON_MARGIN);
 							task->startY = SCALE1(previousY+PADDING);
@@ -3082,7 +3074,7 @@ int main (int argc, char *argv[]) {
 							task->move_w = max_width;
 							task->move_h = SCALE1(PILL_SIZE);
 							task->frames = is_scrolling && CFG_getMenuAnimations() ? 3:0;
-							task->entry_name = strdup(notext ? " " : entry_name);
+							task->entry_name = strdup(entry_name);
 							animPill(task);
 						}
 						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
