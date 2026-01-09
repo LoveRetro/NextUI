@@ -637,11 +637,7 @@ static void clearVideo(void) {
 void PLAT_quitVideo(void) {
 	clearVideo();
 
-
-	glFinish();
-	SDL_GL_DeleteContext(vid.gl_context);
-	SDL_FreeSurface(vid.screen);
-
+	// Destroy all textures first while renderer is still valid
 	if (vid.target) SDL_DestroyTexture(vid.target);
 	if (vid.effect) SDL_DestroyTexture(vid.effect);
 	if (vid.overlay) SDL_DestroyTexture(vid.overlay);
@@ -650,10 +646,21 @@ void PLAT_quitVideo(void) {
 	if (vid.target_layer2) SDL_DestroyTexture(vid.target_layer2);
 	if (vid.target_layer4) SDL_DestroyTexture(vid.target_layer4);
 	if (vid.target_layer5) SDL_DestroyTexture(vid.target_layer5);
-	if (overlay_path) free(overlay_path);
 	SDL_DestroyTexture(vid.stream_layer1);
+	
+	// Ensure all pending GL operations complete
+	glFinish();
+	
+	// Destroy renderer BEFORE GL context - this stops rendering threads
 	SDL_DestroyRenderer(vid.renderer);
+	
+	// Now safe to destroy GL context
+	SDL_GL_DeleteContext(vid.gl_context);
+	SDL_FreeSurface(vid.screen);
+
+	// Cleanup and shutdown
 	SDL_DestroyWindow(vid.window);
+	if (overlay_path) free(overlay_path);
 
 	SDL_QuitSubSystem(SDL_INIT_VIDEO);
 	system("cat /dev/zero > /dev/fb0 2>/dev/null");
@@ -1073,7 +1080,8 @@ void PLAT_scrollTextTexture(
     int x, int y,      // Position on target layer
     int w, int h,      // Clipping width and height
     SDL_Color color,
-    float transparency
+    float transparency,
+    SDL_mutex* fontMutex  // Mutex for thread-safe font access (can be NULL)
 ) {
     static int frame_counter = 0;
 	int padding = 30;
@@ -1082,8 +1090,10 @@ void PLAT_scrollTextTexture(
     if (transparency > 1.0f) transparency = 1.0f;
     color.a = (Uint8)(transparency * 255);
 
-    // Render the original text only once
+    // Render the original text with mutex protection for thread safety
+    if (fontMutex) SDL_LockMutex(fontMutex);
     SDL_Surface* singleSur = TTF_RenderUTF8_Blended(font, in_name, color);
+    if (fontMutex) SDL_UnlockMutex(fontMutex);
     if (!singleSur) return;
 
     int single_width = singleSur->w;

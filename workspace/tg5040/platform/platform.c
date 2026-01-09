@@ -1187,7 +1187,8 @@ void PLAT_scrollTextTexture(
     int x, int y,      // Position on target layer
     int w, int h,      // Clipping width and height
     SDL_Color color,
-    float transparency
+    float transparency,
+    SDL_mutex* fontMutex  // Mutex for thread-safe font access (can be NULL)
 ) {
     static int frame_counter = 0;
 	int padding = 30;
@@ -1196,8 +1197,10 @@ void PLAT_scrollTextTexture(
     if (transparency > 1.0f) transparency = 1.0f;
     color.a = (Uint8)(transparency * 255);
 
-    // Render the original text only once
+    // Render the original text with mutex protection for thread safety
+    if (fontMutex) SDL_LockMutex(fontMutex);
     SDL_Surface* singleSur = TTF_RenderUTF8_Blended(font, in_name, color);
+    if (fontMutex) SDL_UnlockMutex(fontMutex);
     if (!singleSur) return;
 
     int single_width = singleSur->w;

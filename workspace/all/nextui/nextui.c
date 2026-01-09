@@ -1718,7 +1718,7 @@ static SDL_Thread* bgLoadThread = NULL;
 static SDL_Thread* thumbLoadThread = NULL;
 static SDL_Thread* animWorkerThread = NULL;
 
-static int workerThreadsShutdown = 0; // Flag to signal threads to exit
+static SDL_atomic_t workerThreadsShutdown; // Flag to signal threads to exit (atomic for thread safety)
 
 static SDL_Surface* folderbgbmp = NULL;
 static SDL_Surface* thumbbmp = NULL;
@@ -1808,14 +1808,14 @@ void enqueueThumbTask(LoadBackgroundTask* task) {
     SDL_UnlockMutex(thumbqueueMutex);
 }
 
-// Worker threadd
+// Worker thread
 int BGLoadWorker(void* unused) {
-    while (!workerThreadsShutdown) {
+    while (!SDL_AtomicGet(&workerThreadsShutdown)) {
         SDL_LockMutex(bgqueueMutex);
-        while (!taskBGQueueHead && !workerThreadsShutdown) {
+        while (!taskBGQueueHead && !SDL_AtomicGet(&workerThreadsShutdown)) {
         	SDL_CondWait(bgqueueCond, bgqueueMutex);
         }
-        if (workerThreadsShutdown) {
+        if (SDL_AtomicGet(&workerThreadsShutdown)) {
             SDL_UnlockMutex(bgqueueMutex);
             break;
         }
@@ -1850,12 +1850,12 @@ int BGLoadWorker(void* unused) {
     return 0;
 }
 int ThumbLoadWorker(void* unused) {
-    while (!workerThreadsShutdown) {
+    while (!SDL_AtomicGet(&workerThreadsShutdown)) {
         SDL_LockMutex(thumbqueueMutex);
-        while (!taskThumbQueueHead && !workerThreadsShutdown) {
+        while (!taskThumbQueueHead && !SDL_AtomicGet(&workerThreadsShutdown)) {
         	SDL_CondWait(thumbqueueCond, thumbqueueMutex);
         }
-        if (workerThreadsShutdown) {
+        if (SDL_AtomicGet(&workerThreadsShutdown)) {
             SDL_UnlockMutex(thumbqueueMutex);
             break;
         }
@@ -2002,12 +2002,12 @@ bool frameReady = true;
 bool pillanimdone = false;
 
 int animWorker(void* unused) {
-	  while (!workerThreadsShutdown) {
+	  while (!SDL_AtomicGet(&workerThreadsShutdown)) {
  		SDL_LockMutex(animqueueMutex);
-        while (!animTaskQueueHead && !workerThreadsShutdown) {
+        while (!animTaskQueueHead && !SDL_AtomicGet(&workerThreadsShutdown)) {
             SDL_CondWait(animqueueCond, animqueueMutex);
         }
-        if (workerThreadsShutdown) {
+        if (SDL_AtomicGet(&workerThreadsShutdown)) {
             SDL_UnlockMutex(animqueueMutex);
             break;
         }
@@ -2108,6 +2108,9 @@ void animPill(AnimTask *task) {
 }
 
 void initImageLoaderPool() {
+	// Initialize shutdown flag to 0
+	SDL_AtomicSet(&workerThreadsShutdown, 0);
+	
     thumbqueueMutex = SDL_CreateMutex();
     bgqueueMutex = SDL_CreateMutex();
     bgqueueCond = SDL_CreateCond();
@@ -2127,8 +2130,8 @@ void initImageLoaderPool() {
 }
 
 void cleanupImageLoaderPool() {
-	// Signal all worker threads to exit
-	workerThreadsShutdown = 1;
+	// Signal all worker threads to exit (atomic set for thread safety)
+	SDL_AtomicSet(&workerThreadsShutdown, 1);
 	
 	// Wake up all waiting threads
 	if (bgqueueCond) SDL_CondSignal(bgqueueCond);
@@ -2149,6 +2152,20 @@ void cleanupImageLoaderPool() {
 		animWorkerThread = NULL;
 	}
 	
+	// Small delay to ensure llvmpipe/OpenGL threads have completed any pending operations
+	SDL_Delay(10);
+	
+	// Acquire and release each mutex before destroying to ensure no thread is in a critical section
+	// This creates a memory barrier and ensures proper synchronization
+	if (bgqueueMutex) { SDL_LockMutex(bgqueueMutex); SDL_UnlockMutex(bgqueueMutex); }
+	if (thumbqueueMutex) { SDL_LockMutex(thumbqueueMutex); SDL_UnlockMutex(thumbqueueMutex); }
+	if (animqueueMutex) { SDL_LockMutex(animqueueMutex); SDL_UnlockMutex(animqueueMutex); }
+	if (bgMutex) { SDL_LockMutex(bgMutex); SDL_UnlockMutex(bgMutex); }
+	if (thumbMutex) { SDL_LockMutex(thumbMutex); SDL_UnlockMutex(thumbMutex); }
+	if (animMutex) { SDL_LockMutex(animMutex); SDL_UnlockMutex(animMutex); }
+	if (frameMutex) { SDL_LockMutex(frameMutex); SDL_UnlockMutex(frameMutex); }
+	if (fontMutex) { SDL_LockMutex(fontMutex); SDL_UnlockMutex(fontMutex); }
+	
 	// Destroy mutexes and condition variables
 	if (bgqueueMutex) SDL_DestroyMutex(bgqueueMutex);
 	if (thumbqueueMutex) SDL_DestroyMutex(thumbqueueMutex);
@@ -2163,6 +2180,20 @@ void cleanupImageLoaderPool() {
 	if (thumbqueueCond) SDL_DestroyCond(thumbqueueCond);
 	if (animqueueCond) SDL_DestroyCond(animqueueCond);
 	if (flipCond) SDL_DestroyCond(flipCond);
+	
+	// Set pointers to NULL after destruction
+	bgqueueMutex = NULL;
+	thumbqueueMutex = NULL;
+	animqueueMutex = NULL;
+	bgMutex = NULL;
+	thumbMutex = NULL;
+	animMutex = NULL;
+	frameMutex = NULL;
+	fontMutex = NULL;
+	bgqueueCond = NULL;
+	thumbqueueCond = NULL;
+	animqueueCond = NULL;
+	flipCond = NULL;
 }
 ///////////////////////////////////////
 
@@ -3232,7 +3263,8 @@ int main (int argc, char *argv[]) {
 							max_width - SCALE1(BUTTON_PADDING * 2),
 							0,
 							text_color,
-							1
+							1,
+							fontMutex  // Thread-safe font access
 						);
 					}
 				}
