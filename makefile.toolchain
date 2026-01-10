@@ -13,6 +13,7 @@ GIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain
 INIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain/.build
 IMAGE_NAME=ghcr.io/loveretro/$(PLATFORM)-toolchain:modernize
 
+
 all: $(INIT_IF_NECESSARY)
 	docker run -it --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) $(IMAGE_NAME) /bin/bash
 
@@ -21,7 +22,7 @@ $(INIT_IF_NECESSARY): $(GIT_IF_NECESSARY)
 
 $(GIT_IF_NECESSARY):
 	mkdir -p toolchains
-	git clone -b modernize https://github.com/LoveRetro/$(PLATFORM)-toolchain/ toolchains/$(PLATFORM)-toolchain
+	git clone https://github.com/LoveRetro/$(PLATFORM)-toolchain/ toolchains/$(PLATFORM)-toolchain
 	docker pull $(IMAGE_NAME) && touch toolchains/$(PLATFORM)-toolchain/.build
 
 clean:
