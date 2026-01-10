@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SDCARD_PATH="/mnt/SDCARD"
+SDCARD_PATH="/var/tmp/nextui/sdcard"
 USERDATA_PATH="$SDCARD_PATH/.userdata"
 SHARED_USERDATA_PATH="$USERDATA_PATH/shared"
 

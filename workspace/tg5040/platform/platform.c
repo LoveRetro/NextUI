@@ -561,16 +561,16 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
 
-	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
-	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer2 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer3 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer4 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
-	vid.target_layer5 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w,h);
+	vid.target_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer2 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer3 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer4 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
+	vid.target_layer5 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	
 	vid.target	= NULL; // only needed for non-native sizes
 	
-	vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
+	vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
 
 	SDL_SetSurfaceBlendMode(vid.screen, SDL_BLENDMODE_BLEND);
 	SDL_SetTextureBlendMode(vid.stream_layer1, SDL_BLENDMODE_BLEND);
@@ -742,65 +742,6 @@ void PLAT_setShaders(int nr) {
 	reloadShaderTextures = 1;
 }
 
-
-uint32_t PLAT_get_dominant_color() {
-    if (!vid.screen) {
-        fprintf(stderr, "Error: vid.screen is NULL.\n");
-        return 0;
-    }
-
-    if (vid.screen->format->format != SDL_PIXELFORMAT_RGBA8888) {
-        fprintf(stderr, "Error: Surface is not in RGBA8888 format.\n");
-        return 0;
-    }
-
-    uint32_t *pixels = (uint32_t *)vid.screen->pixels;
-    if (!pixels) {
-        fprintf(stderr, "Error: Unable to access pixel data.\n");
-        return 0;
-    }
-
-    int width = vid.screen->w;
-    int height = vid.screen->h;
-    int pixel_count = width * height;
-
-    // Use dynamic memory allocation for the histogram
-    uint32_t *color_histogram = (uint32_t *)calloc(256 * 256 * 256, sizeof(uint32_t));
-    if (!color_histogram) {
-        fprintf(stderr, "Error: Memory allocation failed.\n");
-        return 0;
-    }
-
-    for (int i = 0; i < pixel_count; i++) {
-        uint32_t pixel = pixels[i];
-
-        // Extract R, G, B from RGBA8888
-        uint8_t r = (pixel >> 24) & 0xFF;
-        uint8_t g = (pixel >> 16) & 0xFF;
-        uint8_t b = (pixel >> 8) & 0xFF;
-
-        uint32_t rgb = (r << 16) | (g << 8) | b;
-        color_histogram[rgb]++;
-    }
-
-    // Find the most frequent color
-    uint32_t dominant_color = 0;
-    uint32_t max_count = 0;
-    for (int i = 0; i < 256 * 256 * 256; i++) {
-        if (color_histogram[i] > max_count) {
-            max_count = color_histogram[i];
-            dominant_color = i;
-        }
-    }
-
-    free(color_histogram);
-
-    // Return as RGBA8888 with full alpha
-    return (dominant_color << 8) | 0xFF;
-}
-
-
-
 static void clearVideo(void) {
 	for (int i=0; i<3; i++) {
 		SDL_RenderClear(vid.renderer);
@@ -874,12 +815,12 @@ static void resizeVideo(int w, int h, int p) {
 	if (vid.target) SDL_DestroyTexture(vid.target);
 	
 	// SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, vid.sharpness==SHARPNESS_SOFT?"1":"0", SDL_HINT_OVERRIDE);
-	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w,h);
+	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w,h);
 	SDL_SetTextureBlendMode(vid.stream_layer1, SDL_BLENDMODE_BLEND);
 	
 	if (vid.sharpness==SHARPNESS_CRISP) {
 		// SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, "1", SDL_HINT_OVERRIDE);
-		vid.target = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w * hard_scale,h * hard_scale);
+		vid.target = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w * hard_scale,h * hard_scale);
 	}
 	else {
 		vid.target = NULL;
@@ -1102,7 +1043,7 @@ void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, flo
     if (!inputSurface || !vid.target_layer1 || !vid.renderer) return; 
 
     SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-                                                 SDL_PIXELFORMAT_RGBA8888, 
+                                                 SDL_PIXELFORMAT_ARGB8888, 
                                                  SDL_TEXTUREACCESS_TARGET,  
                                                  inputSurface->w, inputSurface->h); 
 
@@ -1177,7 +1118,7 @@ void PLAT_animateSurface(
 	if (!inputSurface || !vid.target_layer2 || !vid.renderer) return;
 
 	SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
+		SDL_PIXELFORMAT_ARGB8888,
 		SDL_TEXTUREACCESS_TARGET,
 		inputSurface->w, inputSurface->h);
 
@@ -1226,20 +1167,21 @@ void PLAT_animateSurface(
 	SDL_DestroyTexture(tempTexture);
 }
 
-static int text_offset = 0;
-
-int PLAT_resetScrollText(TTF_Font* font, const char* in_name,int max_width) {
-	int text_width, text_height;
+int PLAT_textShouldScroll(TTF_Font* font, const char* in_name, int max_width, SDL_mutex* fontMutex) {
+	int text_width = 0;
+	if (fontMutex) SDL_LockMutex(fontMutex);
+	TTF_SizeUTF8(font, in_name, &text_width, NULL);
+	if (fontMutex) SDL_UnlockMutex(fontMutex);
 	
-    TTF_SizeUTF8(font, in_name, &text_width, &text_height);
-
-	text_offset = 0;
-
 	if (text_width <= max_width) {
 		return 0;
 	} else {
 		return 1;
 	}
+}
+static int text_offset = 0;
+void PLAT_resetScrollText() {
+	text_offset = 0;
 }
 void PLAT_scrollTextTexture(
     TTF_Font* font,
@@ -1247,7 +1189,8 @@ void PLAT_scrollTextTexture(
     int x, int y,      // Position on target layer
     int w, int h,      // Clipping width and height
     SDL_Color color,
-    float transparency
+    float transparency,
+    SDL_mutex* fontMutex  // Mutex for thread-safe font access (can be NULL)
 ) {
     static int frame_counter = 0;
 	int padding = 30;
@@ -1256,8 +1199,10 @@ void PLAT_scrollTextTexture(
     if (transparency > 1.0f) transparency = 1.0f;
     color.a = (Uint8)(transparency * 255);
 
-    // Render the original text only once
+    // Render the original text with mutex protection for thread safety
+    if (fontMutex) SDL_LockMutex(fontMutex);
     SDL_Surface* singleSur = TTF_RenderUTF8_Blended(font, in_name, color);
+    if (fontMutex) SDL_UnlockMutex(fontMutex);
     if (!singleSur) return;
 
     int single_width = singleSur->w;
@@ -1265,7 +1210,7 @@ void PLAT_scrollTextTexture(
 
     // Create a surface to hold two copies side by side with padding
     SDL_Surface* text_surface = SDL_CreateRGBSurfaceWithFormat(0,
-        single_width * 2 + padding, single_height, 32, SDL_PIXELFORMAT_RGBA8888);
+        single_width * 2 + padding, single_height, 32, SDL_PIXELFORMAT_ARGB8888);
 
     SDL_FillRect(text_surface, NULL, THEME_COLOR1);
     SDL_BlitSurface(singleSur, NULL, text_surface, NULL);
@@ -1332,7 +1277,7 @@ void PLAT_animateSurfaceOpacity(
 	if (!inputSurface) return;
 
 	SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
+		SDL_PIXELFORMAT_ARGB8888,
 		SDL_TEXTUREACCESS_TARGET,
 		inputSurface->w, inputSurface->h);
 
@@ -1385,7 +1330,7 @@ SDL_Surface* PLAT_captureRendererToSurface() {
 	int width, height;
 	SDL_GetRendererOutputSize(vid.renderer, &width, &height);
 
-	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA8888);
+	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
 	if (!surface) {
 		printf("Failed to create surface: %s\n", SDL_GetError());
 		return NULL;
@@ -1394,7 +1339,7 @@ SDL_Surface* PLAT_captureRendererToSurface() {
 	Uint32 black = SDL_MapRGBA(surface->format, 0, 0, 0, 255);
 	SDL_FillRect(surface, NULL, black);
 
-	if (SDL_RenderReadPixels(vid.renderer, NULL, SDL_PIXELFORMAT_RGBA8888, surface->pixels, surface->pitch) != 0) {
+	if (SDL_RenderReadPixels(vid.renderer, NULL, SDL_PIXELFORMAT_ARGB8888, surface->pixels, surface->pitch) != 0) {
 		printf("Failed to read pixels from renderer: %s\n", SDL_GetError());
 		SDL_FreeSurface(surface);
 		return NULL;
@@ -1424,7 +1369,7 @@ void PLAT_animateAndFadeSurface(
 	if (!inputSurface || !vid.renderer) return;
 
 	SDL_Texture* moveTexture = SDL_CreateTexture(vid.renderer,
-		SDL_PIXELFORMAT_RGBA8888,
+		SDL_PIXELFORMAT_ARGB8888,
 		SDL_TEXTUREACCESS_TARGET,
 		inputSurface->w, inputSurface->h);
 
@@ -2091,30 +2036,6 @@ unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight) {
 
 ///////////////////////////////
 
-// TODO: 
-#define OVERLAY_WIDTH PILL_SIZE // unscaled
-#define OVERLAY_HEIGHT PILL_SIZE // unscaled
-#define OVERLAY_BPP 4
-#define OVERLAY_DEPTH 16
-#define OVERLAY_PITCH (OVERLAY_WIDTH * OVERLAY_BPP) // unscaled
-#define OVERLAY_RGBA_MASK 0x00ff0000,0x0000ff00,0x000000ff,0xff000000 // ARGB
-static struct OVL_Context {
-	SDL_Surface* overlay;
-} ovl;
-
-SDL_Surface* PLAT_initOverlay(void) {
-	ovl.overlay = SDL_CreateRGBSurface(SDL_SWSURFACE, SCALE2(OVERLAY_WIDTH,OVERLAY_HEIGHT),OVERLAY_DEPTH,OVERLAY_RGBA_MASK);
-	return ovl.overlay;
-}
-void PLAT_quitOverlay(void) {
-	if (ovl.overlay) SDL_FreeSurface(ovl.overlay);
-}
-void PLAT_enableOverlay(int enable) {
-
-}
-
-///////////////////////////////
-
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	PLAT_getBatteryStatusFine(is_charging, charge);
 
@@ -2154,12 +2075,15 @@ static inline void connection_reset(struct WIFI_connection *connection_info)
 
 static bool bluetoothConnected = false;
 
-void PLAT_updateNetworkStatus()
+void PLAT_getNetworkStatus(int* is_online)
 {
 	if(WIFI_enabled())
 		WIFI_connectionInfo(&connection);
 	else
 		connection_reset(&connection);
+	
+	if(is_online)
+		*is_online = (connection.valid && connection.ssid[0] != '\0');
 	
 	if(BT_enabled()) {
 		bluetoothConnected = PLAT_bluetoothConnected();
@@ -2415,10 +2339,6 @@ void PLAT_getOsVersionInfo(char* output_str, size_t max_len)
 bool PLAT_btIsConnected(void)
 {
 	return bluetoothConnected;
-}
-
-int PLAT_isOnline(void) {
-	return (connection.valid && connection.ssid[0] != '\0');
 }
 
 ConnectionStrength PLAT_connectionStrength(void) {
@@ -2970,10 +2890,6 @@ void PLAT_setNetworkTimeSync(bool on) {
 		system("/etc/init.d/ntpd stop");
 	}
 }
-
-/////////////////////////
-
-bool PLAT_supportSSH() { return true; }
 
 /////////////////////////
 

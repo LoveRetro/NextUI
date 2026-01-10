@@ -15,8 +15,7 @@ $(PLATFORM):
 	# rfkill
 	cp ./workspace/$@/rfkill/rfkill.elf ./build/SYSTEM/$@/bin/
 	# bluetooth
-	cp ./workspace/$@/btmanager/build/nextui.upgrade_bluez.pakz ./build/BASE/
-	cp ./workspace/$@/audiomon/audiomon.elf ./build/SYSTEM/$@/bin/
+	cp ./workspace/$@/btmanager/build/nextui.upgrade_bluez.pakz ./build/BASE/nextui.upgrade_bluez.tg5040.pakz
 
 	# extras
 	cp ./workspace/$@/other/NextCommander/output/NextCommander ./build/EXTRAS/Tools/$@/Files.pak/

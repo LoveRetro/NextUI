@@ -445,8 +445,6 @@ next
 				if so it needs to either be solved in MOSS/JELOS (RIP)
 				or the other platforms MinUI supports (the non-Plus Mini in particular has a really terrible shutdown process at least on older firmwares)
 		
-	move PLAT_isOnline() into PWR_* formally
-			
 	all
 		revisit localization?
 	

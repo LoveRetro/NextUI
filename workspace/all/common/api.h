@@ -262,8 +262,9 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateSurfaceOpacity PLAT_animateSurfaceOpacity //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateAndFadeSurface PLAT_animateAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_resetScrollText PLAT_resetScrollText
-#define GFX_scrollTextTexture PLAT_scrollTextTexture
+#define GFX_textShouldScroll PLAT_textShouldScroll // (TTF_Font* font, const char* in_name,int max_width, SDL_mutex* fontMutex);
+#define GFX_resetScrollText PLAT_resetScrollText // (void);
+#define GFX_scrollTextTexture PLAT_scrollTextTexture // (TTF_Font* font, const char* in_name,int x, int y, int w, int h, SDL_Color color, float transparency, SDL_mutex* fontMutex);
 #define GFX_flipHidden PLAT_flipHidden //(void)
 #define GFX_GL_screenCapture PLAT_GL_screenCapture //(void)
 
@@ -293,7 +294,8 @@ int GFX_getVsync(void);
 void GFX_setVsync(int vsync);
 
 int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
-int PLAT_resetScrollText(TTF_Font* font, const char* in_name,int max_width);
+int PLAT_textShouldScroll(TTF_Font* font, const char* in_name, int max_width, SDL_mutex* fontMutex);
+void PLAT_resetScrollText(void);
 void GFX_scrollTextSurface(TTF_Font* font, const char* in_name, SDL_Surface** out_surface, int max_width, int height, int padding, SDL_Color color,float heightratio); // returns final width
 int GFX_getTextWidth(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
 int GFX_getTextHeight(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
@@ -347,9 +349,10 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 
 void GFX_ApplyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius);
 void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius);
-void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, SDL_Rect* rect, int radius);
-void GFX_ApplyRoundedCorners_RGBA8888(SDL_Surface* surface, SDL_Rect* rect, int radius);
-void BlitRGBA4444toRGB565(SDL_Surface* src, SDL_Surface* dest, SDL_Rect* dest_rect);
+// for both ARGB44444 and RGBA4444
+void GFX_ApplyRoundedCorners_4444(SDL_Surface* surface, SDL_Rect* rect, int radius);
+// for both ARGB8888 and RGBA8888
+void GFX_ApplyRoundedCorners_8888(SDL_Surface* surface, SDL_Rect* rect, int radius);
 ///////////////////////////////
 
 typedef struct SND_Frame {
@@ -458,7 +461,6 @@ void VIB_triplePulse(int strength, int duration_ms, int gap_ms);
 typedef void (*PWR_callback_t)();
 void PWR_init(void);
 void PWR_quit(void);
-void PWR_warn(int enable);
 
 int PWR_ignoreSettingInput(int btn, int show_setting);
 void PWR_update(int* dirty, int* show_setting, PWR_callback_t before_sleep, PWR_callback_t after_sleep);
@@ -480,6 +482,8 @@ int PWR_preventAutosleep(void);
 
 int PWR_isCharging(void);
 int PWR_getBattery(void);
+
+int PWR_isOnline(void);
 
 // rules-based presets managed and applied by LEDS_applyRules()
 enum LightProfile {
@@ -547,7 +551,6 @@ int PLAT_shouldWake(void);
 
 SDL_Surface* PLAT_initVideo(void);
 void PLAT_quitVideo(void);
-uint32_t PLAT_get_dominant_color(void);
 void PLAT_clearVideo(SDL_Surface* screen);
 void PLAT_clearAll(void);
 void PLAT_setVsync(int vsync);
@@ -588,9 +591,9 @@ void PLAT_scrollTextTexture(
     int x, int y,      // Position on target layer
     int w, int h,      // Clipping width and height
     SDL_Color color,
-    float transparency
+    float transparency,
+    SDL_mutex* fontMutex  // Mutex for thread-safe font access (can be NULL)
 );
-void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
 void PLAT_vsync(int remaining);
 scaler_t PLAT_getScaler(GFX_Renderer* renderer);
 void PLAT_blitRenderer(GFX_Renderer* renderer);
@@ -598,29 +601,15 @@ void PLAT_flip(SDL_Surface* screen, int sync);
 void PLAT_GL_Swap();
 void GFX_GL_Swap();
 unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight);
-unsigned char* PLAT_pixelscaler(const unsigned char* src, int sw, int sh, int scale, int* outW, int* outH);
 void PLAT_GPU_Flip();
 void PLAT_setShaders(int nr);
 void PLAT_resetShaders();
 void PLAT_clearShaders();
-void PLAT_setShader1Filter(int value);
-void PLAT_setShader2Filter(int value);
-void PLAT_setShader3Filter(int value);
-void PLAT_setShaderUpscale1(int nr);
-void PLAT_setShaderUpscale2(int nr);
-void PLAT_setShaderUpscale3(int nr);
-void PLAT_setShader1(const char* filename);
-void PLAT_setShader2(const char* filename);
-void PLAT_setShader3(const char* filename);
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *inputtype);
 void PLAT_initShaders();
 ShaderParam* PLAT_getShaderPragmas(int i);
 int PLAT_supportsOverscan(void);
 
-SDL_Surface* PLAT_initOverlay(void);
-void PLAT_quitOverlay(void);
-void PLAT_enableOverlay(int enable);
-	
 #define PWR_LOW_CHARGE 10
 void PLAT_getBatteryStatus(int* is_charging, int* charge); // 0,1 and 0,10,20,40,60,80,100
 void PLAT_getBatteryStatusFine(int* is_charging, int* charge); // 0,1 and 0-100
@@ -637,9 +626,8 @@ int PLAT_pickSampleRate(int requested, int max);
 
 char* PLAT_getModel(void);
 void PLAT_getOsVersionInfo(char *output_str, size_t max_len);
-void PLAT_updateNetworkStatus();
+void PLAT_getNetworkStatus(int* is_online);
 bool PLAT_btIsConnected(void);
-int PLAT_isOnline(void);
 typedef enum {
 	SIGNAL_STRENGTH_OFF = -1,
 	SIGNAL_STRENGTH_DISCONNECTED,

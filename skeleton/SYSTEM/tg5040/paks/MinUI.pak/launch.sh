@@ -23,6 +23,7 @@ export USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
 export SHARED_USERDATA_PATH="$SDCARD_PATH/.userdata/shared"
 export LOGS_PATH="$USERDATA_PATH/logs"
 export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
+export HOME="$USERDATA_PATH"
 
 #######################################
 
@@ -48,6 +49,8 @@ mkdir -p "$SHARED_USERDATA_PATH/.minui"
 export TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
 if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
 	export DEVICE="brick"
+else
+	export DEVICE="smartpro"
 fi
 
 export IS_NEXT="yes"
