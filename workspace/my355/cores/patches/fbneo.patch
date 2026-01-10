@@ -7,11 +7,11 @@ index 0b7d646c7..2784aa150
 @@ -346,6 +346,22 @@ else ifeq ($(platform), classic_armv7_a7)
  	CFLAGS += $(PLATFORM_FLAGS)
  	CXXFLAGS += $(PLATFORM_FLAGS)
- 
+
 +# target platform my355
 +else ifneq (,$(findstring my355,$(platform)))
 +	TARGET := $(TARGET_NAME)_libretro.so
-+	CXX=/usr/bin/aarch64-linux-gnu-gcc
++	CXX=$(CROSS_COMPILE)gcc
 +	fpic := -fPIC
 +	SHARED := -shared -Wl,-no-undefined -Wl,--version-script=$(VERSION_SCRIPT)
 +	PLATFORM_FLAGS := -O3 -Ofast -DNDEBUG=1 -fomit-frame-pointer -ffast-math -mtune=cortex-a35 -mcpu=cortex-a35 -march=armv8-a+simd
@@ -23,7 +23,7 @@ index 0b7d646c7..2784aa150
 +	LDFLAGS += -lstdc++ -static-libgcc -static-libstdc++ -lpthread -lm -flto
 +	CFLAGS += $(PLATFORM_FLAGS)
 +	CXXFLAGS += $(PLATFORM_FLAGS)
-+	
++
  # (armv8 a35, hard point, neon based) ###
  # Playstation Classic
  else ifeq ($(platform), classic_armv8_a35)
@@ -32,14 +32,14 @@ index 3726ec60f..30a6c8cd6 100644
 --- a/src/burner/libretro/libretro.cpp
 +++ b/src/burner/libretro/libretro.cpp
 @@ -78,7 +78,7 @@ INT32 nAudSegLen = 0;
- 
+
  static UINT8* pVidImage              = NULL;
  static bool bVidImageNeedRealloc     = false;
 -static bool bRotationDone            = false;
 +static bool bRotationDone            = true;
  static int16_t *pAudBuffer           = NULL;
  static char text_missing_files[2048] = "";
- 
+
 @@ -1550,8 +1550,46 @@ void retro_run()
  		// current frame will be corrupted, let's dupe instead
  		pBurnDraw = NULL;
@@ -83,9 +83,9 @@ index 3726ec60f..30a6c8cd6 100644
 +    } else {
 +	    video_cb(pBurnDraw, nGameWidth, nGameHeight, nBurnPitch);
 +    }
- 
+
 -	video_cb(pBurnDraw, nGameWidth, nGameHeight, nBurnPitch);
- 
+
  	bool updated = false;
  	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
 @@ -1567,7 +1605,7 @@ void retro_run()
@@ -98,11 +98,11 @@ index 3726ec60f..30a6c8cd6 100644
  			retro_get_system_av_info(&av_info);
  			environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &av_info);
 @@ -2184,7 +2222,7 @@ static bool retro_load_game_common()
- 
+
  		// Initializing display, autorotate if needed
  		BurnDrvGetFullSize(&nGameWidth, &nGameHeight);
 -		SetRotation();
 +		//SetRotation();
  		SetColorDepth();
- 
+
  		VideoBufferInit();
