@@ -113,6 +113,7 @@ endif
 
 	# lib dependencies
 ifeq ($(PLATFORM), my355)
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libcrypto.* ./build/SYSTEM/$(PLATFORM)/lib/
 	# cp ./workspace/$(PLATFORM)/wifimanager/src/core/libwifimg.so ./build/SYSTEM/$(PLATFORM)/lib/
 endif
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libsamplerate.* ./build/SYSTEM/$(PLATFORM)/lib/

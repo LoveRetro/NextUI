@@ -72,6 +72,9 @@ all: clean libretro-common $(PREFIX_LOCAL)/include/msettings.h
 else
 all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
+ifeq ($(PLATFORM), my355)
+	cp $(LIB_PATH)/libcrypto.so.3 build/$(PLATFORM)
+endif
 	cp $(LIB_PATH)/libsamplerate.so.0 build/$(PLATFORM)
 	# cp /usr/lib/aarch64-linux-gnu/libsqlite3.so.0 build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.

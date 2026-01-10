@@ -46,6 +46,7 @@ else ifeq ($(PLATFORM), my355)
 	cd ./all/minput/ && make
 	cd ./all/nextval/ && make
 	cd ./all/settings/ && make
+	cd ./all/syncsettings/ && make
 else
 	cd ./$(PLATFORM)/rfkill && make all
 	cd ./$(PLATFORM)/btmanager && make all
