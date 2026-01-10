@@ -1,6 +1,7 @@
 // tg5040
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <linux/fb.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -57,6 +58,7 @@ typedef struct Shader {
 
 GLuint g_shader_default = 0;
 GLuint g_shader_overlay = 0;
+GLuint g_shader_overlay_mul = 0;
 GLuint g_noshader = 0;
 
 Shader* shaders[MAXSHADERS] = {
@@ -490,6 +492,12 @@ void PLAT_initShaders() {
 	vertex = load_shader_from_file(GL_VERTEX_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
 	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
 	g_shader_overlay = link_program(vertex, fragment,"overlay.glsl");
+
+
+	// Multiply overlays are handled via GL blend state + preprocessed mask textures.
+	// No separate shader file is needed (keeps SD deployments simple).
+	g_shader_overlay_mul = g_shader_overlay;
+
 
 	vertex = load_shader_from_file(GL_VERTEX_SHADER, "noshader.glsl",SYSSHADERS_FOLDER);
 	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "noshader.glsl",SYSSHADERS_FOLDER);
@@ -1634,8 +1642,14 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 }
 
 static int frame_count = 0;
+typedef enum {
+	BLEND_NONE = 0,
+	BLEND_ALPHA = 1,
+	BLEND_MULTIPLY = 2,
+} BlendMode;
+
 void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_texture,
-                   int x, int y, int dst_width, int dst_height, Shader* shader, int alpha, int filter) {
+                   int x, int y, int dst_width, int dst_height, Shader* shader, BlendMode blend_mode, int filter) {
 
 	static GLuint static_VAO = 0, static_VBO = 0;
 	static GLuint last_program = 0;
@@ -1739,9 +1753,13 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 		lastfbo = 0;
     }
 
-	if(alpha==1) {
+	if (blend_mode == BLEND_ALPHA) {
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	} else if (blend_mode == BLEND_MULTIPLY) {
+		// out = dst * src
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_DST_COLOR, GL_ZERO);
 	} else {
 		glDisable(GL_BLEND);
 	}
@@ -1768,12 +1786,259 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 
 typedef struct {
     SDL_Surface* loaded_effect;
-    SDL_Surface* loaded_overlay;
+
+    // Overlay is split into two conceptual layers at load time:
+    // - loaded_overlay_mask: CRT masks (scanlines/grids/RGB masks) prepared for multiply blending
+    // - loaded_overlay_frame: bezel/frame art drawn with standard alpha blending
+    SDL_Surface* loaded_overlay_mask;
+    SDL_Surface* loaded_overlay_frame;
+
     int effect_ready;
     int overlay_ready;
 } FramePreparation;
 
 static FramePreparation frame_prep = {0};
+static SDL_mutex* frame_prep_mutex = NULL;
+
+// Upload an SDL surface to an existing GL texture.
+// Handles pitch padding and forces a known pixel layout.
+static void uploadSurfaceToTextureRGBA(GLuint tex, SDL_Surface* surface, int* out_w, int* out_h) {
+    if (!surface) return;
+
+    SDL_Surface* s = surface;
+    // ABGR8888 is the safest for OpenGL RGBA uploads on little-endian.
+    if (s->format && s->format->format != SDL_PIXELFORMAT_ABGR8888) {
+        SDL_Surface* conv = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_ABGR8888, 0);
+        if (conv) s = conv;
+    }
+
+    if (out_w) *out_w = s->w;
+    if (out_h) *out_h = s->h;
+
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+    const int row_bytes = s->w * 4;
+    const uint8_t* pixels = (const uint8_t*)s->pixels;
+
+    if (s->pitch == row_bytes) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, s->w, s->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    } else {
+        // GLES2 doesn't guarantee GL_UNPACK_ROW_LENGTH, so repack.
+        uint8_t* packed = (uint8_t*)malloc((size_t)row_bytes * (size_t)s->h);
+        if (packed) {
+            for (int y = 0; y < s->h; y++) {
+                memcpy(packed + (size_t)y * (size_t)row_bytes, pixels + (size_t)y * (size_t)s->pitch, (size_t)row_bytes);
+            }
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, s->w, s->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, packed);
+            free(packed);
+        }
+    }
+
+    if (s != surface) {
+        SDL_FreeSurface(s);
+    }
+}
+
+// Build two overlay layers from a single ABGR8888 surface:
+//  - mask: alpha-weighted multiply factor baked into RGB, alpha forced to 255, fully transparent becomes white (no-op)
+//  - frame: edge/near-edge high-alpha pixels kept as-is for normal alpha blending
+// This prevents "transparent-black" pixels from blacking out the image under multiply blending.
+static void split_overlay_surface(SDL_Surface* src_abgr8888,
+                                 SDL_Surface** out_mask,
+                                 SDL_Surface** out_frame,
+                                 const char* overlay_path) {
+    if (out_mask) *out_mask = NULL;
+    if (out_frame) *out_frame = NULL;
+    if (!src_abgr8888) return;
+
+    const int w = src_abgr8888->w;
+    const int h = src_abgr8888->h;
+
+    int force_mask = 0;
+    int force_alpha = 0;
+
+    // Optional filename hints to resolve tricky edge-cases without UI changes:
+    //  - "@mask" / ".mask" / "_mask" / "@mul" / ".mul" / "_mul" => mask-only
+    //  - "@alpha" / ".alpha" / "_alpha" / "@frame" / ".frame" / "_frame" => alpha-only
+    if (overlay_path) {
+        const char* base = strrchr(overlay_path, '/');
+        base = base ? (base + 1) : overlay_path;
+
+        char lower[256];
+        size_t n = strlen(base);
+        if (n > sizeof(lower) - 1) n = sizeof(lower) - 1;
+        for (size_t i = 0; i < n; i++) {
+            char c = base[i];
+            if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+            lower[i] = c;
+        }
+        lower[n] = '\0';
+
+        if (strstr(lower, "@mask") || strstr(lower, ".mask") || strstr(lower, "_mask") ||
+            strstr(lower, "@mul")  || strstr(lower, ".mul")  || strstr(lower, "_mul")) {
+            force_mask = 1;
+        }
+        if (strstr(lower, "@alpha") || strstr(lower, ".alpha") || strstr(lower, "_alpha") ||
+            strstr(lower, "@frame") || strstr(lower, ".frame") || strstr(lower, "_frame")) {
+            force_alpha = 1;
+        }
+        if (force_mask && force_alpha) {
+            // If user accidentally sets both, prefer default behavior.
+            force_mask = 0;
+            force_alpha = 0;
+        }
+    }
+
+    // Edge margin used to detect "frame art" (bezel/border). Roughly ~12% of min dimension.
+    int margin = (int)(0.12f * (float)((w < h) ? w : h));
+    if (margin < 24) margin = 24;
+    if (margin > 160) margin = 160;
+
+    const int a_frame = 220; // "mostly opaque"
+
+    // Quick classification: do we even look like a frame overlay?
+    // If there are lots of opaque pixels near the edges but not in the interior, treat those edge pixels as "frame".
+    int likely_frame = (!force_mask && !force_alpha);
+
+    if (likely_frame) {
+        int edge_opaque = 0, edge_total = 0;
+        int inner_opaque = 0, inner_total = 0;
+
+        SDL_LockSurface(src_abgr8888);
+        const uint8_t* sp = (const uint8_t*)src_abgr8888->pixels;
+        const int spitch = src_abgr8888->pitch;
+
+        for (int y = 0; y < h; y += 4) { // sample every 4th row (fast)
+            const uint32_t* row = (const uint32_t*)(sp + (size_t)y * (size_t)spitch);
+            const int near_y = (y < margin) || (y >= h - margin);
+
+            for (int x = 0; x < w; x += 4) { // sample every 4th column
+                const uint32_t px = row[x];
+                const uint8_t a = (uint8_t)((px >> 24) & 0xFF);
+                const int near_edge = near_y || (x < margin) || (x >= w - margin);
+
+                if (near_edge) {
+                    edge_total++;
+                    if (a >= a_frame) edge_opaque++;
+                } else {
+                    inner_total++;
+                    if (a >= a_frame) inner_opaque++;
+                }
+            }
+        }
+
+        SDL_UnlockSurface(src_abgr8888);
+
+        // Require some edge opacity, and ensure the interior isn't similarly opaque everywhere.
+        // If interior also has lots of opaque pixels, it's probably a full-screen mask (scanlines/grid) not a bezel frame.
+        float edge_ratio = edge_total ? (float)edge_opaque / (float)edge_total : 0.0f;
+        float inner_ratio = inner_total ? (float)inner_opaque / (float)inner_total : 0.0f;
+
+        if (!(edge_ratio > 0.02f && inner_ratio < 0.01f)) {
+            likely_frame = 0;
+        }
+    }
+
+    SDL_Surface* mask = NULL;
+    SDL_Surface* frame = NULL;
+
+    if (!force_alpha) {
+        mask = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ABGR8888);
+        if (!mask) return;
+    }
+    if (!force_mask) {
+        frame = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ABGR8888);
+        if (!frame) {
+            SDL_FreeSurface(mask);
+            return;
+        }
+    }
+
+    int frame_nonzero = 0;
+    int mask_nonwhite = 0;
+
+    SDL_LockSurface(src_abgr8888);
+    if (mask) SDL_LockSurface(mask);
+    if (frame) SDL_LockSurface(frame);
+
+    const uint8_t* sp = (const uint8_t*)src_abgr8888->pixels;
+    const int spitch = src_abgr8888->pitch;
+
+    uint8_t* mp = mask ? (uint8_t*)mask->pixels : NULL;
+    const int mpitch = mask ? mask->pitch : 0;
+
+    uint8_t* fp = frame ? (uint8_t*)frame->pixels : NULL;
+    const int fpitch = frame ? frame->pitch : 0;
+
+    for (int y = 0; y < h; y++) {
+        const uint32_t* srow = (const uint32_t*)(sp + (size_t)y * (size_t)spitch);
+        uint32_t* mrow = mask ? (uint32_t*)(mp + (size_t)y * (size_t)mpitch) : NULL;
+        uint32_t* frow = frame ? (uint32_t*)(fp + (size_t)y * (size_t)fpitch) : NULL;
+
+        const int near_y = (y < margin) || (y >= h - margin);
+
+        for (int x = 0; x < w; x++) {
+            const uint32_t px = srow[x];
+            const uint8_t r = (uint8_t)(px & 0xFF);
+            const uint8_t g = (uint8_t)((px >> 8) & 0xFF);
+            const uint8_t b = (uint8_t)((px >> 16) & 0xFF);
+            const uint8_t a = (uint8_t)((px >> 24) & 0xFF);
+
+            const int near_edge = near_y || (x < margin) || (x >= w - margin);
+
+            int is_frame = 0;
+            if (force_alpha) {
+                is_frame = (a != 0);
+            } else if (force_mask) {
+                is_frame = 0;
+            } else if (likely_frame) {
+                if (near_edge && a >= a_frame) is_frame = 1;
+            }
+
+            if (frame) {
+                if (is_frame) {
+                    frow[x] = px;
+                    if (a) frame_nonzero++;
+                } else {
+                    frow[x] = 0u;
+                }
+            }
+
+            if (mask) {
+                uint8_t mr, mg, mb;
+
+                if (is_frame || a == 0) {
+                    // Multiply no-op
+                    mr = mg = mb = 255;
+                } else {
+                    // alpha-weighted multiply factor baked into RGB:
+                    // factor = (1 - a) + a * rgb
+                    // in 0..255 space: 255 - a + (rgb*a)/255
+                    mr = (uint8_t)(255 - a + (uint8_t)(((int)r * (int)a + 127) / 255));
+                    mg = (uint8_t)(255 - a + (uint8_t)(((int)g * (int)a + 127) / 255));
+                    mb = (uint8_t)(255 - a + (uint8_t)(((int)b * (int)a + 127) / 255));
+                }
+
+                const uint32_t mpx = ((uint32_t)255 << 24) | ((uint32_t)mb << 16) | ((uint32_t)mg << 8) | (uint32_t)mr;
+                mrow[x] = mpx;
+
+                if (mr != 255 || mg != 255 || mb != 255) mask_nonwhite++;
+            }
+        }
+    }
+
+    if (frame) SDL_UnlockSurface(frame);
+    if (mask) SDL_UnlockSurface(mask);
+    SDL_UnlockSurface(src_abgr8888);
+
+    if (frame && frame_nonzero == 0) { SDL_FreeSurface(frame); frame = NULL; }
+    if (mask && mask_nonwhite == 0) { SDL_FreeSurface(mask); mask = NULL; }
+
+    if (out_mask) *out_mask = mask; else if (mask) SDL_FreeSurface(mask);
+    if (out_frame) *out_frame = frame; else if (frame) SDL_FreeSurface(frame);
+}
+
 
 int prepareFrameThread(void *data) {
     while (1) {
@@ -1781,42 +2046,61 @@ int prepareFrameThread(void *data) {
 
         if (effectUpdated) {
 			LOG_info("effect updated %s\n",effect_path);
-			if(effect_path) {
+
+			SDL_Surface* loaded = NULL;
+			if (effect_path) {
 				SDL_Surface* tmp = IMG_Load(effect_path);
 				if (tmp) {
-					frame_prep.loaded_effect = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA32, 0);
+					loaded = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_ABGR8888, 0);
 					SDL_FreeSurface(tmp);
-				} else {
-					frame_prep.loaded_effect = 0;
 				}
-			} else {
-				frame_prep.loaded_effect = 0;
 			}
-			effectUpdated = 0;
-			frame_prep.effect_ready = 1; 
-        }
-		if(effect.type == EFFECT_NONE && frame_prep.loaded_effect !=0) {
-			frame_prep.loaded_effect = 0;
+
+			SDL_LockMutex(frame_prep_mutex);
+			if (frame_prep.loaded_effect) {
+				SDL_FreeSurface(frame_prep.loaded_effect);
+			}
+			frame_prep.loaded_effect = loaded;
 			frame_prep.effect_ready = 1;
-	
+			effectUpdated = 0;
+			SDL_UnlockMutex(frame_prep_mutex);
+        }
+		if (effect.type == EFFECT_NONE) {
+			SDL_LockMutex(frame_prep_mutex);
+			if (frame_prep.loaded_effect != NULL) {
+				SDL_FreeSurface(frame_prep.loaded_effect);
+				frame_prep.loaded_effect = NULL;
+				frame_prep.effect_ready = 1;
+			}
+			SDL_UnlockMutex(frame_prep_mutex);
 		}
 
         if (overlayUpdated) {
-
 			LOG_info("overlay updated\n");
-			if(overlay_path) {
+
+			SDL_Surface* loaded_mask = NULL;
+			SDL_Surface* loaded_frame = NULL;
+
+			if (overlay_path) {
 				SDL_Surface* tmp = IMG_Load(overlay_path);
 				if (tmp) {
-					frame_prep.loaded_overlay = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA32, 0);
+					SDL_Surface* loaded = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_ABGR8888, 0);
 					SDL_FreeSurface(tmp);
-				} else {
-					frame_prep.loaded_overlay = 0;
+					if (loaded) {
+						split_overlay_surface(loaded, &loaded_mask, &loaded_frame, overlay_path);
+						SDL_FreeSurface(loaded);
+					}
 				}
-			} else {
-				frame_prep.loaded_overlay = 0;
 			}
+
+			SDL_LockMutex(frame_prep_mutex);
+			if (frame_prep.loaded_overlay_mask) SDL_FreeSurface(frame_prep.loaded_overlay_mask);
+			if (frame_prep.loaded_overlay_frame) SDL_FreeSurface(frame_prep.loaded_overlay_frame);
+			frame_prep.loaded_overlay_mask = loaded_mask;
+			frame_prep.loaded_overlay_frame = loaded_frame;
 			frame_prep.overlay_ready = 1;
-			overlayUpdated=0;
+			overlayUpdated = 0;
+			SDL_UnlockMutex(frame_prep_mutex);
         }
 
         SDL_Delay(120); 
@@ -1829,6 +2113,13 @@ static SDL_Thread *prepare_thread = NULL;
 void PLAT_GL_Swap() {
 
 	if (prepare_thread == NULL) {
+		if (frame_prep_mutex == NULL) {
+			frame_prep_mutex = SDL_CreateMutex();
+			if (frame_prep_mutex == NULL) {
+				printf("Error creating frame preparation mutex: %s\n", SDL_GetError());
+				return;
+			}
+		}
         prepare_thread = SDL_CreateThread(prepareFrameThread, "PrepareFrameThread", NULL);
 
         if (prepare_thread == NULL) {
@@ -1853,51 +2144,83 @@ void PLAT_GL_Swap() {
 
     static GLuint effect_tex = 0;
     static int effect_w = 0, effect_h = 0;
-    static GLuint overlay_tex = 0;
-    static int overlay_w = 0, overlay_h = 0;
-    static int overlayload = 0;
+    static GLuint overlay_mask_tex = 0;
+    static int overlay_mask_w = 0, overlay_mask_h = 0;
+    static GLuint overlay_frame_tex = 0;
+    static int overlay_frame_w = 0, overlay_frame_h = 0;
 
 
-	 if (frame_prep.effect_ready) {
-		if(frame_prep.loaded_effect) {
-			if(!effect_tex) glGenTextures(1, &effect_tex);
+	// Pull prepared surfaces from the background thread (thread-safe) and upload them.
+	SDL_Surface* effect_surf = NULL;
+	SDL_Surface* overlay_mask_surf = NULL;
+	SDL_Surface* overlay_frame_surf = NULL;
+	int do_effect = 0;
+	int do_overlay = 0;
+
+	SDL_LockMutex(frame_prep_mutex);
+	if (frame_prep.effect_ready) {
+		do_effect = 1;
+		effect_surf = frame_prep.loaded_effect;
+		frame_prep.loaded_effect = NULL;
+		frame_prep.effect_ready = 0;
+	}
+	if (frame_prep.overlay_ready) {
+		do_overlay = 1;
+		overlay_mask_surf = frame_prep.loaded_overlay_mask;
+		overlay_frame_surf = frame_prep.loaded_overlay_frame;
+		frame_prep.loaded_overlay_mask = NULL;
+		frame_prep.loaded_overlay_frame = NULL;
+		frame_prep.overlay_ready = 0;
+	}
+	SDL_UnlockMutex(frame_prep_mutex);
+
+	if (do_effect) {
+		if (effect_surf) {
+			if (!effect_tex) glGenTextures(1, &effect_tex);
 			glBindTexture(GL_TEXTURE_2D, effect_tex);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, frame_prep.loaded_effect->w, frame_prep.loaded_effect->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, frame_prep.loaded_effect->pixels);
-			effect_w = frame_prep.loaded_effect->w;
-			effect_h = frame_prep.loaded_effect->h;
+			uploadSurfaceToTextureRGBA(effect_tex, effect_surf, &effect_w, &effect_h);
+			SDL_FreeSurface(effect_surf);
 		} else {
-			if (effect_tex) {
-				glDeleteTextures(1, &effect_tex);
-			}
+			if (effect_tex) glDeleteTextures(1, &effect_tex);
 			effect_tex = 0;
 		}
-        frame_prep.effect_ready = 0; 
-    }
+	}
 
-    if (frame_prep.overlay_ready) {
-		if(frame_prep.loaded_overlay) {
-			if(!overlay_tex) glGenTextures(1, &overlay_tex);
-			glBindTexture(GL_TEXTURE_2D, overlay_tex);
+	if (do_overlay) {
+		// Mask layer: alpha-weighted multiply (RGB is pre-baked, alpha forced to 255)
+		if (overlay_mask_surf) {
+			if (!overlay_mask_tex) glGenTextures(1, &overlay_mask_tex);
+			glBindTexture(GL_TEXTURE_2D, overlay_mask_tex);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, frame_prep.loaded_overlay->w, frame_prep.loaded_overlay->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, frame_prep.loaded_overlay->pixels);
-			overlay_w = frame_prep.loaded_overlay->w;
-			overlay_h = frame_prep.loaded_overlay->h;
-		
+			uploadSurfaceToTextureRGBA(overlay_mask_tex, overlay_mask_surf, &overlay_mask_w, &overlay_mask_h);
+			SDL_FreeSurface(overlay_mask_surf);
 		} else {
-			if (overlay_tex) {
-				glDeleteTextures(1, &overlay_tex);
-			}
-			overlay_tex = 0;
+			if (overlay_mask_tex) glDeleteTextures(1, &overlay_mask_tex);
+			overlay_mask_tex = 0;
 		}
-        frame_prep.overlay_ready = 0; 
-    }
+
+		// Frame layer: normal alpha blend (bezel/frame art)
+		if (overlay_frame_surf) {
+			if (!overlay_frame_tex) glGenTextures(1, &overlay_frame_tex);
+			glBindTexture(GL_TEXTURE_2D, overlay_frame_tex);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			uploadSurfaceToTextureRGBA(overlay_frame_tex, overlay_frame_surf, &overlay_frame_w, &overlay_frame_h);
+			SDL_FreeSurface(overlay_frame_surf);
+		} else {
+			if (overlay_frame_tex) glDeleteTextures(1, &overlay_frame_tex);
+			overlay_frame_tex = 0;
+		}
+	}
 	
     static GLuint src_texture = 0;
     static int src_w_last = 0, src_h_last = 0;
@@ -1930,7 +2253,7 @@ void PLAT_GL_Swap() {
         runShaderPass(src_texture, g_shader_default, NULL, dst_rect.x, dst_rect.y,
             dst_rect.w, dst_rect.h,
             &(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_h, .texw = vid.blit->src_w, .texh = vid.blit->src_h},
-            0, GL_NONE);
+			BLEND_NONE, GL_NONE);
     }
 
     last_w = vid.blit->src_w;
@@ -1983,7 +2306,7 @@ void PLAT_GL_Swap() {
                 &shaders[i]->texture,
                 0, 0, dst_w, dst_h,
                 shaders[i],
-                0,
+				BLEND_NONE,
                 (i == nrofshaders - 1) ? finalScaleFilter : shaders[i + 1]->filter
             );
         } else {
@@ -1993,7 +2316,7 @@ void PLAT_GL_Swap() {
                 &shaders[i]->texture,
                 0, 0, dst_w, dst_h,
                 shaders[i],
-                0,
+				BLEND_NONE,
                 (i == nrofshaders - 1) ? finalScaleFilter : shaders[i + 1]->filter
             );
         }
@@ -2009,7 +2332,7 @@ void PLAT_GL_Swap() {
             NULL,
             dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h,
             &(Shader){.srcw = last_w, .srch = last_h, .texw = last_w, .texh = last_h},
-            0, GL_NONE
+			BLEND_NONE, GL_NONE
         );
     }
 
@@ -2020,18 +2343,29 @@ void PLAT_GL_Swap() {
             NULL,
 			dst_rect.x, dst_rect.y, effect_w, effect_h,
             &(Shader){.srcw = effect_w, .srch = effect_h, .texw = effect_w, .texh = effect_h},
-            1, GL_NONE
+			BLEND_ALPHA, GL_NONE
         );
     }
 
-    if (overlay_tex) {
+    if (overlay_mask_tex) {
         runShaderPass(
-            overlay_tex,
+            overlay_mask_tex,
             g_shader_overlay,
             NULL,
             0, 0, device_width, device_height,
-            &(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_h, .texw = overlay_w, .texh = overlay_h},
-            1, GL_NONE
+            &(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_h, .texw = overlay_mask_w, .texh = overlay_mask_h},
+            BLEND_MULTIPLY, GL_NONE
+        );
+    }
+
+    if (overlay_frame_tex) {
+        runShaderPass(
+            overlay_frame_tex,
+            g_shader_overlay,
+            NULL,
+            0, 0, device_width, device_height,
+            &(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_h, .texw = overlay_frame_w, .texh = overlay_frame_h},
+            BLEND_ALPHA, GL_NONE
         );
     }
 
