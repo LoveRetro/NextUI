@@ -1,0 +1,22 @@
+diff --git a/libretro/Makefile b/libretro/Makefile
+index 466fa6b..ec40f1a
+--- a/libretro/Makefile
++++ b/libretro/Makefile
+@@ -82,6 +82,17 @@ ifneq (,$(findstring unix,$(platform)))
+    endif
+ endif
+
++# my355
++else ifneq (,$(findstring my355,$(platform)))
++   CC=$(CROSS_COMPILE)gcc
++   CXX=$(CROSS_COMPILE)g++
++   CFLAGS += $(LTO)
++   CXXFLAGS += $(LTO) -O3 -Ofast -march=armv8-a+simd -mtune=cortex-a35 -ffast-math
++   LDFLAGS += $(LTO) -lstdc++ -flto
++   TARGET := $(TARGET_NAME)_libretro.so
++   fpic := -fPIC
++   LIBS += -lz
++   SHARED := -shared -Wl,--version-script=link.T -Wl,-z,defs
+ # ODROIDN2
+ else ifneq (,$(findstring CortexA73_G12B,$(platform)))
+ 	TARGET := $(TARGET_NAME)_libretro.so
