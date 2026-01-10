@@ -21,6 +21,8 @@
 
 #include <pthread.h>
 
+extern pthread_mutex_t audio_mutex;
+
 ///////////////////////////////
 
 void LOG_note(int level, const char *fmt, ...)
@@ -2363,6 +2365,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 			tmpbuffer, amount, snd.sample_rate_in, snd.sample_rate_out, ratio);
 
 		int written_frames = 0;
+		pthread_mutex_lock(&audio_mutex);
 		for (int i = 0; i < resampled.frame_count; i++)
 		{
 			// Check if buffer full (leave one slot free)
@@ -2371,12 +2374,11 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 				// Buffer full, break early
 				break;
 			}
-			pthread_mutex_lock(&audio_mutex);
 			snd.buffer[snd.frame_in] = resampled.frames[i];
 			snd.frame_in = (snd.frame_in + 1) % snd.frame_count;
-			pthread_mutex_unlock(&audio_mutex);
 			written_frames++;
 		}
+		pthread_mutex_unlock(&audio_mutex);
 
 		total_consumed_frames += written_frames;
 		free(resampled.frames);
@@ -2407,6 +2409,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	// int full = 0;
 
 	float remaining_space = snd.frame_count;
+	pthread_mutex_lock(&audio_mutex);
 	if (snd.frame_in >= snd.frame_out)
 	{
 		remaining_space = snd.frame_count - (snd.frame_in - snd.frame_out);
@@ -2415,6 +2418,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	{
 		remaining_space = snd.frame_out - snd.frame_in;
 	}
+	pthread_mutex_unlock(&audio_mutex);
 	// printf("    actual free: %g\n", remaining_space);
 	currentbufferfree = remaining_space;
 	// let audio buffer fill up a little before playing audio, so no underruns occur. Target fill rate of buffer is about 50% so start playing when about 40% full
@@ -2490,6 +2494,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 		// Write resampled frames to the buffer
 		int written_frames = 0;
 
+		pthread_mutex_lock(&audio_mutex);
 		for (int i = 0; i < resampled.frame_count; i++)
 		{
 			if ((snd.frame_in + 1) % snd.frame_count == snd.frame_out)
@@ -2497,12 +2502,11 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 				// Buffer is full, break. This should never happen tho, but just to be safe
 				break;
 			}
-			pthread_mutex_lock(&audio_mutex);
 			snd.buffer[snd.frame_in] = resampled.frames[i];
 			snd.frame_in = (snd.frame_in + 1) % snd.frame_count;
-			pthread_mutex_unlock(&audio_mutex);
 			written_frames++;
 		}
+		pthread_mutex_unlock(&audio_mutex);
 
 		total_consumed_frames += written_frames;
 		free(resampled.frames);
