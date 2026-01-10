@@ -7072,9 +7072,9 @@ void onAudioSinkChanged(int device, int watch_event)
 	else
 		SDL_setenv("AUDIODEV", "default", 1);
 
-	if(device != AUDIO_SINK_DEFAULT && !exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
+	if(device != AUDIO_SINK_DEFAULT && !exists(SDCARD_PATH "/.userdata/tg5040/.asoundrc"))
 		LOG_error("asoundrc is not there yet!!!\n");
-	else if(device == AUDIO_SINK_DEFAULT && exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
+	else if(device == AUDIO_SINK_DEFAULT && exists(SDCARD_PATH "/.userdata/tg5040/.asoundrc"))
 		LOG_error("asoundrc is not deleted yet!!!\n");
 }
 

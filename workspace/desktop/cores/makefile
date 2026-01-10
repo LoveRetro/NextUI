@@ -7,7 +7,7 @@
 #CORES+= fake-08 (clang)
 #CORES+= fbneo
 #CORES+= fceumm (clang)
-#CORES+= gambatte
+CORES= gambatte
 #CORES+= gpsp
 #CORES+= libretro-cap32
 #CORES+= libretro-uae

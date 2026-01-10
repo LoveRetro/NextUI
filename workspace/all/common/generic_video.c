@@ -146,7 +146,7 @@ int extractPragmaParameters(const char *shaderSource, ShaderParam *params, int m
 
 GLuint link_program(GLuint vertex_shader, GLuint fragment_shader, const char* cache_key) {
     char cache_path[512];
-    snprintf(cache_path, sizeof(cache_path), "/mnt/SDCARD/.shadercache/%s.bin", cache_key);
+    snprintf(cache_path, sizeof(cache_path), SDCARD_PATH "/.shadercache/%s.bin", cache_key);
 
     GLuint program = glCreateProgram();
     GLint success;
@@ -200,7 +200,7 @@ GLuint link_program(GLuint vertex_shader, GLuint fragment_shader, const char* ca
     void* binary = malloc(binaryLength);
     glGetProgramBinary(program, binaryLength, NULL, &binaryFormat, binary);
 
-    mkdir("/mnt/SDCARD/.shadercache", 0755); 
+    mkdir(SDCARD_PATH "/.shadercache", 0755); 
     f = fopen(cache_path, "wb");
     if (f) {
         fwrite(&binaryFormat, sizeof(GLenum), 1, f);
