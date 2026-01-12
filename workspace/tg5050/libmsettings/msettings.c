@@ -787,12 +787,11 @@ int scaleExposure(int value) {
 }
 
 int scaleFanSpeed(int value) {
-	if(value < 0) return -1; // auto
+	if(value < -3) return -2; // auto medium
 	if(value > 100) return 100;
 	
-	// map 0-100 to 0-31
-	int raw = (value * 31) / 100;
-	return raw;
+	// Mapping is done in fan control daemon, pass on percentage
+	return value;
 }
 
 ///////// Platform specific, unscaled accessors
@@ -958,14 +957,36 @@ void SetRawColortemp(int val) { // 0 - 255
 	}
 }
 
-void SetRawFanSpeed(int val) { // 0-31, -1 for auto
+#define FAN_SPEED_CONTROL "/mnt/SDCARD/.system/tg5050/bin/fancontrol"
+#define FAN_LOCK_FILE "/var/run/fan-control.lock"
+
+void SetRawFanSpeed(int val) { // 0-31, -1/-2-3 for auto low/med/high
 	printf("SetRawFanSpeed(%i)\n", val); fflush(stdout);
 
-	// TODO: handle auto fan speed
-
-	FILE *fd = fopen("/sys/class/thermal/cooling_device0/cur_state", "w");
-	if (fd) {
-		fprintf(fd, "%i", val);
-		fclose(fd);
+	// Kill any existing fancontrol process and wait for it to exit
+	system("killall fancontrol 2>/dev/null");
+	usleep(100000); // 100ms - give time for process to clean up
+	
+	// Clean up stale lock file just in case
+	unlink(FAN_LOCK_FILE);
+		
+	if(val == -1) { // auto quiet
+		system(FAN_SPEED_CONTROL " quiet &");
+	}
+	else if(val == -2) { // auto normal
+		system(FAN_SPEED_CONTROL " normal &");
+	}
+	else if(val == -3) { // auto performance
+		system(FAN_SPEED_CONTROL " performance &");
+	}
+	else if(val >= 0 && val <= 100) { // manual percentage
+		char cmd[128];
+		snprintf(cmd, sizeof(cmd), "%s %d &", FAN_SPEED_CONTROL, val);
+		system(cmd);
+	}
+	else {
+		// let fan control figure out a valid default behavior
+		system(FAN_SPEED_CONTROL " &");
+		return;
 	}
 }

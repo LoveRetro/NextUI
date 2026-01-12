@@ -8,7 +8,7 @@
 #define SETTINGS_DEFAULT_EXPOSURE 0
 #define SETTINGS_DEFAULT_VOLUME 8
 #define SETTINGS_DEFAULT_HEADPHONE_VOLUME 4
-#define SETTINGS_DEFAULT_FAN_SPEED 40 // 12 (approx 39%) is quiet but effective
+#define SETTINGS_DEFAULT_FAN_SPEED -2 // Default fan curve
 
 #define SETTINGS_DEFAULT_MUTE_NO_CHANGE -69
 
@@ -30,7 +30,7 @@ void SetRawContrast(int value); // 0-100
 void SetRawSaturation(int value); // 0-100
 void SetRawExposure(int value); // 0-100
 void SetRawVolume(int value); // 0-100
-void SetRawFanSpeed(int value); // 0-31, -1 for auto
+void SetRawFanSpeed(int value); // 0-31, -1/-2-3 for auto low/med/high
 
 void SetBrightness(int value); // 0-10
 void SetColortemp(int value); // 0-40

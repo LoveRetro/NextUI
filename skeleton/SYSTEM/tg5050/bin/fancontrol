@@ -4,23 +4,15 @@
 # https://github.com/knulli-cfw/knulli-linux/commit/5c1b4724330b59cbe8af79d0a7f1dac86f1c221a
 # Mode is determined at startup: quiet(x0.5 curve) | normal(x1.0 curve) | performance(x1.5 curve)
 
-SHUTDOWN_FLAG="/var/run/shutdown.flag"
 LOCK_FILE="/var/run/fan-control.lock"
 
 exec 9>"${LOCK_FILE}"
 if ! flock -n 9; then
+  echo "Error: Another instance of fancontrol is still running"
   exit 0
 fi
 
 cleanup() {
-    # Max fan during shutdown/reboot sequence has started
-    if [ -f "$SHUTDOWN_FLAG" ]; then
-        if [ -n "$FAN_STATE" ] && [ -e "$FAN_STATE" ] && [ -n "$FAN_MAX" ]; then
-            echo "$FAN_MAX" > "$FAN_STATE" 2>/dev/null || true
-            sleep 1 # let fan do it's thing
-        fi
-    fi
-
     flock -u 9 2>/dev/null || true
     exec 9>&-
 }
@@ -42,33 +34,56 @@ RELATCH_EVERY=5
 LOOP_COUNT=0
 
 MODE="${1:-normal}"
+
+# Check if MODE is a percentage (number with optional % suffix)
+FIXED_PERCENT=""
 case "$MODE" in
-    quiet|normal|performance) ;;
-    *)
-        echo "Usage: $0 [quiet|normal|performance]" >&2
-        exit 1
+    *%)
+        FIXED_PERCENT="${MODE%?}"
+        ;;
+    *[0-9])
+        # Pure number, treat as percentage
+        case "$MODE" in
+            ''|*[!0-9]*) ;; # Not a pure number
+            *) FIXED_PERCENT="$MODE" ;;
+        esac
         ;;
 esac
 
-IFS= read -r BOARD < /boot/boot/knulli.board
+if [ -n "$FIXED_PERCENT" ]; then
+    # Validate percentage range
+    if [ "$FIXED_PERCENT" -lt 0 ] 2>/dev/null || [ "$FIXED_PERCENT" -gt 100 ] 2>/dev/null; then
+        echo "Error: Percentage must be between 0 and 100" >&2
+        exit 1
+    fi
+else
+    case "$MODE" in
+        quiet|normal|performance) ;;
+        *)
+            echo "Usage: $0 [quiet|normal|performance|PERCENT]" >&2
+            echo "  PERCENT: 0-100 (optionally with % suffix) for fixed fan speed" >&2
+            exit 1
+            ;;
+    esac
+fi
 
 T_MIN=""
 T_MAX=""
 T_OFF=""
 FAN_STATE=""
 FAN_MAX=""
-case "$BOARD" in
-    trimui-smart-pro-s)
+case "$PLATFORM" in
+    tg5050)
         FAN_STATE="/sys/class/thermal/cooling_device0/cur_state"
         FAN_MAX=31
 
         # Temperature ramp (C)
         T_OFF=30 # below this -> fan off
         T_MIN=35
-        T_MAX=60
+        T_MAX=60 # thermal throttling above this
     ;;
     *)
-    echo "Device not supported!"
+    echo "Device not supported: " $BOARD
     exit 1
     ;;
 esac
@@ -167,18 +182,29 @@ apply_mode() {
     exit 1
 }
 
+# If fixed percentage mode, set it and exit main logic
+if [ -n "$FIXED_PERCENT" ]; then
+    FIXED=$(( (FAN_MAX * FIXED_PERCENT + 50) / 100 ))
+    FIXED="$(clamp "$FIXED" 0 "$FAN_MAX")"
+    echo "$FIXED" > "$FAN_STATE"
+    do_exit
+fi
+
 build_temp_file_list
 pick_hottest_temp_file || TEMP_FILE=""
 
 # If no temperature source exists, pick a safe fixed speed
 [ -z "$TEMP_FILE" ] && {
     case "$MODE" in
+        # 30%
         quiet)  FIXED=$(( (FAN_MAX + 1) / 3 )) ;;
+        # 60%
         normal) FIXED=$(( (2 * FAN_MAX + 1) / 3 )) ;;
+        # 100%
         performance)    FIXED="$FAN_MAX" ;;
     esac
     echo "$FIXED" > "$FAN_STATE"
-    sleep infinity # So daemon controller sees it as still running
+    do_exit
 }
 
 LAST="0"

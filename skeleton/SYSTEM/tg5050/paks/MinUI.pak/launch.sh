@@ -123,12 +123,6 @@ echo 0 > /sys/devices/system/cpu/cpu7/online
 echo 0 > /sys/devices/system/cpu/cpu6/online
 echo 0 > /sys/devices/system/cpu/cpu5/online
 
-#set cpu fan level %s
-#/sys/class/thermal/cooling_device0/cur_state
-#/sys/class/thermal/thermal_zone0/temp
-#/sys/class/thermal/thermal_zone1/temp
-#/sys/class/thermal/thermal_zone2/temp
-
 #echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 #CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
 #CPU_SPEED_PERF=2000000
