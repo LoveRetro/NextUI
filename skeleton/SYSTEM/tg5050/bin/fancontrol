@@ -1,10 +1,14 @@
 #!/bin/sh
-# fan-control — simple fan control daemon
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2024 Knulli (https://knulli.org)
 # Original script written by Mikhailzrick and adapted from Knulli
 # https://github.com/knulli-cfw/knulli-linux/commit/5c1b4724330b59cbe8af79d0a7f1dac86f1c221a
+#
+# fan-control — simple fan control daemon
 # Mode is determined at startup: quiet(x0.5 curve) | normal(x1.0 curve) | performance(x1.5 curve)
 
 LOCK_FILE="/var/run/fan-control.lock"
+
 
 exec 9>"${LOCK_FILE}"
 if ! flock -n 9; then
