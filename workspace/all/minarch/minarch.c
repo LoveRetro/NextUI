@@ -2133,6 +2133,13 @@ char** list_files_in_folder(const char* folderPath, int* fileCount, const char* 
     *fileCount = 0;
 
     while ((entry = readdir(dir)) != NULL) {
+		// skip all entries starting with ._ (hidden files on macOS)
+		if (entry->d_name[0] == '.' && entry->d_name[1] == '_')
+			continue;
+		// skip macOS .DS_Store files
+		if (strcmp(entry->d_name, ".DS_Store") == 0)
+			continue;
+		
         char fullPath[1024];
         snprintf(fullPath, sizeof(fullPath), "%s/%s", folderPath, entry->d_name);
 
