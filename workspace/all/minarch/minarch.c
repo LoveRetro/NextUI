@@ -2673,8 +2673,6 @@ static void Config_syncShaders(char* key, int value) {
 		i = SH_SHADERS_PRESET;
 	}
 	if (exactMatch(key,config.shaders.options[SH_NROFSHADERS].key)) {
-		// Avoid zero-pass pipeline: clamp to at least 1
-		if (value < 1) value = 1;
 		GFX_setShaders(value);
 		shadersreload = 1;
 		i = SH_NROFSHADERS;
@@ -4372,8 +4370,6 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 			dst_p = dst_w * FIXED_BPP;
 			
 			sprintf(scaler_name, "raw%i", scale);
-			LOG_info("ignore core aspect %ix%i\n\n",dst_w,dst_h);
-			
 		}
 		else {
 			double src_aspect_ratio = ((double)src_w) / src_h;
