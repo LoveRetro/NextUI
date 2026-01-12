@@ -1901,8 +1901,7 @@ void PLAT_GL_Swap() {
     reloadShaderTextures = 0;
 }
 
-#if (defined(__ARM_NEON__) || defined(__ARM_NEON))
-// tryin to some arm neon optimization for first time for flipping image upside down, they sit in platform cause not all have neon extensions
+
 void PLAT_pixelFlipper(uint8_t* pixels, int width, int height) {
     const int rowBytes = width * 4;
     uint8_t* rowTop;
@@ -1913,6 +1912,7 @@ void PLAT_pixelFlipper(uint8_t* pixels, int width, int height) {
         rowBottom = pixels + (height - 1 - y) * rowBytes;
 
         int x = 0;
+#if (defined(__ARM_NEON__) || defined(__ARM_NEON))
         for (; x + 15 < rowBytes; x += 16) {
             uint8x16_t top = vld1q_u8(rowTop + x);
             uint8x16_t bottom = vld1q_u8(rowBottom + x);
@@ -1920,31 +1920,14 @@ void PLAT_pixelFlipper(uint8_t* pixels, int width, int height) {
             vst1q_u8(rowTop + x, bottom);
             vst1q_u8(rowBottom + x, top);
         }
-        for (; x < rowBytes; ++x) {
-            uint8_t temp = rowTop[x];
-            rowTop[x] = rowBottom[x];
-            rowBottom[x] = temp;
-        }
-    }
-}
-#else
-void PLAT_pixelFlipper(uint8_t* pixels, int width, int height) {
-    const int rowBytes = width * 4;
-    uint8_t* rowTop;
-    uint8_t* rowBottom;
-    
-    for (int y = 0; y < height / 2; ++y) {
-        rowTop = pixels + y * rowBytes;
-        rowBottom = pixels + (height - 1 - y) * rowBytes;
-        int x = 0;
-        for (; x < rowBytes; ++x) {
-            uint8_t temp = rowTop[x];
-            rowTop[x] = rowBottom[x];
-            rowBottom[x] = temp;
-        }
-    }
-}
 #endif
+        for (; x < rowBytes; ++x) {
+            uint8_t temp = rowTop[x];
+            rowTop[x] = rowBottom[x];
+            rowBottom[x] = temp;
+        }
+    }
+}
 
 unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight) {
     glViewport(0, 0, device_width, device_height);
