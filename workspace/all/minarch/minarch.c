@@ -38,6 +38,7 @@ static int show_menu = 0;
 static int simple_mode = 0;
 static int was_threaded = 0;
 static int should_run_core = 1; // used by threaded video
+static void selectScaler(int src_w, int src_h, int src_p);
 enum retro_pixel_format fmt;
 
 static pthread_t		core_pt;
@@ -78,6 +79,7 @@ static int downsample = 0; // set to 1 to convert from 8888 to 565
 static int DEVICE_WIDTH = 0; // FIXED_WIDTH;
 static int DEVICE_HEIGHT = 0; // FIXED_HEIGHT;
 static int DEVICE_PITCH = 0; // FIXED_PITCH;
+static int shader_reset_suppressed = 0;
 
 GFX_Renderer renderer;
 
@@ -2105,6 +2107,19 @@ static void Config_syncFrontend(char* key, int value) {
 	option->value = value;
 }
 
+// ensure live gameplay immediately picks up scaler/effect changes triggered via shortcuts
+static void apply_live_video_reset(void) {
+	// defer work to the video thread: mark scaler dirty (shader reset not needed here)
+	renderer.dst_p = 0;
+	// If shaders are disabled (0 passes), force a reset so the default pipeline rebuilds
+	if (config.shaders.options[SH_NROFSHADERS].value == 0) {
+		GFX_resetShaders();
+		shader_reset_suppressed = 0;
+	} else {
+		shader_reset_suppressed = 1; // skip reset for >0 shader pipelines
+	}
+}
+
 char** list_files_in_folder(const char* folderPath, int* fileCount, const char* extensionFilter) {
     DIR* dir = opendir(folderPath);
     if (!dir) {
@@ -2658,6 +2673,8 @@ static void Config_syncShaders(char* key, int value) {
 		i = SH_SHADERS_PRESET;
 	}
 	if (exactMatch(key,config.shaders.options[SH_NROFSHADERS].key)) {
+		// Avoid zero-pass pipeline: clamp to at least 1
+		if (value < 1) value = 1;
 		GFX_setShaders(value);
 		shadersreload = 1;
 		i = SH_NROFSHADERS;
@@ -3254,11 +3271,13 @@ static void input_poll_callback(void) {
 						int count = config.frontend.options[FE_OPT_SCALING].count;
 						if (screen_scaling>=count) screen_scaling -= count;
 						Config_syncFrontend(config.frontend.options[FE_OPT_SCALING].key, screen_scaling);
+						apply_live_video_reset();
 						break;
 					case SHORTCUT_CYCLE_EFFECT:
 						screen_effect += 1;
 						if (screen_effect>=EFFECT_COUNT) screen_effect -= EFFECT_COUNT;
 						Config_syncFrontend(config.frontend.options[FE_OPT_EFFECT].key, screen_effect);
+						apply_live_video_reset();
 						break;
 					default: break;
 				}
@@ -4479,17 +4498,17 @@ void applyFadeIn(uint32_t **data, size_t pitch, unsigned width, unsigned height,
 
             uint32_t color = (*data)[idx];
 
-            uint8_t a = (color >> 24) & 0xFF;
-            uint8_t b = (color >> 16) & 0xFF;
-            uint8_t g = (color >> 8) & 0xFF;
-            uint8_t r = (color >> 0) & 0xFF;
+			uint8_t a = (color >> 24) & 0xFF;
+			uint8_t b = (color >> 16) & 0xFF;
+			uint8_t g = (color >> 8) & 0xFF;
+			uint8_t r = (color >> 0) & 0xFF;
 
             r = (uint8_t)(r * fade_alpha);
             g = (uint8_t)(g * fade_alpha);
             b = (uint8_t)(b * fade_alpha);
             a = (uint8_t)(a * fade_alpha);
 
-            temp_buffer[idx] = (a << 24) | (b << 16) | (g << 8) | r;
+			temp_buffer[idx] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
         }
     }
 
@@ -4532,17 +4551,17 @@ void applyZoomFadeIn(uint32_t **data, size_t pitch, unsigned width, unsigned hei
                 color = (*data)[src_idx];
             }
 
-            uint8_t a = (color >> 24) & 0xFF;
-            uint8_t b = (color >> 16) & 0xFF;
-            uint8_t g = (color >> 8) & 0xFF;
-            uint8_t r = (color >> 0) & 0xFF;
+			uint8_t a = (color >> 24) & 0xFF;
+			uint8_t b = (color >> 16) & 0xFF;
+			uint8_t g = (color >> 8) & 0xFF;
+			uint8_t r = (color >> 0) & 0xFF;
 
             r = (uint8_t)(r * fade_alpha);
             g = (uint8_t)(g * fade_alpha);
             b = (uint8_t)(b * fade_alpha);
             a = (uint8_t)(a * fade_alpha);
 
-            temp_buffer[dst_idx] = (a << 24) | (b << 16) | (g << 8) | r;
+			temp_buffer[dst_idx] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
         }
     }
 
@@ -4630,7 +4649,11 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	if (renderer.dst_p==0 || width!=renderer.true_w || height!=renderer.true_h) {
 		selectScaler(width, height, pitch);
 		GFX_clearAll();
-		GFX_resetShaders();
+		if (!shader_reset_suppressed) {
+			GFX_resetShaders();
+		} else {
+			shader_reset_suppressed = 0; // consume suppression after one use
+		}
 	}
 	
 	// debug
@@ -4715,7 +4738,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 				return; // No data to display
 			}
 		} else if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
-			// convert XRGB8888 to ABGR8888
+			// convert XRGB8888 to GL-ready RGBA byte order (r,g,b,a in memory)
 			const uint32_t* src = (const uint32_t*)data;
 			for (unsigned i = 0; i < width * height; ++i) {
 				uint32_t pixel = src[i];
@@ -4723,12 +4746,12 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 				uint8_t g = (pixel >> 8) & 0xFF;
 				uint8_t b = (pixel >> 0) & 0xFF;
 				uint8_t a = 0xFF;
-				rgbaData[i] = (a << 24) | (b << 16) | (g << 8) | r;
+				rgbaData[i] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
 			}
 			data = rgbaData;
 
 		} else {
-			// convert RGB565 to ABGR8888
+			// convert RGB565 to GL-ready RGBA byte order (r,g,b,a in memory)
 			const uint16_t* srcData = (const uint16_t*)data;
 			unsigned srcPitchInPixels = pitch / sizeof(uint16_t); 
 
@@ -4741,7 +4764,7 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 					uint8_t b = (pixel & 0x1F) << 3;          
 					uint8_t a = 0xFF;
 
-					rgbaData[y * width + x] = (a << 24) | (b << 16) | (g << 8) | r;
+					rgbaData[y * width + x] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
 				}
 			}
 			data = rgbaData;

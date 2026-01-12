@@ -595,7 +595,7 @@ SDL_Surface* PLAT_initVideo(void) {
 }
 
 void PLAT_resetShaders() {
-
+	reloadShaderTextures = 1;
 }
 
 char* PLAT_findFileInDir(const char *directory, const char *filename) {

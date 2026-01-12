@@ -31,6 +31,7 @@
 
 static int finalScaleFilter=GL_LINEAR;
 static int reloadShaderTextures = 1;
+static int shaderResetRequested = 0;
 
 // shader stuff
 
@@ -438,7 +439,8 @@ static void sdl_log_stdout(
 }
 
 void PLAT_resetShaders() {
-
+	reloadShaderTextures = 1;
+	shaderResetRequested = 1;
 }
 
 SDL_Surface* PLAT_initVideo(void) {
@@ -1511,6 +1513,19 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 	static GLfloat last_texelSize[2] = {-1.0f, -1.0f};
 	static GLfloat texelSize[2] = {-1.0f, -1.0f};
 	static GLuint fbo = 0;
+	static GLuint lastfbo = 0;
+	static GLuint last_bound_texture = 0;
+
+	if (shaderResetRequested) {
+		// Force rebuild of GL objects and cached state
+		if (static_VAO) { glDeleteVertexArrays(1, &static_VAO); static_VAO = 0; }
+		if (static_VBO) { glDeleteBuffers(1, &static_VBO); static_VBO = 0; }
+		last_program = 0;
+		last_texelSize[0] = last_texelSize[1] = -1.0f;
+		fbo = 0;
+		lastfbo = 0;
+		last_bound_texture = 0;
+	}
 
 	texelSize[0] = 1.0f / shader->texw;
 	texelSize[1] = 1.0f / shader->texh;
@@ -1571,7 +1586,6 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 		}
 		glBindVertexArray(static_VAO);
 	}
-	static GLuint lastfbo = -1;
 	if (target_texture) {
 		if (*target_texture==0 || shader->updated || reloadShaderTextures) { 
 			
@@ -1615,7 +1629,6 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 		glDisable(GL_BLEND);
 	}
 
-	static GLuint last_bound_texture = 0;
 	if (src_texture != last_bound_texture) {
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, src_texture);
@@ -1720,12 +1733,24 @@ void PLAT_GL_Swap() {
 
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 
-    static GLuint effect_tex = 0;
-    static int effect_w = 0, effect_h = 0;
-    static GLuint overlay_tex = 0;
-    static int overlay_w = 0, overlay_h = 0;
-    static int overlayload = 0;
+	static GLuint effect_tex = 0;
+	static int effect_w = 0, effect_h = 0;
+	static GLuint overlay_tex = 0;
+	static int overlay_w = 0, overlay_h = 0;
+	static int overlayload = 0;
 
+	static GLuint src_texture = 0;
+	static int src_w_last = 0, src_h_last = 0;
+	static int last_w = 0, last_h = 0;
+
+	if (shaderResetRequested) {
+		if (src_texture) { glDeleteTextures(1, &src_texture); src_texture = 0; }
+		src_w_last = src_h_last = 0;
+		last_w = last_h = 0;
+		if (effect_tex) { glDeleteTextures(1, &effect_tex); effect_tex = 0; effect_w = effect_h = 0; }
+		if (overlay_tex) { glDeleteTextures(1, &overlay_tex); overlay_tex = 0; overlay_w = overlay_h = 0; }
+		reloadShaderTextures = 1;
+	}
 
 	 if (frame_prep.effect_ready) {
 		if(frame_prep.loaded_effect) {
@@ -1747,7 +1772,7 @@ void PLAT_GL_Swap() {
         frame_prep.effect_ready = 0; 
     }
 
-    if (frame_prep.overlay_ready) {
+	if (frame_prep.overlay_ready) {
 		if(frame_prep.loaded_overlay) {
 			if(!overlay_tex) glGenTextures(1, &overlay_tex);
 			glBindTexture(GL_TEXTURE_2D, overlay_tex);
@@ -1767,12 +1792,8 @@ void PLAT_GL_Swap() {
 		}
         frame_prep.overlay_ready = 0; 
     }
-	
-    static GLuint src_texture = 0;
-    static int src_w_last = 0, src_h_last = 0;
-    static int last_w = 0, last_h = 0;
 
-    if (!src_texture || reloadShaderTextures) {
+	if (!src_texture || reloadShaderTextures) {
         // if (src_texture) {
         //     glDeleteTextures(1, &src_texture);
         //     src_texture = 0;
@@ -1906,7 +1927,8 @@ void PLAT_GL_Swap() {
 
     SDL_GL_SwapWindow(vid.window);
     frame_count++;
-    reloadShaderTextures = 0;
+	reloadShaderTextures = 0;
+	shaderResetRequested = 0;
 }
 
 
