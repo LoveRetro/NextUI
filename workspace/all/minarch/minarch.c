@@ -4107,13 +4107,13 @@ static const char* bitmap_font[] = {
 	}
 	
 	static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int stride, int width, int height) {
-		#define CHAR_WIDTH 5
-		#define CHAR_HEIGHT 9
+		#define DEBUG_CHAR_WIDTH 5
+		#define DEBUG_CHAR_HEIGHT 9
 		#define LETTERSPACING 1
 	
 		int len = strlen(text);
-		int w = ((CHAR_WIDTH + LETTERSPACING) * len) - 1;
-		int h = CHAR_HEIGHT;
+		int w = ((DEBUG_CHAR_WIDTH + LETTERSPACING) * len) - 1;
+		int h = DEBUG_CHAR_HEIGHT;
 	
 		if (ox < 0) ox = width - w + ox;
 		if (oy < 0) oy = height - h + oy;
@@ -4127,12 +4127,12 @@ static const char* bitmap_font[] = {
 	
 		data += oy * stride + ox;
 	
-		for (int y = 0; y < CHAR_HEIGHT; y++) {
+		for (int y = 0; y < DEBUG_CHAR_HEIGHT; y++) {
 			uint32_t* row = data + y * stride;
 			for (int i = 0; i < len; i++) {
 				const char* c = bitmap_font[(unsigned char)text[i]];
-				for (int x = 0; x < CHAR_WIDTH; x++) {
-					if (c[y * CHAR_WIDTH + x] == '1') {
+				for (int x = 0; x < DEBUG_CHAR_WIDTH; x++) {
+					if (c[y * DEBUG_CHAR_WIDTH + x] == '1') {
 						*row = 0xFFFFFFFF;  // white RGBA8888
 					}
 					row++;
