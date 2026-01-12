@@ -262,7 +262,7 @@ int GFX_loadSystemFont(const char *fontPath)
 	return 0;
 }
 
-int GFX_updateColors()
+int GFX_updateColors(void)
 {
 	// We are currently micro managing all of these screen-mapped colors,
 	// should just move this to the caller.
@@ -372,6 +372,7 @@ void GFX_quit(void)
 	TTF_CloseFont(font.medium);
 	TTF_CloseFont(font.small);
 	TTF_CloseFont(font.tiny);
+	TTF_CloseFont(font.micro);
 
 	SDL_FreeSurface(gfx.assets);
 
