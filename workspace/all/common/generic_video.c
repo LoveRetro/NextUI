@@ -412,7 +412,7 @@ void PLAT_initShaders() {
 
 	vertex = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl",SYSSHADERS_FOLDER);
 	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl",SYSSHADERS_FOLDER);
-	g_shader_default = link_program(vertex, fragment,"defaultv2.glsl");
+	g_shader_default = link_program(vertex, fragment,"default.glsl");
 
 	vertex = load_shader_from_file(GL_VERTEX_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
 	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
@@ -1816,13 +1816,6 @@ void PLAT_GL_Swap() {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
     }
 
-    if (nrofshaders < 1) {
-        runShaderPass(src_texture, g_shader_default, NULL, dst_rect.x, dst_rect.y,
-            dst_rect.w, dst_rect.h,
-            &(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_h, .texw = vid.blit->src_w, .texh = vid.blit->src_h},
-            0, GL_NONE);
-    }
-
     last_w = vid.blit->src_w;
     last_h = vid.blit->src_h;
 
@@ -1901,6 +1894,14 @@ void PLAT_GL_Swap() {
             &(Shader){.srcw = last_w, .srch = last_h, .texw = last_w, .texh = last_h},
             0, GL_NONE
         );
+    }
+	else {
+        runShaderPass(src_texture, 
+			g_shader_default, 
+			NULL, 
+			dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h,
+            &(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_h, .texw = vid.blit->src_w, .texh = vid.blit->src_h},
+            0, GL_NONE);
     }
 
     if (effect_tex) {
