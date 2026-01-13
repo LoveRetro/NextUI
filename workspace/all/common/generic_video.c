@@ -410,14 +410,17 @@ void PLAT_initShaders() {
 	GLuint vertex;
 	GLuint fragment;
 
+	// Final  display shader (simple texture blit)
 	vertex = load_shader_from_file(GL_VERTEX_SHADER, "default.glsl",SYSSHADERS_FOLDER);
 	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "default.glsl",SYSSHADERS_FOLDER);
 	g_shader_default = link_program(vertex, fragment,"default.glsl");
 
+	// Overlay shader, for png overlays and static line/grid overlays
 	vertex = load_shader_from_file(GL_VERTEX_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
 	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "overlay.glsl",SYSSHADERS_FOLDER);
 	g_shader_overlay = link_program(vertex, fragment,"overlay.glsl");
 
+	// Stand-In if a shader is supposed to be applied, but wasnt compiled properly (shaper_p == NULL)
 	vertex = load_shader_from_file(GL_VERTEX_SHADER, "noshader.glsl",SYSSHADERS_FOLDER);
 	fragment = load_shader_from_file(GL_FRAGMENT_SHADER, "noshader.glsl",SYSSHADERS_FOLDER);
 	g_noshader = link_program(vertex, fragment,"noshader.glsl");
