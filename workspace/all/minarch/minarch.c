@@ -37,7 +37,7 @@ static int newScreenshot = 0;
 static int show_menu = 0;
 static int simple_mode = 0;
 static void selectScaler(int src_w, int src_h, int src_p);
-enum retro_pixel_format fmt;
+enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
 
 enum {
 	SCALE_NATIVE,
@@ -67,10 +67,11 @@ static int fast_forward = 0;
 static int overclock = 3; // auto
 static int has_custom_controllers = 0;
 static int gamepad_type = 0; // index in gamepad_labels/gamepad_values
+
 // these are no longer constants as of the RG CubeXX (even though they look like it)
-static int DEVICE_WIDTH = 0; // FIXED_WIDTH;
-static int DEVICE_HEIGHT = 0; // FIXED_HEIGHT;
-static int DEVICE_PITCH = 0; // FIXED_PITCH;
+static int DEVICE_WIDTH = 0;
+static int DEVICE_HEIGHT = 0;
+static int DEVICE_PITCH = 0;
 static int shader_reset_suppressed = 0;
 
 GFX_Renderer renderer;
@@ -1410,21 +1411,25 @@ enum {
 	SH_EXTRASETTINGS,
 	SH_SHADERS_PRESET,
 	SH_NROFSHADERS,
+
 	SH_SHADER1,
 	SH_SHADER1_FILTER,
 	SH_SRCTYPE1,
 	SH_SCALETYPE1,
 	SH_UPSCALE1,
+
 	SH_SHADER2,
 	SH_SHADER2_FILTER,
 	SH_SRCTYPE2,
 	SH_SCALETYPE2,
 	SH_UPSCALE2,
+
 	SH_SHADER3,
 	SH_SHADER3_FILTER,
 	SH_SRCTYPE3,
 	SH_SCALETYPE3,
 	SH_UPSCALE3,
+
 	SH_NONE
 };
 
@@ -1608,7 +1613,7 @@ static struct Config {
 			[FE_OPT_RESAMPLING] = {
 				.key	= "minarch__resampling_quality", 
 				.name	= "Audio Resampling Quality",
-				.desc	= "Resampling quality higher takes more CPU", // will call getScreenScalingDesc()
+				.desc	= "Resampling quality higher takes more CPU",
 				.default_value = 2,
 				.value = 2,
 				.count = 4,
@@ -1618,7 +1623,7 @@ static struct Config {
 			[FE_OPT_AMBIENT] = {
 				.key	= "minarch_ambient", 
 				.name	= "Ambient Mode",
-				.desc	= "Makes your leds follow on screen colors", // will call getScreenScalingDesc()
+				.desc	= "Makes your leds follow on screen colors",
 				.default_value = 0,
 				.value = 0,
 				.count = 6,
@@ -1751,7 +1756,7 @@ static struct Config {
 			[SH_EXTRASETTINGS] = {
 				.key	= "minarch_shaders_settings", 
 				.name	= "Optional Shaders Settings",
-				.desc	= "If shaders have extra settings they will show up in this settings menu", // will call getScreenScalingDesc()
+				.desc	= "If shaders have extra settings they will show up in this settings menu",
 				.default_value = 1,
 				.value = 1,
 				.count = 0,
@@ -1761,7 +1766,7 @@ static struct Config {
 			[SH_SHADERS_PRESET] = {
 				.key	= "minarch_shaders_preset", 
 				.name	= "Shader / Emulator Settings Preset",
-				.desc	= "Load a premade shaders/emulators config.\nTo try out a preset, exit the game without saving settings!", // will call getScreenScalingDesc()
+				.desc	= "Load a premade shaders/emulators config.\nTo try out a preset, exit the game without saving settings!",
 				.default_value = 1,
 				.value = 1,
 				.count = 0,
@@ -1771,7 +1776,7 @@ static struct Config {
 			[SH_NROFSHADERS] = {
 				.key	= "minarch_nrofshaders", 
 				.name	= "Number of Shaders",
-				.desc	= "Number of shaders 1 to 3", // will call getScreenScalingDesc()
+				.desc	= "Number of shaders 1 to 3",
 				.default_value = 0,
 				.value = 0,
 				.count = 4,
@@ -1782,7 +1787,7 @@ static struct Config {
 			[SH_SHADER1] = {
 				.key	= "minarch_shader1", 
 				.name	= "Shader 1",
-				.desc	= "Shader 1 program to run", // will call getScreenScalingDesc()
+				.desc	= "Shader 1 program to run",
 				.default_value = 1,
 				.value = 1,
 				.count = 0,
@@ -1792,7 +1797,7 @@ static struct Config {
 			[SH_SHADER1_FILTER] = {
 				.key	= "minarch_shader1_filter", 
 				.name	= "Shader 1 Filter",
-				.desc	= "Method of upscaling, NEAREST or LINEAR", // will call getScreenScalingDesc()
+				.desc	= "Method of upscaling, NEAREST or LINEAR",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1802,7 +1807,7 @@ static struct Config {
 			[SH_SRCTYPE1] = {
 				.key	= "minarch_shader1_srctype", 
 				.name	= "Shader 1 Source type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1812,7 +1817,7 @@ static struct Config {
 			[SH_SCALETYPE1] = {
 				.key	= "minarch_shader1_scaletype", 
 				.name	= "Shader 1 Texture Type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1822,7 +1827,7 @@ static struct Config {
 			[SH_UPSCALE1] = {
 				.key	= "minarch_shader1_upscale", 
 				.name	= "Shader 1 Scale",
-				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)",
 				.default_value = 1,
 				.value = 1,
 				.count = 9,
@@ -1832,7 +1837,7 @@ static struct Config {
 			[SH_SHADER2] = {
 				.key	= "minarch_shader2", 
 				.name	= "Shader 2",
-				.desc	= "Shader 2 program to run", // will call getScreenScalingDesc()
+				.desc	= "Shader 2 program to run",
 				.default_value = 0,
 				.value = 0,
 				.count = 0,
@@ -1843,7 +1848,7 @@ static struct Config {
 			[SH_SHADER2_FILTER] = {
 				.key	= "minarch_shader2_filter", 
 				.name	= "Shader 2 Filter",
-				.desc	= "Method of upscaling, NEAREST or LINEAR", // will call getScreenScalingDesc()
+				.desc	= "Method of upscaling, NEAREST or LINEAR",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1853,7 +1858,7 @@ static struct Config {
 			[SH_SRCTYPE2] = {
 				.key	= "minarch_shader2_srctype", 
 				.name	= "Shader 2 Source type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1863,7 +1868,7 @@ static struct Config {
 			[SH_SCALETYPE2] = {
 				.key	= "minarch_shader2_scaletype", 
 				.name	= "Shader 2 Texture Type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1873,7 +1878,7 @@ static struct Config {
 			[SH_UPSCALE2] = {
 				.key	= "minarch_shader2_upscale", 
 				.name	= "Shader 2 Scale",
-				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)",
 				.default_value = 0,
 				.value = 0,
 				.count = 9,
@@ -1883,7 +1888,7 @@ static struct Config {
 			[SH_SHADER3] = {
 				.key	= "minarch_shader3", 
 				.name	= "Shader 3",
-				.desc	= "Shader 3 program to run", // will call getScreenScalingDesc()
+				.desc	= "Shader 3 program to run",
 				.default_value = 2,
 				.value = 2,
 				.count = 0,
@@ -1894,7 +1899,7 @@ static struct Config {
 			[SH_SHADER3_FILTER] = {
 				.key	= "minarch_shader3_filter", 
 				.name	= "Shader 3 Filter",
-				.desc	= "Method of upscaling, NEAREST or LINEAR", // will call getScreenScalingDesc()
+				.desc	= "Method of upscaling, NEAREST or LINEAR",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1904,7 +1909,7 @@ static struct Config {
 			[SH_SRCTYPE3] = {
 				.key	= "minarch_shader3_srctype", 
 				.name	= "Shader 3 Source type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1914,7 +1919,7 @@ static struct Config {
 			[SH_SCALETYPE3] = {
 				.key	= "minarch_shader3_scaletype", 
 				.name	= "Shader 3 Texture Type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1924,7 +1929,7 @@ static struct Config {
 			[SH_UPSCALE3] = {
 				.key	= "minarch_shader3_upscale", 
 				.name	= "Shader 3 Scale",
-				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)",
 				.default_value = 0,
 				.value = 0,
 				.count = 9,
@@ -2110,7 +2115,7 @@ static void apply_live_video_reset(void) {
 	}
 }
 
-char** list_files_in_folder(const char* folderPath, int* fileCount, const char* extensionFilter) {
+char** list_files_in_folder(const char* folderPath, int* fileCount, const char* defaultElement, const char* extensionFilter) {
     DIR* dir = opendir(folderPath);
     if (!dir) {
         perror("opendir");
@@ -2121,6 +2126,13 @@ char** list_files_in_folder(const char* folderPath, int* fileCount, const char* 
     struct stat fileStat;
     char** fileList = NULL;
     *fileCount = 0;
+
+	if(defaultElement) {
+		fileList = malloc(sizeof(char* ) * 2);
+		fileList[0] = strdup(defaultElement);
+		fileList[1] = NULL;
+		(*fileCount)++;
+	}
 
     while ((entry = readdir(dir)) != NULL) {
 		// skip all entries starting with ._ (hidden files on macOS)
@@ -2141,7 +2153,7 @@ char** list_files_in_folder(const char* folderPath, int* fileCount, const char* 
                 }
             }
 
-            char** temp = realloc(fileList, sizeof(char*) * (*fileCount + 2)); 
+            char** temp = realloc(fileList, sizeof(char*) * (*fileCount + 1)); 
             if (!temp) {
                 perror("realloc");
                 for (int i = 0; i < *fileCount; ++i) {
@@ -2153,7 +2165,6 @@ char** list_files_in_folder(const char* folderPath, int* fileCount, const char* 
             }
             fileList = temp;
             fileList[*fileCount] = strdup(entry->d_name);
-            fileList[*fileCount + 1] = NULL;
             (*fileCount)++;
         }
     }
@@ -2171,11 +2182,21 @@ char** list_files_in_folder(const char* folderPath, int* fileCount, const char* 
         }
     }
 
+	// NUll terminate the list
+	char** temp = realloc(fileList, sizeof(char*) * (*fileCount + 1));
+	if (!temp) {
+		perror("realloc");
+		for (int i = 0; i < *fileCount; ++i) {
+			free(fileList[i]);
+		}
+		free(fileList);
+		return NULL;
+	}
+	fileList = temp;
+	fileList[*fileCount] = NULL;
+
     return fileList;
 }
-
-
-
 
 static void OptionList_setOptionValue(OptionList* list, const char* key, const char* value);
 enum {
@@ -2252,51 +2273,36 @@ static void Config_init(void) {
 		button->retro = retro_id;
 		button->local = local_id;
 	};
+
+	// populate shader presets
+	// TODO: None option?
+	int preset_filecount;
+	char** preset_filelist = list_files_in_folder(SHADERS_FOLDER, &preset_filecount, NULL, ".cfg");
+	config.shaders.options[SH_SHADERS_PRESET].values = preset_filelist;
 	
 	// populate shader options
+	// TODO: None option?
+	// TODO: Why do we do this twice? (see OptionShaders_openMenu)
 	int filecount;
-	char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount,NULL);
-	int preset_filecount;
-	char** preset_filelist = list_files_in_folder(SHADERS_FOLDER, &preset_filecount,".cfg");
-	
+	char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount, NULL, NULL);
+
 	config.shaders.options[SH_SHADER1].values = filelist;
-	config.shaders.options[SH_SHADER2].values = filelist;
-	config.shaders.options[SH_SHADER3].values = filelist;
-	config.shaders.options[SH_SHADERS_PRESET].values = preset_filelist;
-
 	config.shaders.options[SH_SHADER1].labels = filelist;
-	config.shaders.options[SH_SHADER2].labels = filelist;
-	config.shaders.options[SH_SHADER3].labels = filelist;
-	config.shaders.options[SH_SHADERS_PRESET].labels = preset_filelist;
-
 	config.shaders.options[SH_SHADER1].count = filecount;
+
+	config.shaders.options[SH_SHADER2].values = filelist;
+	config.shaders.options[SH_SHADER2].labels = filelist;
 	config.shaders.options[SH_SHADER2].count = filecount;
+
+	config.shaders.options[SH_SHADER3].values = filelist;
+	config.shaders.options[SH_SHADER3].labels = filelist;
 	config.shaders.options[SH_SHADER3].count = filecount;
-	config.shaders.options[SH_SHADERS_PRESET].count = preset_filecount;
 	
-	char overlaypath[255];
+	char overlaypath[MAX_PATH];
 	snprintf(overlaypath, sizeof(overlaypath), "%s/%s", OVERLAYS_FOLDER, core.tag);
-	char** overlaylist = list_files_in_folder(overlaypath, &filecount,NULL);
+	char** overlaylist = list_files_in_folder(overlaypath, &filecount, "None", NULL);
 
 	if (overlaylist) {
-		int newcount = filecount + 1;
-		char** newlist = malloc(sizeof(char*) * (newcount + 1)); // +1 for NULL terminator
-		if (!newlist) {
-			LOG_info("failed to make newlist");
-			return;
-		}
-		for (int i = 0; i < filecount; i++) {
-			newlist[i + 1] = overlaylist[i];
-		}
-
-		newlist[0] = strdup("None");  
-		newlist[newcount] = NULL;  
-		
-		free(overlaylist);
-
-		overlaylist = newlist;
-		filecount = newcount;
-
 		config.frontend.options[FE_OPT_OVERLAY].labels = overlaylist;
 		config.frontend.options[FE_OPT_OVERLAY].values = overlaylist;
 		config.frontend.options[FE_OPT_OVERLAY].count = filecount;
@@ -2434,8 +2440,6 @@ static void Config_load(void) {
 	}
 	else if (exists(system_path)) config.system_cfg = allocFile(system_path);
 	else config.system_cfg = NULL;
-	
-	
 	
 	// LOG_info("config.system_cfg: %s\n", config.system_cfg);
 	
@@ -2609,18 +2613,16 @@ static void Config_restore(void) {
 }
 
 void readShadersPreset(int i) {
-		char shaderspath[MAX_PATH] = {0};
-		sprintf(shaderspath, SHADERS_FOLDER "/%s", config.shaders.options[SH_SHADERS_PRESET].values[i]);
-		LOG_info("read shaders preset %s\n",shaderspath);
-		if (exists(shaderspath)) {
-			config.shaders_preset = allocFile(shaderspath);
-			Config_readOptionsString(config.shaders_preset);
-		}
-		else config.shaders_preset = NULL;
-		
-
-		
+	char shaderspath[MAX_PATH] = {0};
+	sprintf(shaderspath, SHADERS_FOLDER "/%s", config.shaders.options[SH_SHADERS_PRESET].values[i]);
+	LOG_info("read shaders preset %s\n",shaderspath);
+	if (exists(shaderspath)) {
+		config.shaders_preset = allocFile(shaderspath);
+		Config_readOptionsString(config.shaders_preset);
+	}
+	else config.shaders_preset = NULL;
 }
+
 void loadShaderSettings(int i) {
 	int menucount = 0;
 	config.shaderpragmas[i].options = calloc(32 + 1, sizeof(Option));
@@ -5544,10 +5546,6 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 	return MENU_CALLBACK_NOP;
 }
 
-
-
-
-
 static int OptionPragmas_optionChanged(MenuList* list, int i) {
 		MenuItem* item = &list->items[i];
 		for (int shader_index=0; shader_index < config.shaders.options[SH_NROFSHADERS].value; shader_index++) {
@@ -5605,16 +5603,20 @@ static int OptionPragmas_openMenu(MenuList* list, int i) {
 	return MENU_CALLBACK_NOP;
 }
 static int OptionShaders_optionChanged(MenuList* list, int i) {
-		MenuItem* item = &list->items[i];
-		Config_syncShaders(item->key, item->value);
-		applyShaderSettings();
-		for (int i = 0; i < config.shaders.count; i++) {
-			MenuItem* item = &list->items[i];
-			item->value = config.shaders.options[i].value;
-
-		}
-		if(i==1) initShaders();
-		return MENU_CALLBACK_NOP;
+	MenuItem* item = &list->items[i];
+	// Process menu entry change, update underlying config cruft and call handler
+	Config_syncShaders(item->key, item->value);
+	// Apply shader pragmas if needed
+	applyShaderSettings();
+	// Update menu entries to reflect any changes made by the handler
+	for (int y = 0; y < config.shaders.count; y++) {
+		MenuItem* item = &list->items[y];
+		item->value = config.shaders.options[y].value;
+	}
+	// Recursively call Config_syncShaders again for some reason
+	if(i==SH_SHADERS_PRESET) 
+		initShaders();
+	return MENU_CALLBACK_NOP;
 }
 
 static MenuList ShaderOptions_menu = {
@@ -5626,17 +5628,13 @@ static MenuList ShaderOptions_menu = {
 
 static int OptionShaders_openMenu(MenuList* list, int i) {
 	int filecount;
-	char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount,NULL);
+	char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount,NULL,NULL);
 
 	// Check if folder read failed or no files found
 	if (!filelist || filecount == 0) {
 		Menu_message("No shaders available\n/Shaders folder or shader files not found", (char*[]){"B", "BACK", NULL});
 		return MENU_CALLBACK_NOP;
 	}
-
-	// NULL-terminate filelist just in case
-	filelist = realloc(filelist, sizeof(char*) * (filecount + 1));
-	filelist[filecount] = NULL;
 
 	ShaderOptions_menu.items = calloc(config.shaders.count + 1, sizeof(MenuItem));
 	for (int i = 0; i < config.shaders.count; i++) {
@@ -6931,9 +6929,6 @@ int main(int argc , char* argv[]) {
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
 
 	setOverclock(overclock); // default to normal
-	// force a stack overflow to ensure asan is linked and actually working
-	// char tmp[2];
-	// tmp[2] = 'a';
 	
 	char core_path[MAX_PATH];
 	char rom_path[MAX_PATH]; 
@@ -6968,9 +6963,6 @@ int main(int argc , char* argv[]) {
 	IMG_Init(IMG_INIT_PNG);
 	Core_open(core_path, tag_name);
 
-	fmt = RETRO_PIXEL_FORMAT_XRGB8888;
-	environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
-
 	Game_open(rom_path); // nes tries to load gamegenie setting before this returns ffs
 	if (!game.is_open) goto finish;
 	
@@ -6980,14 +6972,10 @@ int main(int argc , char* argv[]) {
 	Config_load(); // before init?
 	Config_init();
 	Config_readOptions(); // cores with boot logo option (eg. gb) need to load options early
-	setOverclock(overclock);
+	setOverclock(overclock); // why twice?
 	
 	Core_init();
 
-	// TODO: find a better place to do this
-	// mixing static and loaded data is messy
-	// why not move to Core_init()?
-	// ah, because it's defined before options_menu...
 	options_menu.items[1].desc = (char*)core.version;
 	Core_load();
 	Input_init(NULL);
