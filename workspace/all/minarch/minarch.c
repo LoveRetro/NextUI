@@ -2669,12 +2669,11 @@ static void Config_syncShaders(char* key, int value) {
 		readShadersPreset(value);
 		i = SH_SHADERS_PRESET;
 	}
-	if (exactMatch(key,config.shaders.options[SH_NROFSHADERS].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_NROFSHADERS].key)) {
 		GFX_setShaders(value);
 		i = SH_NROFSHADERS;
 	}
-
-	if (exactMatch(key, config.shaders.options[SH_SHADER1].key)) {
+	else if (exactMatch(key, config.shaders.options[SH_SHADER1].key)) {
 		char** shaderList = config.shaders.options[SH_SHADER1].values;
 		if (shaderList) {
 			LOG_info("minarch: updating shader 1 - %i\n",value);
@@ -2687,11 +2686,11 @@ static void Config_syncShaders(char* key, int value) {
 		}
 		loadShaderSettings(0);
 	}
-	if (exactMatch(key,config.shaders.options[SH_SHADER1_FILTER].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SHADER1_FILTER].key)) {
 		GFX_updateShader(0,NULL,NULL,&value,NULL,NULL);
 		i = SH_SHADER1_FILTER;
 	}
-	if (exactMatch(key,config.shaders.options[SH_SRCTYPE1].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SRCTYPE1].key)) {
 		GFX_updateShader(0,NULL,NULL,NULL,NULL,&value);
 		i = SH_SRCTYPE1;
 	}
@@ -2699,11 +2698,11 @@ static void Config_syncShaders(char* key, int value) {
 		GFX_updateShader(0,NULL,NULL,NULL,&value,NULL);
 		i = SH_SCALETYPE1;
 	}
-	if (exactMatch(key,config.shaders.options[SH_UPSCALE1].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_UPSCALE1].key)) {
 		GFX_updateShader(0,NULL,&value,NULL,NULL,NULL);
 		i = SH_UPSCALE1;
 	}
-	if (exactMatch(key, config.shaders.options[SH_SHADER2].key)) {
+	else if (exactMatch(key, config.shaders.options[SH_SHADER2].key)) {
 		char** shaderList = config.shaders.options[SH_SHADER2].values;
 		if (shaderList) {
 			LOG_info("minarch: updating shader 2 - %i\n",value);
@@ -2716,23 +2715,23 @@ static void Config_syncShaders(char* key, int value) {
 		}
 		loadShaderSettings(1);
 	}
-	if (exactMatch(key,config.shaders.options[SH_SHADER2_FILTER].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SHADER2_FILTER].key)) {
 		GFX_updateShader(1,NULL,NULL,&value,NULL,NULL);
 		i = SH_SHADER2_FILTER;
 	}
-	if (exactMatch(key,config.shaders.options[SH_SRCTYPE2].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SRCTYPE2].key)) {
 		GFX_updateShader(1,NULL,NULL,NULL,NULL,&value);
 		i = SH_SRCTYPE2;
 	}
-	if (exactMatch(key,config.shaders.options[SH_SCALETYPE2].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SCALETYPE2].key)) {
 		GFX_updateShader(1,NULL,NULL,NULL,&value,NULL);
 		i = SH_SCALETYPE2;
 	}
-	if (exactMatch(key,config.shaders.options[SH_UPSCALE2].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_UPSCALE2].key)) {
 		GFX_updateShader(1,NULL,&value,NULL,NULL,NULL);
 		i = SH_UPSCALE2;
 	}
-	if (exactMatch(key, config.shaders.options[SH_SHADER3].key)) {
+	else if (exactMatch(key, config.shaders.options[SH_SHADER3].key)) {
 		char** shaderList = config.shaders.options[SH_SHADER3].values;
 		if (shaderList) {
 			LOG_info("minarch: updating shader 3 - %i\n",value);
@@ -2745,7 +2744,7 @@ static void Config_syncShaders(char* key, int value) {
 		}
 		loadShaderSettings(2);
 	}
-	if (exactMatch(key,config.shaders.options[SH_SHADER3_FILTER].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SHADER3_FILTER].key)) {
 		GFX_updateShader(2,NULL,NULL,&value,NULL,NULL);
 		i = SH_SHADER3_FILTER;
 	}
@@ -2753,11 +2752,11 @@ static void Config_syncShaders(char* key, int value) {
 		GFX_updateShader(2,NULL,NULL,NULL,NULL,&value);
 		i = SH_SRCTYPE3;
 	}
-	if (exactMatch(key,config.shaders.options[SH_SCALETYPE3].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SCALETYPE3].key)) {
 		GFX_updateShader(2,NULL,NULL,NULL,&value,NULL);
 		i = SH_SCALETYPE3;
 	}
-	if (exactMatch(key,config.shaders.options[SH_UPSCALE3].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_UPSCALE3].key)) {
 		GFX_updateShader(2,NULL,&value,NULL,NULL,NULL);
 		i = SH_UPSCALE3;
 	}
@@ -2791,7 +2790,6 @@ void initShaders() {
 			Config_syncShaders(option->key, option->value);
 		}
 	}
-	shadersreload = 0;
 }
 
 ///////////////////////////////
@@ -4098,7 +4096,6 @@ static const char* bitmap_font[] = {
 
 };
 
-
 void drawRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
 	for (int _x = x; _x < x + w; _x++) {
 		data[_x + y * stride] = c;
@@ -4109,7 +4106,6 @@ void drawRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride
 		data[x + w - 1 + _y * stride] = c;
 	}
 }
-
 
 void fillRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
 	for (int _y = y; _y < y + h; _y++) {
@@ -4155,7 +4151,6 @@ static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int strid
 	}
 }
 
-
 void drawGauge(int x, int y, float percent, int width, int height, uint32_t *data, int stride) {
 	// Clamp percent to 0.0 - 1.0
 	if (percent < 0.0f) percent = 0.0f;
@@ -4181,8 +4176,6 @@ void drawGauge(int x, int y, float percent, int width, int height, uint32_t *dat
 	drawRect(x, y, width, height, borderColor, data, stride);
 }
 
-
-
 ///////////////////////////////
 
 static int cpu_ticks = 0;
@@ -4193,12 +4186,6 @@ static double cpu_double = 0;
 static double use_double = 0;
 static uint32_t sec_start = 0;
 
-#ifdef USES_SWSCALER
-	static int fit = 1;
-#else
-	static int fit = 0;
-#endif	
-
 static void selectScaler(int src_w, int src_h, int src_p) {
 	int src_x,src_y,dst_x,dst_y,dst_w,dst_h,dst_p,scale;
 	double aspect;
@@ -4206,7 +4193,6 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 	int aspect_w = src_w;
 	int aspect_h = CEIL_DIV(aspect_w, core.aspect_ratio);
 	
-	// TODO: make sure this doesn't break fit==1 devices
 	if (aspect_h<src_h) {
 		aspect_h = src_h;
 		aspect_w = aspect_h * core.aspect_ratio;
@@ -4297,28 +4283,6 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 			dst_y = (DEVICE_HEIGHT - scaled_h) / 2; // should always be positive
 		}
 	}
-	else if (fit) {
-		// these both will use a generic nn scaler
-		if (scaling==SCALE_FULLSCREEN) {
-			sprintf(scaler_name, "full fit");
-			dst_w = DEVICE_WIDTH;
-			dst_h = DEVICE_HEIGHT;
-			dst_p = DEVICE_PITCH;
-			scale = -1; // nearest neighbor
-		}
-		else {
-			double scale_f = MIN(((double)DEVICE_WIDTH)/aspect_w, ((double)DEVICE_HEIGHT)/aspect_h);
-			LOG_info("scale_f:%f\n", scale_f);
-			
-			sprintf(scaler_name, "aspect fit");
-			dst_w = aspect_w * scale_f;
-			dst_h = aspect_h * scale_f;
-			dst_p = DEVICE_PITCH;
-			dst_x = (DEVICE_WIDTH  - dst_w) / 2;
-			dst_y = (DEVICE_HEIGHT - dst_h) / 2;
-			scale = (scale_f==1.0 && dst_w==src_w && dst_h==src_h) ? 1 : -1;
-		}
-	} 
 	else {
 		int scale_x = CEIL_DIV(DEVICE_WIDTH, src_w);
 		int scale_y = CEIL_DIV(DEVICE_HEIGHT,src_h);
@@ -4420,37 +4384,22 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 		}
 	}
 	
-	// TODO: need to sanity check scale and demands on the buffer
-	
-	// LOG_info("aspect: %ix%i (%f)\n", aspect_w,aspect_h,core.aspect_ratio);
-	
 	renderer.src_x = src_x;
 	renderer.src_y = src_y;
 	renderer.src_w = src_w;
 	renderer.src_h = src_h;
 	renderer.src_p = src_p;
+
 	renderer.dst_x = dst_x;
 	renderer.dst_y = dst_y;
 	renderer.dst_w = dst_w;
 	renderer.dst_h = dst_h;
 	renderer.dst_p = dst_p;
+
 	renderer.scale = scale;
 	renderer.aspect = (scaling==SCALE_ASPECT_SCREEN) ? aspect: (scaling==SCALE_NATIVE||scaling==SCALE_CROPPED)?0:(scaling==SCALE_FULLSCREEN?-1:core.aspect_ratio);
 	renderer.blit = GFX_getScaler(&renderer);
-		
-	// LOG_info("coreAR:%0.3f fixedAR:%0.3f srcAR: %0.3f\nname:%s\nfit:%i scale:%i\nsrc_x:%i src_y:%i src_w:%i src_h:%i src_p:%i\ndst_x:%i dst_y:%i dst_w:%i dst_h:%i dst_p:%i\naspect_w:%i aspect_h:%i\n",
-	// 	core.aspect_ratio, ((double)DEVICE_WIDTH) / DEVICE_HEIGHT, ((double)src_w) / src_h,
-	// 	scaler_name,
-	// 	fit,scale,
-	// 	src_x,src_y,src_w,src_h,src_p,
-	// 	dst_x,dst_y,dst_w,dst_h,dst_p,
-	// 	aspect_w,aspect_h
-	// );
 
-	if (fit) {
-		dst_w = DEVICE_WIDTH;
-		dst_h = DEVICE_HEIGHT;
-	}
 	// dont need this anymore with OpenGL
 	// if (screen->w!=dst_w || screen->h!=dst_w || screen->pitch!=dst_p) {
 		// screen = GFX_resize(dst_w,dst_h,dst_p);
@@ -4467,7 +4416,6 @@ static void screen_flip(SDL_Surface* screen) {
 		// GFX_flip(screen);
 	}
 }
-
 
 // couple of animation functions for pixel data keeping them all cause wanna use them later
 void applyFadeIn(uint32_t **data, size_t pitch, unsigned width, unsigned height, int *frame_counter, int max_frames) {
@@ -4500,101 +4448,6 @@ void applyFadeIn(uint32_t **data, size_t pitch, unsigned width, unsigned height,
             a = (uint8_t)(a * fade_alpha);
 
 			temp_buffer[idx] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
-        }
-    }
-
-    (*frame_counter)++;
-    *data = temp_buffer;
-}
-
-void applyZoomFadeIn(uint32_t **data, size_t pitch, unsigned width, unsigned height, int *frame_counter, int max_frames) {
-    size_t pixels_per_row = pitch / sizeof(uint32_t);
-    static uint32_t temp_buffer[1920 * 1080];
-
-    if (*frame_counter >= max_frames)
-        return;
-
-    float progress = (float)(*frame_counter) / (float)max_frames;
-    float eased = progress * progress * (3.0f - 2.0f * progress);
-
-    float start_zoom = 6.0f;
-    float end_zoom = 1.0f;
-    float zoom = start_zoom - eased * (start_zoom - end_zoom);
-
-    float fade_alpha = eased;
-
-    int center_x = width / 2;
-    int center_y = height / 2;
-
-    for (unsigned y = 0; y < height; ++y) {
-        for (unsigned x = 0; x < width; ++x) {
-            float src_x = center_x + (x - center_x) / zoom;
-            float src_y = center_y + (y - center_y) / zoom;
-
-            int ix = (int)src_x;
-            int iy = (int)src_y;
-
-            size_t dst_idx = y * pixels_per_row + x;
-            uint32_t color = 0xFF000000; 
-
-            if (ix >= 0 && ix < (int)width && iy >= 0 && iy < (int)height) {
-                size_t src_idx = iy * pixels_per_row + ix;
-                color = (*data)[src_idx];
-            }
-
-			uint8_t a = (color >> 24) & 0xFF;
-			uint8_t b = (color >> 16) & 0xFF;
-			uint8_t g = (color >> 8) & 0xFF;
-			uint8_t r = (color >> 0) & 0xFF;
-
-            r = (uint8_t)(r * fade_alpha);
-            g = (uint8_t)(g * fade_alpha);
-            b = (uint8_t)(b * fade_alpha);
-            a = (uint8_t)(a * fade_alpha);
-
-			temp_buffer[dst_idx] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
-        }
-    }
-
-    (*frame_counter)++;
-    *data = temp_buffer;
-}
-
-
-// Looney Tunes opening effect :D
-void applyCircleReveal(uint32_t **data, size_t pitch, unsigned width, unsigned height, int *frame_counter, int max_frames) {
-    static uint32_t temp_buffer[1920 * 1080];
-
-    if (*frame_counter >= max_frames)
-        return;
-
-    uint32_t *src = *data;
-    size_t pixels_per_row = pitch / sizeof(uint32_t);
-
-    float progress = (float)(*frame_counter) / (float)max_frames;
-    float eased = progress * progress * (3.0f - 2.0f * progress);
-
-    float max_radius = sqrtf((float)(width * width + height * height)) * 0.5f;
-    float radius = eased * max_radius;
-
-    int cx = (int)(width / 2);
-    int cy = (int)(height / 2);
-
-    for (unsigned y = 0; y < height; ++y) {
-        for (unsigned x = 0; x < width; ++x) {
-            size_t idx = y * pixels_per_row + x;
-
-            float dx = (float)x - (float)cx;
-            float dy = (float)y - (float)cy;
-            float dist = sqrtf(dx * dx + dy * dy);
-
-            if (dist <= radius) {
-                temp_buffer[idx] = src[idx];
-            } else {
-                uint32_t color = src[idx];
-                uint8_t a = (color >> 24) & 0xFF; 
-                temp_buffer[idx] = (a << 24);  
-            }
         }
     }
 
@@ -4735,7 +4588,8 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 				uint8_t g = (pixel >> 8) & 0xFF;
 				uint8_t b = (pixel >> 0) & 0xFF;
 				uint8_t a = 0xFF;
-				rgbaData[i] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
+				rgbaData[i] = (a << 24) | (b << 16) | (g << 8) | r;
+				//rgbaData[i] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
 			}
 			data = rgbaData;
 
@@ -4753,7 +4607,8 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 					uint8_t b = (pixel & 0x1F) << 3;          
 					uint8_t a = 0xFF;
 
-					rgbaData[y * width + x] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
+					rgbaData[y * width + x] = (a << 24) | (b << 16) | (g << 8) | r;
+					//rgbaData[y * width + x] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
 				}
 			}
 			data = rgbaData;
@@ -6967,31 +6822,6 @@ static void Menu_loop(void) {
 	PWR_disableAutosleep();
 }
 
-// TODO: move to PWR_*?
-static unsigned getUsage(void) { // from picoarch
-	long unsigned ticks = 0;
-	long ticksps = 0;
-	FILE *file = NULL;
-
-	file = fopen("/proc/self/stat", "r");
-	if (!file)
-		goto finish;
-
-	if (!fscanf(file, "%*d %*s %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu", &ticks))
-		goto finish;
-
-	ticksps = sysconf(_SC_CLK_TCK);
-
-	if (ticksps)
-		ticks = ticks * 100 / ticksps;
-
-finish:
-	if (file)
-		fclose(file);
-
-	return ticks;
-}
-
 static void resetFPSCounter() {
 	sec_start = SDL_GetTicks();
 	fps_ticks = 0.0;
@@ -7019,11 +6849,7 @@ static void trackFPS(void) {
 		double last_time = (double)(now - sec_start) / 1000;
 		fps_double = fps_ticks / last_time;
 		cpu_double = cpu_ticks / last_time;
-		// use_ticks = getUsage();
-		// if (use_ticks && last_use_ticks) {
-		// 	use_double = (use_ticks - last_use_ticks) / last_time;
-		// }
-		// last_use_ticks = use_ticks;
+
 		sec_start = now;
 		cpu_ticks = 0;
 		fps_ticks = 0;
