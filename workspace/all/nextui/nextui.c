@@ -3043,6 +3043,15 @@ int main (int argc, char *argv[]) {
 						char display_name[256];
 						int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width, SCALE1(BUTTON_PADDING * 2));
 						int max_width = MIN(available_width, text_width);
+
+						// This spaghetti is preventing white text on white pill when volume/color temp is shown,
+						// dont ask me why. This all needs to get tossed out and redone properly later.
+						SDL_Color text_color = uintToColour(THEME_COLOR4_255);
+						int notext = 0;
+						if(!row_has_moved && row_is_selected) {
+							text_color = uintToColour(THEME_COLOR5_255);
+							notext = 1;
+						}
 					
 						SDL_LockMutex(fontMutex);
 						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
@@ -3074,7 +3083,7 @@ int main (int argc, char *argv[]) {
 							task->move_w = max_width;
 							task->move_h = SCALE1(PILL_SIZE);
 							task->frames = is_scrolling && CFG_getMenuAnimations() ? 3:0;
-							task->entry_name = strdup(entry_name);
+							task->entry_name = strdup(notext ? " " : entry_name);
 							animPill(task);
 						}
 						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
