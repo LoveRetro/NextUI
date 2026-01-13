@@ -36,15 +36,8 @@ static int quit = 0;
 static int newScreenshot = 0;
 static int show_menu = 0;
 static int simple_mode = 0;
-static int was_threaded = 0;
-static int should_run_core = 1; // used by threaded video
 static void selectScaler(int src_w, int src_h, int src_p);
 enum retro_pixel_format fmt;
-
-static pthread_t		core_pt;
-static pthread_mutex_t	core_mx;
-static pthread_cond_t	core_rq; // not sure this is required
-
 
 enum {
 	SCALE_NATIVE,
@@ -74,7 +67,6 @@ static int fast_forward = 0;
 static int overclock = 3; // auto
 static int has_custom_controllers = 0;
 static int gamepad_type = 0; // index in gamepad_labels/gamepad_values
-static int downsample = 0; // set to 1 to convert from 8888 to 565
 // these are no longer constants as of the RG CubeXX (even though they look like it)
 static int DEVICE_WIDTH = 0; // FIXED_WIDTH;
 static int DEVICE_HEIGHT = 0; // FIXED_HEIGHT;
@@ -2020,8 +2012,6 @@ static void setOverclock(int i) {
 		}
     }
 }
-static int toggle_thread = 0;
-static int shadersreload = 0;
 static void Config_syncFrontend(char* key, int value) {
 	int i = -1;
 	if (exactMatch(key,config.frontend.options[FE_OPT_SCALING].key)) {
@@ -2681,7 +2671,6 @@ static void Config_syncShaders(char* key, int value) {
 	}
 	if (exactMatch(key,config.shaders.options[SH_NROFSHADERS].key)) {
 		GFX_setShaders(value);
-		shadersreload = 1;
 		i = SH_NROFSHADERS;
 	}
 
@@ -2776,7 +2765,6 @@ static void Config_syncShaders(char* key, int value) {
 	if (i==-1) return;
 	Option* option = &config.shaders.options[i];
 	option->value = value;
-	shadersreload = 1;
 }
 
 ////////
@@ -4644,8 +4632,6 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	}
 
 	fps_ticks += 1;
-	
-	if (downsample) pitch /= 2; // everything expects 16 but we're downsampling from 32
 	
 	// if source has changed size (or forced by dst_p==0)
 	// eg. true src + cropped src + fixed dst + cropped dst
