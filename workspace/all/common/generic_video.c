@@ -1516,7 +1516,6 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 	static GLfloat last_texelSize[2] = {-1.0f, -1.0f};
 	static GLfloat texelSize[2] = {-1.0f, -1.0f};
 	static GLuint fbo = 0;
-	static GLuint lastfbo = 0;
 	static GLuint last_bound_texture = 0;
 
 	if (shaderResetRequested) {
@@ -1526,7 +1525,6 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 		last_program = 0;
 		last_texelSize[0] = last_texelSize[1] = -1.0f;
 		fbo = 0;
-		lastfbo = 0;
 		last_bound_texture = 0;
 	}
 
@@ -1553,7 +1551,6 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 	}
-	
 
 	if (shader_program != last_program) {
 		GLint posAttrib = glGetAttribLocation(shader_program, "VertexCoord");
@@ -1610,19 +1607,24 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 			glGenFramebuffers(1, &fbo);
 		}
 		
-		if (lastfbo == 0) {
-			glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-			
-		}
-		lastfbo = fbo;
+        // Always bind before attaching to avoid stale state after swaps
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *target_texture, 0);
+
+		GLenum  err = glGetError();
+		if (err != GL_NO_ERROR) {
+			LOG_error("Framebuffer error: %d\n", err);
+			LOG_info("Failed to bind framebuffer with texture %u\n", *target_texture);
+		}
+
+        GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE) {
+            LOG_error("Framebuffer incomplete: 0x%X\n", status);
+        }
 		
     } else {
-		// things like overlays and stuff we don't need to write to another texture so they can be directly written to screen framebuffer
-		if (lastfbo != 0) {
-        	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		}
-		lastfbo = 0;
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
 	if(alpha==1) {
