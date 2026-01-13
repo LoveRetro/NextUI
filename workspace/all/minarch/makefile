@@ -44,16 +44,16 @@ CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
 LDFLAGS +=  -lwifimg -lwifid
 LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -ljson-c
 endif
-ifeq ($(PLATFORM), tg5050)
-#CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
-#LDFLAGS +=  -lwifimg -lwifid
-#LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -ljson-c
-endif
 endif
 
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
-# CFLAGS  += -fsanitize=address -fno-common
-# LDFLAGS += -lasan
+
+ifeq ($(PLATFORM), desktop)
+#CFLAGS  += -fsanitize=address -fno-common
+#LDFLAGS += -lasan
+#CFLAGS  += -fsanitize=thread
+#LDFLAGS += -ltsan
+endif
 
 AR=$(CROSS_COMPILE)ar
 ARFLAGS=rc
