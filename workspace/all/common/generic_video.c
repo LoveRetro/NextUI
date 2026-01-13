@@ -190,7 +190,7 @@ GLuint link_program(GLuint vertex_shader, GLuint fragment_shader, const char* ca
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
         char* log = (char*)malloc(logLength);
         glGetProgramInfoLog(program, logLength, &logLength, log);
-        printf("Program link error: %s\n", log);
+        LOG_error("Program link error: %s\n", log);
         free(log);
         return program;
     }
@@ -602,7 +602,7 @@ void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int
 			shader->pragmas[i].uniformLocation = glGetUniformLocation(shader->shader_p, shader->pragmas[i].name);
 			shader->pragmas[i].value = shader->pragmas[i].def;
 
-			printf("Param: %s = %f (min: %f, max: %f, step: %f)\n",
+			LOG_info("Param: %s = %f (min: %f, max: %f, step: %f)\n",
 				shader->pragmas[i].name,
 				shader->pragmas[i].def,
 				shader->pragmas[i].min,
@@ -895,7 +895,7 @@ void PLAT_setOverlay(const char* filename, const char* tag) {
 
     if (!filename || strcmp(filename, "") == 0) {
 		overlay_path = strdup("");
-        printf("Skipping overlay update.\n");
+        LOG_info("Skipping overlay update.\n");
         return;
     }
 
@@ -908,7 +908,7 @@ void PLAT_setOverlay(const char* filename, const char* tag) {
     }
 
     snprintf(overlay_path, path_len, "%s/%s/%s", OVERLAYS_FOLDER, tag, filename);
-    printf("Overlay path set to: %s\n", overlay_path);
+    LOG_info("Overlay path set to: %s\n", overlay_path);
 
 }
 
@@ -974,7 +974,7 @@ void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, flo
                                                  inputSurface->w, inputSurface->h); 
 
     if (!tempTexture) {
-        printf("Failed to create temporary texture: %s\n", SDL_GetError());
+        LOG_error("Failed to create temporary texture: %s\n", SDL_GetError());
         return;
     }
 
@@ -1049,7 +1049,7 @@ void PLAT_animateSurface(
 		inputSurface->w, inputSurface->h);
 
 	if (!tempTexture) {
-		printf("Failed to create temporary texture: %s\n", SDL_GetError());
+		LOG_error("Failed to create temporary texture: %s\n", SDL_GetError());
 		return;
 	}
 
@@ -1209,7 +1209,7 @@ void PLAT_animateSurfaceOpacity(
 		inputSurface->w, inputSurface->h);
 
 	if (!tempTexture) {
-		printf("Failed to create temporary texture: %s\n", SDL_GetError());
+		LOG_error("Failed to create temporary texture: %s\n", SDL_GetError());
 		return;
 	}
 
@@ -1259,7 +1259,7 @@ SDL_Surface* PLAT_captureRendererToSurface() {
 
 	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
 	if (!surface) {
-		printf("Failed to create surface: %s\n", SDL_GetError());
+		LOG_error("Failed to create surface: %s\n", SDL_GetError());
 		return NULL;
 	}
 
@@ -1267,7 +1267,7 @@ SDL_Surface* PLAT_captureRendererToSurface() {
 	SDL_FillRect(surface, NULL, black);
 
 	if (SDL_RenderReadPixels(vid.renderer, NULL, SDL_PIXELFORMAT_ARGB8888, surface->pixels, surface->pitch) != 0) {
-		printf("Failed to read pixels from renderer: %s\n", SDL_GetError());
+		LOG_error("Failed to read pixels from renderer: %s\n", SDL_GetError());
 		SDL_FreeSurface(surface);
 		return NULL;
 	}
@@ -1301,7 +1301,7 @@ void PLAT_animateAndFadeSurface(
 		inputSurface->w, inputSurface->h);
 
 	if (!moveTexture) {
-		printf("Failed to create move texture: %s\n", SDL_GetError());
+		LOG_error("Failed to create move texture: %s\n", SDL_GetError());
 		return;
 	}
 
@@ -1311,7 +1311,7 @@ void PLAT_animateAndFadeSurface(
 	if (fadeSurface) {
 		fadeTexture = SDL_CreateTextureFromSurface(vid.renderer, fadeSurface);
 		if (!fadeTexture) {
-			printf("Failed to create fade texture: %s\n", SDL_GetError());
+			LOG_error("Failed to create fade texture: %s\n", SDL_GetError());
 			SDL_DestroyTexture(moveTexture);
 			return;
 		}
@@ -1717,7 +1717,7 @@ void PLAT_GL_Swap() {
         prepare_thread = SDL_CreateThread(prepareFrameThread, "PrepareFrameThread", NULL);
 
         if (prepare_thread == NULL) {
-            printf("Error creating background thread: %s\n", SDL_GetError());
+            LOG_error("Error creating background thread: %s\n", SDL_GetError());
             return; 
         }
     }
