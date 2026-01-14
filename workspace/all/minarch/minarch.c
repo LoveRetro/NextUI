@@ -152,13 +152,19 @@ static void Game_open(char* path) {
 	snprintf(tmpfldr, sizeof(tmpfldr), "/tmp/nextarch/%s", core.tag);
 	char *tmppath = findFileInDir(tmpfldr, game.name);
 	if (tmppath) {
-		printf("File exists skipping unzipping and setting game.tmp_path: %s\n", tmppath);
-		strcpy((char*)game.tmp_path, tmppath);
-		skipzip = 1;
+		// Verify the file exists and has non-zero size (not being written or truncated)
+		struct stat st;
+		if (stat(tmppath, &st) == 0 && st.st_size > 0) {
+			printf("File exists skipping unzipping and setting game.tmp_path: %s\n", tmppath);
+			strcpy((char*)game.tmp_path, tmppath);
+			skipzip = 1;
+			// Update the game name to the extracted file name instead of the zip name
+			if (CFG_getUseExtractedFileName())
+				strcpy((char*)game.alt_name, strrchr(game.tmp_path, '/')+1);
+		} else {
+			printf("File exists but is empty or inaccessible, will re-extract: %s\n", tmppath);
+		}
 		free(tmppath);
-		// Update the game name to the extracted file name instead of the zip name
-		if (CFG_getUseExtractedFileName())
-			strcpy((char*)game.alt_name, strrchr(game.tmp_path, '/')+1);
 	} else {
 		printf("File does not exist in %s\n",tmpfldr);
 	}
@@ -325,18 +331,49 @@ int extract_zip(char** extensions)
 				}
 				if (!found) continue;
 
+				sprintf(game.tmp_path, "%s/%s", tmp_dirname, basename((char*)sb.name));
+				
+				// Check if file already exists and has the correct size
+				struct stat st;
+				if (stat(game.tmp_path, &st) == 0 && st.st_size == sb.size) {
+					// File already exists with correct size, skip extraction
+					LOG_info("File already exists with correct size, skipping extraction: %s\n", game.tmp_path);
+					return 1;
+				}
+				
 				zf = zip_fopen_index(za, i, 0);
 				if (!zf) {
 					LOG_error( "zip_fopen_index failed\n");
 					return 0;
 				}
 
-				sprintf(game.tmp_path, "%s/%s", tmp_dirname, basename((char*)sb.name));
-				fd = open(game.tmp_path, O_RDWR | O_TRUNC | O_CREAT, 0644);
+				// Try to create file exclusively first to avoid race condition
+				fd = open(game.tmp_path, O_RDWR | O_CREAT | O_EXCL, 0644);
 				if (fd < 0) {
-					LOG_error( "open failed\n");
-					zip_fclose(zf);
-					return 0;
+					if (errno == EEXIST) {
+						// File was created by another process, verify it's complete
+						zip_fclose(zf);
+						if (stat(game.tmp_path, &st) == 0 && st.st_size == sb.size) {
+							LOG_info("File was created by another process, using it: %s\n", game.tmp_path);
+							return 1;
+						}
+						// File exists but wrong size, try to truncate and rewrite
+						fd = open(game.tmp_path, O_RDWR | O_TRUNC, 0644);
+						if (fd < 0) {
+							LOG_error("open failed after EEXIST: %s\n", strerror(errno));
+							return 0;
+						}
+						zf = zip_fopen_index(za, i, 0);
+						if (!zf) {
+							LOG_error("zip_fopen_index failed on retry\n");
+							close(fd);
+							return 0;
+						}
+					} else {
+						LOG_error("open failed: %s\n", strerror(errno));
+						zip_fclose(zf);
+						return 0;
+					}
 				}
 				//LOG_info("Writing: %s\n", game.tmp_path);
 
