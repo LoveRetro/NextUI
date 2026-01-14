@@ -4528,8 +4528,10 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		sprintf(debug_text, "%.01f/%.01f/%.0f%%/%ihz/%ic", currentfps, currentreqfps,currentcpuse,currentcpuspeed,currentcputemp);
 		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
 
-		sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
-		blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
+		if(currentshaderpass>0) {
+			sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
+			blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
+		}
 	
 		double buffer_fill = (double) (currentbuffersize - currentbufferfree) / (double) currentbuffersize;
 		drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
