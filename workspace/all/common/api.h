@@ -383,10 +383,11 @@ typedef enum {
 } WatchEvent;
 void PLAT_audioDeviceWatchRegister(void (*cb)(int, int));
 void PLAT_audioDeviceWatchUnregister(void);
+void PLAT_overrideMute(int mute); // Overrules and bypasses any mute state from msettings
 
 #define SND_registerDeviceWatcher PLAT_audioDeviceWatchRegister
 #define SND_removeDeviceWatcher PLAT_audioDeviceWatchUnregister
-#define SND_overrideMute PLAT_overrideMute // Overrules and bypasses any mute state from msettings
+#define SND_overrideMute PLAT_overrideMute
 
 ///////////////////////////////
 
