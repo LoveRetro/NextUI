@@ -33,9 +33,10 @@ CXXFLAGS += $(CFLAGS) -std=c++17
 CFLAGS += -fpermissive
 LDFLAGS +=  -lmsettings
 ifeq ($(PLATFORM), tg5040)
-CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
-LDFLAGS +=  -lwifimg -lwifid
-LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -lasound -ljson-c
+# drop as soon as we use btagent on all platforms
+CXXFLAGS += -DHAS_BTAGENT
+CXXSOURCE += btagent.cpp
+CXXFLAGS += $$(pkg-config --cflags --libs gio-2.0 glib-2.0)
 endif
 ifeq ($(PLATFORM), tg5050)
 # drop as soon as we use btagent on all platforms

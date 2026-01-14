@@ -33,7 +33,6 @@ else
 ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/rfkill && make all
 	cd ./$(PLATFORM)/btmanager && make all
-	cd ./$(PLATFORM)/wifimanager && make all
 	cd ./$(PLATFORM)/poweroff_next/ && make
 endif
 	cd ./$(PLATFORM)/libmsettings && make
@@ -82,7 +81,6 @@ ifneq ($(PLATFORM), desktop)
 	cd ./all/show2/ && make clean
 ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/rfkill && make clean
-	cd ./$(PLATFORM)/wifimanager && make clean
 	cd ./$(PLATFORM)/btmanager && make clean
 	cd ./$(PLATFORM)/poweroff_next/ && make clean
 endif

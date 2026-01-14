@@ -7,6 +7,14 @@ UPDATE_PATH="$SDCARD_PATH/MinUI.zip"
 PAKZ_PATH="$SDCARD_PATH/*.pakz"
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
+export LD_LIBRARY_PATH=/usr/trimui/lib:$LD_LIBRARY_PATH
+export PATH=/usr/trimui/bin:$PATH
+
+TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
+if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
+	DEVICE="brick"
+fi
+
 # only show splash if either UPDATE_PATH or pakz files exist
 SHOW_SPLASH="no"
 if [ -f "$UPDATE_PATH" ]; then
@@ -21,7 +29,11 @@ else
 fi
 if [ "$SHOW_SPLASH" = "yes" ] ; then
 	cd $(dirname "$0")/$PLATFORM
-	./show2.elf --mode=daemon --image="logo.png" --logoheight=128 --progress=-1 &
+	if [ "$DEVICE" = "brick" ]; then
+		./show2.elf --mode=daemon --image="logo.png" --logoheight=144 --fontsize=32 --progress=-1 &
+	else
+		./show2.elf --mode=daemon --image="logo.png" --logoheight=128 --progress=-1 &
+	fi
 	#SHOW_PID=$!
 fi
 
@@ -39,21 +51,13 @@ if [ -f "/etc/init.d/lcservice" ]; then
 	rm /etc/init.d/lcservice
 fi
 
-export LD_LIBRARY_PATH=/usr/trimui/lib:$LD_LIBRARY_PATH
-export PATH=/usr/trimui/bin:$PATH
-
-TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
-if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
-	DEVICE="brick"
-fi
-
 # leds_off
 echo 0 > /sys/class/led_anim/max_scale
 
 # generic NextUI package install
 for pakz in $PAKZ_PATH; do
 	if [ ! -e "$pakz" ]; then continue; fi
-	if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Extracting $pakz" > /tmp/show2.fifo; fi
+	echo "TEXT:Extracting $pakz" > /tmp/show2.fifo
 	cd $(dirname "$0")/$PLATFORM
 
 	./unzip -o -d "$SDCARD_PATH" "$pakz" # >> $pakz.txt
@@ -71,9 +75,9 @@ done
 if [ -f "$UPDATE_PATH" ]; then 
 	cd $(dirname "$0")/$PLATFORM
 	if [ -d "$SYSTEM_PATH" ]; then
-		if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Updating NextUI" > /tmp/show2.fifo; fi
+		echo "TEXT:Updating NextUI" > /tmp/show2.fifo
 	else
-		if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Installing NextUI" > /tmp/show2.fifo; fi
+		echo "TEXT:Installing NextUI" > /tmp/show2.fifo
 	fi
 
 	# clean replacement for core paths

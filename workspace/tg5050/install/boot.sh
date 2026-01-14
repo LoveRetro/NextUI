@@ -7,6 +7,11 @@ UPDATE_PATH="$SDCARD_PATH/MinUI.zip"
 PAKZ_PATH="$SDCARD_PATH/*.pakz"
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
+export LD_LIBRARY_PATH=/usr/trimui/lib:$LD_LIBRARY_PATH
+export PATH=/usr/trimui/bin:$PATH
+
+TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
+
 echo 1 > /sys/class/drm/card0-DSI-1/rotate
 echo 1 > /sys/class/drm/card0-DSI-1/force_rotate
 
@@ -53,11 +58,6 @@ echo 0 > /sys/devices/system/cpu/cpu5/online
 
 echo after cpugov `cat /proc/uptime` >> /tmp/nextui_boottime
 
-export LD_LIBRARY_PATH=/usr/trimui/lib:$LD_LIBRARY_PATH
-export PATH=/usr/trimui/bin:$PATH
-
-TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
-
 # leds_off
 echo 0 > /sys/class/led_anim/max_scale
 
@@ -66,7 +66,7 @@ echo before pkg install `cat /proc/uptime` >> /tmp/nextui_boottime
 # generic NextUI package install
 for pakz in $PAKZ_PATH; do
 	if [ ! -e "$pakz" ]; then continue; fi
-	if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Extracting $pakz" > /tmp/show2.fifo; fi
+	echo "TEXT:Extracting $pakz" > /tmp/show2.fifo
 	cd $(dirname "$0")/$PLATFORM
 
 	./unzip -o -d "$SDCARD_PATH" "$pakz" # >> $pakz.txt
@@ -87,9 +87,9 @@ if [ -f "$UPDATE_PATH" ]; then
 	echo ok
 	cd $(dirname "$0")/$PLATFORM
 	if [ -d "$SYSTEM_PATH" ]; then
-		if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Updating NextUI" > /tmp/show2.fifo; fi
+		echo "TEXT:Updating NextUI" > /tmp/show2.fifo
 	else
-		if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Installing NextUI" > /tmp/show2.fifo; fi
+		echo "TEXT:Installing NextUI" > /tmp/show2.fifo
 	fi
 
 	# clean replacement for core paths

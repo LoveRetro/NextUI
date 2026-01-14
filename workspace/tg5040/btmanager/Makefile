@@ -5,29 +5,6 @@ ifeq (,$(PREFIX))
 $(error missing PREFIX for this toolchain)
 endif
 
-TARGET_ARCH = "aarch64"
-TARGET_CC = $(CROSS_COMPILE)gcc
-TARGET_CXX = $(CROSS_COMPILE)g++
-TARGET_AR = $(CROSS_COMPILE)ar
-TARGET_CFLAGS = -pthread
-TARGET_LDFLAGS = 
-PKG_INSTALL_DIR = 
-PKG_BUILD_DIR = .
-
-TARGET_CFLAGS = $(if $(CONFIG_USE_GLIBC),-pthread)
-
-btmanager:
-	make -C $(PKG_BUILD_DIR)/src/ \
-		ARCH="$(TARGET_ARCH)" \
-		AR="$(TARGET_AR)" \
-		CC="$(TARGET_CC)" \
-		CXX="$(TARGET_CXX)" \
-		CFLAGS="$(TARGET_CFLAGS)" \
-		LDFLAGS="$(TARGET_LDFLAGS)" \
-		CONFIG_PREFIX="$(PKG_INSTALL_DIR)" \
-		CONFIG_IPV6="$(CONFIG_IPV6)" \
-		all
-
 bluez:
 	rm -rf ./build
 	mkdir -p ./build/.update_bluez/usr/bin
@@ -76,4 +53,4 @@ bluez:
 	# zip -r nextui.upgrade_bluez.pakz build/
 	cd build && python3 -m zipfile -c nextui.upgrade_bluez.pakz .update_bluez/ post_install.sh
 
-all: btmanager bluez
+all: bluez

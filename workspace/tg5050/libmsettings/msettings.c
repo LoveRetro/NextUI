@@ -897,15 +897,6 @@ void SetRawVolume(int val) { // in: 0-100
 				//printf("Set 'digital volume' to %d%%\n", val); fflush(stdout);
 		}
 		
-		// Digital volume does not quite go to 0, so also mute the DAC volume
-		//struct mixer_ctl *dac     = mixer_get_ctl_by_name(mixer, "DAC volume");
-        //if (dac) {
-        //    int dac_val = (val == 0 ? 0 : 160);
-        //    unsigned int num_values = mixer_ctl_get_num_values(dac);
-        //    for (unsigned int i = 0; i < num_values; i++)
-        //        mixer_ctl_set_value(dac, i, dac_val);
-		//	//printf("Set 'DAC volume' to %d\n", dac_val); fflush(stdout);
-		//}
 		mixer_close(mixer);
 
 		// Really, actually, finally turn the speaker off - including the hissing

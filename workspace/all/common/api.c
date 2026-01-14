@@ -280,6 +280,10 @@ int GFX_updateColors(void)
 
 SDL_Surface *GFX_init(int mode)
 {
+	// Platform-specific init
+	// This might affect FIXED_SCALE, so do it first
+	PLAT_initPlatform();
+
 	gfx.screen = PLAT_initVideo();
 	gfx.vsync = VSYNC_STRICT;
 	gfx.mode = mode;
@@ -4070,6 +4074,10 @@ FALLBACK_IMPLEMENTATION FILE *PLAT_WriteSettings(const char *filename)
 	}
 	return file;
 }
+/////////////////////////////////////////////////////////////////////////////////////////
+
+FALLBACK_IMPLEMENTATION void PLAT_initPlatform(void) {}
+
 /////////////////////////////////////////////////////////////////////////////////////////
 
 FALLBACK_IMPLEMENTATION void PLAT_initTimezones() {}

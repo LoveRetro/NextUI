@@ -25,8 +25,7 @@ before() {
 
 	if pgrep wpa_supplicant; then
 		wifid_running=1
-		>&2 echo "Stopping wifi_daemon..."
-		killall -15 wifi_daemon || true
+		>&2 echo "Stopping wpa_supplicant..."
 		/etc/wifi/wifi_init.sh stop || true
 	fi
 }

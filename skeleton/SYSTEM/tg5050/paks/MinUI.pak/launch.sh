@@ -128,7 +128,7 @@ batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 
 # start fresh, will be populated on the next connect
 rm -f $USERDATA_PATH/.asoundrc
-audiomon.elf &> $SDCARD_PATH/audiomon.txt &
+audiomon.elf & #&> $SDCARD_PATH/audiomon.txt &
 
 # BT handling
 bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')

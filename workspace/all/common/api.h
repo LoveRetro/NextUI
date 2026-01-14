@@ -541,6 +541,8 @@ enum {
 
 ///////////////////////////////
 
+void PLAT_initPlatform(void); // *actual* platform-specific init
+
 FILE *PLAT_OpenSettings(const char *filename);
 FILE *PLAT_WriteSettings(const char *filename);
 char* PLAT_findFileInDir(const char *directory, const char *filename);

@@ -61,6 +61,7 @@ struct Config {
     int progress_y_pct = 90;  // Progress bar Y position as percentage of screen height
     int timeout_seconds = 0;  // Auto-close timeout (0 = no timeout)
     int logo_height = 0;      // Scale logo to this height (0 = no scaling)
+    int font_size = 24;       // Font size in pixels
 };
 
 class ShowApp {
@@ -172,7 +173,7 @@ public:
                 SDL_RWops* rw = SDL_RWFromConstMem(RoundedMplus1c_Bold_reduced_ttf,
                                                     RoundedMplus1c_Bold_reduced_ttf_len);
                 if (rw) {
-                    font = TTF_OpenFontRW(rw, 1, FONT_SIZE);
+                    font = TTF_OpenFontRW(rw, 1, config.font_size);
                     if (!font) {
                         std::cerr << "Failed to load embedded font: " << TTF_GetError() << std::endl;
                     }
@@ -260,8 +261,6 @@ private:
     }
 
     void fifoThread() {
-        char buffer[512];
-
         while (running) {
             int fd = open(FIFO_PATH, O_RDONLY);
             if (fd < 0) {
@@ -269,51 +268,59 @@ private:
                 continue;
             }
 
-            ssize_t bytes = read(fd, buffer, sizeof(buffer) - 1);
-            if (bytes > 0) {
+            // Keep reading from this FIFO connection until writer closes
+            char buffer[512];
+            while (running) {
+                ssize_t bytes = read(fd, buffer, sizeof(buffer) - 1);
+                if (bytes <= 0) {
+                    // Writer closed connection or error, reopen FIFO
+                    break;
+                }
+                
                 buffer[bytes] = '\0';
 
-                // Remove trailing newline
-                if (buffer[bytes - 1] == '\n') {
-                    buffer[bytes - 1] = '\0';
-                }
-
-                // Parse command
-                std::string cmd(buffer);
-                if (cmd.find("TEXT:") == 0) {
-                    pthread_mutex_lock(&mutex);
-                    current_text = cmd.substr(5);
-                    pthread_mutex_unlock(&mutex);
-                } else if (cmd.find("PROGRESS:") == 0) {
-                    pthread_mutex_lock(&mutex);
-                    current_progress = std::stoi(cmd.substr(9));
-                    pthread_mutex_unlock(&mutex);
-                } else if (cmd == "QUIT") {
-                    running = false;
-                } else if (cmd.find("BGCOLOR:") == 0) {
-                    pthread_mutex_lock(&mutex);
-                    uint32_t rgb = parseColor(cmd.substr(8));
-                    bg_color_sdl = SDL_MapRGB(screen->format,
-                                              (rgb >> 16) & 0xFF,
-                                              (rgb >> 8) & 0xFF,
-                                              rgb & 0xFF);
-                    pthread_mutex_unlock(&mutex);
-                } else if (cmd.find("FONTCOLOR:") == 0) {
-                    pthread_mutex_lock(&mutex);
-                    uint32_t rgb = parseColor(cmd.substr(10));
-                    font_color.r = (rgb >> 16) & 0xFF;
-                    font_color.g = (rgb >> 8) & 0xFF;
-                    font_color.b = rgb & 0xFF;
-                    font_color.a = 255;
-                    pthread_mutex_unlock(&mutex);
-                } else if (cmd.find("TEXTY:") == 0) {
-                    pthread_mutex_lock(&mutex);
-                    current_text_y_pct = std::stoi(cmd.substr(6));
-                    pthread_mutex_unlock(&mutex);
-                } else if (cmd.find("PROGRESSY:") == 0) {
-                    pthread_mutex_lock(&mutex);
-                    current_progress_y_pct = std::stoi(cmd.substr(10));
-                    pthread_mutex_unlock(&mutex);
+                // Process potentially multiple commands in buffer
+                char* line = strtok(buffer, "\n");
+                while (line != nullptr && running) {
+                    std::string cmd(line);
+                    
+                    if (cmd.find("TEXT:") == 0) {
+                        pthread_mutex_lock(&mutex);
+                        current_text = cmd.substr(5);
+                        pthread_mutex_unlock(&mutex);
+                    } else if (cmd.find("PROGRESS:") == 0) {
+                        pthread_mutex_lock(&mutex);
+                        current_progress = std::stoi(cmd.substr(9));
+                        pthread_mutex_unlock(&mutex);
+                    } else if (cmd == "QUIT") {
+                        running = false;
+                    } else if (cmd.find("BGCOLOR:") == 0) {
+                        pthread_mutex_lock(&mutex);
+                        uint32_t rgb = parseColor(cmd.substr(8));
+                        bg_color_sdl = SDL_MapRGB(screen->format,
+                                                  (rgb >> 16) & 0xFF,
+                                                  (rgb >> 8) & 0xFF,
+                                                  rgb & 0xFF);
+                        pthread_mutex_unlock(&mutex);
+                    } else if (cmd.find("FONTCOLOR:") == 0) {
+                        pthread_mutex_lock(&mutex);
+                        uint32_t rgb = parseColor(cmd.substr(10));
+                        font_color.r = (rgb >> 16) & 0xFF;
+                        font_color.g = (rgb >> 8) & 0xFF;
+                        font_color.b = rgb & 0xFF;
+                        font_color.a = 255;
+                        pthread_mutex_unlock(&mutex);
+                    } else if (cmd.find("TEXTY:") == 0) {
+                        pthread_mutex_lock(&mutex);
+                        current_text_y_pct = std::stoi(cmd.substr(6));
+                        pthread_mutex_unlock(&mutex);
+                    } else if (cmd.find("PROGRESSY:") == 0) {
+                        pthread_mutex_lock(&mutex);
+                        current_progress_y_pct = std::stoi(cmd.substr(10));
+                        pthread_mutex_unlock(&mutex);
+                    }
+                    
+                    line = strtok(nullptr, "\n");
                 }
             }
 
@@ -539,13 +546,14 @@ void printUsage() {
     std::cout << "  Simple mode:   show2.elf --mode=simple --image=<path> [--bgcolor=0x000000] [--logoheight=N] [--timeout=N]\n";
     std::cout << "  Progress mode: show2.elf --mode=progress --image=<path> [--bgcolor=0x000000] [--fontcolor=0xFFFFFF]\n";
     std::cout << "                 [--text=\"message\"] [--progress=0] [--texty=80] [--progressy=90]\n";
-    std::cout << "                 [--logoheight=N] [--timeout=N]\n";
+    std::cout << "                 [--logoheight=N] [--fontsize=24] [--timeout=N]\n";
     std::cout << "  Daemon mode:   show2.elf --mode=daemon --image=<path> [--bgcolor=0x000000] [--fontcolor=0xFFFFFF]\n";
-    std::cout << "                 [--text=\"message\"] [--texty=80] [--progressy=90] [--logoheight=N]\n";
+    std::cout << "                 [--text=\"message\"] [--texty=80] [--progressy=90] [--logoheight=N] [--fontsize=24]\n";
     std::cout << "\n";
     std::cout << "Position parameters (texty, progressy) are percentages of screen height (0-100)\n";
     std::cout << "Default positions: texty=80, progressy=90\n";
     std::cout << "Logo height parameter (logoheight) scales the logo to the specified height in pixels (0 = no scaling)\n";
+    std::cout << "Font size parameter (fontsize) sets the text size in pixels (default = 24)\n";
     std::cout << "Timeout parameter (timeout) is in seconds (0 = no timeout, runs until killed)\n";
     std::cout << "\n";
     std::cout << "Daemon mode commands via FIFO (" << FIFO_PATH << "):\n";
@@ -614,6 +622,10 @@ int main(int argc, char* argv[]) {
 
     if (args.find("logoheight") != args.end()) {
         config.logo_height = std::stoi(args["logoheight"]);
+    }
+
+    if (args.find("fontsize") != args.end()) {
+        config.font_size = std::stoi(args["fontsize"]);
     }
 
     // Create and run app

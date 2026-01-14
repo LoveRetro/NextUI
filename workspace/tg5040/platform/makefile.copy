@@ -6,9 +6,6 @@ $(PLATFORM):
 	cp ./workspace/$@/install/*.png ./build/BOOT/common/$@/
 	cp ./workspace/all/show2/build/$@/show2.elf ./build/BOOT/common/$@/
 	cp ./workspace/$@/other/unzip60/unzip ./build/BOOT/common/$@/
-	# wifi
-	cp ./workspace/$@/wifimanager/daemon/libwifid.so ./build/SYSTEM/$@/lib/
-	cp ./workspace/$@/wifimanager/daemon/wifi_daemon ./build/SYSTEM/$@/bin/
 	# rfkill
 	cp ./workspace/$@/rfkill/rfkill.elf ./build/SYSTEM/$@/bin/
 	# bluetooth
