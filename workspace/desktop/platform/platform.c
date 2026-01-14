@@ -1912,6 +1912,7 @@ void PLAT_pixelFlipper(uint8_t* pixels, int width, int height) {
         rowBottom = pixels + (height - 1 - y) * rowBytes;
 
         int x = 0;
+#if defined(__ARM_NEON)
         for (; x + 15 < rowBytes; x += 16) {
             uint8x16_t top = vld1q_u8(rowTop + x);
             uint8x16_t bottom = vld1q_u8(rowBottom + x);
@@ -1919,6 +1920,7 @@ void PLAT_pixelFlipper(uint8_t* pixels, int width, int height) {
             vst1q_u8(rowTop + x, bottom);
             vst1q_u8(rowBottom + x, top);
         }
+#endif
         for (; x < rowBytes; ++x) {
             uint8_t temp = rowTop[x];
             rowTop[x] = rowBottom[x];
