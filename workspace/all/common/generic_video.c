@@ -1752,8 +1752,24 @@ void PLAT_GL_Swap() {
 		if (src_texture) { glDeleteTextures(1, &src_texture); src_texture = 0; }
 		src_w_last = src_h_last = 0;
 		last_w = last_h = 0;
-		if (effect_tex) { glDeleteTextures(1, &effect_tex); effect_tex = 0; effect_w = effect_h = 0; }
-		if (overlay_tex) { glDeleteTextures(1, &overlay_tex); overlay_tex = 0; overlay_w = overlay_h = 0; }
+		if (effect_tex) { 
+			glDeleteTextures(1, &effect_tex); 
+			effect_tex = 0; 
+			effect_w = effect_h = 0;
+			// Force reload by marking as ready again if effect is active
+			if (effect.type != EFFECT_NONE) {
+				frame_prep.effect_ready = 1;
+			}
+		}
+		if (overlay_tex) { 
+			glDeleteTextures(1, &overlay_tex); 
+			overlay_tex = 0; 
+			overlay_w = overlay_h = 0;
+			// Force reload if we had an overlay
+			if (frame_prep.loaded_overlay) {
+				frame_prep.overlay_ready = 1;
+			}
+		}
 		reloadShaderTextures = 1;
 	}
 
