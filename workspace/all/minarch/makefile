@@ -22,7 +22,7 @@ SDL?=SDL
 TARGET = minarch
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 INCDIR = -I. -I./libretro-common/include/ -I../common/ -I../../$(PLATFORM)/platform/
-SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
+SOURCE = $(TARGET).c manual.c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
 
 CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(OPT) -fomit-frame-pointer
@@ -30,8 +30,8 @@ CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS	 += -lmsettings -lsamplerate
 ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
-CFLAGS += `pkg-config --cflags libzip`
-LDFLAGS += `pkg-config --libs libzip`
+CFLAGS += `pkg-config --cflags libzip poppler-glib gio-2.0 gobject-2.0 glib-2.0 cairo` -DENABLE_PDF_MANUAL
+LDFLAGS += `pkg-config --libs libzip poppler-glib gio-2.0 gobject-2.0 glib-2.0 cairo`
 else
 LDFLAGS += -lzip
 endif

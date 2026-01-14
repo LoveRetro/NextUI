@@ -25,14 +25,15 @@
 #include "api.h"
 #include "utils.h"
 #include "scaler.h"
+#include "manual.h"
 #include <dirent.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL.h>
 
 ///////////////////////////////////////
 
-static SDL_Surface* screen;
-static int quit = 0;
+SDL_Surface* screen;
+int quit = 0;
 static int newScreenshot = 0;
 static int show_menu = 0;
 static int simple_mode = 0;
@@ -3136,8 +3137,8 @@ static void OptionList_setOptionVisibility(OptionList* list, const char* key, in
 
 ///////////////////////////////
 
-static void Menu_beforeSleep();
-static void Menu_afterSleep();
+void Menu_beforeSleep();
+void Menu_afterSleep();
 
 static void Menu_screenshot(void);
 
@@ -5803,6 +5804,11 @@ static int OptionShaders_openMenu(MenuList* list, int i) {
 	return MENU_CALLBACK_NOP;
 }
 
+static int OptionManual_openMenu(MenuList* list, int i) {
+    Manual_open(game.path);
+    return MENU_CALLBACK_NOP;
+}
+
 static MenuList options_menu = {
 	.type = MENU_LIST,
 	.items = (MenuItem[]) {
@@ -5812,6 +5818,7 @@ static MenuList options_menu = {
 		{"Cheats",.on_confirm=OptionCheats_openMenu},
 		{"Controls",.on_confirm=OptionControls_openMenu},
 		{"Shortcuts",.on_confirm=OptionShortcuts_openMenu}, 
+		{"Manual",.on_confirm=OptionManual_openMenu},
 		{"Save Changes",.on_confirm=OptionSaveChanges_openMenu},
 		{NULL},
 		{NULL},
