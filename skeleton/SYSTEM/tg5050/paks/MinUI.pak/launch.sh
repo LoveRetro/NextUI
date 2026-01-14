@@ -123,16 +123,8 @@ echo 0 > /sys/devices/system/cpu/cpu7/online
 echo 0 > /sys/devices/system/cpu/cpu6/online
 echo 0 > /sys/devices/system/cpu/cpu5/online
 
-#echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-#CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
-#CPU_SPEED_PERF=2000000
-#echo $CPU_SPEED_PERF > $CPU_PATH
-
 keymon.elf & # &> $SDCARD_PATH/keymon.txt &
 batmon.elf & # &> $SDCARD_PATH/batmon.txt &
-
-# TODO
-# thermald for fan control
 
 # start fresh, will be populated on the next connect
 rm -f $USERDATA_PATH/.asoundrc
@@ -164,6 +156,9 @@ fi
 cd $(dirname "$0")
 
 #######################################
+
+# kill show2.elf if running
+killall -9 show2.elf > /dev/null 2>&1
 
 EXEC_PATH="/tmp/nextui_exec"
 NEXT_PATH="/tmp/next"

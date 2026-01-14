@@ -120,8 +120,6 @@ batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 rm -f $USERDATA_PATH/.asoundrc
 audiomon.elf & # &> $SDCARD_PATH/audiomon.txt &
 
-#killall MtpDaemon # I dont think we need to micro manage this one
-
 # BT handling
 # on by default, disable based on systemval setting
 bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')
@@ -153,6 +151,9 @@ fi
 cd $(dirname "$0")
 
 #######################################
+
+# kill show2.elf if running
+killall -9 show2.elf > /dev/null 2>&1
 
 EXEC_PATH="/tmp/nextui_exec"
 NEXT_PATH="/tmp/next"

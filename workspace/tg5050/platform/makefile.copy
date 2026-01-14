@@ -1,12 +1,10 @@
 $(PLATFORM):
-	# $@
-	cp ./workspace/$@/show/show.elf ./build/SYSTEM/$@/bin
 	# installer
 	cp ./workspace/$@/install/boot.sh ./build/BOOT/common/$@.sh
 	cp ./workspace/$@/install/update.sh ./build/SYSTEM/$@/bin/install.sh
 	mkdir -p ./build/BOOT/common/$@/
 	cp ./workspace/$@/install/*.png ./build/BOOT/common/$@/
-	cp ./workspace/$@/show/show.elf ./build/BOOT/common/$@/
+	cp ./workspace/all/show2/build/$@/show2.elf ./build/BOOT/common/$@/
 	cp ./workspace/$@/other/unzip60/unzip ./build/BOOT/common/$@/
 
 	# extras

@@ -10,8 +10,23 @@ SYSTEM_PATH="$SDCARD_PATH/.system"
 echo 1 > /sys/class/drm/card0-DSI-1/rotate
 echo 1 > /sys/class/drm/card0-DSI-1/force_rotate
 
-# splash
-/usr/trimui/bin/sdl2display /usr/trimui/bin/splash.png &
+# only show splash if either UPDATE_PATH or pakz files exist
+SHOW_SPLASH="no"
+if [ -f "$UPDATE_PATH" ]; then
+	SHOW_SPLASH="yes"
+else
+	for pakz in $PAKZ_PATH; do
+		if [ -e "$pakz" ]; then
+			SHOW_SPLASH="yes"
+			break
+		fi
+	done
+fi
+if [ "$SHOW_SPLASH" = "yes" ] ; then
+	cd $(dirname "$0")/$PLATFORM
+	./show2.elf --mode=daemon --image="logo.png" --logoheight=128 --progress=-1 &
+	#SHOW_PID=$!
+fi
 
 echo after splash `cat /proc/uptime` >> /tmp/nextui_boottime
 
@@ -46,20 +61,20 @@ TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
 # leds_off
 echo 0 > /sys/class/led_anim/max_scale
 
-echo before splash `cat /proc/uptime` >> /tmp/nextui_boottime
+echo before pkg install `cat /proc/uptime` >> /tmp/nextui_boottime
 
 # generic NextUI package install
 for pakz in $PAKZ_PATH; do
 	if [ ! -e "$pakz" ]; then continue; fi
-	echo "Installing $pakz"
+	if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Extracting $pakz" > /tmp/show2.fifo; fi
 	cd $(dirname "$0")/$PLATFORM
-	./show.elf ./$DEVICE/installing.png
 
 	./unzip -o -d "$SDCARD_PATH" "$pakz" # >> $pakz.txt
 	rm -f "$pakz"
 
 	# run postinstall if present
 	if [ -f $SDCARD_PATH/post_install.sh ]; then
+		echo "TEXT:Installing $pakz" > /tmp/show2.fifo
 		$SDCARD_PATH/post_install.sh # > $pakz_post.txt
 		rm -f $SDCARD_PATH/post_install.sh
 	fi
@@ -72,9 +87,9 @@ if [ -f "$UPDATE_PATH" ]; then
 	echo ok
 	cd $(dirname "$0")/$PLATFORM
 	if [ -d "$SYSTEM_PATH" ]; then
-		./show.elf ./$DEVICE/updating.png
+		if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Updating NextUI" > /tmp/show2.fifo; fi
 	else
-		./show.elf ./$DEVICE/installing.png
+		if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Installing NextUI" > /tmp/show2.fifo; fi
 	fi
 
 	# clean replacement for core paths
@@ -91,6 +106,7 @@ if [ -f "$UPDATE_PATH" ]; then
 	fi
 fi
 
+#kill $SHOW_PID
 echo after update install `cat /proc/uptime` >> /tmp/nextui_boottime
 
 LAUNCH_PATH="$SYSTEM_PATH/$PLATFORM/paks/MinUI.pak/launch.sh"

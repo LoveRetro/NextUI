@@ -55,6 +55,7 @@ endif
 	cd ./all/ledcontrol/ && make
 	cd ./all/bootlogo/ && make
 	cd ./all/audiomon && make all
+	cd ./all/show2/ && make
 endif
 ifdef COMPILE_CORES
 	make cores
@@ -78,6 +79,7 @@ ifneq ($(PLATFORM), desktop)
 	cd ./all/syncsettings/ && make clean
 	cd ./all/ledcontrol/ && make clean
 	cd ./all/bootlogo/ && make clean
+	cd ./all/show2/ && make clean
 ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/rfkill && make clean
 	cd ./$(PLATFORM)/wifimanager && make clean

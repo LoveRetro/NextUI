@@ -7,6 +7,24 @@ UPDATE_PATH="$SDCARD_PATH/MinUI.zip"
 PAKZ_PATH="$SDCARD_PATH/*.pakz"
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
+# only show splash if either UPDATE_PATH or pakz files exist
+SHOW_SPLASH="no"
+if [ -f "$UPDATE_PATH" ]; then
+	SHOW_SPLASH="yes"
+else
+	for pakz in $PAKZ_PATH; do
+		if [ -e "$pakz" ]; then
+			SHOW_SPLASH="yes"
+			break
+		fi
+	done
+fi
+if [ "$SHOW_SPLASH" = "yes" ] ; then
+	cd $(dirname "$0")/$PLATFORM
+	./show2.elf --mode=daemon --image="logo.png" --logoheight=128 --progress=-1 &
+	#SHOW_PID=$!
+fi
+
 echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
 CPU_SPEED_PERF=2000000
@@ -35,15 +53,15 @@ echo 0 > /sys/class/led_anim/max_scale
 # generic NextUI package install
 for pakz in $PAKZ_PATH; do
 	if [ ! -e "$pakz" ]; then continue; fi
-	echo "Installing $pakz"
+	if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Extracting $pakz" > /tmp/show2.fifo; fi
 	cd $(dirname "$0")/$PLATFORM
-	./show.elf ./$DEVICE/installing.png
 
 	./unzip -o -d "$SDCARD_PATH" "$pakz" # >> $pakz.txt
 	rm -f "$pakz"
 
 	# run postinstall if present
 	if [ -f $SDCARD_PATH/post_install.sh ]; then
+		echo "TEXT:Installing $pakz" > /tmp/show2.fifo
 		$SDCARD_PATH/post_install.sh # > $pakz_post.txt
 		rm -f $SDCARD_PATH/post_install.sh
 	fi
@@ -51,12 +69,11 @@ done
 
 # install/update
 if [ -f "$UPDATE_PATH" ]; then 
-	echo ok
 	cd $(dirname "$0")/$PLATFORM
 	if [ -d "$SYSTEM_PATH" ]; then
-		./show.elf ./$DEVICE/updating.png
+		if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Updating NextUI" > /tmp/show2.fifo; fi
 	else
-		./show.elf ./$DEVICE/installing.png
+		if [ "$SHOW_SPLASH" = "yes" ] ; then echo "TEXT:Installing NextUI" > /tmp/show2.fifo; fi
 	fi
 
 	# clean replacement for core paths
@@ -72,6 +89,8 @@ if [ -f "$UPDATE_PATH" ]; then
 		$SYSTEM_PATH/$PLATFORM/bin/install.sh # &> $SDCARD_PATH/log.txt
 	fi
 fi
+
+#kill $SHOW_PID
 
 LAUNCH_PATH="$SYSTEM_PATH/$PLATFORM/paks/MinUI.pak/launch.sh"
 if [ -f "$LAUNCH_PATH" ] ; then
