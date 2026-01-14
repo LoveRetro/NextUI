@@ -30,7 +30,7 @@ CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS	 += -lmsettings -lsamplerate
 ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
-CFLAGS += `pkg-config --cflags libzip poppler-glib gio-2.0 gobject-2.0 glib-2.0 cairo`
+CFLAGS += `pkg-config --cflags libzip poppler-glib gio-2.0 gobject-2.0 glib-2.0 cairo` -DENABLE_PDF_MANUAL
 LDFLAGS += `pkg-config --libs libzip poppler-glib gio-2.0 gobject-2.0 glib-2.0 cairo`
 else
 LDFLAGS += -lzip

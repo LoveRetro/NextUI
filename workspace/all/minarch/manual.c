@@ -6,14 +6,16 @@
 #include <unistd.h>
 #include <ctype.h>
 
-#include <glib/poppler.h>
-#include <cairo.h>
-#include <SDL2/SDL.h>
-
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
 #include "manual.h"
+
+#ifdef ENABLE_PDF_MANUAL
+#include <glib.h>
+#include <glib/poppler.h>
+#include <cairo.h>
+#include <SDL2/SDL.h>
 
 // External variables from minarch.c
 extern SDL_Surface* screen;
@@ -125,18 +127,17 @@ static void Manual_render(void) {
 }
 
 static void Manual_loop(char* pdf_path) {
-    // Load PDF
-    char uri[MAX_PATH + 7]; // file:// + path
-    if (pdf_path[0] == '/')
-        snprintf(uri, sizeof(uri), "file://%s", pdf_path);
-    else {
-        char cwd[MAX_PATH];
-        getcwd(cwd, sizeof(cwd));
-        snprintf(uri, sizeof(uri), "file://%s/%s", cwd, pdf_path);
+    GError *error = NULL;
+    char *uri = g_filename_to_uri(pdf_path, NULL, &error);
+    if (!uri) {
+        LOG_error("Failed to create URI: %s\n", error->message);
+        g_error_free(error);
+        return;
     }
 
-    GError *error = NULL;
     manual.doc = poppler_document_new_from_file(uri, NULL, &error);
+    g_free(uri);
+
     if (!manual.doc) {
         LOG_error("Failed to open PDF: %s\n", error->message);
         g_error_free(error);
@@ -210,8 +211,10 @@ static void Manual_loop(char* pdf_path) {
     g_object_unref(manual.doc);
     manual.doc = NULL;
 }
+#endif
 
 void Manual_open(char* rom_path) {
+#ifdef ENABLE_PDF_MANUAL
     char manual_dir[MAX_PATH];
     char* tmp = strrchr(rom_path, '/');
     if (!tmp) return;
@@ -219,21 +222,27 @@ void Manual_open(char* rom_path) {
     int len = tmp - rom_path;
     strncpy(manual_dir, rom_path, len);
     manual_dir[len] = '\0';
-    strcat(manual_dir, "/manuals");
 
-    if (!exists(manual_dir)) {
-        // Try to verify if we are in "Roms/<System>/manuals" vs "Roms/<System>"
-        // If rom_path is ".../Roms/GBA/game.gba", then dir is ".../Roms/GBA"
-        // And manual dir is ".../Roms/GBA/manuals"
-        LOG_info("Manual dir not found: %s\n", manual_dir);
-        // Maybe try listing files?
+    // Check .media/manuals first (preferred)
+    char preferred_dir[MAX_PATH];
+    snprintf(preferred_dir, sizeof(preferred_dir), "%s/.media/manuals", manual_dir);
+
+    // Fallback to legacy manuals dir
+    char legacy_dir[MAX_PATH];
+    snprintf(legacy_dir, sizeof(legacy_dir), "%s/manuals", manual_dir);
+
+    char* target_dir = NULL;
+    if (exists(preferred_dir)) target_dir = preferred_dir;
+    else if (exists(legacy_dir)) target_dir = legacy_dir;
+    else {
+        LOG_info("No manual directory found in %s\n", manual_dir);
         return;
     }
 
     // List PDFs
     DIR *d;
     struct dirent *dir;
-    d = opendir(manual_dir);
+    d = opendir(target_dir);
     if (!d) return;
 
     char *pdf_files[64];
@@ -255,35 +264,32 @@ void Manual_open(char* rom_path) {
         return;
     }
 
-    // If only one manual, open it directly?
-    // Or check if one matches the ROM name?
+    // Matching
     char rom_name[MAX_PATH];
     getDisplayName(rom_path, rom_name);
 
     char best_match[MAX_PATH] = {0};
     int found_match = 0;
 
-    // Simple matching: looks for manual with same basename
     for (int i=0; i<count; i++) {
         char manual_name[MAX_PATH];
         getDisplayName(pdf_files[i], manual_name);
-        if (exactMatch(rom_name, manual_name)) {
-            snprintf(best_match, sizeof(best_match), "%s/%s", manual_dir, pdf_files[i]);
+
+        // Case-insensitive comparison
+        if (strcasecmp(rom_name, manual_name) == 0) {
+            snprintf(best_match, sizeof(best_match), "%s/%s", target_dir, pdf_files[i]);
             found_match = 1;
             break;
         }
     }
 
     if (!found_match && count > 0) {
-        // Just take the first one? Or implement a menu to select?
-        // For now, let's take the first one if only one, or show a list if multiple.
         if (count == 1) {
-             snprintf(best_match, sizeof(best_match), "%s/%s", manual_dir, pdf_files[0]);
+             snprintf(best_match, sizeof(best_match), "%s/%s", target_dir, pdf_files[0]);
              found_match = 1;
         } else {
-            // TODO: Implement selection menu.
-            // For now, just pick the first one to prove concept.
-             snprintf(best_match, sizeof(best_match), "%s/%s", manual_dir, pdf_files[0]);
+             // Fallback to first if multiple and no match (temporary behavior)
+             snprintf(best_match, sizeof(best_match), "%s/%s", target_dir, pdf_files[0]);
              found_match = 1;
         }
     }
@@ -294,4 +300,7 @@ void Manual_open(char* rom_path) {
 
     // Cleanup
     for (int i=0; i<count; i++) free(pdf_files[i]);
+#else
+    LOG_info("PDF Manuals not supported on this platform\n");
+#endif
 }
