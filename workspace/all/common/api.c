@@ -2638,6 +2638,7 @@ void SND_pauseAudio(bool paused)
 
 FALLBACK_IMPLEMENTATION void PLAT_audioDeviceWatchRegister(void (*cb)(int, int)) {}
 FALLBACK_IMPLEMENTATION void PLAT_audioDeviceWatchUnregister(void) {}
+FALLBACK_IMPLEMENTATION void PLAT_overrideMute(int mute) {}
 
 ///////////////////////////////
 

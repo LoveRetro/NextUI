@@ -204,12 +204,15 @@ void InitSettings(void) {
 	// printf("brightness: %i\nspeaker: %i \n", settings->brightness, settings->speaker);
 	system("amixer");
 
-	// make sure all these volume-influencing controls are set to defaults, we will set volume with 'digital volume'
-	if(GetAudioSink() == AUDIO_SINK_DEFAULT) {
-		system("amixer sset 'HPOUT' unmute");
-		system("amixer sset 'SPK' unmute");
-		system("amixer sset 'LINEOUTL' unmute");
-		system("amixer sset 'LINEOUTR' unmute");
+	// make sure all these volume-influencing controls are set to defaults, we will set volume with 'DAC Volume'
+	if(GetAudioSink() == AUDIO_SINK_DEFAULT) {	
+		system("amixer sset 'SPK' on");
+		system("amixer sset 'HPOUT' on");
+		system("amixer sset 'LINEOUTL' on");
+		system("amixer sset 'LINEOUTR' on");
+		system("amixer sset 'DACL DACR Swap' On");
+		//system("amixer sset 'HPOUT Gain' 7"); // resets itself on boot to 7, we dont necessarily need to modify
+		//system("amixer sset 'LINEOUT Gain' 19"); // resets itself on boot to 19, we dont necessarily need to modify
 	}
 
 	// This will implicitly update all other settings based on FN switch state
@@ -878,6 +881,7 @@ void SetRawVolume(int val) { // in: 0-100
                 break;
             }
         }
+		mixer_close(mixer);
 	}
 	else {
         // Speaker path: use direct lookup by name
@@ -890,7 +894,7 @@ void SetRawVolume(int val) { // in: 0-100
         struct mixer_ctl *digital = mixer_get_ctl_by_name(mixer, "DAC Volume");
         if (digital) {
 			mixer_ctl_set_percent(digital, 0, val);
-			//printf("Set 'digital volume' to %d%%\n", val); fflush(stdout);
+				//printf("Set 'digital volume' to %d%%\n", val); fflush(stdout);
 		}
 		
 		// Digital volume does not quite go to 0, so also mute the DAC volume

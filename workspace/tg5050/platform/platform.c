@@ -385,6 +385,10 @@ int PLAT_pickSampleRate(int requested, int max) {
 	return MIN(requested, max);
 }
 
+void PLAT_overrideMute(int mute) {
+	putInt("/sys/class/speaker/mute", mute);
+}
+
 char* PLAT_getModel(void) {
 	char* model = getenv("TRIMUI_MODEL");
 	if (model) return model;

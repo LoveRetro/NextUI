@@ -6910,22 +6910,22 @@ void onAudioSinkChanged(int device, int watch_event)
 	else
 		SDL_setenv("AUDIODEV", "default", 1);
 
-	if(device != AUDIO_SINK_DEFAULT && !exists(SDCARD_PATH "/.userdata/tg5040/.asoundrc"))
-		LOG_error("asoundrc is not there yet!!!\n");
-	else if(device == AUDIO_SINK_DEFAULT && exists(SDCARD_PATH "/.userdata/tg5040/.asoundrc"))
-		LOG_error("asoundrc is not deleted yet!!!\n");
+	//if(device != AUDIO_SINK_DEFAULT && !exists(SDCARD_PATH "/.userdata/tg5040/.asoundrc"))
+	//	LOG_error("asoundrc is not there yet!!!\n");
+	//else if(device == AUDIO_SINK_DEFAULT && exists(SDCARD_PATH "/.userdata/tg5040/.asoundrc"))
+	//	LOG_error("asoundrc is not deleted yet!!!\n");
 }
 
 int main(int argc , char* argv[]) {
 	LOG_info("MinArch\n");
 
-	static char asoundpath[MAX_PATH];
-	sprintf(asoundpath, "%s/.asoundrc", getenv("HOME"));
-	LOG_info("minarch: need asoundrc at %s\n", asoundpath);
-	if(exists(asoundpath))
-		LOG_info("asoundrc exists at %s\n", asoundpath);
-	else 
-		LOG_info("asoundrc does not exist at %s\n", asoundpath);
+	//static char asoundpath[MAX_PATH];
+	//sprintf(asoundpath, "%s/.asoundrc", getenv("HOME"));
+	//LOG_info("minarch: need asoundrc at %s\n", asoundpath);
+	//if(exists(asoundpath))
+	//	LOG_info("asoundrc exists at %s\n", asoundpath);
+	//else 
+	//	LOG_info("asoundrc does not exist at %s\n", asoundpath);
 
 	pthread_t cpucheckthread;
     pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
@@ -6984,6 +6984,8 @@ int main(int argc , char* argv[]) {
 	Config_readOptions(); // but others load and report options later (eg. nes)
 	Config_readControls(); // restore controls (after the core has reported its defaults)
 
+	// Mute audio during startup to avoid pops (InitSettings would be logical, but too late)
+	SND_overrideMute(1);
 	SND_init(core.sample_rate, core.fps);
 	SND_registerDeviceWatcher(onAudioSinkChanged);
 	InitSettings(); // after we initialize audio

@@ -386,6 +386,7 @@ void PLAT_audioDeviceWatchUnregister(void);
 
 #define SND_registerDeviceWatcher PLAT_audioDeviceWatchRegister
 #define SND_removeDeviceWatcher PLAT_audioDeviceWatchUnregister
+#define SND_overrideMute PLAT_overrideMute // Overrules and bypasses any mute state from msettings
 
 ///////////////////////////////
 
