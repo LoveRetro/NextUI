@@ -78,8 +78,12 @@ static bool wifi_get_ip(char *ip, size_t len) {
 }
 
 void PLAT_wifiInit() {
-	wifilog("Wifi init\n");
-	PLAT_wifiEnable(CFG_getWifi());
+    // We should never have to do this manually, as wifi_init.sh should be
+    // started/stopped by the platform init scripts.
+	//PLAT_wifiEnable(CFG_getWifi());
+
+    PLAT_wifiDiagnosticsEnable(CFG_getWifiDiagnostics());
+    wifilog("Wifi init\n");
 }
 
 bool PLAT_wifiEnabled() {
@@ -89,7 +93,7 @@ bool PLAT_wifiEnabled() {
 void PLAT_wifiEnable(bool on) {
 	if (on) {
 		wifilog("turning wifi on...\n");
-		system(SYSTEM_PATH "/etc/wifi/wifi_init.sh start");
+		system(SYSTEM_PATH "/etc/wifi/wifi_init.sh start > /dev/null 2>&1");
 		// Keep config in sync
 		CFG_setWifi(on);
 	}
@@ -97,7 +101,7 @@ void PLAT_wifiEnable(bool on) {
 		wifilog("turning wifi off...\n");
 		// Keep config in sync
 		CFG_setWifi(on);
-		system(SYSTEM_PATH "/etc/wifi/wifi_init.sh stop");
+		system(SYSTEM_PATH "/etc/wifi/wifi_init.sh stop > /dev/null 2>&1");
 	}
 }
 
@@ -547,4 +551,10 @@ bool PLAT_wifiDiagnosticsEnabled()
 void PLAT_wifiDiagnosticsEnable(bool on) 
 {
 	CFG_setWifiDiagnostics(on);
+    // set wpa_cli log level
+    if (on) {
+        system(WPA_CLI_CMD " log_level DEBUG 2>/dev/null");
+    } else {
+        system(WPA_CLI_CMD " log_level WARNING 2>/dev/null");
+    }
 }

@@ -4036,7 +4036,7 @@ int LEDS_getProfileOverride()
 		return LIGHT_PROFILE_DEFAULT;
 	}
 	
-	LOG_info("LEDS_getProfileOverride: %i\n", profile_override[profile_override_top]);
+	LOG_debug("LEDS_getProfileOverride: %i\n", profile_override[profile_override_top]);
 	return profile_override[profile_override_top];
 }
 
