@@ -1881,6 +1881,7 @@ void PLAT_GL_Swap() {
         shaderinfocount++;
 
         if (shaders[i]->shader_p) {
+			LOG_info("Shader Pass: Pipeline step %d/%d\n", i + 1, nrofshaders);
             runShaderPass(
                 (i == 0) ? src_texture : shaders[i - 1]->texture,
                 shaders[i]->shader_p,
@@ -1907,6 +1908,7 @@ void PLAT_GL_Swap() {
     }
 
     if (nrofshaders > 0) {
+		LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
         runShaderPass(
             shaders[nrofshaders - 1]->texture,
             g_shader_default,
@@ -1917,6 +1919,7 @@ void PLAT_GL_Swap() {
         );
     }
 	else {
+		LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
         runShaderPass(src_texture, 
 			g_shader_default, 
 			NULL, 
@@ -1926,6 +1929,7 @@ void PLAT_GL_Swap() {
     }
 
     if (effect_tex) {
+		LOG_info("Shader Pass: Screen Effect\n");
         runShaderPass(
             effect_tex,
             g_shader_overlay,
@@ -1937,6 +1941,7 @@ void PLAT_GL_Swap() {
     }
 
     if (overlay_tex) {
+		LOG_info("Shader Pass: Overlay\n");
         runShaderPass(
             overlay_tex,
             g_shader_overlay,
