@@ -893,7 +893,7 @@ void PLAT_setOverlay(const char* filename, const char* tag) {
 	overlay_path = NULL;
 	overlayUpdated=1;
 
-    if (!filename || strcmp(filename, "") == 0) {
+    if (!filename || strcmp(filename, "") == 0 || strcmp(filename, "None") == 0) {
 		overlay_path = strdup("");
         LOG_info("Skipping overlay update.\n");
         return;
