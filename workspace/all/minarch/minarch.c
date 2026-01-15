@@ -4661,19 +4661,21 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		int scale = renderer.scale;
 		if (scale==-1) scale = 1; // nearest neighbor flag
 
-		sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,perf.samplerate_in,perf.samplerate_out);
-		blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
-		
-		sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", perf.ratio,
-				perf.buffer_size,perf.buffer_ms, perf.buffer_free, perf.buffer_target,perf.avg_buffer_free);
-		blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
-					height);
+		if (!perf.benchmark_mode) {
+			sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,perf.samplerate_in,perf.samplerate_out);
+			blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
+			
+			sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", perf.ratio,
+					perf.buffer_size,perf.buffer_ms, perf.buffer_free, perf.buffer_target,perf.avg_buffer_free);
+			blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
+						height);
 
-		sprintf(debug_text, "%i,%i %ix%i", renderer.dst_x,renderer.dst_y, renderer.src_w*scale,renderer.src_h*scale);
-		blitBitmapText(debug_text,-x,y,(uint32_t*)data,pitch / 4, width,height);
-	
-		sprintf(debug_text, "%ix%i", renderer.dst_w,renderer.dst_h);
-		blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
+			sprintf(debug_text, "%i,%i %ix%i", renderer.dst_x,renderer.dst_y, renderer.src_w*scale,renderer.src_h*scale);
+			blitBitmapText(debug_text,-x,y,(uint32_t*)data,pitch / 4, width,height);
+		
+			sprintf(debug_text, "%ix%i", renderer.dst_w,renderer.dst_h);
+			blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
+		}
 
 		//want this to overwrite bottom right in case screen is too small this info more important tbh
 		PLAT_getCPUTemp();
@@ -4683,21 +4685,15 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.cpu_usage, perf.cpu_speed, perf.cpu_temp);
 		blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
 
-		if (perf.benchmark_mode) {
-			sprintf(debug_text, "BNCH");
-			int text_width = strlen(debug_text) * (5 + 1); // rough approx
-			int center_x = width/2 - text_width/2;
-			int center_y = height/2 - 4; // half char height
-			blitBitmapText(debug_text, center_x, center_y, (uint32_t*)data, pitch / 4, width, height);
-		}
-
-		if(currentshaderpass>0) {
+		if(!perf.benchmark_mode && currentshaderpass>0) {
 			sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
 			blitBitmapText(debug_text,x,-y - 28,(uint32_t*)data,pitch / 4, width,height);
 		}
 	
-		double buffer_fill = (double) (perf.buffer_size - perf.buffer_free) / (double) perf.buffer_size;
-		drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
+		if (!perf.benchmark_mode) {
+			double buffer_fill = (double) (perf.buffer_size - perf.buffer_free) / (double) perf.buffer_size;
+			drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
+		}
 	}
 	
 	static int frame_counter = 0;
