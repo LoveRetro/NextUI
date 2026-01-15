@@ -40,6 +40,11 @@ LDFLAGS	 +=  -Llibretro-common -lsrm -lzip
 CFLAGS   += -DHAS_SRM
 endif
 ifeq ($(PLATFORM), tg5040)
+TG5040_LIBS = ../../tg5040/libs
+ifneq (,$(wildcard $(TG5040_LIBS)/lib/libpoppler-glib.so))
+CFLAGS += $(shell PKG_CONFIG_PATH=$(abspath $(TG5040_LIBS)/lib/pkgconfig) pkg-config --cflags poppler-glib cairo) -DENABLE_PDF_MANUAL
+LDFLAGS += $(shell PKG_CONFIG_PATH=$(abspath $(TG5040_LIBS)/lib/pkgconfig) pkg-config --libs poppler-glib cairo)
+endif
 CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
 LDFLAGS +=  -lwifimg -lwifid
 LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -lasound -ljson-c
