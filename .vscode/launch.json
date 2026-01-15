@@ -95,8 +95,25 @@
             "envFile": "${workspaceFolder}/.env_desktop",
             "args": [
               "${workspaceFolder}/workspace/desktop/cores/output/gambatte_libretro.so", 
-              "/var/tmp/nextui/sdcard/Roms/Game Boy Color (GBC)/Tetris DX (SGB Enhanced) (GB Compatible).zip"
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Color (GBC)/Tetris (World) (Rev 1).zip"
             ],
+        },
+        {
+            "name": "Minarch (Profile)",
+            "request": "launch",
+            "type": "cppdbg",
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
+            "preLaunchTask": "make desktop profile",
+            "envFile": "${workspaceFolder}/.env_desktop",
+            "args": [
+              "${workspaceFolder}/workspace/desktop/cores/output/gambatte_libretro.so", 
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Color (GBC)/Tetris (World) (Rev 1).zip"
+            ],
+            "postDebugTask": "show profile results"
         },
         {
           "name": "Remote debug minarch",

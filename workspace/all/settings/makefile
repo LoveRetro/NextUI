@@ -27,7 +27,7 @@ CXXSOURCE += build/$(PLATFORM)/utils.o build/$(PLATFORM)/api.o build/$(PLATFORM)
 
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
-CFLAGS += $(OPT) -fomit-frame-pointer
+CFLAGS += $(OPT)
 CFLAGS += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\"
 CXXFLAGS += $(CFLAGS) -std=c++17
 CFLAGS += -fpermissive

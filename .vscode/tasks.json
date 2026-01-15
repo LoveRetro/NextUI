@@ -13,6 +13,21 @@
             "problemMatcher": "$gcc"
         },
         {
+            "label": "make desktop profile",
+            "type": "shell",
+            "command": "PROFILE=1 make setup common PLATFORM=desktop",
+            "group": {
+                "kind": "build"
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "show profile results",
+            "type": "shell",
+            "command": "gprof ${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf ${workspaceFolder}/workspace/all/minarch/build/desktop/gmon.out > ${workspaceFolder}/workspace/all/minarch/build/desktop/profile.txt",
+            "problemMatcher": []
+        },
+        {
             "label": "launch minarch",
             "type": "shell",
             "command": "adb push ${workspaceFolder}/workspace/all/minarch/build/tg5040/minarch.elf /mnt/SDCARD/.system/tg5040/bin/ && adb shell /mnt/SDCARD/.system/tg5040/dbg/launch.sh :13337 /mnt/SDCARD/.system/tg5040/bin/minarch.elf /mnt/SDCARD/.system/tg5040/cores/gpsp_libretro.so /mnt/SDCARD/.system/tg5040/dbg/mbros3.gba",
