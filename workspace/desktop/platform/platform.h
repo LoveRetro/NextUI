@@ -52,7 +52,7 @@
 #define CODE_X			26 // W
 #define CODE_Y			20 // Q
 
-#define CODE_L1			CODE_NA
+#define CODE_L1			43 // Tab
 #define CODE_R1			CODE_NA
 #define CODE_L2			CODE_NA
 #define CODE_R2			CODE_NA
