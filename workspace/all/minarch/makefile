@@ -34,6 +34,11 @@ CFLAGS  += -pg
 LDFLAGS += -pg
 endif
 
+ifeq ($(GPERFTOOLS), 1)
+CFLAGS  += -g
+LDFLAGS += -lprofiler
+endif
+
 ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
 CFLAGS += `pkg-config --cflags libzip`
