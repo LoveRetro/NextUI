@@ -1517,6 +1517,28 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 	static GLfloat texelSize[2] = {-1.0f, -1.0f};
 	static GLuint fbo = 0;
 	static GLuint last_bound_texture = 0;
+	static GLint max_tex_size = 0;
+	static int logged_bad_size = 0;
+	GLenum pre_err;
+
+	while ((pre_err = glGetError()) != GL_NO_ERROR) {
+		(void)pre_err;
+	}
+
+	if (max_tex_size == 0) {
+		glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_tex_size);
+		if (max_tex_size <= 0) {
+			max_tex_size = 2048;
+		}
+	}
+
+	if (dst_width <= 0 || dst_height <= 0 || dst_width > max_tex_size || dst_height > max_tex_size) {
+		if (!logged_bad_size) {
+			LOG_error("Shader pass invalid target size: %dx%d (max %d)\n", dst_width, dst_height, max_tex_size);
+			logged_bad_size = 1;
+		}
+		return;
+	}
 
 	if (shaderResetRequested) {
 		// Force rebuild of GL objects and cached state
@@ -1587,6 +1609,10 @@ void runShaderPass(GLuint src_texture, GLuint shader_program, GLuint* target_tex
 		glBindVertexArray(static_VAO);
 	}
 	if (target_texture) {
+		if (*target_texture != 0 && !glIsTexture(*target_texture)) {
+			*target_texture = 0;
+			shader->updated = 1;
+		}
 		if (*target_texture==0 || shader->updated || reloadShaderTextures) { 
 			
 			// if(target_texture) {
@@ -1881,7 +1907,7 @@ void PLAT_GL_Swap() {
         shaderinfocount++;
 
         if (shaders[i]->shader_p) {
-			LOG_info("Shader Pass: Pipeline step %d/%d\n", i + 1, nrofshaders);
+			//LOG_info("Shader Pass: Pipeline step %d/%d\n", i + 1, nrofshaders);
             runShaderPass(
                 (i == 0) ? src_texture : shaders[i - 1]->texture,
                 shaders[i]->shader_p,
@@ -1908,7 +1934,7 @@ void PLAT_GL_Swap() {
     }
 
     if (nrofshaders > 0) {
-		LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
+		//LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
         runShaderPass(
             shaders[nrofshaders - 1]->texture,
             g_shader_default,
@@ -1919,7 +1945,7 @@ void PLAT_GL_Swap() {
         );
     }
 	else {
-		LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
+		//LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
         runShaderPass(src_texture, 
 			g_shader_default, 
 			NULL, 
@@ -1929,7 +1955,7 @@ void PLAT_GL_Swap() {
     }
 
     if (effect_tex) {
-		LOG_info("Shader Pass: Screen Effect\n");
+		//LOG_info("Shader Pass: Screen Effect\n");
         runShaderPass(
             effect_tex,
             g_shader_overlay,
@@ -1941,7 +1967,7 @@ void PLAT_GL_Swap() {
     }
 
     if (overlay_tex) {
-		LOG_info("Shader Pass: Overlay\n");
+		//LOG_info("Shader Pass: Overlay\n");
         runShaderPass(
             overlay_tex,
             g_shader_overlay,
