@@ -26,18 +26,15 @@ SOURCE = $(TARGET).c ../common/utils.c ../common/api.c ../common/config.c ../com
 CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(OPT) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
-LDFLAGS	 += -lmsettings -lbatmondb -lsqlite3
+LDFLAGS	 += -lbatmondb -lsqlite3
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 
-all: $(PREFIX_LOCAL)/include/msettings.h $(PREFIX_LOCAL)/include/batmondb.h
+all: $(PREFIX_LOCAL)/include/batmondb.h
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 clean:
 	rm -f $(PRODUCT)
-
-$(PREFIX_LOCAL)/include/msettings.h:
-	cd ../../$(PLATFORM)/libmsettings && make
 
 $(PREFIX_LOCAL)/include/batmondb.h:
 	cd ../libbatmondb && make
