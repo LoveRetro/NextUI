@@ -79,18 +79,27 @@ extern SDL_Color ALT_BUTTON_TEXT_COLOR;
 
 // TODO: do we need that many free externs? This should move
 // to a structure or something.
-extern float currentratio;
-extern int currentbufferfree;
-extern int avgbufferfree;
-extern int currentbuffertarget;
-extern int currentframecount;
-extern double currentfps;
-extern double currentreqfps;
-extern float currentbufferms;
-extern int currentbuffersize;
-extern int currentsampleratein;
-extern int currentsamplerateout;
-extern int currentcpuspeed;
+typedef struct {
+    float ratio;
+    int buffer_free;
+    int avg_buffer_free;
+    int buffer_target;
+    int frame_count;
+    double fps;
+    double req_fps;
+    float buffer_ms;
+    int buffer_size;
+    int samplerate_in;
+    int samplerate_out;
+    int cpu_speed;
+    double cpu_usage;
+    int cpu_temp;
+    double jitter;
+    int frame_drops;
+} PerfProfile;
+
+extern PerfProfile perf;
+
 extern int currentshaderpass;
 extern int currentshadersrcw;
 extern int currentshadersrch;
@@ -98,8 +107,6 @@ extern int currentshaderdstw;
 extern int currentshaderdsth;
 extern int currentshadertexw;
 extern int currentshadertexh;
-extern double currentcpuse;
-extern int currentcputemp;
 extern int should_rotate;
 extern volatile int useAutoCpu;
 

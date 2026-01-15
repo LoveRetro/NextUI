@@ -347,7 +347,7 @@ int main(int argc, char *argv[])
         if(is_smartpro_s)
         {
             systemItems.push_back(
-                new MenuItem{ListItemType::Generic, "Fan Speed", "Select the fan speed percentage (0-100%)", 
+                new MenuItem{ListItemType::Generic, "Fan Speed", "Select the fan speed percentage (Quiet/Normal/Performance or 0-100%)", 
                 {-3,-2,-1,0,10,20,30,40,50,60,70,80,90,100}, {"Performance","Normal","Quiet","0%","10%","20%","30%","40%","50%","60%","70%","80%","90%","100%"}, 
                 []() -> std::any { return GetFanSpeed(); },
                 [](const std::any &value){ SetFanSpeed(std::any_cast<int>(value)); },

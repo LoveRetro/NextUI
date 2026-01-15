@@ -113,7 +113,7 @@ void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 }
 
 void PLAT_getCPUTemp() {
-	currentcputemp = getInt("/sys/devices/virtual/thermal/thermal_zone0/temp")/1000;
+	perf.cpu_temp = getInt("/sys/devices/virtual/thermal/thermal_zone0/temp")/1000;
 
 }
 
@@ -291,8 +291,8 @@ void *PLAT_cpu_monitor(void *arg) {
                 sum_cpu_speed += cpu_speed_history[i];
             }
 
-            currentcpuse = sum_cpu_usage / history_count;
-            currentcpuspeed = sum_cpu_speed / history_count;
+            perf.cpu_usage = sum_cpu_usage / history_count;
+            perf.cpu_speed = sum_cpu_speed / history_count;
 
             pthread_mutex_unlock(&currentcpuinfo);
 
@@ -327,7 +327,7 @@ void *PLAT_cpu_monitor(void *arg) {
                     sum_cpu_usage += cpu_usage_history[i];
                 }
 
-                currentcpuse = sum_cpu_usage / history_count;
+                perf.cpu_usage = sum_cpu_usage / history_count;
 
                 pthread_mutex_unlock(&currentcpuinfo);
             }
@@ -354,10 +354,10 @@ void PLAT_setCustomCPUSpeed(int speed) {
 void PLAT_setCPUSpeed(int speed) {
 	int freq = 0;
 	switch (speed) {
-		case CPU_SPEED_MENU: 		freq =  672000; currentcpuspeed = 672; break;
-		case CPU_SPEED_POWERSAVE:	freq = 1200000; currentcpuspeed = 1200; break;
-		case CPU_SPEED_NORMAL: 		freq = 1680000; currentcpuspeed = 1680; break;
-		case CPU_SPEED_PERFORMANCE: freq = 2160000; currentcpuspeed = 2160; break;
+		case CPU_SPEED_MENU: 		freq =  672000; perf.cpu_speed = 672; break;
+		case CPU_SPEED_POWERSAVE:	freq = 1200000; perf.cpu_speed = 1200; break;
+		case CPU_SPEED_NORMAL: 		freq = 1680000; perf.cpu_speed = 1680; break;
+		case CPU_SPEED_PERFORMANCE: freq = 2160000; perf.cpu_speed = 2160; break;
 	}
 	putInt(GOVERNOR_PATH, freq);
 }

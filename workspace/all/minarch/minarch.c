@@ -4166,26 +4166,35 @@ static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int strid
 	if (ox < 0) ox = width - w + ox;
 	if (oy < 0) oy = height - h + oy;
 
+	if (ox < 0) ox = 0;
+	if (oy < 0) oy = 0;
+
 	// Clamp to screen bounds (optional but recommended)
 	if (ox + w > width) w = width - ox;
 	if (oy + h > height) h = height - oy;
+
+	if (w <= 0 || h <= 0) return;
 
 	// Draw background rectangle (black ARGB8888)
 	fillRect(ox, oy, w, h, 0xFF000000, data, stride);
 
 	data += oy * stride + ox;
 
-	for (int y = 0; y < CHAR_HEIGHT; y++) {
-		uint32_t* row = data + y * stride;
+	for (int y = 0; y < h; y++) {
+		// uint32_t* row = data + y * stride;
+		int current_x = 0;
 		for (int i = 0; i < len; i++) {
 			const char* c = bitmap_font[(unsigned char)text[i]];
 			for (int x = 0; x < CHAR_WIDTH; x++) {
+				if (current_x >= w) break;
+
 				if (c[y * CHAR_WIDTH + x] == '1') {
-					*row = 0xFFFFFFFF;  // white ARGBB8888
+					data[y * stride + current_x] = 0xFFFFFFFF;  // white ARGBB8888
 				}
-				row++;
+				current_x++;
 			}
-			row += LETTERSPACING;
+			if (current_x >= w) break;
+			current_x += LETTERSPACING;
 		}
 	}
 }
@@ -4538,19 +4547,19 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	}
 	
 	// debug
-	if (show_debug && !isnan(currentratio) && !isnan(currentfps) && !isnan(currentreqfps)  && !isnan(currentbufferms) &&
-	currentbuffersize >= 0  && currentbufferfree >= 0 && SDL_GetTicks() > 5000) {
+	if (show_debug && !isnan(perf.ratio) && !isnan(perf.fps) && !isnan(perf.req_fps)  && !isnan(perf.buffer_ms) &&
+	perf.buffer_size >= 0  && perf.buffer_free >= 0 && SDL_GetTicks() > 5000) {
 		int x = 2 + renderer.src_x;
 		int y = 2 + renderer.src_y;
 		char debug_text[250];
 		int scale = renderer.scale;
 		if (scale==-1) scale = 1; // nearest neighbor flag
 
-		sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,currentsampleratein,currentsamplerateout);
+		sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,perf.samplerate_in,perf.samplerate_out);
 		blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
 		
-		sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", currentratio,
-				currentbuffersize,currentbufferms, currentbufferfree, currentbuffertarget,avgbufferfree);
+		sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", perf.ratio,
+				perf.buffer_size,perf.buffer_ms, perf.buffer_free, perf.buffer_target,perf.avg_buffer_free);
 		blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
 					height);
 
@@ -4562,15 +4571,18 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 
 		//want this to overwrite bottom right in case screen is too small this info more important tbh
 		PLAT_getCPUTemp();
-		sprintf(debug_text, "%.01f/%.01f/%.0f%%/%ihz/%ic", currentfps, currentreqfps,currentcpuse,currentcpuspeed,currentcputemp);
+		sprintf(debug_text, "%.01f/%.01f J:%.1f D:%d", perf.fps, perf.req_fps, perf.jitter, perf.frame_drops);
 		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
+
+		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.cpu_usage, perf.cpu_speed, perf.cpu_temp);
+		blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
 
 		if(currentshaderpass>0) {
 			sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
-			blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
+			blitBitmapText(debug_text,x,-y - 28,(uint32_t*)data,pitch / 4, width,height);
 		}
 	
-		double buffer_fill = (double) (currentbuffersize - currentbufferfree) / (double) currentbuffersize;
+		double buffer_fill = (double) (perf.buffer_size - perf.buffer_free) / (double) perf.buffer_size;
 		drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
 	}
 	

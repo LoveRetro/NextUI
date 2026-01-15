@@ -64,7 +64,6 @@ uint32_t RGB_BLACK;
 uint32_t RGB_LIGHT_GRAY;
 uint32_t RGB_GRAY;
 uint32_t RGB_DARK_GRAY;
-float currentbufferms = 20.0;
 
 int lights_initialized = 0;
 LightSettings lightsDefault[MAX_LIGHTS];
@@ -206,10 +205,7 @@ static int _;
 
 static double current_fps = SCREEN_FPS;
 static int fps_counter = 0;
-double currentfps = 0.0;
-double currentreqfps = 0.0;
-int currentcpuspeed = 0;
-double currentcpuse = 0;
+PerfProfile perf = {0};
 
 int currentshaderpass = 0;
 int currentshadersrcw = 0;
@@ -219,11 +215,7 @@ int currentshaderdsth = 0;
 int currentshadertexw = 0;
 int currentshadertexh = 0;
 
-int currentbuffersize = 0;
-int currentsampleratein = 0;
-int currentsamplerateout = 0;
 int should_rotate = 0;
-int currentcputemp = 0;
 
 FALLBACK_IMPLEMENTATION void *PLAT_cpu_monitor(void *arg)
 {
@@ -232,7 +224,7 @@ FALLBACK_IMPLEMENTATION void *PLAT_cpu_monitor(void *arg)
 
 FALLBACK_IMPLEMENTATION void PLAT_getCPUTemp()
 {
-	currentcputemp = 0;
+	perf.cpu_temp = 0;
 }
 
 int GFX_loadSystemFont(const char *fontPath)
@@ -537,7 +529,7 @@ void GFX_flip(SDL_Surface *screen)
 
 	PLAT_flip(screen, 0);
 
-	currentfps = current_fps;
+	perf.fps = current_fps;
 	fps_counter++;
 
 	uint64_t performance_frequency = SDL_GetPerformanceFrequency();
@@ -545,8 +537,19 @@ void GFX_flip(SDL_Surface *screen)
 	double elapsed_time_s = (double)frame_duration / performance_frequency;
 	double tempfps = 1.0 / elapsed_time_s;
 
+	// Stats logic
+	double frame_ms = elapsed_time_s * 1000.0;
+	double target_ms = 1000.0 / SCREEN_FPS;
+	perf.jitter = fabs(frame_ms - target_ms);
+	
+	// If frame took > 1.1x target time, count as drop/stutter
+	if (frame_ms > target_ms * 1.1) {
+		perf.frame_drops++;
+	}
+
 	if (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2)
 		tempfps = SCREEN_FPS;
+
 
 	fps_buffer[fps_buffer_index] = tempfps;
 	fps_buffer_index = (fps_buffer_index + 1) % FPS_BUFFER_SIZE;
@@ -571,13 +574,22 @@ void GFX_GL_Swap()
 
 	PLAT_GL_Swap();
 
-	currentfps = current_fps;
+	perf.fps = current_fps;
 	fps_counter++;
 
 	uint64_t performance_frequency = SDL_GetPerformanceFrequency();
 	uint64_t frame_duration = SDL_GetPerformanceCounter() - per_frame_start;
 	double elapsed_time_s = (double)frame_duration / performance_frequency;
 	double tempfps = 1.0 / elapsed_time_s;
+
+	// Stats logic
+	double frame_ms = elapsed_time_s * 1000.0;
+	double target_ms = 1000.0 / SCREEN_FPS;
+	perf.jitter = fabs(frame_ms - target_ms);
+	
+	if (frame_ms > target_ms * 1.1) {
+		perf.frame_drops++;
+	}
 
 	if (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2)
 		tempfps = SCREEN_FPS;
@@ -693,6 +705,15 @@ void GFX_flip_fixed_rate(SDL_Surface *screen, double target_fps)
 	double elapsed_time_s = (double)(SDL_GetPerformanceCounter() - per_frame_start) / perf_freq;
 	double tempfps = 1.0 / elapsed_time_s;
 
+	// Stats logic
+	double frame_ms = elapsed_time_s * 1000.0;
+	double target_ms = 1000.0 / target_fps;
+	perf.jitter = fabs(frame_ms - target_ms);
+	
+	if (frame_ms > target_ms * 1.1) {
+		perf.frame_drops++;
+	}
+
 	fps_buffer[fps_buffer_index] = tempfps;
 	fps_buffer_index = (fps_buffer_index + 1) % FPS_BUFFER_SIZE;
 	// give it a little bit to stabilize and then use, meanwhile the buffer will
@@ -706,11 +727,13 @@ void GFX_flip_fixed_rate(SDL_Surface *screen, double target_fps)
 			average_fps += fps_buffer[i];
 		}
 		average_fps /= fpsbuffersize;
-		currentfps = current_fps = average_fps;
+		current_fps = average_fps;
+		perf.fps = current_fps;
 	}
 	else
 	{
-		currentfps = current_fps = target_fps;
+		current_fps = target_fps;
+		perf.fps = target_fps;
 	}
 	per_frame_start = SDL_GetPerformanceCounter();
 }
@@ -2209,8 +2232,6 @@ static float adjustment_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
 static int adjustment_index = 0;
 static float remaining_space_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
 static int remaining_space_index = 0;
-int currentbuffertarget = 0;
-int avgbufferfree = 0;
 
 float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, float targetbuffer_under, int batchsize)
 {
@@ -2224,11 +2245,11 @@ float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, 
 		avgspace += remaining_space_history[i];
 	}
 	avgspace /= ROLLING_AVERAGE_WINDOW_SIZE;
-	avgbufferfree = avgspace;
+	perf.avg_buffer_free = avgspace;
 	// end debug part
 
 	float midpoint = (targetbuffer_over + targetbuffer_under) / 2.0f;
-	currentbuffertarget = midpoint;
+	perf.buffer_target = midpoint;
 
 	float normalizedDistance;
 	if (remaining_space < midpoint)
@@ -2268,10 +2289,6 @@ static SND_Frame tmpbuffer[BATCH_SIZE];
 static SND_Frame *unwritten_frames = NULL;
 static int unwritten_frame_count = 0;
 
-float currentratio = 0.0;
-int currentbufferfree = 0;
-int currentframecount = 0;
-
 size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 {
 	int framecount = (int)frame_count;
@@ -2303,18 +2320,18 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	{
 		remaining_space = snd.frame_out - snd.frame_in;
 	}
-	currentbufferfree = remaining_space;
+	perf.buffer_free = remaining_space;
 
 	// let audio buffer fill a little first and then unpause audio so no underruns occur
-	if (currentbufferfree < snd.frame_count * 0.6f) {
+	if (perf.buffer_free < snd.frame_count * 0.6f) {
 		SND_pauseAudio(false);
-	} else if (currentbufferfree > snd.frame_count * 0.99f) { // if for some reason buffer drops below threshold again, pause it (like psx core can stop sending audio in between scenes or after fast forward etc)
+	} else if (perf.buffer_free > snd.frame_count * 0.99f) { // if for some reason buffer drops below threshold again, pause it (like psx core can stop sending audio in between scenes or after fast forward etc)
 		SND_pauseAudio(true);
 	} 
 
 
 	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000.0f;
-	currentbufferms = tempdelay;
+	perf.buffer_ms = tempdelay;
 
 	// do some checks
 	if (current_fps <= 0.0f || !isfinite(current_fps))
@@ -2352,7 +2369,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	else if (ratio < 0.5)
 		ratio = 0.5;
 
-	currentratio = (ratio > 0.0) ? ratio : current_fps;
+	perf.ratio = (ratio > 0.0) ? ratio : current_fps;
 
 	while (framecount > 0)
 	{
@@ -2425,18 +2442,18 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	}
 	pthread_mutex_unlock(&audio_mutex);
 	// printf("    actual free: %g\n", remaining_space);
-	currentbufferfree = remaining_space;
+	perf.buffer_free = remaining_space;
 	// let audio buffer fill up a little before playing audio, so no underruns occur. Target fill rate of buffer is about 50% so start playing when about 40% full
-	if (currentbufferfree < snd.frame_count * 0.6f) {
+	if (perf.buffer_free < snd.frame_count * 0.6f) {
 		SND_pauseAudio(false);
-	} else if (currentbufferfree > snd.frame_count * 0.99f) { // if for some reason buffer drops below 1% again, pause audio again (like psx core can stop sending audio in between scenes or after fast forward etc)
+	} else if (perf.buffer_free > snd.frame_count * 0.99f) { // if for some reason buffer drops below 1% again, pause audio again (like psx core can stop sending audio in between scenes or after fast forward etc)
 		SND_pauseAudio(true);
 	} 
 
 	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000;
-	currentbufferms = tempdelay;
+	perf.buffer_ms = tempdelay;
 
-	float occupancy = (float)(snd.frame_count - currentbufferfree) / snd.frame_count;
+	float occupancy = (float)(snd.frame_count - perf.buffer_free) / snd.frame_count;
 	switch (current_mode)
 	{
 	case SND_FF_ON_TIME:
@@ -2479,7 +2496,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	default:
 		ratio = 1.0;
 	}
-	currentratio = ratio;
+	perf.ratio = ratio;
 
 	while (framecount > 0)
 	{
@@ -2525,7 +2542,7 @@ void SND_init(double sample_rate, double frame_rate)
 	LOG_info("SND_init\n");
 	if(SDL_WasInit(SDL_INIT_AUDIO))
 		LOG_error("SND_init: already initialized\n");
-	currentreqfps = frame_rate;
+	perf.req_fps = frame_rate;
 	SDL_InitSubSystem(SDL_INIT_AUDIO);
 
 	fps_counter = 0;
@@ -2581,11 +2598,11 @@ void SND_init(double sample_rate, double frame_rate)
 	LOG_info("We now have audio device #%d\n", snd.device_id);
 
 	snd.frame_count = ((float)spec_out.freq / SCREEN_FPS) * 8; // buffer size based on sample rate out (times 12 samples headroom)
-	currentbuffersize = snd.frame_count;
+	perf.buffer_size = snd.frame_count;
 	snd.sample_rate_in = sample_rate;
 	snd.sample_rate_out = spec_out.freq;
-	currentsampleratein = snd.sample_rate_in;
-	currentsamplerateout = snd.sample_rate_out;
+	perf.samplerate_in = snd.sample_rate_in;
+	perf.samplerate_out = snd.sample_rate_out;
 
 	SND_resizeBuffer();
 
