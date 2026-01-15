@@ -4182,8 +4182,46 @@ static const char* bitmap_font[] = {
 		"  1  "
 		"     "
 		"     ",
-
-
+	['B'] = 
+		"1111 "
+		"1   1"
+		"1   1"
+		"1111 "
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1111 ",
+	['C'] = 
+		" 111 "
+		"1   1"
+		"1    "
+		"1    "
+		"1    "
+		"1    "
+		"1    "
+		"1   1"
+		" 111 ",
+	['N'] = 
+		"1   1"
+		"1   1"
+		"11  1"
+		"1   1"
+		"1 1 1"
+		"1   1"
+		"1  11"
+		"1   1"
+		"1   1",
+	['H'] = 
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"11111"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1",
 };
 
 void drawRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
@@ -4509,7 +4547,11 @@ static int firstframe = 1;
 static void screen_flip(SDL_Surface* screen) {
 	
 	if (use_core_fps) {
-		GFX_flip_fixed_rate(screen, core.fps);
+		if (perf.benchmark_mode) {
+			GFX_GL_Swap();
+		} else {
+			GFX_flip_fixed_rate(screen, core.fps);
+		}
 	}
 	else {
 		GFX_GL_Swap();
@@ -4560,6 +4602,18 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	
 	Special_render();
 	
+	int new_benchmark_mode = (show_debug && fast_forward);
+	static int was_benchmarking = 0;
+	if (new_benchmark_mode != was_benchmarking) {
+		if (new_benchmark_mode) {
+			GFX_setVsync(VSYNC_OFF);
+		} else {
+			GFX_setVsync(config.frontend.options[FE_OPT_TEARING].value);
+		}
+		was_benchmarking = new_benchmark_mode;
+	}
+	perf.benchmark_mode = new_benchmark_mode;
+
 	// static int tmp_frameskip = 0;
 	// if ((tmp_frameskip++)%2) return;
 	
@@ -4569,7 +4623,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	// 14 will let GB hit 10x but NES and SNES will drop to 1.5x at 30fps (not sure why)
 	// but 10 hurts PS...
 	// TODO: 10 was based on rg35xx, probably different results on other supported platforms
-	if (fast_forward && SDL_GetTicks()-last_flip_time<10) return;
+	if (fast_forward && !perf.benchmark_mode && SDL_GetTicks()-last_flip_time<10) return;
 	
 	// FFVII menus 
 	// 16: 30/200
@@ -4628,6 +4682,14 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 
 		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.cpu_usage, perf.cpu_speed, perf.cpu_temp);
 		blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
+
+		if (perf.benchmark_mode) {
+			sprintf(debug_text, "BNCH");
+			int text_width = strlen(debug_text) * (5 + 1); // rough approx
+			int center_x = width/2 - text_width/2;
+			int center_y = height/2 - 4; // half char height
+			blitBitmapText(debug_text, center_x, center_y, (uint32_t*)data, pitch / 4, width, height);
+		}
 
 		if(currentshaderpass>0) {
 			sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
@@ -6960,6 +7022,7 @@ static void trackFPS(void) {
 }
 
 static void limitFF(void) {
+	if (perf.benchmark_mode) return;
 	static uint64_t ff_frame_time = 0;
 	static uint64_t last_time = 0;
 	static int last_max_speed = -1;

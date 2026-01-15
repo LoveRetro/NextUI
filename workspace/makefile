@@ -19,13 +19,13 @@ ifeq ($(PLATFORM), desktop)
 	cd ./$(PLATFORM) && make early # eg. other libs
 	cd ./all/nextui/ && make
 	cd ./all/minarch/ && make
-	cd ./all/libbatmondb/ && make
-	cd ./all/battery/ && make
+	#cd ./all/libbatmondb/ && make
+	#cd ./all/battery/ && make
 	cd ./all/clock/ && make
-	cd ./all/batmon/ && make
-	cd ./all/libgametimedb/ && make
-	cd ./all/gametimectl/ && make
-	cd ./all/gametime/ && make
+	#cd ./all/batmon/ && make
+	#cd ./all/libgametimedb/ && make
+	#cd ./all/gametimectl/ && make
+	#cd ./all/gametime/ && make
 	cd ./all/minput/ && make
 	cd ./all/nextval/ && make
 	cd ./all/settings/ && make
@@ -79,6 +79,7 @@ ifneq ($(PLATFORM), desktop)
 	cd ./all/ledcontrol/ && make clean
 	cd ./all/bootlogo/ && make clean
 	cd ./all/show2/ && make clean
+	cd ./all/batmon/ && make clean
 ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/rfkill && make clean
 	cd ./$(PLATFORM)/btmanager && make clean
@@ -91,7 +92,6 @@ endif
 	cd ./all/battery/ && make clean
 	cd ./all/clock/ && make clean
 	cd ./all/libbatmondb/ && make clean
-	cd ./all/batmon/ && make clean
 	cd ./all/libgametimedb/ && make clean
 	cd ./all/gametimectl/ && make clean
 	cd ./all/gametime/ && make clean

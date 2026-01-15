@@ -718,7 +718,23 @@ void PLAT_clearAll(void) {
 }
 
 void PLAT_setVsync(int vsync) {
-	
+	// No effect on Ge8300
+	//int interval = 1;
+	//if (vsync == VSYNC_OFF) interval = 0;
+	//else if (vsync == VSYNC_LENIENT) interval = -1; // Adaptive, fallback to 1 usually happens internally if not supported
+	//
+	//// Try to set swap interval
+	//if (SDL_GL_SetSwapInterval(interval) < 0) {
+	//	// If -1 (adaptive) failed, try 1 (strict)
+	//	if (interval == -1) {
+	//		LOG_info("Adaptive VSync not supported, falling back to Strict\n");
+	//		SDL_GL_SetSwapInterval(1);
+	//	} else {
+	//		LOG_error("Failed to set swap interval: %s\n", SDL_GetError());
+	//	}
+	//} else {
+	//	LOG_info("VSync set to %d (requested %d)\n", interval, vsync);
+	//}
 }
 
 static int hard_scale = 4; // TODO: base src size, eg. 160x144 can be 4
@@ -1799,7 +1815,7 @@ void PLAT_GL_Swap() {
 		reloadShaderTextures = 1;
 	}
 
-	 if (frame_prep.effect_ready) {
+	if (frame_prep.effect_ready) {
 		if(frame_prep.loaded_effect) {
 			if(!effect_tex) glGenTextures(1, &effect_tex);
 			glBindTexture(GL_TEXTURE_2D, effect_tex);
@@ -1978,7 +1994,9 @@ void PLAT_GL_Swap() {
         );
     }
 
-    SDL_GL_SwapWindow(vid.window);
+	if (!perf.benchmark_mode || frame_count % 60 == 0) {
+    	SDL_GL_SwapWindow(vid.window);
+	}
     frame_count++;
 	reloadShaderTextures = 0;
 	shaderResetRequested = 0;
