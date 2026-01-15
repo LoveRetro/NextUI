@@ -4132,6 +4132,37 @@ static const char* bitmap_font[] = {
         "1   1"
         "1   1"
         "1   1",
+	['D'] = 
+		"1111 "
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1111 ",
+	['J'] = 
+		"  111"
+		"    1"
+		"    1"
+		"    1"
+		"    1"
+		"1   1"
+		"1   1"
+		"1   1"
+		" 111 ",
+	[':'] = 
+		"     "
+		"     "
+		"  1  "
+		"     "
+		"     "
+		"     "
+		"  1  "
+		"     "
+		"     ",
+
 
 };
 
@@ -4185,6 +4216,7 @@ static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int strid
 		int current_x = 0;
 		for (int i = 0; i < len; i++) {
 			const char* c = bitmap_font[(unsigned char)text[i]];
+			if (!c) c = bitmap_font[' '];
 			for (int x = 0; x < CHAR_WIDTH; x++) {
 				if (current_x >= w) break;
 
