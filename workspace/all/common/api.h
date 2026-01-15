@@ -96,6 +96,8 @@ typedef struct {
     int cpu_temp;
     double jitter;
     int frame_drops;
+    double avg_frame_ms;
+    double max_frame_ms;
 } PerfProfile;
 
 extern PerfProfile perf;

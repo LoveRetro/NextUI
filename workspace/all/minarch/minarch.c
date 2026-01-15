@@ -4152,6 +4152,26 @@ static const char* bitmap_font[] = {
 		"1   1"
 		"1   1"
 		" 111 ",
+	['A'] = 
+		"  1  "
+		" 1 1 "
+		"1   1"
+		"1   1"
+		"11111"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1",
+	['M'] = 
+		"1   1"
+		"11 11"
+		"1 1 1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1",
 	[':'] = 
 		"     "
 		"     "
@@ -4603,7 +4623,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 
 		//want this to overwrite bottom right in case screen is too small this info more important tbh
 		PLAT_getCPUTemp();
-		sprintf(debug_text, "%.01f/%.01f J:%.1f D:%d", perf.fps, perf.req_fps, perf.jitter, perf.frame_drops);
+		sprintf(debug_text, "%.1f/%.1f A:%.1f M:%.1f D:%d", perf.fps, perf.req_fps, perf.avg_frame_ms, perf.max_frame_ms, perf.frame_drops);
 		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
 
 		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.cpu_usage, perf.cpu_speed, perf.cpu_temp);

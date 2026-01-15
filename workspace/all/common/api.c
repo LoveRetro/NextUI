@@ -412,6 +412,7 @@ static uint64_t per_frame_start = 0;
 #define FPS_BUFFER_SIZE 50
 // filling with  60.1 cause i'd rather underrun than overflow in start phase
 static double fps_buffer[FPS_BUFFER_SIZE] = {60.1};
+static double frame_time_buffer[FPS_BUFFER_SIZE] = {0};
 static int fps_buffer_index = 0;
 
 void GFX_startFrame(void)
@@ -545,6 +546,7 @@ void GFX_flip(SDL_Surface *screen)
 	// If frame took > 1.1x target time, count as drop/stutter
 	if (frame_ms > target_ms * 1.1) {
 		perf.frame_drops++;
+		LOG_warn("Frame drop detected! Frame time: %.2f ms (target: %.2f ms)\n", frame_ms, target_ms);
 	}
 
 	if (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2)
@@ -552,19 +554,27 @@ void GFX_flip(SDL_Surface *screen)
 
 
 	fps_buffer[fps_buffer_index] = tempfps;
+	frame_time_buffer[fps_buffer_index] = frame_ms;
 	fps_buffer_index = (fps_buffer_index + 1) % FPS_BUFFER_SIZE;
 	// give it a little bit to stabilize and then use, meanwhile the buffer will
 	// cover it
 	if (fps_counter > 100)
 	{
 		double average_fps = 0.0;
+		double avg_ft = 0.0;
+		double max_ft = 0.0;
 		int fpsbuffersize = MIN(fps_counter, FPS_BUFFER_SIZE);
 		for (int i = 0; i < fpsbuffersize; i++)
 		{
 			average_fps += fps_buffer[i];
+			avg_ft += frame_time_buffer[i];
+			if (frame_time_buffer[i] > max_ft) max_ft = frame_time_buffer[i];
 		}
 		average_fps /= fpsbuffersize;
+		avg_ft /= fpsbuffersize;
 		current_fps = average_fps;
+		perf.avg_frame_ms = avg_ft;
+		perf.max_frame_ms = max_ft;
 	}
 
 	per_frame_start = SDL_GetPerformanceCounter();
@@ -595,19 +605,27 @@ void GFX_GL_Swap()
 		tempfps = SCREEN_FPS;
 
 	fps_buffer[fps_buffer_index] = tempfps;
+	frame_time_buffer[fps_buffer_index] = frame_ms;
 	fps_buffer_index = (fps_buffer_index + 1) % FPS_BUFFER_SIZE;
 	// give it a little bit to stabilize and then use, meanwhile the buffer will
 	// cover it
 	if (fps_counter > 100)
 	{
 		double average_fps = 0.0;
+		double avg_ft = 0.0;
+		double max_ft = 0.0;
 		int fpsbuffersize = MIN(fps_counter, FPS_BUFFER_SIZE);
 		for (int i = 0; i < fpsbuffersize; i++)
 		{
 			average_fps += fps_buffer[i];
+			avg_ft += frame_time_buffer[i];
+			if (frame_time_buffer[i] > max_ft) max_ft = frame_time_buffer[i];
 		}
 		average_fps /= fpsbuffersize;
+		avg_ft /= fpsbuffersize;
 		current_fps = average_fps;
+		perf.avg_frame_ms = avg_ft;
+		perf.max_frame_ms = max_ft;
 	}
 
 	per_frame_start = SDL_GetPerformanceCounter();
@@ -715,25 +733,35 @@ void GFX_flip_fixed_rate(SDL_Surface *screen, double target_fps)
 	}
 
 	fps_buffer[fps_buffer_index] = tempfps;
+	frame_time_buffer[fps_buffer_index] = frame_ms;
 	fps_buffer_index = (fps_buffer_index + 1) % FPS_BUFFER_SIZE;
 	// give it a little bit to stabilize and then use, meanwhile the buffer will
 	// cover it
 	if (fps_counter++ > 100)
 	{
 		double average_fps = 0.0;
+		double avg_ft = 0.0;
+		double max_ft = 0.0;
 		int fpsbuffersize = MIN(fps_counter, FPS_BUFFER_SIZE);
 		for (int i = 0; i < fpsbuffersize; i++)
 		{
 			average_fps += fps_buffer[i];
+			avg_ft += frame_time_buffer[i];
+			if (frame_time_buffer[i] > max_ft) max_ft = frame_time_buffer[i];
 		}
 		average_fps /= fpsbuffersize;
+		avg_ft /= fpsbuffersize;
 		current_fps = average_fps;
 		perf.fps = current_fps;
+		perf.avg_frame_ms = avg_ft;
+		perf.max_frame_ms = max_ft;
 	}
 	else
 	{
 		current_fps = target_fps;
 		perf.fps = target_fps;
+		perf.avg_frame_ms = 1000.0 / target_fps;
+		perf.max_frame_ms = perf.avg_frame_ms;
 	}
 	per_frame_start = SDL_GetPerformanceCounter();
 }
