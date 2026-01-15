@@ -29,7 +29,8 @@ else
 fi
 if [ "$SHOW_SPLASH" = "yes" ] ; then
 	cd $(dirname "$0")/$PLATFORM
-	./show2.elf --mode=daemon --image="logo.png" --logoheight=128 --progress=-1 &
+	./show2.elf --mode=daemon --image="logo.png" --text="Installing..." --logoheight=128 --progress=-1 &
+	#sleep 0.5
 	#SHOW_PID=$!
 fi
 
