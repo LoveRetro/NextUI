@@ -59,8 +59,10 @@ ifeq ($(TSAN), 1)
 CFLAGS  += -fsanitize=thread
 LDFLAGS += -ltsan
 endif
-#CFLAGS  += -fsanitize=address -fno-common
-#LDFLAGS += -lasan
+ifeq ($(ASAN), 1)
+CFLAGS  += -fsanitize=address -fno-common -fno-omit-frame-pointer
+LDFLAGS += -lasan
+endif
 endif
 
 AR=$(CROSS_COMPILE)ar

@@ -40,6 +40,15 @@
             "problemMatcher": "$gcc"
         },
         {
+            "label": "make desktop asan",
+            "type": "shell",
+            "command": "ASAN=1 make setup common PLATFORM=desktop",
+            "group": {
+                "kind": "build"
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
             "label": "show profile results",
             "type": "shell",
             "command": "gprof ${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf ${workspaceFolder}/workspace/all/minarch/build/desktop/gmon.out > ${workspaceFolder}/workspace/all/minarch/build/desktop/profile.txt",
