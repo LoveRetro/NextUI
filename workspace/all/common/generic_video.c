@@ -19,6 +19,7 @@
 #include "api.h"
 #include "utils.h"
 #include <stdlib.h>
+#include <pthread.h>
 
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)
@@ -821,62 +822,81 @@ static void rgb565_to_rgb888(uint32_t rgb565, uint8_t *r, uint8_t *g, uint8_t *b
 }
 static char* effect_path;
 static int effectUpdated = 0;
+static pthread_mutex_t video_prep_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 static void updateEffect(void) {
-	if (effect.next_scale==effect.scale && effect.next_type==effect.type && effect.next_color==effect.color) return; // unchanged
+	// Read effect state with mutex protection
+	pthread_mutex_lock(&video_prep_mutex);
+	int next_scale = effect.next_scale;
+	int next_type = effect.next_type;
+	int next_color = effect.next_color;
+	int curr_scale = effect.scale;
+	int curr_type = effect.type;
+	int curr_color = effect.color;
+	pthread_mutex_unlock(&video_prep_mutex);
 	
+	if (next_scale==curr_scale && next_type==curr_type && next_color==curr_color) return; // unchanged
+	
+	// Update effect state with mutex protection
+	pthread_mutex_lock(&video_prep_mutex);
 	int live_scale = effect.scale;
 	int live_color = effect.color;
 	effect.scale = effect.next_scale;
 	effect.type = effect.next_type;
 	effect.color = effect.next_color;
+	int effect_type = effect.type;
+	int effect_scale = effect.scale;
+	int effect_color = effect.color;
+	int live_type = effect.live_type;
+	pthread_mutex_unlock(&video_prep_mutex);
 	
-	if (effect.type==EFFECT_NONE) return; // disabled
-	if (effect.type==effect.live_type && effect.scale==live_scale && effect.color==live_color) return; // already loaded
+	if (effect_type==EFFECT_NONE) return; // disabled
+	if (effect_type==live_type && effect_scale==live_scale && effect_color==live_color) return; // already loaded
 	
 	int opacity = 128; // 1 - 1/2 = 50%
-	if (effect.type==EFFECT_LINE) {
-		if (effect.scale<3) {
+	if (effect_type==EFFECT_LINE) {
+		if (effect_scale<3) {
 			effect_path = RES_PATH "/line-2.png";
 		}
-		else if (effect.scale<4) {
+		else if (effect_scale<4) {
 			effect_path = RES_PATH "/line-3.png";
 		}
-		else if (effect.scale<5) {
+		else if (effect_scale<5) {
 			effect_path = RES_PATH "/line-4.png";
 		}
-		else if (effect.scale<6) {
+		else if (effect_scale<6) {
 			effect_path = RES_PATH "/line-5.png";
 		}
-		else if (effect.scale<8) {
+		else if (effect_scale<8) {
 			effect_path = RES_PATH "/line-6.png";
 		}
 		else {
 			effect_path = RES_PATH "/line-8.png";
 		}
 	}
-	else if (effect.type==EFFECT_GRID) {
-		if (effect.scale<3) {
+	else if (effect_type==EFFECT_GRID) {
+		if (effect_scale<3) {
 			effect_path = RES_PATH "/grid-2.png";
 			opacity = 64; // 1 - 3/4 = 25%
 		}
-		else if (effect.scale<4) {
+		else if (effect_scale<4) {
 			effect_path = RES_PATH "/grid-3.png";
 			opacity = 112; // 1 - 5/9 = ~44%
 		}
-		else if (effect.scale<5) {
+		else if (effect_scale<5) {
 			effect_path = RES_PATH "/grid-4.png";
 			opacity = 144; // 1 - 7/16 = ~56%
 		}
-		else if (effect.scale<6) {
+		else if (effect_scale<6) {
 			effect_path = RES_PATH "/grid-5.png";
 			opacity = 160; // 1 - 9/25 = ~64%
 			// opacity = 96; // TODO: tmp, for white grid
 		}
-		else if (effect.scale<8) {
+		else if (effect_scale<8) {
 			effect_path = RES_PATH "/grid-6.png";
 			opacity = 112; // 1 - 5/9 = ~44%
 		}
-		else if (effect.scale<11) {
+		else if (effect_scale<11) {
 			effect_path = RES_PATH "/grid-8.png";
 			opacity = 144; // 1 - 7/16 = ~56%
 		}
@@ -910,7 +930,10 @@ void PLAT_setOverlay(const char* filename, const char* tag) {
 		free(overlay_path);
 		overlay_path = NULL;
 	}
+	
+	pthread_mutex_lock(&video_prep_mutex);
 	overlayUpdated=1;
+	pthread_mutex_unlock(&video_prep_mutex);
 
     if (!filename || strcmp(filename, "") == 0 || strcmp(filename, "None") == 0) {
 		overlay_path = strdup("");
@@ -1398,10 +1421,14 @@ void PLAT_animateAndFadeSurface(
 }
 
 void PLAT_setEffect(int next_type) {
+	pthread_mutex_lock(&video_prep_mutex);
 	effect.next_type = next_type;
+	pthread_mutex_unlock(&video_prep_mutex);
 }
 void PLAT_setEffectColor(int next_color) {
+	pthread_mutex_lock(&video_prep_mutex);
 	effect.next_color = next_color;
+	pthread_mutex_unlock(&video_prep_mutex);
 }
 void PLAT_vsync(int remaining) {
 	if (remaining>0) SDL_Delay(remaining);
@@ -1410,7 +1437,9 @@ void PLAT_vsync(int remaining) {
 
 scaler_t PLAT_getScaler(GFX_Renderer* renderer) {
 	// LOG_info("getScaler for scale: %i\n", renderer->scale);
+	pthread_mutex_lock(&video_prep_mutex);
 	effect.next_scale = renderer->scale;
+	pthread_mutex_unlock(&video_prep_mutex);
 	return scale1x1_c16;
 }
 
@@ -1728,44 +1757,76 @@ int prepareFrameThread(void *data) {
     while (1) {
 		updateEffect();
 
-        if (effectUpdated) {
+		// Check effectUpdated flag with mutex
+		pthread_mutex_lock(&video_prep_mutex);
+		int effect_updated = effectUpdated;
+		pthread_mutex_unlock(&video_prep_mutex);
+		
+        if (effect_updated) {
 			LOG_info("effect updated %s\n",effect_path);
 			if(effect_path) {
 				SDL_Surface* tmp = IMG_Load(effect_path);
+				SDL_Surface* converted = NULL;
 				if (tmp) {
-					frame_prep.loaded_effect = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA32, 0);
+					converted = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA32, 0);
 					SDL_FreeSurface(tmp);
-				} else {
-					frame_prep.loaded_effect = 0;
 				}
+				
+				pthread_mutex_lock(&video_prep_mutex);
+				frame_prep.loaded_effect = converted;
+				effectUpdated = 0;
+				frame_prep.effect_ready = 1;
+				pthread_mutex_unlock(&video_prep_mutex);
 			} else {
+				pthread_mutex_lock(&video_prep_mutex);
 				frame_prep.loaded_effect = 0;
+				effectUpdated = 0;
+				frame_prep.effect_ready = 1;
+				pthread_mutex_unlock(&video_prep_mutex);
 			}
-			effectUpdated = 0;
-			frame_prep.effect_ready = 1; 
         }
-		if(effect.type == EFFECT_NONE && frame_prep.loaded_effect !=0) {
+		
+		// Check if effect is disabled
+		pthread_mutex_lock(&video_prep_mutex);
+		int effect_type = effect.type;
+		SDL_Surface* loaded_effect = frame_prep.loaded_effect;
+		pthread_mutex_unlock(&video_prep_mutex);
+		
+		if(effect_type == EFFECT_NONE && loaded_effect != 0) {
+			pthread_mutex_lock(&video_prep_mutex);
 			frame_prep.loaded_effect = 0;
 			frame_prep.effect_ready = 1;
-	
+			pthread_mutex_unlock(&video_prep_mutex);
 		}
 
-        if (overlayUpdated) {
+		// Check overlayUpdated flag with mutex
+		pthread_mutex_lock(&video_prep_mutex);
+		int overlay_updated = overlayUpdated;
+		pthread_mutex_unlock(&video_prep_mutex);
+		
+        if (overlay_updated) {
 
 			LOG_info("overlay updated\n");
 			if(overlay_path) {
 				SDL_Surface* tmp = IMG_Load(overlay_path);
+				SDL_Surface* converted = NULL;
 				if (tmp) {
-					frame_prep.loaded_overlay = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA32, 0);
+					converted = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA32, 0);
 					SDL_FreeSurface(tmp);
-				} else {
-					frame_prep.loaded_overlay = 0;
 				}
+				
+				pthread_mutex_lock(&video_prep_mutex);
+				frame_prep.loaded_overlay = converted;
+				frame_prep.overlay_ready = 1;
+				overlayUpdated=0;
+				pthread_mutex_unlock(&video_prep_mutex);
 			} else {
+				pthread_mutex_lock(&video_prep_mutex);
 				frame_prep.loaded_overlay = 0;
+				frame_prep.overlay_ready = 1;
+				overlayUpdated=0;
+				pthread_mutex_unlock(&video_prep_mutex);
 			}
-			frame_prep.overlay_ready = 1;
-			overlayUpdated=0;
         }
 
         SDL_Delay(120); 
@@ -1819,53 +1880,71 @@ void PLAT_GL_Swap() {
 			effect_tex = 0; 
 			effect_w = effect_h = 0;
 			// Force reload by marking as ready again if effect is active
+			pthread_mutex_lock(&video_prep_mutex);
 			if (effect.type != EFFECT_NONE) {
 				frame_prep.effect_ready = 1;
 			}
+			pthread_mutex_unlock(&video_prep_mutex);
 		}
 		if (overlay_tex) { 
 			glDeleteTextures(1, &overlay_tex); 
 			overlay_tex = 0; 
 			overlay_w = overlay_h = 0;
 			// Force reload if we had an overlay
+			pthread_mutex_lock(&video_prep_mutex);
 			if (frame_prep.loaded_overlay) {
 				frame_prep.overlay_ready = 1;
 			}
+			pthread_mutex_unlock(&video_prep_mutex);
 		}
 		reloadShaderTextures = 1;
 	}
 
-	if (frame_prep.effect_ready) {
-		if(frame_prep.loaded_effect) {
+	// Check if effect needs updating
+	pthread_mutex_lock(&video_prep_mutex);
+	int effect_ready = frame_prep.effect_ready;
+	SDL_Surface* loaded_effect = frame_prep.loaded_effect;
+	pthread_mutex_unlock(&video_prep_mutex);
+	
+	if (effect_ready) {
+		if(loaded_effect) {
 			if(!effect_tex) glGenTextures(1, &effect_tex);
 			glBindTexture(GL_TEXTURE_2D, effect_tex);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, frame_prep.loaded_effect->w, frame_prep.loaded_effect->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, frame_prep.loaded_effect->pixels);
-			effect_w = frame_prep.loaded_effect->w;
-			effect_h = frame_prep.loaded_effect->h;
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, loaded_effect->w, loaded_effect->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, loaded_effect->pixels);
+			effect_w = loaded_effect->w;
+			effect_h = loaded_effect->h;
 		} else {
 			if (effect_tex) {
 				glDeleteTextures(1, &effect_tex);
 			}
 			effect_tex = 0;
 		}
-        frame_prep.effect_ready = 0; 
+		pthread_mutex_lock(&video_prep_mutex);
+        frame_prep.effect_ready = 0;
+		pthread_mutex_unlock(&video_prep_mutex);
     }
 
-	if (frame_prep.overlay_ready) {
-		if(frame_prep.loaded_overlay) {
+	// Check if overlay needs updating
+	pthread_mutex_lock(&video_prep_mutex);
+	int overlay_ready = frame_prep.overlay_ready;
+	SDL_Surface* loaded_overlay = frame_prep.loaded_overlay;
+	pthread_mutex_unlock(&video_prep_mutex);
+	
+	if (overlay_ready) {
+		if(loaded_overlay) {
 			if(!overlay_tex) glGenTextures(1, &overlay_tex);
 			glBindTexture(GL_TEXTURE_2D, overlay_tex);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, frame_prep.loaded_overlay->w, frame_prep.loaded_overlay->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, frame_prep.loaded_overlay->pixels);
-			overlay_w = frame_prep.loaded_overlay->w;
-			overlay_h = frame_prep.loaded_overlay->h;
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, loaded_overlay->w, loaded_overlay->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, loaded_overlay->pixels);
+			overlay_w = loaded_overlay->w;
+			overlay_h = loaded_overlay->h;
 		
 		} else {
 			if (overlay_tex) {
@@ -1873,7 +1952,9 @@ void PLAT_GL_Swap() {
 			}
 			overlay_tex = 0;
 		}
-        frame_prep.overlay_ready = 0; 
+		pthread_mutex_lock(&video_prep_mutex);
+        frame_prep.overlay_ready = 0;
+		pthread_mutex_unlock(&video_prep_mutex);
     }
 
 	if (!src_texture || reloadShaderTextures) {
