@@ -2320,6 +2320,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 		snd.frame_count = 4096; // idk some random samples nr this should never hit tho, just to be safe
 	}
 
+	pthread_mutex_lock(&audio_mutex);
 	if (snd.frame_in < 0 || snd.frame_in >= snd.frame_count)
 	{
 		snd.frame_in = 0;
@@ -2331,13 +2332,17 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 	}
 
 	float remaining_space = 0.0f;
-	if (snd.frame_in >= snd.frame_out)
+	int frame_in_snapshot = snd.frame_in;
+	int frame_out_snapshot = snd.frame_out;
+	pthread_mutex_unlock(&audio_mutex);
+	
+	if (frame_in_snapshot >= frame_out_snapshot)
 	{
-		remaining_space = snd.frame_count - (snd.frame_in - snd.frame_out);
+		remaining_space = snd.frame_count - (frame_in_snapshot - frame_out_snapshot);
 	}
 	else
 	{
-		remaining_space = snd.frame_out - snd.frame_in;
+		remaining_space = frame_out_snapshot - frame_in_snapshot;
 	}
 	perf.buffer_free = remaining_space;
 

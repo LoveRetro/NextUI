@@ -458,7 +458,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	setenv("LP_NUM_THREADS", "1", 1);
 #endif
 	SDL_LogSetOutputFunction(sdl_log_stdout, NULL);
-	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
+	//SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
 	
@@ -906,7 +906,10 @@ void PLAT_setOverlay(const char* filename, const char* tag) {
         SDL_DestroyTexture(vid.overlay);
         vid.overlay = NULL;
     }
-	overlay_path = NULL;
+	if (overlay_path) {
+		free(overlay_path);
+		overlay_path = NULL;
+	}
 	overlayUpdated=1;
 
     if (!filename || strcmp(filename, "") == 0 || strcmp(filename, "None") == 0) {
@@ -1493,6 +1496,23 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
         SDL_RenderPresent(vid.renderer);
         return;
     }
+    
+    // Safety check: ensure texture dimensions match blit buffer dimensions
+    if (vid.width != vid.blit->true_w || vid.height != vid.blit->true_h) {
+        // Texture size doesn't match buffer, clear blit and use screen buffer instead
+        vid.blit = NULL;
+        resizeVideo(device_width, device_height, FIXED_PITCH);
+        SDL_UpdateTexture(vid.stream_layer1, NULL, vid.screen->pixels, vid.screen->pitch);
+        SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
+        SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
+        SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
+        SDL_RenderCopy(vid.renderer, vid.target_layer3, NULL, NULL);
+        SDL_RenderCopy(vid.renderer, vid.target_layer4, NULL, NULL);
+        SDL_RenderCopy(vid.renderer, vid.target_layer5, NULL, NULL);
+        SDL_RenderPresent(vid.renderer);
+        return;
+    }
+    
     SDL_UpdateTexture(vid.stream_layer1, NULL, vid.blit->src, vid.blit->src_p);
 
     SDL_Texture* target = vid.stream_layer1;
