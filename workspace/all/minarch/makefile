@@ -55,10 +55,12 @@ endif
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 
 ifeq ($(PLATFORM), desktop)
+ifeq ($(TSAN), 1)
+CFLAGS  += -fsanitize=thread
+LDFLAGS += -ltsan
+endif
 #CFLAGS  += -fsanitize=address -fno-common
 #LDFLAGS += -lasan
-#CFLAGS  += -fsanitize=thread
-#LDFLAGS += -ltsan
 endif
 
 AR=$(CROSS_COMPILE)ar

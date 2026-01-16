@@ -191,6 +191,24 @@
             "postDebugTask": "show gperftools results"
         },
         {
+            "name": "Minarch (TSAN 2-Core)",
+            "request": "launch",
+            "type": "cppdbg",
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
+            "program": "/usr/bin/taskset",
+            "preLaunchTask": "make desktop tsan",
+            "envFile": "${workspaceFolder}/.env_desktop",
+            "args": [
+              "-c", "0,1",
+              "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
+              "${workspaceFolder}/workspace/desktop/cores/output/gambatte_libretro.so", 
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Color (GBC)/Tetris (World) (Rev 1).zip"
+            ]
+        },
+        {
           "name": "Remote debug minarch",
           "type": "cppdbg",
           "request": "launch",
