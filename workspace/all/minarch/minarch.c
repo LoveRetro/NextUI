@@ -4719,70 +4719,198 @@ const void* lastframe = NULL;
 static Uint32* rgbaData = NULL;
 static size_t rgbaDataSize = 0;
 
+// ARM NEON SIMD optimization for pixel format conversion
+#if defined(__ARM_NEON) || defined(__aarch64__)
+#include <arm_neon.h>
+
+// Convert 8 RGB565 pixels to RGBA using NEON (processes 16 bytes → 32 bytes)
+static inline void convert_rgb565_to_rgba_neon(const uint16_t* __restrict src, uint32_t* __restrict dst) {
+	// Load 8 RGB565 pixels (128 bits)
+	uint16x8_t rgb565 = vld1q_u16(src);
+	
+	// Extract RGB components using bit manipulation
+	// R: bits 11-15 (5 bits) → scale to 8 bits
+	// G: bits 5-10 (6 bits) → scale to 8 bits  
+	// B: bits 0-4 (5 bits) → scale to 8 bits
+	
+	uint8x8_t r5 = vmovn_u16(vshrq_n_u16(vandq_u16(rgb565, vdupq_n_u16(0xF800)), 11));
+	uint8x8_t g6 = vmovn_u16(vshrq_n_u16(vandq_u16(rgb565, vdupq_n_u16(0x07E0)), 5));
+	uint8x8_t b5 = vmovn_u16(vandq_u16(rgb565, vdupq_n_u16(0x001F)));
+	
+	// Scale 5-bit to 8-bit: (val * 255) / 31 ≈ (val << 3) | (val >> 2)
+	// Scale 6-bit to 8-bit: (val * 255) / 63 ≈ (val << 2) | (val >> 4)
+	uint8x8_t r8 = vorr_u8(vshl_n_u8(r5, 3), vshr_n_u8(r5, 2));
+	uint8x8_t g8 = vorr_u8(vshl_n_u8(g6, 2), vshr_n_u8(g6, 4));
+	uint8x8_t b8 = vorr_u8(vshl_n_u8(b5, 3), vshr_n_u8(b5, 2));
+	uint8x8_t a8 = vdup_n_u8(0xFF);
+	
+	// Interleave RGBA
+	uint8x8x4_t rgba;
+	rgba.val[0] = r8;
+	rgba.val[1] = g8;
+	rgba.val[2] = b8;
+	rgba.val[3] = a8;
+	
+	// Store as RGBA (32 bytes)
+	vst4_u8((uint8_t*)dst, rgba);
+}
+
+// Convert 4 XRGB8888 pixels to RGBA using NEON (processes 16 bytes → 16 bytes)
+static inline void convert_xrgb8888_to_rgba_neon(const uint32_t* __restrict src, uint32_t* __restrict dst) {
+	// Load 4 XRGB8888 pixels
+	uint32x4_t xrgb = vld1q_u32(src);
+	
+	// XRGB8888: 0xXXRRGGBB → RGBA: 0xAABBGGRR
+	// Extract components
+	uint32x4_t r = vandq_u32(vshrq_n_u32(xrgb, 16), vdupq_n_u32(0xFF));
+	uint32x4_t g = vandq_u32(vshrq_n_u32(xrgb, 8), vdupq_n_u32(0xFF));
+	uint32x4_t b = vandq_u32(xrgb, vdupq_n_u32(0xFF));
+	uint32x4_t a = vdupq_n_u32(0xFF);
+	
+	// Reconstruct as RGBA
+	uint32x4_t rgba = vorrq_u32(vorrq_u32(r, vshlq_n_u32(g, 8)), vorrq_u32(vshlq_n_u32(b, 16), vshlq_n_u32(a, 24)));
+	
+	vst1q_u32(dst, rgba);
+}
+#endif
+
+// Convert XRGB8888 to RGBA format (handles pitch correctly)
+static void convert_xrgb8888_to_rgba(const void* src, uint32_t* dst, unsigned width, unsigned height, size_t pitch) {
+	const uint32_t* srcData = (const uint32_t*)src;
+	unsigned srcPitchInPixels = pitch / sizeof(uint32_t);
+	
+	for (unsigned y = 0; y < height; y++) {
+		const uint32_t* srcRow = srcData + y * srcPitchInPixels;
+		uint32_t* dstRow = dst + y * width;
+		unsigned x = 0;
+
+#if defined(__ARM_NEON) || defined(__aarch64__)
+		// NEON: process 4 pixels at a time
+		for (; x + 3 < width; x += 4) {
+			convert_xrgb8888_to_rgba_neon(srcRow + x, dstRow + x);
+		}
+#else
+		// Scalar: process 4 pixels at a time for better cache utilization
+		for (; x + 3 < width; x += 4) {
+			uint32_t p0 = srcRow[x], p1 = srcRow[x+1], p2 = srcRow[x+2], p3 = srcRow[x+3];
+			
+			// Swizzle: XRGB -> RGBA (swap R and B, set A=0xFF)
+			dstRow[x]   = (p0 & 0x0000FF00) | ((p0 & 0x00FF0000) >> 16) | ((p0 & 0x000000FF) << 16) | 0xFF000000;
+			dstRow[x+1] = (p1 & 0x0000FF00) | ((p1 & 0x00FF0000) >> 16) | ((p1 & 0x000000FF) << 16) | 0xFF000000;
+			dstRow[x+2] = (p2 & 0x0000FF00) | ((p2 & 0x00FF0000) >> 16) | ((p2 & 0x000000FF) << 16) | 0xFF000000;
+			dstRow[x+3] = (p3 & 0x0000FF00) | ((p3 & 0x00FF0000) >> 16) | ((p3 & 0x000000FF) << 16) | 0xFF000000;
+		}
+#endif
+		// Handle remaining pixels in the row
+		for (; x < width; x++) {
+			uint32_t pixel = srcRow[x];
+			dstRow[x] = (pixel & 0x0000FF00) | ((pixel & 0x00FF0000) >> 16) | ((pixel & 0x000000FF) << 16) | 0xFF000000;
+		}
+	}
+}
+
+// Convert RGB565 to RGBA format (handles pitch correctly)
+static void convert_rgb565_to_rgba(const void* src, uint32_t* dst, unsigned width, unsigned height, size_t pitch) {
+	const uint16_t* srcData = (const uint16_t*)src;
+	unsigned srcPitchInPixels = pitch / sizeof(uint16_t);
+	
+	for (unsigned y = 0; y < height; y++) {
+		const uint16_t* srcRow = srcData + y * srcPitchInPixels;
+		uint32_t* dstRow = dst + y * width;
+		unsigned x = 0;
+
+#if defined(__ARM_NEON) || defined(__aarch64__)
+		// NEON: process 8 pixels at a time
+		for (; x + 7 < width; x += 8) {
+			convert_rgb565_to_rgba_neon(srcRow + x, dstRow + x);
+		}
+#else
+		// Scalar: process 4 pixels at a time
+		for (; x + 3 < width; x += 4) {
+			uint16_t p0 = srcRow[x], p1 = srcRow[x+1], p2 = srcRow[x+2], p3 = srcRow[x+3];
+			
+			uint8_t r0 = (p0 >> 11) & 0x1F, g0 = (p0 >> 5) & 0x3F, b0 = p0 & 0x1F;
+			uint8_t r1 = (p1 >> 11) & 0x1F, g1 = (p1 >> 5) & 0x3F, b1 = p1 & 0x1F;
+			uint8_t r2 = (p2 >> 11) & 0x1F, g2 = (p2 >> 5) & 0x3F, b2 = p2 & 0x1F;
+			uint8_t r3 = (p3 >> 11) & 0x1F, g3 = (p3 >> 5) & 0x3F, b3 = p3 & 0x1F;
+			
+			r0 = (r0 << 3) | (r0 >> 2); g0 = (g0 << 2) | (g0 >> 4); b0 = (b0 << 3) | (b0 >> 2);
+			r1 = (r1 << 3) | (r1 >> 2); g1 = (g1 << 2) | (g1 >> 4); b1 = (b1 << 3) | (b1 >> 2);
+			r2 = (r2 << 3) | (r2 >> 2); g2 = (g2 << 2) | (g2 >> 4); b2 = (b2 << 3) | (b2 >> 2);
+			r3 = (r3 << 3) | (r3 >> 2); g3 = (g3 << 2) | (g3 >> 4); b3 = (b3 << 3) | (b3 >> 2);
+			
+			dstRow[x]   = (0xFF << 24) | (b0 << 16) | (g0 << 8) | r0;
+			dstRow[x+1] = (0xFF << 24) | (b1 << 16) | (g1 << 8) | r1;
+			dstRow[x+2] = (0xFF << 24) | (b2 << 16) | (g2 << 8) | r2;
+			dstRow[x+3] = (0xFF << 24) | (b3 << 16) | (g3 << 8) | r3;
+		}
+#endif
+		// Handle remaining pixels in the row
+		for (; x < width; x++) {
+			uint16_t pixel = srcRow[x];
+			uint8_t r = (pixel >> 11) & 0x1F;
+			uint8_t g = (pixel >> 5) & 0x3F;
+			uint8_t b = pixel & 0x1F;
+			
+			r = (r << 3) | (r >> 2);
+			g = (g << 2) | (g >> 4);
+			b = (b << 3) | (b >> 2);
+			
+			dstRow[x] = (0xFF << 24) | (b << 16) | (g << 8) | r;
+		}
+	}
+}
+
 static void video_refresh_callback(const void* data, unsigned width, unsigned height, size_t pitch) {
+	// Log NEON availability once on first call
+	static int neon_logged = 0;
+	if (!neon_logged) {
+		neon_logged = 1;
+#if defined(__ARM_NEON) || defined(__aarch64__)
+		LOG_info("Pixel conversion: ARM NEON SIMD optimizations enabled\n");
+#else
+		LOG_info("Pixel conversion: Using scalar optimizations (NEON not available)\n");
+#endif
+	}
 
-	// I need to check quit here because sometimes quit is true but callback is still called by the core after and it still runs one more frame and it looks ugly :D
-	if(!quit) {
-		if (!rgbaData || rgbaDataSize != width * height) {
-			if (rgbaData) free(rgbaData);
-			rgbaDataSize = width * height;
-			rgbaData = (Uint32*)malloc(rgbaDataSize * sizeof(Uint32));
-			if (!rgbaData) {
-				printf("Failed to allocate memory for ARGB8888 data.\n");
-				return;
-			}
+	// Early exit if quitting to avoid rendering stale frames
+	if (quit) return;
+
+	// Allocate RGBA buffer if needed
+	if (!rgbaData || rgbaDataSize != width * height) {
+		if (rgbaData) free(rgbaData);
+		rgbaDataSize = width * height;
+		rgbaData = (Uint32*)malloc(rgbaDataSize * sizeof(Uint32));
+		if (!rgbaData) {
+			printf("Failed to allocate memory for RGBA data.\n");
+			return;
 		}
+	}
 
-		if(ambient_mode && !fast_forward && data)
-			GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
+	// Set ambient lighting color (if enabled)
+	if (ambient_mode && !fast_forward && data) {
+		GFX_setAmbientColor(data, width, height, pitch, ambient_mode);
+	}
 
-		if (!data) {
-			if (lastframe) {
-				data = lastframe;
-			} else {
-				return; // No data to display
-			}
-		} else if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
-			// convert XRGB8888 to GL-ready RGBA byte order (r,g,b,a in memory)
-			const uint32_t* src = (const uint32_t*)data;
-			for (unsigned i = 0; i < width * height; ++i) {
-				uint32_t pixel = src[i];
-				uint8_t r = (pixel >> 16) & 0xFF;
-				uint8_t g = (pixel >> 8) & 0xFF;
-				uint8_t b = (pixel >> 0) & 0xFF;
-				uint8_t a = 0xFF;
-				rgbaData[i] = (a << 24) | (b << 16) | (g << 8) | r;
-				//rgbaData[i] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
-			}
-			data = rgbaData;
-
+	// Handle NULL data by reusing last frame
+	if (!data) {
+		data = lastframe;
+		if (!data) return;
+	} else {
+		// Convert pixel format to RGBA
+		if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
+			convert_xrgb8888_to_rgba(data, rgbaData, width, height, pitch);
 		} else {
-			// convert RGB565 to GL-ready RGBA byte order (r,g,b,a in memory)
-			const uint16_t* srcData = (const uint16_t*)data;
-			unsigned srcPitchInPixels = pitch / sizeof(uint16_t); 
-
-			for (unsigned y = 0; y < height; ++y) {
-				for (unsigned x = 0; x < width; ++x) {
-					uint16_t pixel = srcData[y * srcPitchInPixels + x];
-
-					uint8_t r = ((pixel >> 11) & 0x1F) << 3; 
-					uint8_t g = ((pixel >> 5) & 0x3F) << 2;   
-					uint8_t b = (pixel & 0x1F) << 3;          
-					uint8_t a = 0xFF;
-
-					rgbaData[y * width + x] = (a << 24) | (b << 16) | (g << 8) | r;
-					//rgbaData[y * width + x] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
-				}
-			}
-			data = rgbaData;
-
+			convert_rgb565_to_rgba(data, rgbaData, width, height, pitch);
 		}
-
+		
+		data = rgbaData;
 		pitch = width * sizeof(Uint32);
 		lastframe = data;
-		
-		video_refresh_callback_main(data,width,height,pitch);
 	}
+
+	// Render the frame
+	video_refresh_callback_main(data, width, height, pitch);
 }
 ///////////////////////////////
 
