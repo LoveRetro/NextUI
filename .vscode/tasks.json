@@ -63,7 +63,7 @@
         {
             "label": "run minarch 2-core profile",
             "type": "shell",
-            "command": "taskset -c 0,1 ${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf ${workspaceFolder}/workspace/desktop/cores/output/gambatte_libretro.so '/var/tmp/nextui/sdcard/Roms/Game Boy Color (GBC)/Tetris (World) (Rev 1).zip'",
+            "command": "taskset -c 0,1 ${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf ${workspaceFolder}/workspace/desktop/cores/output/gpsp_libretro.so '/var/tmp/nextui/sdcard/Roms/Game Boy Advance (GBA)/Advance Wars 2 - Black Hole Rising (USA).zip'",
             "options": {
                 "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop"
             },
