@@ -4316,14 +4316,6 @@ void drawGauge(int x, int y, float percent, int width, int height, uint32_t *dat
 
 ///////////////////////////////
 
-static int cpu_ticks = 0;
-static int fps_ticks = 0;
-static int use_ticks = 0;
-static double fps_double = 0;
-static double cpu_double = 0;
-static double use_double = 0;
-static uint32_t sec_start = 0;
-
 static void selectScaler(int src_w, int src_h, int src_p) {
 	int src_x,src_y,dst_x,dst_y,dst_w,dst_h,dst_p,scale;
 	double aspect;
@@ -4537,13 +4529,7 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 	renderer.scale = scale;
 	renderer.aspect = (scaling==SCALE_ASPECT_SCREEN) ? aspect: (scaling==SCALE_NATIVE||scaling==SCALE_CROPPED)?0:(scaling==SCALE_FULLSCREEN?-1:core.aspect_ratio);
 	renderer.blit = GFX_getScaler(&renderer);
-
-	// dont need this anymore with OpenGL
-	// if (screen->w!=dst_w || screen->h!=dst_w || screen->pitch!=dst_p) {
-		// screen = GFX_resize(dst_w,dst_h,dst_p);
-	// }
 }
-static int firstframe = 1;
 static void screen_flip(SDL_Surface* screen) {
 	
 	if (use_core_fps) {
@@ -4613,9 +4599,6 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		was_benchmarking = new_benchmark_mode;
 	}
 	perf.benchmark_mode = new_benchmark_mode;
-
-	// static int tmp_frameskip = 0;
-	// if ((tmp_frameskip++)%2) return;
 	
 	static uint32_t last_flip_time = 0;
 	
@@ -4638,8 +4621,6 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		return;
 	}
 
-	fps_ticks += 1;
-	
 	// if source has changed size (or forced by dst_p==0)
 	// eg. true src + cropped src + fixed dst + cropped dst
 	if (renderer.dst_p==0 || width!=renderer.true_w || height!=renderer.true_h) {
@@ -4701,9 +4682,6 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	if(frame_counter<9) {
 		applyFadeIn((uint32_t **) &data, pitch, width, height, &frame_counter, max_frames);
 	}
-
-	// LOG_info("video_refresh_callback: %ix%i@%i %ix%i@%i\n",width,height,pitch,screen->w,screen->h,screen->pitch);
-
 
 	renderer.src = (void*)data;
 	renderer.dst = screen->pixels;
@@ -7109,12 +7087,6 @@ static void Menu_loop(void) {
 	PWR_disableAutosleep();
 }
 
-static void resetFPSCounter() {
-	sec_start = SDL_GetTicks();
-	fps_ticks = 0.0;
-	fps_double = 0.0;
-}
-
 static void chooseSyncRef(void) {
 	switch (sync_ref) {
 		case SYNC_SRC_AUTO:   use_core_fps = (core.get_region() == RETRO_REGION_PAL); break;
@@ -7126,23 +7098,6 @@ static void chooseSyncRef(void) {
 		  sync_ref_labels[sync_ref],
 		  core.get_region() == RETRO_REGION_NTSC ? "NTSC" : "PAL",
 		  use_core_fps ? "yes" : "no");
-}
-
-static void trackFPS(void) {
-	cpu_ticks += 1;
-	static int last_use_ticks = 0;
-	uint32_t now = SDL_GetTicks();
-	if (now - sec_start>=1000) {
-		double last_time = (double)(now - sec_start) / 1000;
-		fps_double = fps_ticks / last_time;
-		cpu_double = cpu_ticks / last_time;
-
-		sec_start = now;
-		cpu_ticks = 0;
-		fps_ticks = 0;
-		
-		// LOG_info("fps: %f cpu: %f\n", fps_double, cpu_double);
-	}
 }
 
 static void limitFF(void) {
@@ -7301,16 +7256,11 @@ int main(int argc , char* argv[]) {
 
 	Special_init(); // after config
 
-	sec_start = SDL_GetTicks();
-	resetFPSCounter();
 	chooseSyncRef();
 	
 	int has_pending_opt_change = 0;
-	LOG_info("Starting shaders %ims\n\n",SDL_GetTicks());
-
 
 	// then initialize custom  shaders from settings
-	
 	initShaders();
 	Config_readOptions();
 	applyShaderSettings();
@@ -7322,9 +7272,7 @@ int main(int argc , char* argv[]) {
 		GFX_startFrame();
 	
 		core.run();
-		limitFF();
-		trackFPS();
-		
+		limitFF();		
 
 		if (has_pending_opt_change) {
 			has_pending_opt_change = 0;
@@ -7332,7 +7280,6 @@ int main(int argc , char* argv[]) {
 				LOG_info("AV info changed, reset sound system");
 				SND_resetAudio(core.sample_rate, core.fps);
 			}
-			resetFPSCounter();
 			chooseSyncRef();
 		}
 
@@ -7342,7 +7289,6 @@ int main(int argc , char* argv[]) {
 			Menu_loop();
 			PWR_updateFrequency(PWR_UPDATE_FREQ_INGAME,0);
 			has_pending_opt_change = config.core.changed;
-			resetFPSCounter();
 			chooseSyncRef();
 		}
 
