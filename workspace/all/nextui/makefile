@@ -24,14 +24,9 @@ INCDIR = -I. -I../common/ -I../../$(PLATFORM)/platform/
 SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
 
 CC = $(CROSS_COMPILE)gcc
-CFLAGS  += $(OPT) -fomit-frame-pointer
+CFLAGS  += $(OPT)
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS	 += -lmsettings
-ifeq ($(PLATFORM), tg5040)
-CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
-LDFLAGS +=  -lwifimg -lwifid
-LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -lasound -ljson-c
-endif
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 

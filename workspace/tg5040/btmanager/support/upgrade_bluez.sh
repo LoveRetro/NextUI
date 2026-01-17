@@ -1,5 +1,10 @@
 #! /bin/sh
 
+TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
+if [ "$TRIMUI_MODEL" = "Trimui Smart Pro S" ]; then
+	return 0
+fi
+
 BLUEZ_PATH=/mnt/SDCARD/.update_bluez
 if [ -d "$BLUEZ_PATH" ]; then
 	echo "Updating bluez..."

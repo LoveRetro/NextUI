@@ -83,7 +83,7 @@
             "envFile": "${workspaceFolder}/.env_desktop",
         },
         {
-            "name": "Minarch",
+            "name": "Minarch (gpsp)",
             "request": "launch",
             "type": "cppdbg",
             "osx": {
@@ -94,9 +94,159 @@
             "preLaunchTask": "make desktop",
             "envFile": "${workspaceFolder}/.env_desktop",
             "args": [
-              "${workspaceFolder}/workspace/desktop/cores/output/gambatte_libretro.so", 
-              "/var/tmp/nextui/sdcard/Roms/Game Boy Color (GBC)/Tetris DX (SGB Enhanced) (GB Compatible).zip"
+              "${workspaceFolder}/workspace/desktop/cores/output/gpsp_libretro.so", 
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Advance (GBA)/Advance Wars 2 - Black Hole Rising (USA).zip"
             ],
+        },
+        {
+            "name": "Minarch (mgba)",
+            "request": "launch",
+            "type": "cppdbg",
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
+            "preLaunchTask": "make desktop",
+            "envFile": "${workspaceFolder}/.env_desktop",
+            "args": [
+              "${workspaceFolder}/workspace/desktop/cores/output/mgba_libretro.so", 
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Advance (GBA)/Advance Wars 2 - Black Hole Rising (USA).zip"
+            ],
+        },
+        {
+            "name": "Minarch (Profile)",
+            "request": "launch",
+            "type": "cppdbg",
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
+            "preLaunchTask": "make desktop profile",
+            "envFile": "${workspaceFolder}/.env_desktop",
+            "args": [
+              "${workspaceFolder}/workspace/desktop/cores/output/gpsp_libretro.so", 
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Advance (GBA)/Advance Wars 2 - Black Hole Rising (USA).zip"
+            ],
+            "postDebugTask": "show profile results"
+        },
+        {
+            "name": "Minarch (Profile 2-Core)",
+            "request": "launch",
+            "type": "cppdbg",
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
+            "program": "/usr/bin/taskset",
+            "preLaunchTask": "make desktop profile",
+            "envFile": "${workspaceFolder}/.env_desktop",
+            "args": [
+              "-c", "0,1",
+              "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
+              "${workspaceFolder}/workspace/desktop/cores/output/gpsp_libretro.so", 
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Advance (GBA)/Advance Wars 2 - Black Hole Rising (USA).zip"
+            ],
+            "postDebugTask": "show profile results"
+        },
+        {
+            "name": "Minarch (GPerfTools)",
+            "request": "launch",
+            "type": "cppdbg",
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
+            "preLaunchTask": "make desktop gperftools",
+            "envFile": "${workspaceFolder}/.env_desktop",
+            "environment": [
+              {
+                "name": "CPUPROFILE",
+                "value": "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.prof"
+              },
+              {
+                "name": "LD_PRELOAD",
+                "value": "/usr/lib/aarch64-linux-gnu/libprofiler.so.0"
+              }
+            ],
+            "args": [
+              "${workspaceFolder}/workspace/desktop/cores/output/gpsp_libretro.so", 
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Advance (GBA)/Advance Wars 2 - Black Hole Rising (USA).zip"
+            ],
+            "postDebugTask": "show gperftools results"
+        },
+        {
+            "name": "Minarch (GPerfTools 2-Core)",
+            "request": "launch",
+            "type": "cppdbg",
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
+            "program": "/usr/bin/taskset",
+            "preLaunchTask": "make desktop gperftools",
+            "envFile": "${workspaceFolder}/.env_desktop",
+            "environment": [
+              {
+                "name": "CPUPROFILE",
+                "value": "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.prof"
+              },
+              {
+                "name": "LD_PRELOAD",
+                "value": "/usr/lib/aarch64-linux-gnu/libprofiler.so.0"
+              }
+            ],
+            "args": [
+              "-c", "0,1",
+              "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
+              "${workspaceFolder}/workspace/desktop/cores/output/gpsp_libretro.so", 
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Advance (GBA)/Advance Wars 2 - Black Hole Rising (USA).zip"
+            ],
+            "postDebugTask": "show gperftools results"
+        },
+        {
+            "name": "Minarch (TSAN 2-Core)",
+            "request": "launch",
+            "type": "cppdbg",
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
+            "program": "/usr/bin/taskset",
+            "preLaunchTask": "make desktop tsan",
+            "envFile": "${workspaceFolder}/.env_desktop",
+            "environment": [
+              {
+                "name": "TSAN_OPTIONS",
+                "value": "suppressions=${workspaceFolder}/tsan.supp"
+              }
+            ],
+            "args": [
+              "-c", "0,1",
+              "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
+              "${workspaceFolder}/workspace/desktop/cores/output/gpsp_libretro.so", 
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Advance (GBA)/Advance Wars 2 - Black Hole Rising (USA).zip"
+            ]
+        },
+        {
+            "name": "Minarch (ASAN 2-Core)",
+            "request": "launch",
+            "type": "cppdbg",
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop",
+            "program": "/usr/bin/taskset",
+            "preLaunchTask": "make desktop asan",
+            "envFile": "${workspaceFolder}/.env_desktop",
+            "args": [
+              "-c", "0,1",
+              "${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf",
+              "${workspaceFolder}/workspace/desktop/cores/output/gpsp_libretro.so", 
+              "/var/tmp/nextui/sdcard/Roms/Game Boy Advance (GBA)/Advance Wars 2 - Black Hole Rising (USA).zip"
+            ]
         },
         {
           "name": "Remote debug minarch",

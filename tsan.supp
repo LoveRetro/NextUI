@@ -1,0 +1,21 @@
+# TSAN suppressions for MinArch
+# These are known issues in external libraries (SDL2, glib, ALSA, PipeWire, fontconfig, pango)
+
+# SDL/ALSA/PipeWire audio threading - lock order inversion
+deadlock:libasound.so
+deadlock:libSDL2
+deadlock:libpipewire
+
+# SDL/glib gamepad input polling races with gdbus
+race:libglib-2.0.so
+race:libgio-2.0.so
+
+# ALSA/PipeWire audio buffer access
+race:libasound.so
+race:libpipewire
+race:snd_pcm_area_copy
+
+# Fontconfig/Pango font loading races during initialization
+race:libfontconfig.so
+race:libpangoft2
+race:FcValueSave

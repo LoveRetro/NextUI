@@ -1185,6 +1185,7 @@ void SetRawVolume(int val) { // in: 0-100
                 break;
             }
         }
+		mixer_close(mixer);
 	}
 	else {
         // Speaker path: use direct lookup by name

@@ -12,7 +12,6 @@ index ffaba21e7a88f90786d818ab550b68acd05738bf..2095b2f843eaf6be9abec24ce3da69b5
 +	CC = $(CROSS_COMPILE)gcc
 +	CXX = $(CROSS_COMPILE)g++
 +	AR = $(CROSS_COMPILE)ar
-+   # macos ld doesnt understand -Wl or --version-script
 +	SHARED := -shared -W
 +	LDFLAGS += -fPIC -flto
 +	PLATFORM_DEFINES := -DCC_RESAMPLER -DCC_RESAMPLER_NO_HIGHPASS

@@ -358,7 +358,7 @@ void getEmuName(const char* in_name, char* out_name) { // NOTE: both char arrays
 		char* tmp2 = strchr(tmp, '/');
 		if (tmp2) tmp2[0] = '\0';
 		// printf("    tmp1: %s\n", tmp);
-		strcpy(out_name, tmp);
+		memmove(out_name, tmp, strlen(tmp) + 1);
 		tmp = out_name;
 	}
 
@@ -367,7 +367,7 @@ void getEmuName(const char* in_name, char* out_name) { // NOTE: both char arrays
 	if (tmp) {
 		tmp += 1;
 		// printf("    tmp2: %s\n", tmp);
-		strcpy(out_name, tmp);
+		memmove(out_name, tmp, strlen(tmp) + 1);
 		tmp = strchr(out_name,')');
 		tmp[0] = '\0';
 	}

@@ -1,15 +1,25 @@
 #!/bin/sh
 # Taken from allwinner/btmanager/config/xradio_bt_init.sh for NextUI
 bt_hciattach="hciattach"
+TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
+DEVICE_NAME="$TRIMUI_MODEL (NextUI)"
 
-start_hci_attach()
-{
+reset_bluetooth_power() {
+	echo 0 > /sys/class/rfkill/rfkill0/state;
+	sleep 1
+	echo 1 > /sys/class/rfkill/rfkill0/state;
+	sleep 1
+}
+
+start_hci_attach() {
 	h=`ps | grep "$bt_hciattach" | grep -v grep`
 	[ -n "$h" ] && {
 		killall "$bt_hciattach"
 	}
 
-	#xradio init
+	echo 1 > /proc/bluetooth/sleep/btwrite
+	reset_bluetooth_power
+
 	"$bt_hciattach" -n ttyS1 xradio >/dev/null 2>&1 &
 
 	wait_hci0_count=0
@@ -25,7 +35,7 @@ start_hci_attach()
 	done
 }
 
-start() {
+start_bt() {
 	rfkill.elf unblock bluetooth
 
 	if [ -d "/sys/class/bluetooth/hci0" ];then
@@ -33,7 +43,8 @@ start() {
 	else
 		start_hci_attach
 	fi
-
+	
+	# Start bluetooth daemon if not running
     d=`ps | grep bluetoothd | grep -v grep`
 	[ -z "$d" ] && {
 		/etc/bluetooth/bluetoothd start
@@ -46,6 +57,20 @@ start() {
 		bluealsa -p a2dp-source &
 		sleep 1
     }
+
+	# Power on adapter
+	bluetoothctl power on 2>/dev/null
+	
+	# Set discoverable and pairable
+	bluetoothctl discoverable on 2>/dev/null
+	bluetoothctl pairable on 2>/dev/null
+	
+	# Set default agent for automatic pairing (no input/output)
+	bluetoothctl agent NoInputNoOutput 2>/dev/null
+	bluetoothctl default-agent 2>/dev/null
+	
+	# Set adapter name
+	bluetoothctl system-alias "$DEVICE_NAME" 2>/dev/null
 }
 
 ble_start() {
@@ -75,42 +100,54 @@ ble_start() {
 	fi
 }
 
-stop() {
-	a=`ps | grep bluealsa | grep -v grep`
-	[ -n "$a" ] && {
-		killall bluealsa
-		sleep 1
-	}
+stop_bt() {
+	# stop bluealsa
+	killall bluealsa 2>/dev/null
 
+	# stop bluetoothctl
+	bluetoothctl power off 2>/dev/null
+	#bluetoothctl discoverable off 2>/dev/null
+	bluetoothctl pairable off 2>/dev/null
+	#bluetoothctl remove $(bluetoothctl devices | awk '{print $2}') 2>/dev/null
+	killall bluetoothctl 2>/dev/null
+
+	# Stop bluetooth service
 	d=`ps | grep bluetoothd | grep -v grep`
 	[ -n "$d" ] && {
 		killall bluetoothd
 		sleep 1
 	}
 
+	hciconfig hci0 down
+	t=`ps | grep hcidump | grep -v grep`
+	[ -n "$t" ] && {
+		killall hcidump
+	}
+
 	h=`ps | grep "$bt_hciattach" | grep -v grep`
 	[ -n "$h" ] && {
 		killall "$bt_hciattach"
-		sleep 1
+		usleep 500000
 	}
-
-	rfkill.elf block bluetooth
-	#echo 0 > /sys/class/rfkill/rfkill0/state;
-	sleep 1
+	echo 0 > /proc/bluetooth/sleep/btwrite
+	echo 0 > /sys/class/rfkill/rfkill0/state;
 	echo "stop bluetoothd and hciattach"
 }
 
 case "$1" in
-  start|"")
-        start
-        ;;
-  stop)
-        stop
-        ;;
-  ble_start)
-	    ble_start
+	start)
+		start_bt
+		;;
+	stop)
+		stop_bt
+		;;
+	restart)
+		stop_bt
+		sleep 0.5
+		start_bt
 		;;
   *)
-        echo "Usage: $0 {start|stop}"
-        exit 1
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+		;;
 esac
