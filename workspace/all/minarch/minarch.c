@@ -4295,8 +4295,8 @@ void drawGauge(int x, int y, float percent, int width, int height, uint32_t *dat
 	uint8_t alpha = 255;
 
 	uint32_t fillColor = (red << 24) | (green << 16) | (blue << 8) | alpha;
-	uint32_t borderColor = 0xFFFFFFFF;  // White RGBA
-	uint32_t bgColor = 0x000000FF;      // Black RGBA
+	uint32_t borderColor = 0xFFFFFFFF;  // White ARGB
+	uint32_t bgColor = 0xFF000000;      // Black ARGB
 
 	// Background
 	fillRect(x, y, width, height, bgColor, data, stride);
