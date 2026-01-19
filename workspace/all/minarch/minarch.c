@@ -57,7 +57,6 @@ static int screen_effect = EFFECT_NONE;
 static int screenx = 64;
 static int screeny = 64;
 static int overlay = 0; 
-static int prevent_tearing = 1; // lenient
 static int use_core_fps = 0;
 static int sync_ref = 0;
 static int show_debug = 0;
@@ -1210,12 +1209,6 @@ static char* sharpness_labels[] = {
 	"LINEAR",
 	NULL
 };
-static char* tearing_labels[] = {
-	"Off",
-	"Lenient",
-	"Strict",
-	NULL
-};
 static char* sync_ref_labels[] = {
 	"Auto",
 	"Screen",
@@ -1406,7 +1399,6 @@ enum {
 	FE_OPT_SCREENX,
 	FE_OPT_SCREENY,
 	FE_OPT_SHARPNESS,
-	FE_OPT_TEARING,
 	FE_OPT_SYNC_REFERENCE,
 	FE_OPT_OVERCLOCK,
 	FE_OPT_DEBUG,
@@ -1717,16 +1709,6 @@ static struct Config {
 				.count = 3,
 				.values = sharpness_labels,
 				.labels = sharpness_labels,
-			},
-			[FE_OPT_TEARING] = {
-				.key	= "minarch_prevent_tearing",
-				.name	= "VSync",
-				.desc	= "Wait for vsync before drawing the next frame.\nLenient only waits when within frame budget.\nStrict always waits.",
-				.default_value = VSYNC_LENIENT,
-				.value = VSYNC_LENIENT,
-				.count = 3,
-				.values = tearing_labels,
-				.labels = tearing_labels,
 			},
 			[FE_OPT_SYNC_REFERENCE] = {
 				.key	= "minarch_sync_reference",
@@ -2109,10 +2091,6 @@ static void Config_syncFrontend(char* key, int value) {
 	else if (exactMatch(key,config.frontend.options[FE_OPT_SHARPNESS].key)) {
 		GFX_setSharpness(value);
 		i = FE_OPT_SHARPNESS;
-	}
-	else if (exactMatch(key,config.frontend.options[FE_OPT_TEARING].key)) {
-		prevent_tearing = value;
-		i = FE_OPT_TEARING;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_SYNC_REFERENCE].key)) {
 		sync_ref = value;
@@ -4600,7 +4578,6 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	// 12: 30/150
 	// 10: 30/120 (optimize text off has no effect)
 	//  8: 60/210 (with optimize text off)
-	// you can squeeze more out of every console by turning prevent tearing off
 	// eg. PS@10 60/240
 	if (!data) {
 		return;
