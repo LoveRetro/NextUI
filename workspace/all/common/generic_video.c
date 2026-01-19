@@ -1838,6 +1838,9 @@ static SDL_Thread *prepare_thread = NULL;
 
 void PLAT_GL_Swap() {
 
+	//uint64_t performance_frequency = SDL_GetPerformanceFrequency();
+	//uint64_t frame_start = SDL_GetPerformanceCounter();
+
 	if (prepare_thread == NULL) {
         prepare_thread = SDL_CreateThread(prepareFrameThread, "PrepareFrameThread", NULL);
 
@@ -2096,11 +2099,22 @@ void PLAT_GL_Swap() {
     }
 
 	if (!perf.benchmark_mode || frame_count % 60 == 0) {
+		//glFinish();
+		//glFlush();
     	SDL_GL_SwapWindow(vid.window);
 	}
     frame_count++;
 	reloadShaderTextures = 0;
 	shaderResetRequested = 0;
+
+	//{
+	//	uint64_t op_ts = SDL_GetPerformanceCounter();
+	//	uint64_t frame_duration = op_ts - frame_start;
+	//	frame_start = op_ts;
+	//	double elapsed_time_s = (double)frame_duration / performance_frequency;
+	//	double frame_ms = elapsed_time_s * 1000.0;
+	//	LOG_info("10: %.2f ms\n", frame_ms);
+	//}
 }
 
 

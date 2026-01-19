@@ -527,7 +527,13 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 
 void GFX_flip(SDL_Surface *screen)
 {
-
+	{
+		uint64_t performance_frequency = SDL_GetPerformanceFrequency();
+		uint64_t frame_duration = SDL_GetPerformanceCounter() - per_frame_start;
+		double elapsed_time_s = (double)frame_duration / performance_frequency;
+		double frame_ms = elapsed_time_s * 1000.0;
+		//LOG_info("GFX_flip: Frame time before flip: %.2f ms\n", frame_ms);
+	}
 	PLAT_flip(screen, 0);
 
 	perf.fps = current_fps;
@@ -543,14 +549,13 @@ void GFX_flip(SDL_Surface *screen)
 	double target_ms = 1000.0 / SCREEN_FPS;
 	perf.jitter = fabs(frame_ms - target_ms);
 	
-	// If frame took > 1.1x target time, count as drop/stutter
 	if (frame_ms > target_ms * 1.1) {
 		perf.frame_drops++;
-		LOG_warn("Frame drop detected! Frame time: %.2f ms (target: %.2f ms)\n", frame_ms, target_ms);
+		//LOG_warn("GFX_flip: Frame drop detected! Frame time: %.2f ms (target: %.2f ms)\n", frame_ms, target_ms);
 	}
 
-	if (!perf.benchmark_mode && (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2))
-		tempfps = SCREEN_FPS;
+	//if (!perf.benchmark_mode && (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2))
+	//	tempfps = SCREEN_FPS;
 
 
 	fps_buffer[fps_buffer_index] = tempfps;
@@ -581,7 +586,13 @@ void GFX_flip(SDL_Surface *screen)
 }
 void GFX_GL_Swap()
 {
-
+	{
+		uint64_t performance_frequency = SDL_GetPerformanceFrequency();
+		uint64_t frame_duration = SDL_GetPerformanceCounter() - per_frame_start;
+		double elapsed_time_s = (double)frame_duration / performance_frequency;
+		double frame_ms = elapsed_time_s * 1000.0;
+		//LOG_info("GFX_GL_Swap: Frame time before flip: %.2f ms\n", frame_ms);
+	}
 	PLAT_GL_Swap();
 
 	perf.fps = current_fps;
@@ -599,10 +610,11 @@ void GFX_GL_Swap()
 	
 	if (frame_ms > target_ms * 1.1) {
 		perf.frame_drops++;
+		//LOG_warn("GFX_GL_Swap: Frame drop detected! Frame time: %.2f ms (target: %.2f ms)\n", frame_ms, target_ms);
 	}
 
-	if (!perf.benchmark_mode && (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2))
-		tempfps = SCREEN_FPS;
+	//if (!perf.benchmark_mode && (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2))
+	//	tempfps = SCREEN_FPS;
 
 	fps_buffer[fps_buffer_index] = tempfps;
 	frame_time_buffer[fps_buffer_index] = frame_ms;
@@ -719,7 +731,6 @@ void GFX_flip_fixed_rate(SDL_Surface *screen, double target_fps)
 			}
 		}
 	}
-	// PLAT_flip(screen, 0);
 	PLAT_GL_Swap();
 
 	double elapsed_time_s = (double)(SDL_GetPerformanceCounter() - per_frame_start) / perf_freq;
@@ -732,6 +743,7 @@ void GFX_flip_fixed_rate(SDL_Surface *screen, double target_fps)
 	
 	if (frame_ms > target_ms * 1.1) {
 		perf.frame_drops++;
+		//LOG_warn("GFX_flip_fixed_rate: Frame drop detected! Frame time: %.2f ms (target: %.2f ms)\n", frame_ms, target_ms);
 	}
 
 	fps_buffer[fps_buffer_index] = tempfps;
