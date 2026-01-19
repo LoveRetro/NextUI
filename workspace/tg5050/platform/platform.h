@@ -136,8 +136,8 @@
 #define SDCARD_PATH "/mnt/SDCARD"
 #define MUTE_VOLUME_RAW 0
 
-// this should be set to the devices native screen refresh rate
-#define SCREEN_FPS 60.235
+// modetest -v -s 147@100:1280x720
+#define SCREEN_FPS 62.948
 
 #define MAX_LIGHTS 4
 
