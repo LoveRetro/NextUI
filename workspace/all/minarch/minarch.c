@@ -3297,17 +3297,12 @@ static void input_poll_callback(void) {
 						putFile(GAME_SWITCHER_PERSIST_PATH, game.path + strlen(SDCARD_PATH));
 						break;
 					case SHORTCUT_CYCLE_SCALE:
-						screen_scaling += 1;
-						int count = config.frontend.options[FE_OPT_SCALING].count;
-						if (screen_scaling>=count) screen_scaling -= count;
+						screen_scaling = (screen_scaling + 1) % config.frontend.options[FE_OPT_SCALING].count;
 						Config_syncFrontend(config.frontend.options[FE_OPT_SCALING].key, screen_scaling);
-						apply_live_video_reset();
 						break;
 					case SHORTCUT_CYCLE_EFFECT:
-						screen_effect += 1;
-						if (screen_effect>=EFFECT_COUNT) screen_effect -= EFFECT_COUNT;
+						screen_effect = (screen_effect + 1) % config.frontend.options[FE_OPT_EFFECT].count;
 						Config_syncFrontend(config.frontend.options[FE_OPT_EFFECT].key, screen_effect);
-						apply_live_video_reset();
 						break;
 					default: break;
 				}
