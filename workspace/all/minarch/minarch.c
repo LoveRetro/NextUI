@@ -4583,17 +4583,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	
 	Special_render();
 	
-	int new_benchmark_mode = (show_debug && fast_forward);
-	static int was_benchmarking = 0;
-	if (new_benchmark_mode != was_benchmarking) {
-		if (new_benchmark_mode) {
-			GFX_setVsync(VSYNC_OFF);
-		} else {
-			GFX_setVsync(config.frontend.options[FE_OPT_TEARING].value);
-		}
-		was_benchmarking = new_benchmark_mode;
-	}
-	perf.benchmark_mode = new_benchmark_mode;
+	perf.benchmark_mode =(show_debug && fast_forward);
 	
 	static uint32_t last_flip_time = 0;
 	
