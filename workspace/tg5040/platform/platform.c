@@ -118,9 +118,22 @@ void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	else if (*charge>10) *charge =  20;
 	else           		 *charge =  10;
 }
+
 void PLAT_getCPUTemp() {
 	perf.cpu_temp = getInt("/sys/devices/virtual/thermal/thermal_zone0/temp")/1000;
+}
 
+void PLAT_getCPUSpeed()
+{
+	perf.cpu_speed = getInt("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")/1000;
+}
+
+void PLAT_getGPUTemp() {
+	perf.gpu_temp = getInt("/sys/devices/virtual/thermal/thermal_zone2/temp")/1000;
+}
+
+void PLAT_getGPUSpeed() {
+	perf.gpu_speed = 660; // MHz
 }
 
 static struct WIFI_connection connection = {
@@ -240,6 +253,8 @@ void *PLAT_cpu_monitor(void *arg) {
     double prev_real_time = get_time_sec();
     double prev_cpu_time = get_process_cpu_time_sec();
 
+	// big Cortex-A53 CPUx4 - 408Mhz to 2160Mhz
+	// 408000 600000 816000 1008000 1200000 1416000 1608000 1800000 2000000
 	const int cpu_frequencies[] = {408,600,816,1008,1200,1416,1608,1800,2000};
     const int num_freqs = sizeof(cpu_frequencies) / sizeof(cpu_frequencies[0]);
     int current_index = 1; 
@@ -250,12 +265,14 @@ void *PLAT_cpu_monitor(void *arg) {
     int history_count = 0; 
 
     while (true) {
-        if (useAutoCpu) {
-            double curr_real_time = get_time_sec();
-            double curr_cpu_time = get_process_cpu_time_sec();
 
-            double elapsed_real_time = curr_real_time - prev_real_time;
-            double elapsed_cpu_time = curr_cpu_time - prev_cpu_time;
+		double curr_real_time = get_time_sec();
+		double curr_cpu_time = get_process_cpu_time_sec();
+
+		double elapsed_real_time = curr_real_time - prev_real_time;
+		double elapsed_cpu_time = curr_cpu_time - prev_cpu_time;
+
+        if (useAutoCpu) {
             double cpu_usage = 0;
 
             if (elapsed_real_time > 0) {
@@ -296,7 +313,7 @@ void *PLAT_cpu_monitor(void *arg) {
             }
 
             perf.cpu_usage = sum_cpu_usage / history_count;
-            perf.cpu_speed = sum_cpu_speed / history_count;
+            //perf.cpu_speed = sum_cpu_speed / history_count;
 
             pthread_mutex_unlock(&currentcpuinfo);
 
@@ -306,13 +323,9 @@ void *PLAT_cpu_monitor(void *arg) {
 			// Anyways screw it 20ms is pretty much on a frame by frame basis anyways, so will anything lower really make a difference specially if that introduces cpu usage by itself? 
 			// Who knows, maybe some CPU engineer will find my comment here one day and can explain, maybe this is looking for the limits of C and needs Assambler or whatever to call CPU instructions directly to go further, but all I know is PUSH and MOV, how did the orignal Roller Coaster Tycoon developer wrote a whole game like this anyways? Its insane..
             usleep(20000);
-        } else {
-            // Just measure CPU usage without changing frequency
-            double curr_real_time = get_time_sec();
-            double curr_cpu_time = get_process_cpu_time_sec();
 
-            double elapsed_real_time = curr_real_time - prev_real_time;
-            double elapsed_cpu_time = curr_cpu_time - prev_cpu_time;
+        } else {
+			// Just measure CPU usage without changing frequency
 
             if (elapsed_real_time > 0) {
                 double cpu_usage = (elapsed_cpu_time / elapsed_real_time) * 100.0;

@@ -81,8 +81,6 @@ enum LightProfile profile_override[PROFILE_OVERRIDE_SIZE];
 
 ///////////////////////////////
 
-volatile int useAutoCpu;
-
 static struct GFX_Context
 {
 	SDL_Surface *screen;
@@ -225,6 +223,26 @@ FALLBACK_IMPLEMENTATION void *PLAT_cpu_monitor(void *arg)
 FALLBACK_IMPLEMENTATION void PLAT_getCPUTemp()
 {
 	perf.cpu_temp = 0;
+}
+
+FALLBACK_IMPLEMENTATION void PLAT_getCPUSpeed()
+{
+	perf.cpu_speed = 0;
+}
+
+FALLBACK_IMPLEMENTATION void PLAT_getGPUTemp()
+{
+	perf.gpu_temp = 0;
+}
+
+FALLBACK_IMPLEMENTATION void PLAT_getGPUSpeed()
+{
+	perf.gpu_speed = 0;
+}
+
+FALLBACK_IMPLEMENTATION void PLAT_getGPUUsage()
+{
+	perf.gpu_usage = 0.0;
 }
 
 int GFX_loadSystemFont(const char *fontPath)
@@ -556,7 +574,6 @@ void GFX_flip(SDL_Surface *screen)
 
 	//if (!perf.benchmark_mode && (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2))
 	//	tempfps = SCREEN_FPS;
-
 
 	fps_buffer[fps_buffer_index] = tempfps;
 	frame_time_buffer[fps_buffer_index] = frame_ms;

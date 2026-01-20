@@ -114,7 +114,51 @@ void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 
 void PLAT_getCPUTemp() {
 	perf.cpu_temp = getInt("/sys/devices/virtual/thermal/thermal_zone0/temp")/1000;
+}
 
+void PLAT_getCPUSpeed()
+{
+	perf.cpu_speed = getInt("/sys/devices/system/cpu/cpu4/cpufreq/scaling_cur_freq")/1000;
+}
+
+void PLAT_getGPUTemp() {
+	perf.gpu_temp = getInt("/sys/devices/virtual/thermal/thermal_zone5/temp")/1000;
+}
+
+void PLAT_getGPUSpeed() {
+	perf.gpu_speed = getInt("/sys/devices/platform/soc@3000000/1800000.gpu/devfreq/1800000.gpu/cur_freq")/1000000;
+}
+
+void PLAT_getGPUUsage() {
+	// cat /sys/devices/platform/soc@3000000/1800000.gpu/sunxi_gpu/sunxi_gpu_freq | grep -o '[0-9]*%' | tr -d '%'
+	
+    char buffer[256];
+    buffer[0] = '\0';
+    getFile("/sys/devices/platform/soc@3000000/1800000.gpu/sunxi_gpu/sunxi_gpu_freq", buffer, sizeof(buffer));
+    
+    // Parse the percentage value from the buffer
+    // Look for a number followed by '%'
+    char *ptr = buffer;
+    while (*ptr) {
+        if (*ptr >= '0' && *ptr <= '9') {
+            // Found start of a number
+            char *start = ptr;
+            while (*ptr >= '0' && *ptr <= '9') {
+                ptr++;
+            }
+            // Check if followed by '%'
+            if (*ptr == '%') {
+                *ptr = '\0'; // Temporarily null-terminate
+                perf.gpu_usage = (double)atoi(start);
+                return;
+            }
+        } else {
+            ptr++;
+        }
+    }
+    
+    // If no percentage found, set to 0.0
+    perf.gpu_usage = 0.0;
 }
 
 static struct WIFI_connection connection = {
@@ -222,7 +266,7 @@ static pthread_mutex_t currentcpuinfo;
 // a roling average for the display values of about 2 frames, otherwise they are unreadable jumping too fast up and down and stuff to read
 #define ROLLING_WINDOW 120  
 
-//volatile int useAutoCpu = 1;
+volatile int useAutoCpu = 1;
 void *PLAT_cpu_monitor(void *arg) {
     struct timespec start_time, curr_time;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
@@ -232,13 +276,16 @@ void *PLAT_cpu_monitor(void *arg) {
     double prev_real_time = get_time_sec();
     double prev_cpu_time = get_process_cpu_time_sec();
 
-	// little Cortex-A55 CPU0 - 408Mhz to 1416Mhz
-	// 408000 672000 792000 936000 1032000 1128000 1224000 1320000 1416000
 	// big Cortex-A55 CPU4 - 408Mhz to 2160Mhz
 	// 408000 672000 840000 1008000 1200000 1344000 1488000 1584000 1680000 1800000 1992000 2088000 2160000
-	const int cpu_frequencies[] = {408,672,840,1008,1200,1344,1488,1584,1680,1800,1992,2088,2160};
-    const int num_freqs = sizeof(cpu_frequencies) / sizeof(cpu_frequencies[0]);
-    int current_index = 1; // 672Mhz start 
+	const int big_cpu_frequencies[] = {408,672,840,1008,1200,1344,1488,1584,1680,1800,1992,2088,2160};
+    const int big_num_freqs = sizeof(big_cpu_frequencies) / sizeof(big_cpu_frequencies[0]);
+    int big_index = 1; // 672Mhz start 
+	// little Cortex-A55 CPU0 - 408Mhz to 1416Mhz
+	// 408000 672000 792000 936000 1032000 1128000 1224000 1320000 1416000
+	const int little_cpu_frequencies[] = {408,672,792,936,1032,1128,1224,1320,1416};
+	const int little_num_freqs = sizeof(little_cpu_frequencies) / sizeof(little_cpu_frequencies[0]);
+	int little_index = 1; // 672Mhz start
 
     double cpu_usage_history[ROLLING_WINDOW] = {0};
     double cpu_speed_history[ROLLING_WINDOW] = {0};
@@ -246,12 +293,14 @@ void *PLAT_cpu_monitor(void *arg) {
     int history_count = 0; 
 
     while (true) {
-        if (useAutoCpu) {
-            double curr_real_time = get_time_sec();
-            double curr_cpu_time = get_process_cpu_time_sec();
 
-            double elapsed_real_time = curr_real_time - prev_real_time;
-            double elapsed_cpu_time = curr_cpu_time - prev_cpu_time;
+		double curr_real_time = get_time_sec();
+		double curr_cpu_time = get_process_cpu_time_sec();
+
+		double elapsed_real_time = curr_real_time - prev_real_time;
+		double elapsed_cpu_time = curr_cpu_time - prev_cpu_time;
+
+        if (useAutoCpu) {
             double cpu_usage = 0;
 
             if (elapsed_real_time > 0) {
@@ -266,19 +315,19 @@ void *PLAT_cpu_monitor(void *arg) {
 			// all this happens very fast like 60 times per second, so i'm applying roling averages to display values, so debug screen is readable and gives a good estimate on whats happening cpu wise
 			// the roling averages are purely for displaying, the actual scaling is happening realtime each run. 
             if (cpu_usage > 95) {
-                current_index = num_freqs - 1; // Instant power needed, cpu is above 95% Jump directly to max boost 2000MHz
+                big_index = big_num_freqs - 1; // Instant power needed, cpu is above 95% Jump directly to max boost 2000MHz
             }
-            else if (cpu_usage > 85 && current_index < num_freqs - 1) { // otherwise try to keep between 75 and 85 at lowest clock speed
-                current_index++; 
+            else if (cpu_usage > 85 && big_index < big_num_freqs - 1) { // otherwise try to keep between 75 and 85 at lowest clock speed
+                big_index++; 
             } 
-            else if (cpu_usage < 75 && current_index > 0) {
-                current_index--; 
+            else if (cpu_usage < 75 && big_index > 0) {
+                big_index--; 
             }
 
-            PLAT_setCustomCPUSpeed(cpu_frequencies[current_index] * 1000);
+            PLAT_setCustomCPUSpeed(big_cpu_frequencies[big_index] * 1000);
 
             cpu_usage_history[history_index] = cpu_usage;
-            cpu_speed_history[history_index] = cpu_frequencies[current_index];
+            cpu_speed_history[history_index] = big_cpu_frequencies[big_index];
 
             history_index = (history_index + 1) % ROLLING_WINDOW;
             if (history_count < ROLLING_WINDOW) {
@@ -292,7 +341,7 @@ void *PLAT_cpu_monitor(void *arg) {
             }
 
             perf.cpu_usage = sum_cpu_usage / history_count;
-            perf.cpu_speed = sum_cpu_speed / history_count;
+            //perf.cpu_speed = sum_cpu_speed / history_count;
 
             pthread_mutex_unlock(&currentcpuinfo);
 
@@ -304,11 +353,6 @@ void *PLAT_cpu_monitor(void *arg) {
             usleep(20000);
         } else {
             // Just measure CPU usage without changing frequency
-            double curr_real_time = get_time_sec();
-            double curr_cpu_time = get_process_cpu_time_sec();
-
-            double elapsed_real_time = curr_real_time - prev_real_time;
-            double elapsed_cpu_time = curr_cpu_time - prev_cpu_time;
 
             if (elapsed_real_time > 0) {
                 double cpu_usage = (elapsed_cpu_time / elapsed_real_time) * 100.0;

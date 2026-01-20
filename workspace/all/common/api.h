@@ -77,10 +77,8 @@ extern uint32_t THEME_COLOR6;
 extern uint32_t THEME_COLOR7;
 extern SDL_Color ALT_BUTTON_TEXT_COLOR;
 
-// TODO: do we need that many free externs? This should move
-// to a structure or something.
 typedef struct {
-    float ratio;
+	float ratio;
     int buffer_free;
     int avg_buffer_free;
     int buffer_target;
@@ -94,6 +92,9 @@ typedef struct {
     int cpu_speed;
     double cpu_usage;
     int cpu_temp;
+	int gpu_speed;
+	int gpu_usage;
+    int gpu_temp;
     double jitter;
     int frame_drops;
     double avg_frame_ms;
@@ -103,6 +104,8 @@ typedef struct {
 
 extern PerfProfile perf;
 
+// TODO: do we need that many free externs? This should move
+// to a structure or something.
 extern int currentshaderpass;
 extern int currentshadersrcw;
 extern int currentshadersrch;
@@ -410,6 +413,10 @@ extern LID_Context lid;
 void PLAT_initLid(void);
 int PLAT_lidChanged(int* state);
 void PLAT_getCPUTemp();
+void PLAT_getCPUSpeed();
+void PLAT_getGPUUsage();
+void PLAT_getGPUSpeed();
+void PLAT_getGPUTemp();
 ///////////////////////////////
 
 typedef struct PAD_Axis {

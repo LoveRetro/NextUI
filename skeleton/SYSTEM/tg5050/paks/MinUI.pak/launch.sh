@@ -98,12 +98,23 @@ echo 0 > /sys/class/led_anim/max_scale
 # start gpio input daemon
 trimui_inputd &
 
-echo schedutil > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-echo schedutil > /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor
-echo 408000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
-echo 2000000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
+echo userspace > /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor
 echo 408000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq
 echo 2160000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_max_freq
+
+BIG_PATH=/sys/devices/system/cpu/cpu4/cpufreq/scaling_setspeed
+CPU_SPEED_PERF=2160000
+echo $CPU_SPEED_PERF > $BIG_PATH
+
+echo schedutil > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+echo 408000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
+echo 2000000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
+
+#LITTLE_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
+#CPU_SPEED_PERF_LITTLE=2000000
+#echo $CPU_SPEED_PERF_LITTLE > $LITTLE_PATH
+
+echo performance > /sys/devices/platform/soc@3000000/1800000.gpu/devfreq/1800000.gpu/governor
 
 # Very little libretro cores profit from multithreading, even stock OS is 
 # only very seldomly using more than 1+2 cores. Use as a baseline, the 
@@ -165,13 +176,13 @@ NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
 while [ -f $EXEC_PATH ]; do
 	nextui.elf &> $LOGS_PATH/nextui.txt
-	#echo $CPU_SPEED_PERF > $CPU_PATH
-	
+	echo $CPU_SPEED_PERF > $BIG_PATH
+
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
 		eval $CMD
 		rm -f $NEXT_PATH
-		#echo $CPU_SPEED_PERF > $CPU_PATH
+		echo $CPU_SPEED_PERF > $BIG_PATH
 	fi
 
 	if [ -f "/tmp/poweroff" ]; then

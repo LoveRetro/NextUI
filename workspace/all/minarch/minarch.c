@@ -4620,17 +4620,26 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 			blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
 		}
 
-		//want this to overwrite bottom right in case screen is too small this info more important tbh
-		PLAT_getCPUTemp();
+		// Frame timing stats
 		sprintf(debug_text, "%.1f/%.1f A:%.1f M:%.1f D:%d", perf.fps, perf.req_fps, perf.avg_frame_ms, perf.max_frame_ms, perf.frame_drops);
 		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
-
+		
+		// CPU stats
+		PLAT_getCPUSpeed();
+		PLAT_getCPUTemp();
 		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.cpu_usage, perf.cpu_speed, perf.cpu_temp);
 		blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
+		
+		// GPU stats
+		PLAT_getGPUUsage();
+		PLAT_getGPUSpeed();
+		PLAT_getGPUTemp();
+		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.gpu_usage, perf.gpu_speed, perf.gpu_temp);
+		blitBitmapText(debug_text,x,-y - 28,(uint32_t*)data,pitch / 4, width,height);
 
 		if(!perf.benchmark_mode && currentshaderpass>0) {
 			sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
-			blitBitmapText(debug_text,x,-y - 28,(uint32_t*)data,pitch / 4, width,height);
+			blitBitmapText(debug_text,x,-y - 42,(uint32_t*)data,pitch / 4, width,height);
 		}
 	
 		if (!perf.benchmark_mode) {
