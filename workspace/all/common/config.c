@@ -66,6 +66,8 @@ void CFG_defaults(NextUISettings *cfg)
         .stateFormat = CFG_DEFAULT_STATEFORMAT,
         .useExtractedFileName = CFG_DEFAULT_EXTRACTEDFILENAME,
 
+        .ntp = CFG_DEFAULT_NTP,
+        .currentTimezone = CFG_DEFAULT_TIMEZONE,
         .wifi = CFG_DEFAULT_WIFI,
         .wifiDiagnostics = CFG_DEFAULT_WIFI_DIAG,
         .bluetooth = CFG_DEFAULT_BLUETOOTH,
@@ -278,6 +280,16 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "btMaxRate=%i", &temp_value) == 1)
             {
                 CFG_setBluetoothSamplingrateLimit(temp_value);
+                continue;
+            }
+            if (sscanf(line, "ntp=%i", &temp_value) == 1)
+            {
+                CFG_setNTP((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "currentTimezone=%i", &temp_value) == 1)
+            {
+                CFG_setCurrentTimezone(temp_value);
                 continue;
             }
         }
@@ -687,6 +699,28 @@ void CFG_setBluetoothSamplingrateLimit(int value)
     CFG_sync();
 }
 
+bool CFG_getNTP(void)
+{
+    return settings.ntp;
+}
+
+void CFG_setNTP(bool on)
+{
+    settings.ntp = on;
+    CFG_sync();
+}
+
+int CFG_getCurrentTimezone(void)
+{
+    return settings.currentTimezone;
+}
+
+void CFG_setCurrentTimezone(int index)
+{
+    settings.currentTimezone = index;
+    CFG_sync();
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -829,6 +863,14 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getBluetoothSamplingrateLimit());
     }
+    else if (strcmp(key, "ntp") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getNTP()));
+    }
+    else if (strcmp(key, "currentTimezone") == 0)
+    {
+        sprintf(value, "%i", CFG_getCurrentTimezone());
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -899,6 +941,8 @@ void CFG_sync(void)
     fprintf(file, "bluetooth=%i\n", settings.bluetooth);
     fprintf(file, "btDiagnostics=%i\n", settings.bluetoothDiagnostics);
     fprintf(file, "btMaxRate=%i\n", settings.bluetoothSamplerateLimit);
+    fprintf(file, "ntp=%i\n", settings.ntp);
+    fprintf(file, "currentTimezone=%i\n", settings.currentTimezone);
 
     fclose(file);
 }
@@ -942,6 +986,8 @@ void CFG_print(void)
     printf("\t\"bluetooth\": %i,\n", settings.bluetooth);
     printf("\t\"btDiagnostics\": %i,\n", settings.bluetoothDiagnostics);
     printf("\t\"btMaxRate\": %i,\n", settings.bluetoothSamplerateLimit);
+    printf("\t\"ntp\": %i,\n", settings.ntp);
+    printf("\t\"currentTimezone\": %i,\n", settings.currentTimezone);
 
     // meta, not a real setting
     if (settings.font == 1)

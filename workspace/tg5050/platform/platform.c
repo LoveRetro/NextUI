@@ -824,19 +824,19 @@ void PLAT_getTimezones(char timezones[MAX_TIMEZONES][MAX_TZ_LENGTH], int *tz_cou
 }
 
 char *PLAT_getCurrentTimezone() {
+	// easy enough, get current index from config and return the string
+	int tz_index = CFG_getCurrentTimezone();
+	if (tz_index < 0 || tz_index >= cached_tz_count) {
+		LOG_warn("Error: Current timezone index %d out of bounds.\n", tz_index);
+		return NULL;
+	}
 
 	char *output = (char *)malloc(256);
-	if (!output) {
-		return false;
-	}
-	FILE *fp = popen("uci get system.@system[0].zonename", "r");
-	if (!fp) {
-		free(output);
-		return false;
-	}
-	fgets(output, 256, fp);
-	pclose(fp);
-	trimTrailingNewlines(output);
+	if (!output)
+		return NULL;
+
+	strncpy(output, cached_timezones[tz_index], 256 - 1);
+	output[256 - 1] = '\0'; // Ensure null-termination
 
 	return output;
 }
@@ -847,16 +847,27 @@ void PLAT_setCurrentTimezone(const char* tz) {
         return;
     }
 
-	// This makes it permanent
-	char *zonename = (char *)malloc(256);
-	if (!zonename)
+	if(!tz || strlen(tz) == 0) {
+		LOG_warn("Error: Invalid timezone string.\n");
 		return;
-	snprintf(zonename, 256, "uci set system.@system[0].zonename=\"%s\"", tz);
-	system(zonename);
-	//system("uci set system.@system[0].zonename=\"Europe/Berlin\"");
-	system("uci del -q system.@system[0].timezone");
-	system("uci commit system");
-	free(zonename);
+	}
+
+	// get index of timezone
+	int tz_index = -1;
+	for (int i = 0; i < cached_tz_count; i++) {
+		if (strcmp(cached_timezones[i], tz) == 0) {
+			tz_index = i;
+			break;
+		}
+	}
+
+	if (tz_index == -1) {
+		LOG_warn("Error: Timezone %s not found in cached list.\n", tz);
+		return;
+	}
+
+	// set in config
+	CFG_setCurrentTimezone(tz_index);
 
 	// This fixes the timezone until the next reboot
 	char *tz_path = (char *)malloc(256);
@@ -866,46 +877,27 @@ void PLAT_setCurrentTimezone(const char* tz) {
 	snprintf(tz_path, 256, ZONE_PATH "/%s", tz);
 	// replace existing symlink
 	if (unlink("/tmp/localtime") == -1) {
-		LOG_error("Failed to remove existing symlink: %s\n", strerror(errno));
+		LOG_debug("Failed to remove existing symlink: %s\n", strerror(errno));
 	}
 	if (symlink(tz_path, "/tmp/localtime") == -1) {
 		LOG_error("Failed to set timezone: %s\n", strerror(errno));
 	}
 	free(tz_path);
 
-	// apply timezone to kernel
-	system("date -k");
+	// apply timezone to RTC and kernel
+	system("hwclock -u -w && hwclock --systz -u");
 }
 
 bool PLAT_getNetworkTimeSync(void) {
-	char *output = (char *)malloc(256);
-	if (!output) {
-		return false;
-	}
-	FILE *fp = popen("uci get system.ntp.enable", "r");
-	if (!fp) {
-		free(output);
-		return false;
-	}
-	fgets(output, 256, fp);
-	pclose(fp);
-	bool result = (output[0] == '1');
-	free(output);
-	return result;
+	return CFG_getNTP();
 }
 
 void PLAT_setNetworkTimeSync(bool on) {
-	// note: this is not the service residing at /etc/init.d/ntpd - that one has hardcoded time server URLs and does not interact with UCI.
+	CFG_setNTP(on);
 	if (on) {
-		// permanment
-		system("uci set system.ntp.enable=1");
-		system("uci commit system");
-		system("/etc/init.d/ntpd reload");
+		system("/etc/init.d/S49ntp restart &");
 	} else {
-		// permanment
-		system("uci set system.ntp.enable=0");
-		system("uci commit system");
-		system("/etc/init.d/ntpd stop");
+		system("/etc/init.d/S49ntp stop &");
 	}
 }
 

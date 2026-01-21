@@ -297,12 +297,16 @@ SDL_Surface *GFX_init(int mode)
 	gfx.screen = PLAT_initVideo();
 	gfx.vsync = VSYNC_STRICT;
 	gfx.mode = mode;
+
+	// TODO: all this doesn't really belong here...
+	// tried adding to PWR_init() but that was no good (not sure why)
 	
 	CFG_init(GFX_loadSystemFont, GFX_updateColors);
 
-	// TODO: this doesn't really belong here...
-	// tried adding to PWR_init() but that was no good (not sure why)
-
+	// We always have to symlink, does not depend on NTP being enabled
+	PLAT_initTimezones();
+	PLAT_setCurrentTimezone(PLAT_getCurrentTimezone());
+	
 	PLAT_initLid();
 	LEDS_initLeds();
 
