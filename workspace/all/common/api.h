@@ -553,8 +553,13 @@ enum {
 	CPU_SPEED_NORMAL,
 	CPU_SPEED_PERFORMANCE,
 };
-#define CPU_SWITCH_DELAY_MS 500
 #define PWR_setCPUSpeed PLAT_setCPUSpeed
+
+enum {
+	CPU_CORE_EFFICIENCY,
+	CPU_CORE_PERFORMANCE,
+};
+#define PWR_pinToCores PLAT_pinToCores
 
 ///////////////////////////////
 
@@ -642,6 +647,8 @@ void PLAT_powerOff(int reboot);
 void *PLAT_cpu_monitor(void *arg);
 void PLAT_setCPUSpeed(int speed); // enum
 void PLAT_setCustomCPUSpeed(int speed);
+// note: this affects the calling thread and every thread spawned from it (after)
+void PLAT_pinToCores(int core_type); // CPU_CORE_EFFICIENCY or CPU_CORE_PERFORMANCE
 void PLAT_setRumble(int strength);
 int PLAT_pickSampleRate(int requested, int max);
 

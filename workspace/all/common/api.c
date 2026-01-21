@@ -215,6 +215,11 @@ int currentshadertexh = 0;
 
 int should_rotate = 0;
 
+FALLBACK_IMPLEMENTATION void PLAT_pinToCores(int core_type)
+{
+	// no-op
+}
+
 FALLBACK_IMPLEMENTATION void *PLAT_cpu_monitor(void *arg)
 {
 	return NULL;
@@ -306,7 +311,7 @@ SDL_Surface *GFX_init(int mode)
 	// We always have to symlink, does not depend on NTP being enabled
 	PLAT_initTimezones();
 	PLAT_setCurrentTimezone(PLAT_getCurrentTimezone());
-	
+
 	PLAT_initLid();
 	LEDS_initLeds();
 

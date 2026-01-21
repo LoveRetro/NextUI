@@ -7148,7 +7148,8 @@ int main(int argc , char* argv[]) {
     pthread_create(&cpucheckthread, &attr, PLAT_cpu_monitor, NULL);
 	pthread_attr_destroy(&attr);
 
-	setOverclock(overclock); // default to normal
+	setOverclock(2); // start up in performance mode, faster init
+	PWR_pinToCores(CPU_CORE_PERFORMANCE); // thread affinity
 	
 	char core_path[MAX_PATH];
 	char rom_path[MAX_PATH]; 

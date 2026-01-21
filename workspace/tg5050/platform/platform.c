@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 // tg5050
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +11,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <assert.h>
+#include <sched.h>
 
 #include <msettings.h>
 
@@ -265,6 +267,26 @@ double get_process_cpu_time_sec() {
 static pthread_mutex_t currentcpuinfo;
 // a roling average for the display values of about 2 frames, otherwise they are unreadable jumping too fast up and down and stuff to read
 #define ROLLING_WINDOW 120  
+
+void PLAT_pinToCores(int core_type)
+{
+	cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    
+    // Add all potential cores to the mask, even if some are sleeping right now
+	int from = core_type == CPU_CORE_EFFICIENCY ? 0 : 4;
+	int to = core_type == CPU_CORE_EFFICIENCY ? 3 : 7;
+    for (int i = from; i <= to; i++) {
+        CPU_SET(i, &cpuset);
+    }
+
+	//// This will SUCCEED as long as at least one of the cores is online
+    pthread_t current_thread = pthread_self();
+    int s = pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+    
+    if (s != 0)
+        LOG_error("Failed to pin: Are all cores sleeping?\n");
+}
 
 volatile int useAutoCpu = 1;
 void *PLAT_cpu_monitor(void *arg) {
