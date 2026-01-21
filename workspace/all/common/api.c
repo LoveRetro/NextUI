@@ -572,8 +572,8 @@ void GFX_flip(SDL_Surface *screen)
 		//LOG_warn("GFX_flip: Frame drop detected! Frame time: %.2f ms (target: %.2f ms)\n", frame_ms, target_ms);
 	}
 
-	//if (!perf.benchmark_mode && (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2))
-	//	tempfps = SCREEN_FPS;
+	if (!perf.benchmark_mode && (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2))
+		tempfps = SCREEN_FPS;
 
 	fps_buffer[fps_buffer_index] = tempfps;
 	frame_time_buffer[fps_buffer_index] = frame_ms;
@@ -630,8 +630,8 @@ void GFX_GL_Swap()
 		//LOG_warn("GFX_GL_Swap: Frame drop detected! Frame time: %.2f ms (target: %.2f ms)\n", frame_ms, target_ms);
 	}
 
-	//if (!perf.benchmark_mode && (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2))
-	//	tempfps = SCREEN_FPS;
+	if (!perf.benchmark_mode && (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2))
+		tempfps = SCREEN_FPS;
 
 	fps_buffer[fps_buffer_index] = tempfps;
 	frame_time_buffer[fps_buffer_index] = frame_ms;

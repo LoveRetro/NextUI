@@ -93,7 +93,7 @@ typedef struct {
     double cpu_usage;
     int cpu_temp;
 	int gpu_speed;
-	int gpu_usage;
+	double gpu_usage;
     int gpu_temp;
     double jitter;
     int frame_drops;
