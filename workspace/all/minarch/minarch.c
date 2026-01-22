@@ -4556,6 +4556,61 @@ void applyFadeIn(uint32_t **data, size_t pitch, unsigned width, unsigned height,
     *data = temp_buffer;
 }
 
+static void drawDebugHud(const void* data, unsigned width, unsigned height, size_t pitch, enum retro_pixel_format fmt)
+{
+	if (show_debug && !isnan(perf.ratio) && !isnan(perf.fps) && !isnan(perf.req_fps)  && !isnan(perf.buffer_ms) &&
+		perf.buffer_size >= 0  && perf.buffer_free >= 0 && SDL_GetTicks() > 5000) {
+		int x = 2 + renderer.src_x;
+		int y = 2 + renderer.src_y;
+		char debug_text[250];
+		int scale = renderer.scale;
+		if (scale==-1) scale = 1; // nearest neighbor flag
+
+		if (!perf.benchmark_mode) {
+			sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,perf.samplerate_in,perf.samplerate_out);
+			blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
+			
+			sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", perf.ratio,
+					perf.buffer_size,perf.buffer_ms, perf.buffer_free, perf.buffer_target,perf.avg_buffer_free);
+			blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
+						height);
+
+			sprintf(debug_text, "%i,%i %ix%i", renderer.dst_x,renderer.dst_y, renderer.src_w*scale,renderer.src_h*scale);
+			blitBitmapText(debug_text,-x,y,(uint32_t*)data,pitch / 4, width,height);
+		
+			sprintf(debug_text, "%ix%i,%i", renderer.dst_w,renderer.dst_h, fmt == RETRO_PIXEL_FORMAT_XRGB8888 ? 8888 : 565);
+			blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
+		}
+
+		// Frame timing stats
+		sprintf(debug_text, "%.1f/%.1f A:%.1f M:%.1f D:%d", perf.fps, perf.req_fps, perf.avg_frame_ms, perf.max_frame_ms, perf.frame_drops);
+		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
+		
+		// CPU stats
+		PLAT_getCPUSpeed();
+		PLAT_getCPUTemp();
+		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.cpu_usage, perf.cpu_speed, perf.cpu_temp);
+		blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
+		
+		// GPU stats
+		PLAT_getGPUUsage();
+		PLAT_getGPUSpeed();
+		PLAT_getGPUTemp();
+		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.gpu_usage, perf.gpu_speed, perf.gpu_temp);
+		blitBitmapText(debug_text,x,-y - 28,(uint32_t*)data,pitch / 4, width,height);
+
+		if(!perf.benchmark_mode && currentshaderpass>0) {
+			sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
+			blitBitmapText(debug_text,x,-y - 42,(uint32_t*)data,pitch / 4, width,height);
+		}
+	
+		if (!perf.benchmark_mode) {
+			double buffer_fill = (double) (perf.buffer_size - perf.buffer_free) / (double) perf.buffer_size;
+			drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
+		}
+	}
+}
+
 static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch) {
 	// return;
 	
@@ -4596,57 +4651,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	}
 	
 	// debug
-	if (show_debug && !isnan(perf.ratio) && !isnan(perf.fps) && !isnan(perf.req_fps)  && !isnan(perf.buffer_ms) &&
-	perf.buffer_size >= 0  && perf.buffer_free >= 0 && SDL_GetTicks() > 5000) {
-		int x = 2 + renderer.src_x;
-		int y = 2 + renderer.src_y;
-		char debug_text[250];
-		int scale = renderer.scale;
-		if (scale==-1) scale = 1; // nearest neighbor flag
-
-		if (!perf.benchmark_mode) {
-			sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,perf.samplerate_in,perf.samplerate_out);
-			blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
-			
-			sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", perf.ratio,
-					perf.buffer_size,perf.buffer_ms, perf.buffer_free, perf.buffer_target,perf.avg_buffer_free);
-			blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
-						height);
-
-			sprintf(debug_text, "%i,%i %ix%i", renderer.dst_x,renderer.dst_y, renderer.src_w*scale,renderer.src_h*scale);
-			blitBitmapText(debug_text,-x,y,(uint32_t*)data,pitch / 4, width,height);
-		
-			sprintf(debug_text, "%ix%i", renderer.dst_w,renderer.dst_h);
-			blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
-		}
-
-		// Frame timing stats
-		sprintf(debug_text, "%.1f/%.1f A:%.1f M:%.1f D:%d", perf.fps, perf.req_fps, perf.avg_frame_ms, perf.max_frame_ms, perf.frame_drops);
-		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
-		
-		// CPU stats
-		PLAT_getCPUSpeed();
-		PLAT_getCPUTemp();
-		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.cpu_usage, perf.cpu_speed, perf.cpu_temp);
-		blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
-		
-		// GPU stats
-		PLAT_getGPUUsage();
-		PLAT_getGPUSpeed();
-		PLAT_getGPUTemp();
-		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.gpu_usage, perf.gpu_speed, perf.gpu_temp);
-		blitBitmapText(debug_text,x,-y - 28,(uint32_t*)data,pitch / 4, width,height);
-
-		if(!perf.benchmark_mode && currentshaderpass>0) {
-			sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
-			blitBitmapText(debug_text,x,-y - 42,(uint32_t*)data,pitch / 4, width,height);
-		}
-	
-		if (!perf.benchmark_mode) {
-			double buffer_fill = (double) (perf.buffer_size - perf.buffer_free) / (double) perf.buffer_size;
-			drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
-		}
-	}
+	drawDebugHud(data, width, height, pitch, fmt);
 	
 	static int frame_counter = 0;
 	const int max_frames = 8; 
@@ -4662,9 +4667,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	last_flip_time = SDL_GetTicks();
 }
 
-
 const void* lastframe = NULL;
-
 static Uint32* rgbaData = NULL;
 static size_t rgbaDataSize = 0;
 
@@ -4854,9 +4857,9 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 		}
 		
 		data = rgbaData;
-		pitch = width * sizeof(Uint32);
 		lastframe = data;
 	}
+	pitch = width * sizeof(Uint32);
 
 	// Render the frame
 	video_refresh_callback_main(data, width, height, pitch);
