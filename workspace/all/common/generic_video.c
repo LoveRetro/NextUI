@@ -463,39 +463,39 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
 	
-	SDL_version compiled;
-	SDL_version linked;
-	SDL_VERSION(&compiled);
-	SDL_GetVersion(&linked);
-	LOG_info("Compiled SDL version %d.%d.%d ...\n", compiled.major, compiled.minor, compiled.patch);
-	LOG_info("Linked SDL version %d.%d.%d.\n", linked.major, linked.minor, linked.patch);
-		LOG_info("Available video drivers:\n");
-	for (int i=0; i<SDL_GetNumVideoDrivers(); i++) {
-		LOG_info("- %s\n", SDL_GetVideoDriver(i));
-	}
-	LOG_info("Current video driver: %s\n", SDL_GetCurrentVideoDriver());
-	LOG_info("Available render drivers:\n");
-	for (int i=0; i<SDL_GetNumRenderDrivers(); i++) {
-		SDL_RendererInfo info;
-		SDL_GetRenderDriverInfo(i,&info);
-		LOG_info("- %s\n", info.name);
-	}
-	LOG_info("Available video displays: %d\n", SDL_GetNumVideoDisplays());
-	LOG_info("Available display modes:\n");
-	SDL_DisplayMode mode;
-	for (int i=0; i<SDL_GetNumDisplayModes(0); i++) {
-		SDL_GetDisplayMode(0, i, &mode);
-		LOG_info("- %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
-	}
-	SDL_GetCurrentDisplayMode(0, &mode);
-	LOG_info("Current display mode: %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
+//	SDL_version compiled;
+//	SDL_version linked;
+//	SDL_VERSION(&compiled);
+//	SDL_GetVersion(&linked);
+//	LOG_info("Compiled SDL version %d.%d.%d ...\n", compiled.major, compiled.minor, compiled.patch);
+//	LOG_info("Linked SDL version %d.%d.%d.\n", linked.major, linked.minor, linked.patch);
+//		LOG_info("Available video drivers:\n");
+//	for (int i=0; i<SDL_GetNumVideoDrivers(); i++) {
+//		LOG_info("- %s\n", SDL_GetVideoDriver(i));
+//	}
+//	LOG_info("Current video driver: %s\n", SDL_GetCurrentVideoDriver());
+//	LOG_info("Available render drivers:\n");
+//	for (int i=0; i<SDL_GetNumRenderDrivers(); i++) {
+//		SDL_RendererInfo info;
+//		SDL_GetRenderDriverInfo(i,&info);
+//		LOG_info("- %s\n", info.name);
+//	}
+//	LOG_info("Available video displays: %d\n", SDL_GetNumVideoDisplays());
+//	LOG_info("Available display modes:\n");
+//	SDL_DisplayMode mode;
+//	for (int i=0; i<SDL_GetNumDisplayModes(0); i++) {
+//		SDL_GetDisplayMode(0, i, &mode);
+//		LOG_info("- %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
+//	}
+//	SDL_GetCurrentDisplayMode(0, &mode);
+//	LOG_info("Current display mode: %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
 	
 	int w = FIXED_WIDTH;
 	int h = FIXED_HEIGHT;
 	int p = FIXED_PITCH;
 
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"1");
-	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengles2");
+	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengl");
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");
 
 	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w,h, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN);
