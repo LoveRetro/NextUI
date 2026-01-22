@@ -581,7 +581,7 @@ void GFX_flip(SDL_Surface *screen)
 		//LOG_warn("GFX_flip: Frame drop detected! Frame time: %.2f ms (target: %.2f ms)\n", frame_ms, target_ms);
 	}
 
-	if (!perf.benchmark_mode && (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2))
+	if (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2)
 		tempfps = SCREEN_FPS;
 
 	fps_buffer[fps_buffer_index] = tempfps;
@@ -639,7 +639,7 @@ void GFX_GL_Swap()
 		//LOG_warn("GFX_GL_Swap: Frame drop detected! Frame time: %.2f ms (target: %.2f ms)\n", frame_ms, target_ms);
 	}
 
-	if (!perf.benchmark_mode && (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2))
+	if (tempfps < SCREEN_FPS * 0.8 || tempfps > SCREEN_FPS * 1.2)
 		tempfps = SCREEN_FPS;
 
 	fps_buffer[fps_buffer_index] = tempfps;
@@ -671,8 +671,6 @@ void GFX_GL_Swap()
 // eventually this function should be removed as its only here because of all the audio buffer based delay stuff
 void GFX_sync(void)
 {
-	if (perf.benchmark_mode) return;
-
 	uint32_t frame_duration = SDL_GetTicks() - frame_start;
 	if (gfx.vsync != VSYNC_OFF)
 	{

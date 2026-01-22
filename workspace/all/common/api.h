@@ -99,7 +99,6 @@ typedef struct {
     int frame_drops;
     double avg_frame_ms;
     double max_frame_ms;
-    int benchmark_mode;
 } PerfProfile;
 
 extern PerfProfile perf;

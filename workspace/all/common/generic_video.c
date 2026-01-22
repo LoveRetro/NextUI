@@ -2098,11 +2098,8 @@ void PLAT_GL_Swap() {
         );
     }
 
-	if (!perf.benchmark_mode || frame_count % 60 == 0) {
-		//glFinish();
-		//glFlush();
-    	SDL_GL_SwapWindow(vid.window);
-	}
+	SDL_GL_SwapWindow(vid.window);
+
     frame_count++;
 	reloadShaderTextures = 0;
 	shaderResetRequested = 0;

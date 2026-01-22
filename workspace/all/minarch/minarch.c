@@ -4506,11 +4506,7 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 static void screen_flip(SDL_Surface* screen) {
 	
 	if (use_core_fps) {
-		if (perf.benchmark_mode) {
-			GFX_GL_Swap();
-		} else {
-			GFX_flip_fixed_rate(screen, core.fps);
-		}
+		GFX_flip_fixed_rate(screen, core.fps);
 	}
 	else {
 		GFX_GL_Swap();
@@ -4566,21 +4562,19 @@ static void drawDebugHud(const void* data, unsigned width, unsigned height, size
 		int scale = renderer.scale;
 		if (scale==-1) scale = 1; // nearest neighbor flag
 
-		if (!perf.benchmark_mode) {
-			sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,perf.samplerate_in,perf.samplerate_out);
-			blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
-			
-			sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", perf.ratio,
-					perf.buffer_size,perf.buffer_ms, perf.buffer_free, perf.buffer_target,perf.avg_buffer_free);
-			blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
-						height);
-
-			sprintf(debug_text, "%i,%i %ix%i", renderer.dst_x,renderer.dst_y, renderer.src_w*scale,renderer.src_h*scale);
-			blitBitmapText(debug_text,-x,y,(uint32_t*)data,pitch / 4, width,height);
+		sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,perf.samplerate_in,perf.samplerate_out);
+		blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
 		
-			sprintf(debug_text, "%ix%i,%i", renderer.dst_w,renderer.dst_h, fmt == RETRO_PIXEL_FORMAT_XRGB8888 ? 8888 : 565);
-			blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
-		}
+		sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", perf.ratio,
+				perf.buffer_size,perf.buffer_ms, perf.buffer_free, perf.buffer_target,perf.avg_buffer_free);
+		blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
+					height);
+
+		sprintf(debug_text, "%i,%i %ix%i", renderer.dst_x,renderer.dst_y, renderer.src_w*scale,renderer.src_h*scale);
+		blitBitmapText(debug_text,-x,y,(uint32_t*)data,pitch / 4, width,height);
+	
+		sprintf(debug_text, "%ix%i,%i", renderer.dst_w,renderer.dst_h, fmt == RETRO_PIXEL_FORMAT_XRGB8888 ? 8888 : 565);
+		blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
 
 		// Frame timing stats
 		sprintf(debug_text, "%.1f/%.1f A:%.1f M:%.1f D:%d", perf.fps, perf.req_fps, perf.avg_frame_ms, perf.max_frame_ms, perf.frame_drops);
@@ -4599,15 +4593,13 @@ static void drawDebugHud(const void* data, unsigned width, unsigned height, size
 		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.gpu_usage, perf.gpu_speed, perf.gpu_temp);
 		blitBitmapText(debug_text,x,-y - 28,(uint32_t*)data,pitch / 4, width,height);
 
-		if(!perf.benchmark_mode && currentshaderpass>0) {
+		if(currentshaderpass>0) {
 			sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
 			blitBitmapText(debug_text,x,-y - 42,(uint32_t*)data,pitch / 4, width,height);
 		}
 	
-		if (!perf.benchmark_mode) {
-			double buffer_fill = (double) (perf.buffer_size - perf.buffer_free) / (double) perf.buffer_size;
-			drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
-		}
+		double buffer_fill = (double) (perf.buffer_size - perf.buffer_free) / (double) perf.buffer_size;
+		drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
 	}
 }
 
@@ -4616,15 +4608,13 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	
 	Special_render();
 	
-	perf.benchmark_mode =(show_debug && fast_forward);
-	
 	static uint32_t last_flip_time = 0;
 	
 	// 10 seems to be the sweet spot that allows 2x in NES and SNES and 8x in GB at 60fps
 	// 14 will let GB hit 10x but NES and SNES will drop to 1.5x at 30fps (not sure why)
 	// but 10 hurts PS...
 	// TODO: 10 was based on rg35xx, probably different results on other supported platforms
-	if (fast_forward && !perf.benchmark_mode && SDL_GetTicks()-last_flip_time<10) return;
+	if (fast_forward && SDL_GetTicks()-last_flip_time<10) return;
 	
 	// FFVII menus 
 	// 16: 30/200
@@ -7075,7 +7065,6 @@ static void chooseSyncRef(void) {
 }
 
 static void limitFF(void) {
-	if (perf.benchmark_mode) return;
 	static uint64_t ff_frame_time = 0;
 	static uint64_t last_time = 0;
 	static int last_max_speed = -1;
