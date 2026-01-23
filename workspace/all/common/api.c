@@ -2190,11 +2190,19 @@ void SND_setQuality(int quality)
 	soundQuality = qualityLevels[quality];
 	resetSrcState = 1;
 }
+// Pre-allocated buffers for resample_audio to avoid malloc/free per call
+// Max input: BATCH_SIZE (100) frames = 200 floats
+// Max output: BATCH_SIZE * max_ratio (1.5) * max_sample_rate_ratio (~2) + margin = 400 frames = 800 floats
+#define RESAMPLE_MAX_INPUT_FRAMES BATCH_SIZE
+#define RESAMPLE_MAX_OUTPUT_FRAMES 400
+static float resample_input_buffer[RESAMPLE_MAX_INPUT_FRAMES * 2];
+static float resample_output_buffer[RESAMPLE_MAX_OUTPUT_FRAMES * 2];
+static SND_Frame resample_output_frames[RESAMPLE_MAX_OUTPUT_FRAMES];
+
 ResampledFrames resample_audio(const SND_Frame *input_frames,
 							   int input_frame_count, int input_sample_rate,
 							   int output_sample_rate, double ratio)
 {
-
 	int error;
 	static double previous_ratio = 1.0;
 	static SRC_STATE *src_state = NULL;
@@ -2226,16 +2234,15 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 
 	int max_output_frames = (int)(input_frame_count * final_ratio + 1);
 
-	float *input_buffer = (float *)malloc(input_frame_count * 2 * sizeof(float));
-	float *output_buffer = (float *)malloc(max_output_frames * 2 * sizeof(float));
-	if (!input_buffer || !output_buffer)
+	// Use pre-allocated static buffers instead of malloc
+	if (input_frame_count > RESAMPLE_MAX_INPUT_FRAMES || max_output_frames > RESAMPLE_MAX_OUTPUT_FRAMES)
 	{
-		fprintf(stderr, "Error allocating buffers\n");
-		free(input_buffer);
-		free(output_buffer);
-		src_delete(src_state);
+		fprintf(stderr, "Error: resample buffer overflow (input=%d, output=%d)\n",
+				input_frame_count, max_output_frames);
 		exit(1);
 	}
+	float *input_buffer = resample_input_buffer;
+	float *output_buffer = resample_output_buffer;
 
 	for (int i = 0; i < input_frame_count; i++)
 	{
@@ -2255,21 +2262,13 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 	{
 		fprintf(stderr, "Error resampling: %s\n",
 				src_strerror(src_error(src_state)));
-		free(input_buffer);
-		free(output_buffer);
 		exit(1);
 	}
 
 	int output_frame_count = src_data.output_frames_gen;
 
-	SND_Frame *output_frames = (SND_Frame *)malloc(output_frame_count * sizeof(SND_Frame));
-	if (!output_frames)
-	{
-		fprintf(stderr, "Error allocating output frames\n");
-		free(input_buffer);
-		free(output_buffer);
-		exit(1);
-	}
+	// Use pre-allocated static buffer for output frames
+	SND_Frame *output_frames = resample_output_frames;
 
 	for (int i = 0; i < output_frame_count; i++)
 	{
@@ -2283,8 +2282,7 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 		output_frames[i].right = (int16_t)(right * 32767.0f);
 	}
 
-	free(input_buffer);
-	free(output_buffer);
+	// No need to free - using static buffers
 
 	ResampledFrames resampled;
 	resampled.frames = output_frames;
@@ -2296,23 +2294,21 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 #define ROLLING_AVERAGE_WINDOW_SIZE 120
 static float adjustment_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
 static int adjustment_index = 0;
+static float adjustment_running_sum = 0.0f;
+
+// Debug-only rolling average (only computed when needed)
 static float remaining_space_history[ROLLING_AVERAGE_WINDOW_SIZE] = {0.0f};
 static int remaining_space_index = 0;
+static float remaining_space_running_sum = 0.0f;
 
 float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, float targetbuffer_under, int batchsize)
 {
-
-	// this is just to show average remaining space in debug window could be removed later
+	// Debug: incremental rolling average for remaining space (only update perf struct, minimal overhead)
+	remaining_space_running_sum -= remaining_space_history[remaining_space_index];
 	remaining_space_history[remaining_space_index] = remaining_space;
+	remaining_space_running_sum += remaining_space;
 	remaining_space_index = (remaining_space_index + 1) % ROLLING_AVERAGE_WINDOW_SIZE;
-	float avgspace = 0.0f;
-	for (int i = 0; i < ROLLING_AVERAGE_WINDOW_SIZE; ++i)
-	{
-		avgspace += remaining_space_history[i];
-	}
-	avgspace /= ROLLING_AVERAGE_WINDOW_SIZE;
-	perf.avg_buffer_free = avgspace;
-	// end debug part
+	perf.avg_buffer_free = remaining_space_running_sum / ROLLING_AVERAGE_WINDOW_SIZE;
 
 	float midpoint = (targetbuffer_over + targetbuffer_under) / 2.0f;
 	perf.buffer_target = midpoint;
@@ -2326,29 +2322,22 @@ float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, 
 	{
 		normalizedDistance = (remaining_space - midpoint) / (targetbuffer_under - midpoint);
 	}
-	// I make crazy small adjustments, mooore tiny is mooore stable :D But don't come neir the limits cuz imma hit ya with that 0.005 ratio adjustment, pow pow!
-	// I wonder if staying in the middle of 0 to 4000 with 512 samples per batch playing at tiny different speeds each iteration is like the smallest I can get
-	// lets say hovering around 2000 means 2000 samples queue, about 4 frames, so at 17ms(60fps) thats  68ms delay right?
-	// Should have payed attention when my math teacher was talking dammit
-	// Also I chose 3 for pow, but idk if that really the best nr, anyone good in maths looking at my code?
-	float adjustment = 0.001f + (0.01f - 0.001f) * pow(normalizedDistance, 3);
+	// Use x*x*x instead of pow(x, 3) for better performance
+	float nd3 = normalizedDistance * normalizedDistance * normalizedDistance;
+	float adjustment = 0.001f + (0.01f - 0.001f) * nd3;
 
 	if (remaining_space < midpoint)
 	{
 		adjustment = -adjustment;
 	}
 
+	// Incremental rolling average: subtract old value, add new value
+	adjustment_running_sum -= adjustment_history[adjustment_index];
 	adjustment_history[adjustment_index] = adjustment;
+	adjustment_running_sum += adjustment;
 	adjustment_index = (adjustment_index + 1) % ROLLING_AVERAGE_WINDOW_SIZE;
 
-	// Calculate the rolling average
-	float rolling_average = 0.0f;
-	for (int i = 0; i < ROLLING_AVERAGE_WINDOW_SIZE; ++i)
-	{
-		rolling_average += adjustment_history[i];
-	}
-	rolling_average /= ROLLING_AVERAGE_WINDOW_SIZE;
-	return rolling_average;
+	return adjustment_running_sum / ROLLING_AVERAGE_WINDOW_SIZE;
 }
 
 static SND_Frame tmpbuffer[BATCH_SIZE];
@@ -2474,7 +2463,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 		pthread_mutex_unlock(&audio_mutex);
 
 		total_consumed_frames += written_frames;
-		free(resampled.frames);
+		// No need to free - using static buffers
 	}
 
 	return total_consumed_frames;
