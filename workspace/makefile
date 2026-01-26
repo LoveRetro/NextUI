@@ -29,7 +29,7 @@ ifeq ($(PLATFORM), desktop)
 	cd ./all/minput/ && make
 	cd ./all/nextval/ && make
 	cd ./all/settings/ && make
-else 
+else
 ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/rfkill && make all
 	cd ./$(PLATFORM)/btmanager && make all

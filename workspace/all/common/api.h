@@ -130,9 +130,9 @@ enum {
 	ASSET_UNDERLINE,
 	ASSET_DOT,
 	ASSET_HOLE,
-	
+
 	ASSET_COLORS,
-	
+
 	ASSET_BRIGHTNESS,
 	ASSET_COLORTEMP,
 	ASSET_VOLUME_MUTE,
@@ -142,10 +142,10 @@ enum {
 	ASSET_BATTERY_FILL,
 	ASSET_BATTERY_FILL_LOW,
 	ASSET_BATTERY_BOLT,
-	
+
 	ASSET_SCROLL_UP,
 	ASSET_SCROLL_DOWN,
-	
+
 	ASSET_WIFI,
 	ASSET_WIFI_MED,
 	ASSET_WIFI_LOW,
@@ -155,7 +155,7 @@ enum {
 	ASSET_BLUETOOTH_OFF,
 	ASSET_AUDIO,
 	ASSET_CONTROLLER,
-	
+
 	ASSET_CHECKCIRCLE,
 	ASSET_LOCK,
 	ASSET_SETTINGS,
@@ -164,7 +164,7 @@ enum {
 	ASSET_POWEROFF,
 	ASSET_RESTART,
 	ASSET_SUSPEND,
-	
+
 	ASSET_COUNT,
 };
 
@@ -196,7 +196,7 @@ typedef struct GFX_Renderer {
 	void* blit;
 	double aspect; // 0 for integer, -1 for fullscreen, otherwise aspect ratio, used for SDL2 accelerated scaling
 	int scale;
-	
+
 	// TODO: document this better
 	int true_w;
 	int true_h;
@@ -206,7 +206,7 @@ typedef struct GFX_Renderer {
 	int src_w;
 	int src_h;
 	int src_p;
-	
+
 	// TODO: I think this is overscaled
 	int dst_x;
 	int dst_y;
@@ -523,7 +523,7 @@ void LEDS_initLeds();
 void LEDS_applyRules();
 
 // temporary overrides outside of the scope of LEDS_applyRules
-// these will survive LEDS_applyRules() and need to be manually revoked, e.g. 
+// these will survive LEDS_applyRules() and need to be manually revoked, e.g.
 /*
 	LEDS_applyRules(); // applies rules
 	LEDS_pushProfile(LIGHT_PROFILE_AMBIENT); // manual override
@@ -717,6 +717,7 @@ struct WIFI_network {
 	int rssi;
 	WifiSecurityType security;
 	bool wps;
+    int signal;
 };
 
 struct WIFI_connection {
@@ -751,7 +752,7 @@ void PLAT_wifiForget(char *ssid, WifiSecurityType sec);
 // attempt to connect to this SSID, using, stored credentials.
 // \sa PLAT_wifiHasCredentials
 void PLAT_wifiConnect(char *ssid, WifiSecurityType sec);
-// attempt to connect to this SSID with password given. 
+// attempt to connect to this SSID with password given.
 // If successful, stores credentials with wpa_supplicant.
 void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass);
 // disconnect from any active network

@@ -1,0 +1,10 @@
+$(PLATFORM):
+	# installer
+	cp ./workspace/$@/install/update.sh ./build/SYSTEM/$@/bin/install.sh
+	mkdir -p ./build/BOOT/common/$@/
+	cp ./workspace/$@/install/*.png ./build/BOOT/common/$@/
+	cp ./workspace/all/show2/build/$@/show2.elf ./build/BOOT/common/$@/
+
+	# extras
+	# cp ./workspace/$@/other/NextCommander/output/NextCommander ./build/EXTRAS/Tools/$@/Files.pak/
+	cp -r ./workspace/$@/other/NextCommander/res ./build/EXTRAS/Tools/$@/Files.pak/

@@ -1836,7 +1836,7 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 
 		ox += SCALE1(PILL_SIZE);
 		oy += SCALE1((PILL_SIZE - SETTINGS_SIZE) / 2);
-		GFX_blitPillColor(gfx.mode == MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, &(SDL_Rect){ox, oy, SCALE1(SETTINGS_WIDTH), SCALE1(SETTINGS_SIZE)}, 
+		GFX_blitPillColor(gfx.mode == MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, &(SDL_Rect){ox, oy, SCALE1(SETTINGS_WIDTH), SCALE1(SETTINGS_SIZE)},
 			THEME_COLOR3, RGB_WHITE);
 
 		float percent = ((float)(setting_value - setting_min) / (setting_max - setting_min));
@@ -2398,7 +2398,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 		SND_pauseAudio(false);
 	} else if (perf.buffer_free > snd.frame_count * 0.99f) { // if for some reason buffer drops below threshold again, pause it (like psx core can stop sending audio in between scenes or after fast forward etc)
 		SND_pauseAudio(true);
-	} 
+	}
 
 
 	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000.0f;
@@ -2519,7 +2519,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 		SND_pauseAudio(false);
 	} else if (perf.buffer_free > snd.frame_count * 0.99f) { // if for some reason buffer drops below 1% again, pause audio again (like psx core can stop sending audio in between scenes or after fast forward etc)
 		SND_pauseAudio(true);
-	} 
+	}
 
 	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000;
 	perf.buffer_ms = tempdelay;
@@ -3961,7 +3961,7 @@ void LEDS_applyRules()
 		LOG_error("LEDS_applyRules: lights not initialized, skipping\n");
 		return;
 	}
-	
+
 	// some rules rely on pwr.is_charging and pwr.charge being valid
 	if(pwr.initialized == 0)
 		LOG_warn("LEDS_applyRules called before PWR_init\n");
@@ -4006,7 +4006,7 @@ void LEDS_updateLeds(bool indicator_only)
 		LOG_error("LEDS_updateLeds: lights not initialized, skipping\n");
 		return;
 	}
-		
+
 	int lightsize = 3;
 	char *device = getenv("DEVICE");
 	int is_brick = exactMatch("brick", device);
@@ -4066,7 +4066,7 @@ void LEDS_initLeds()
 		lightsCharging[i] = lightsDefault[i];
 		lightsCharging[i].effect = 2; // breathe
 		lightsCharging[i].color1 = 0x00FF00;
-		lightsCharging[i].cycles = -1; // infinite	
+		lightsCharging[i].cycles = -1; // infinite
 
 		// LIGHT_PROFILE_SLEEP
 		lightsSleep[i] = lightsDefault[i];
