@@ -3761,6 +3761,7 @@ static void PWR_exitSleep(void)
 	}
 	// reinitialize audio after sleep otherwise it doesnt come back on sometimes
 	LOG_info("Reinitialize audio after sleep\n");
+	SND_overrideMute(1);
 	SND_resetAudio(snd.sample_rate_in, snd.frame_rate);
 
 	sync();
