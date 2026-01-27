@@ -8,6 +8,8 @@ exec 0<&-
 wifid_running=
 bluetoothd_running=
 
+sleep_retval=
+
 asound_state_dir=/tmp/asound-suspend
 
 before() {
@@ -51,7 +53,26 @@ after() {
 before
 
 >&2 echo "Suspending..."
-echo mem >/sys/power/state
+sleep_max_tries=10
+for i in $(seq 1 $sleep_max_tries); do
+  >&2 echo "Deep sleep attempt $i of $sleep_max_tries"
+
+  # Can't use | true here, it would crash out on non-zero return.
+  set +e
+  echo mem >/sys/power/state
+  sleep_retval=$?
+  set -e
+
+  >&2 echo "Deep sleep: kernel returned $sleep_retval"
+  if [ $sleep_retval -eq 0 ]; then
+     break
+  fi
+
+  >&2 echo "Deep sleep failed: retrying in 2 seconds"
+  sleep 2
+done
 
 # Resume services in background to reduce UI latency
 after &
+
+exit $sleep_retval

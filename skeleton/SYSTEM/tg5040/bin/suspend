@@ -8,6 +8,8 @@ exec 0<&-
 wifid_running=
 bluetoothd_running=
 
+sleep_retval=
+
 asound_state_dir=/tmp/asound-suspend
 
 before() {
@@ -31,6 +33,7 @@ before() {
 }
 
 after() {
+	#modprobe xradio_wlan
 	>&2 echo "Resumed from suspend."
 
 	if [ -n "$wifid_running" ]; then
@@ -48,10 +51,51 @@ after() {
 	# alsactl --file "$asound_state_dir/asound.state.pre" restore || true
 }
 
+# Some debug lights
+echo 20 > /sys/class/led_anim/max_scale_f1f2
+echo 0044FF > /sys/class/led_anim/effect_rgb_hex_f1
+echo 0044FF > /sys/class/led_anim/effect_rgb_hex_f1
+echo 0044FF > /sys/class/led_anim/effect_rgb_hex_f2
+echo 0044FF > /sys/class/led_anim/effect_rgb_hex_f2
+echo 4 > /sys/class/led_anim/effect_f1
+echo 4 > /sys/class/led_anim/effect_f2
+
 before
 
+#rmmod xradio_wlan || true
+#rmmod xradio_core || true
+#rmmod xradio_mac || true
+
 >&2 echo "Suspending..."
-echo mem >/sys/power/state
+sleep_max_tries=10
+for i in $(seq 1 $sleep_max_tries); do
+  >&2 echo "Deep sleep attempt $i of $sleep_max_tries"
+
+  # Can't use | true here, it would crash out on non-zero return.
+  set +e
+  echo mem >/sys/power/state
+  sleep_retval=$?
+  set -e
+
+  >&2 echo "Deep sleep: kernel returned $sleep_retval"
+  if [ $sleep_retval -eq 0 ]; then
+     break
+  fi
+
+  # Debug lights: Red on failure
+  echo 100 > /sys/class/led_anim/max_scale_f1f2
+  echo FF0000 > /sys/class/led_anim/effect_rgb_hex_f1
+  echo FF0000 > /sys/class/led_anim/effect_rgb_hex_f1
+  echo FF0000 > /sys/class/led_anim/effect_rgb_hex_f2
+  echo FF0000 > /sys/class/led_anim/effect_rgb_hex_f2
+  echo 4 > /sys/class/led_anim/effect_f1
+  echo 4 > /sys/class/led_anim/effect_f2
+
+  >&2 echo "Deep sleep failed: retrying in 2 seconds"
+  sleep 2
+done
 
 # Resume services in background to reduce UI latency
 after &
+
+exit $sleep_retval
