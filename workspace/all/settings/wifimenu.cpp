@@ -97,7 +97,6 @@ void Menu::updater()
     while (!quit && !globalQuit)
     {
         // TODO: pause when menu is not rendered
-        // Scan
         if (WIFI_enabled())
         {
             // scan for available networks and add a menu item for each

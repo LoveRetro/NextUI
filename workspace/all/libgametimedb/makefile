@@ -35,7 +35,7 @@ SYSROOT     := $(shell $(CC) --print-sysroot)
 INCDIR = -I. -I../common/ -I../../$(PLATFORM)/platform/
 SOURCE = $(TARGET).c ../common/utils.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
 
-CFLAGS  += $(OPT) -fomit-frame-pointer
+CFLAGS  += $(OPT)
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS += -s -lsqlite3
 

@@ -13,6 +13,65 @@
             "problemMatcher": "$gcc"
         },
         {
+            "label": "make desktop profile",
+            "type": "shell",
+            "command": "PROFILE=1 make setup common PLATFORM=desktop",
+            "group": {
+                "kind": "build"
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "make desktop gperftools",
+            "type": "shell",
+            "command": "GPERFTOOLS=1 make setup common PLATFORM=desktop",
+            "group": {
+                "kind": "build"
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "make desktop tsan",
+            "type": "shell",
+            "command": "TSAN=1 make setup common PLATFORM=desktop",
+            "group": {
+                "kind": "build"
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "make desktop asan",
+            "type": "shell",
+            "command": "ASAN=1 make setup common PLATFORM=desktop",
+            "group": {
+                "kind": "build"
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "show profile results",
+            "type": "shell",
+            "command": "gprof ${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf ${workspaceFolder}/workspace/all/minarch/build/desktop/gmon.out > ${workspaceFolder}/workspace/all/minarch/build/desktop/profile.txt",
+            "problemMatcher": []
+        },
+        {
+            "label": "show gperftools results",
+            "type": "shell",
+            "command": "cd ${workspaceFolder}/workspace/all/minarch/build/desktop && if [ -f minarch.prof ]; then export PATH=$PATH:~/go/bin && pprof --text minarch.elf minarch.prof > gperftools.txt && pprof --svg minarch.elf minarch.prof > gperftools.svg && echo 'GPerfTools results generated: gperftools.txt and gperftools.svg'; else echo 'ERROR: minarch.prof not found. Make sure CPUPROFILE environment variable was set during execution.'; echo 'Try running: CPUPROFILE=minarch.prof ./minarch.elf [args]'; fi",
+            "problemMatcher": []
+        },
+        {
+            "label": "run minarch 2-core profile",
+            "type": "shell",
+            "command": "taskset -c 0,1 ${workspaceFolder}/workspace/all/minarch/build/desktop/minarch.elf ${workspaceFolder}/workspace/desktop/cores/output/gpsp_libretro.so '/var/tmp/nextui/sdcard/Roms/Game Boy Advance (GBA)/Advance Wars 2 - Black Hole Rising (USA).zip'",
+            "options": {
+                "cwd": "${workspaceFolder}/workspace/all/minarch/build/desktop"
+            },
+            "group": "test",
+            "dependsOn": "make desktop profile",
+            "problemMatcher": []
+        },
+        {
             "label": "launch minarch",
             "type": "shell",
             "command": "adb push ${workspaceFolder}/workspace/all/minarch/build/tg5040/minarch.elf /mnt/SDCARD/.system/tg5040/bin/ && adb shell /mnt/SDCARD/.system/tg5040/dbg/launch.sh :13337 /mnt/SDCARD/.system/tg5040/bin/minarch.elf /mnt/SDCARD/.system/tg5040/cores/gpsp_libretro.so /mnt/SDCARD/.system/tg5040/dbg/mbros3.gba",

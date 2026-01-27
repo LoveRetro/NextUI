@@ -1,0 +1,254 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2024 Knulli (https://knulli.org)
+# Original script written by Mikhailzrick and adapted from Knulli
+# https://github.com/knulli-cfw/knulli-linux/commit/5c1b4724330b59cbe8af79d0a7f1dac86f1c221a
+#
+# fan-control — simple fan control daemon
+# Mode is determined at startup: quiet(x0.5 curve) | normal(x1.0 curve) | performance(x1.5 curve)
+
+LOCK_FILE="/var/run/fan-control.lock"
+
+
+exec 9>"${LOCK_FILE}"
+if ! flock -n 9; then
+  echo "Error: Another instance of fancontrol is still running"
+  exit 0
+fi
+
+cleanup() {
+    flock -u 9 2>/dev/null || true
+    exec 9>&-
+}
+
+do_exit() {
+    cleanup
+    exit 0
+}
+
+trap do_exit INT TERM HUP QUIT
+
+POLL_SEC=2
+
+OFF_DELAY_LOOPS=3 # How many loops needed to go from ON -> OFF
+OFF_COUNT=0
+
+# Re-latch hottest sensor every N loops
+RELATCH_EVERY=5
+LOOP_COUNT=0
+
+MODE="${1:-normal}"
+
+# Check if MODE is a percentage (number with optional % suffix)
+FIXED_PERCENT=""
+case "$MODE" in
+    *%)
+        FIXED_PERCENT="${MODE%?}"
+        ;;
+    *[0-9])
+        # Pure number, treat as percentage
+        case "$MODE" in
+            ''|*[!0-9]*) ;; # Not a pure number
+            *) FIXED_PERCENT="$MODE" ;;
+        esac
+        ;;
+esac
+
+if [ -n "$FIXED_PERCENT" ]; then
+    # Validate percentage range
+    if [ "$FIXED_PERCENT" -lt 0 ] 2>/dev/null || [ "$FIXED_PERCENT" -gt 100 ] 2>/dev/null; then
+        echo "Error: Percentage must be between 0 and 100" >&2
+        exit 1
+    fi
+else
+    case "$MODE" in
+        quiet|normal|performance) ;;
+        *)
+            echo "Usage: $0 [quiet|normal|performance|PERCENT]" >&2
+            echo "  PERCENT: 0-100 (optionally with % suffix) for fixed fan speed" >&2
+            exit 1
+            ;;
+    esac
+fi
+
+T_MIN=""
+T_MAX=""
+T_OFF=""
+FAN_STATE=""
+FAN_MAX=""
+case "$PLATFORM" in
+    tg5050)
+        FAN_STATE="/sys/class/thermal/cooling_device0/cur_state"
+        FAN_MAX=31
+
+        # Temperature ramp (C)
+        T_OFF=30 # below this -> fan off
+        T_MIN=35
+        T_MAX=60 # thermal throttling above this
+    ;;
+    *)
+    echo "Device not supported: " $BOARD
+    exit 1
+    ;;
+esac
+
+FAN_MIN=$(( (FAN_MAX + 9) / 10 ))   # floor = 10% of FAN_MAX
+
+# helpers
+clamp() {
+    v="$1"; lo="$2"; hi="$3"
+    [ "$v" -lt "$lo" ] 2>/dev/null && v="$lo"
+    [ "$v" -gt "$hi" ] 2>/dev/null && v="$hi"
+    echo "$v"
+}
+
+build_temp_file_list() {
+    TEMP_FILES=""
+
+    for z in /sys/class/thermal/thermal_zone*; do
+        [ -f "$z/type" ] || continue
+        [ -f "$z/temp" ] || continue
+
+        IFS= read -r t < "$z/type" 2>/dev/null || continue
+        case "$t" in
+            cpu*|cluster*)
+                TEMP_FILES="$TEMP_FILES $z/temp"
+                ;;
+        esac
+    done
+}
+
+pick_hottest_temp_file() {
+    hottest=""
+    hottest_v=-1
+
+    for f in $TEMP_FILES; do
+        IFS= read -r v < "$f" 2>/dev/null || continue
+        case "$v" in ''|*[!0-9]*) continue ;; esac
+        [ "$v" -gt "$hottest_v" ] && { hottest_v="$v"; hottest="$f"; }
+    done
+
+    [ -n "$hottest" ] || return 1
+    TEMP_FILE="$hottest"
+    return 0
+}
+
+read_temp_c() {
+    IFS= read -r TEMP_MC < "$TEMP_FILE" || return 1
+    case "$TEMP_MC" in ''|*[!0-9]*) return 1 ;; esac
+    echo $(( TEMP_MC / 1000 ))
+}
+
+base_from_temp() {
+    t="$1"
+
+    if [ -n "${T_OFF:-}" ] && [ "$t" -lt "$T_OFF" ]; then
+        echo 0
+        return
+    fi
+
+    t="$(clamp "$t" "$T_MIN" "$T_MAX")"
+
+    den=$(( T_MAX - T_MIN ))
+    [ "$den" -le 0 ] && { echo 1; return; }
+
+    base=$(( 1 + ( (t - T_MIN) * (FAN_MAX - 1) ) / den ))
+    clamp "$base" 1 "$FAN_MAX"
+}
+
+apply_mode() {
+    base="$1"
+
+    [ "$base" -eq 0 ] 2>/dev/null && { echo 0; return; }
+
+    case "$MODE" in
+        quiet)
+            # Approximately 0.5x of normal
+            out=$(( (base + 1) / 2 ))
+            [ "$out" -lt 1 ] && out=1
+            ;;
+        normal)
+            out="$base"
+            ;;
+        performance)
+            # Approximately 1.5x of normal
+            out=$(( (3 * base + 1) / 2 ))
+            [ "$out" -gt "$FAN_MAX" ] && out="$FAN_MAX"
+            ;;
+    esac
+
+    echo "$out"
+}
+
+# startup
+[ -n "$FAN_STATE" ] && [ -e "$FAN_STATE" ] || {
+    echo "Missing fan control file" >&2
+    exit 1
+}
+
+# If fixed percentage mode, set it and exit main logic
+if [ -n "$FIXED_PERCENT" ]; then
+    FIXED=$(( (FAN_MAX * FIXED_PERCENT + 50) / 100 ))
+    FIXED="$(clamp "$FIXED" 0 "$FAN_MAX")"
+    echo "$FIXED" > "$FAN_STATE"
+    do_exit
+fi
+
+build_temp_file_list
+pick_hottest_temp_file || TEMP_FILE=""
+
+# If no temperature source exists, pick a safe fixed speed
+[ -z "$TEMP_FILE" ] && {
+    case "$MODE" in
+        # 30%
+        quiet)  FIXED=$(( (FAN_MAX + 1) / 3 )) ;;
+        # 60%
+        normal) FIXED=$(( (2 * FAN_MAX + 1) / 3 )) ;;
+        # 100%
+        performance)    FIXED="$FAN_MAX" ;;
+    esac
+    echo "$FIXED" > "$FAN_STATE"
+    do_exit
+}
+
+LAST="0"
+
+# main loop
+while :; do
+    LOOP_COUNT=$((LOOP_COUNT + 1))
+    if [ $((LOOP_COUNT % RELATCH_EVERY)) -eq 0 ]; then
+        pick_hottest_temp_file >/dev/null 2>&1 || true
+    fi
+
+    TEMP_C="$(read_temp_c 2>/dev/null || true)"
+
+    if [ -n "$TEMP_C" ]; then
+        BASE="$(base_from_temp "$TEMP_C")"
+        TARGET="$(apply_mode "$BASE")"
+    else
+        TARGET=$(( (FAN_MAX + 1) / 2 ))
+    fi
+
+    if [ "$TARGET" -ne 0 ]; then
+        TARGET="$(clamp "$TARGET" "$FAN_MIN" "$FAN_MAX")"
+    fi
+
+    # OFF debounce, delay so it won't immediately go from ON -> OFF -> ON
+    if [ "$TARGET" -eq 0 ]; then
+        OFF_COUNT=$((OFF_COUNT + 1))
+        if [ "$OFF_COUNT" -lt "$OFF_DELAY_LOOPS" ]; then
+            TARGET="$LAST"
+        fi
+    else
+        OFF_COUNT=0
+    fi
+
+    if [ "$TARGET" != "$LAST" ]; then
+        echo "$TARGET" > "$FAN_STATE"
+        LAST="$TARGET"
+    fi
+
+    sleep "$POLL_SEC"
+done
+
+exit 0

@@ -36,14 +36,8 @@ static int quit = 0;
 static int newScreenshot = 0;
 static int show_menu = 0;
 static int simple_mode = 0;
-static int was_threaded = 0;
-static int should_run_core = 1; // used by threaded video
-enum retro_pixel_format fmt;
-
-static pthread_t		core_pt;
-static pthread_mutex_t	core_mx;
-static pthread_cond_t	core_rq; // not sure this is required
-
+static void selectScaler(int src_w, int src_h, int src_p);
+enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
 
 enum {
 	SCALE_NATIVE,
@@ -63,7 +57,6 @@ static int screen_effect = EFFECT_NONE;
 static int screenx = 64;
 static int screeny = 64;
 static int overlay = 0; 
-static int prevent_tearing = 1; // lenient
 static int use_core_fps = 0;
 static int sync_ref = 0;
 static int show_debug = 0;
@@ -73,11 +66,12 @@ static int fast_forward = 0;
 static int overclock = 3; // auto
 static int has_custom_controllers = 0;
 static int gamepad_type = 0; // index in gamepad_labels/gamepad_values
-static int downsample = 0; // set to 1 to convert from 8888 to 565
+
 // these are no longer constants as of the RG CubeXX (even though they look like it)
-static int DEVICE_WIDTH = 0; // FIXED_WIDTH;
-static int DEVICE_HEIGHT = 0; // FIXED_HEIGHT;
-static int DEVICE_PITCH = 0; // FIXED_PITCH;
+static int DEVICE_WIDTH = 0;
+static int DEVICE_HEIGHT = 0;
+static int DEVICE_PITCH = 0;
+static int shader_reset_suppressed = 0;
 
 GFX_Renderer renderer;
 
@@ -131,6 +125,7 @@ static struct Core {
 
 int extract_zip(char** extensions);
 static bool getAlias(char* path, char* alias);
+static char* findFileInDir(const char *directory, const char *filename);
 
 static struct Game {
 	char path[MAX_PATH];
@@ -154,15 +149,21 @@ static void Game_open(char* path) {
 	// check first if the rom already is alive in tmp folder if so skip unzipping shit
 	char tmpfldr[255];
 	snprintf(tmpfldr, sizeof(tmpfldr), "/tmp/nextarch/%s", core.tag);
-	char *tmppath = PLAT_findFileInDir(tmpfldr, game.name);
+	char *tmppath = findFileInDir(tmpfldr, game.name);
 	if (tmppath) {
-		printf("File exists skipping unzipping and setting game.tmp_path: %s\n", tmppath);
-		strcpy((char*)game.tmp_path, tmppath);
-		skipzip = 1;
+		// Verify the file exists and has non-zero size (not being written or truncated)
+		struct stat st;
+		if (stat(tmppath, &st) == 0 && st.st_size > 0) {
+			printf("File exists skipping unzipping and setting game.tmp_path: %s\n", tmppath);
+			strcpy((char*)game.tmp_path, tmppath);
+			skipzip = 1;
+			// Update the game name to the extracted file name instead of the zip name
+			if (CFG_getUseExtractedFileName())
+				strcpy((char*)game.alt_name, strrchr(game.tmp_path, '/')+1);
+		} else {
+			printf("File exists but is empty or inaccessible, will re-extract: %s\n", tmppath);
+		}
 		free(tmppath);
-		// Update the game name to the extracted file name instead of the zip name
-		if (CFG_getUseExtractedFileName())
-			strcpy((char*)game.alt_name, strrchr(game.tmp_path, '/')+1);
 	} else {
 		printf("File does not exist in %s\n",tmpfldr);
 	}
@@ -329,18 +330,49 @@ int extract_zip(char** extensions)
 				}
 				if (!found) continue;
 
+				sprintf(game.tmp_path, "%s/%s", tmp_dirname, basename((char*)sb.name));
+				
+				// Check if file already exists and has the correct size
+				struct stat st;
+				if (stat(game.tmp_path, &st) == 0 && st.st_size == sb.size) {
+					// File already exists with correct size, skip extraction
+					LOG_info("File already exists with correct size, skipping extraction: %s\n", game.tmp_path);
+					return 1;
+				}
+				
 				zf = zip_fopen_index(za, i, 0);
 				if (!zf) {
 					LOG_error( "zip_fopen_index failed\n");
 					return 0;
 				}
 
-				sprintf(game.tmp_path, "%s/%s", tmp_dirname, basename((char*)sb.name));
-				fd = open(game.tmp_path, O_RDWR | O_TRUNC | O_CREAT, 0644);
+				// Try to create file exclusively first to avoid race condition
+				fd = open(game.tmp_path, O_RDWR | O_CREAT | O_EXCL, 0644);
 				if (fd < 0) {
-					LOG_error( "open failed\n");
-					zip_fclose(zf);
-					return 0;
+					if (errno == EEXIST) {
+						// File was created by another process, verify it's complete
+						zip_fclose(zf);
+						if (stat(game.tmp_path, &st) == 0 && st.st_size == sb.size) {
+							LOG_info("File was created by another process, using it: %s\n", game.tmp_path);
+							return 1;
+						}
+						// File exists but wrong size, try to truncate and rewrite
+						fd = open(game.tmp_path, O_RDWR | O_TRUNC, 0644);
+						if (fd < 0) {
+							LOG_error("open failed after EEXIST: %s\n", strerror(errno));
+							return 0;
+						}
+						zf = zip_fopen_index(za, i, 0);
+						if (!zf) {
+							LOG_error("zip_fopen_index failed on retry\n");
+							close(fd);
+							return 0;
+						}
+					} else {
+						LOG_error("open failed: %s\n", strerror(errno));
+						zip_fclose(zf);
+						return 0;
+					}
 				}
 				//LOG_info("Writing: %s\n", game.tmp_path);
 
@@ -1177,12 +1209,6 @@ static char* sharpness_labels[] = {
 	"LINEAR",
 	NULL
 };
-static char* tearing_labels[] = {
-	"Off",
-	"Lenient",
-	"Strict",
-	NULL
-};
 static char* sync_ref_labels[] = {
 	"Auto",
 	"Screen",
@@ -1373,7 +1399,6 @@ enum {
 	FE_OPT_SCREENX,
 	FE_OPT_SCREENY,
 	FE_OPT_SHARPNESS,
-	FE_OPT_TEARING,
 	FE_OPT_SYNC_REFERENCE,
 	FE_OPT_OVERCLOCK,
 	FE_OPT_DEBUG,
@@ -1415,21 +1440,25 @@ enum {
 	SH_EXTRASETTINGS,
 	SH_SHADERS_PRESET,
 	SH_NROFSHADERS,
+
 	SH_SHADER1,
 	SH_SHADER1_FILTER,
 	SH_SRCTYPE1,
 	SH_SCALETYPE1,
 	SH_UPSCALE1,
+
 	SH_SHADER2,
 	SH_SHADER2_FILTER,
 	SH_SRCTYPE2,
 	SH_SCALETYPE2,
 	SH_UPSCALE2,
+
 	SH_SHADER3,
 	SH_SHADER3_FILTER,
 	SH_SRCTYPE3,
 	SH_SCALETYPE3,
 	SH_UPSCALE3,
+
 	SH_NONE
 };
 
@@ -1613,7 +1642,7 @@ static struct Config {
 			[FE_OPT_RESAMPLING] = {
 				.key	= "minarch__resampling_quality", 
 				.name	= "Audio Resampling Quality",
-				.desc	= "Resampling quality higher takes more CPU", // will call getScreenScalingDesc()
+				.desc	= "Resampling quality higher takes more CPU",
 				.default_value = 2,
 				.value = 2,
 				.count = 4,
@@ -1623,7 +1652,7 @@ static struct Config {
 			[FE_OPT_AMBIENT] = {
 				.key	= "minarch_ambient", 
 				.name	= "Ambient Mode",
-				.desc	= "Makes your leds follow on screen colors", // will call getScreenScalingDesc()
+				.desc	= "Makes your leds follow on screen colors",
 				.default_value = 0,
 				.value = 0,
 				.count = 6,
@@ -1680,16 +1709,6 @@ static struct Config {
 				.count = 3,
 				.values = sharpness_labels,
 				.labels = sharpness_labels,
-			},
-			[FE_OPT_TEARING] = {
-				.key	= "minarch_prevent_tearing",
-				.name	= "VSync",
-				.desc	= "Wait for vsync before drawing the next frame.\nLenient only waits when within frame budget.\nStrict always waits.",
-				.default_value = VSYNC_LENIENT,
-				.value = VSYNC_LENIENT,
-				.count = 3,
-				.values = tearing_labels,
-				.labels = tearing_labels,
 			},
 			[FE_OPT_SYNC_REFERENCE] = {
 				.key	= "minarch_sync_reference",
@@ -1756,7 +1775,7 @@ static struct Config {
 			[SH_EXTRASETTINGS] = {
 				.key	= "minarch_shaders_settings", 
 				.name	= "Optional Shaders Settings",
-				.desc	= "If shaders have extra settings they will show up in this settings menu", // will call getScreenScalingDesc()
+				.desc	= "If shaders have extra settings they will show up in this settings menu",
 				.default_value = 1,
 				.value = 1,
 				.count = 0,
@@ -1766,7 +1785,7 @@ static struct Config {
 			[SH_SHADERS_PRESET] = {
 				.key	= "minarch_shaders_preset", 
 				.name	= "Shader / Emulator Settings Preset",
-				.desc	= "Load a premade shaders/emulators config.\nTo try out a preset, exit the game without saving settings!", // will call getScreenScalingDesc()
+				.desc	= "Load a premade shaders/emulators config.\nTo try out a preset, exit the game without saving settings!",
 				.default_value = 1,
 				.value = 1,
 				.count = 0,
@@ -1776,7 +1795,7 @@ static struct Config {
 			[SH_NROFSHADERS] = {
 				.key	= "minarch_nrofshaders", 
 				.name	= "Number of Shaders",
-				.desc	= "Number of shaders 1 to 3", // will call getScreenScalingDesc()
+				.desc	= "Number of shaders 1 to 3",
 				.default_value = 0,
 				.value = 0,
 				.count = 4,
@@ -1787,7 +1806,7 @@ static struct Config {
 			[SH_SHADER1] = {
 				.key	= "minarch_shader1", 
 				.name	= "Shader 1",
-				.desc	= "Shader 1 program to run", // will call getScreenScalingDesc()
+				.desc	= "Shader 1 program to run",
 				.default_value = 1,
 				.value = 1,
 				.count = 0,
@@ -1797,7 +1816,7 @@ static struct Config {
 			[SH_SHADER1_FILTER] = {
 				.key	= "minarch_shader1_filter", 
 				.name	= "Shader 1 Filter",
-				.desc	= "Method of upscaling, NEAREST or LINEAR", // will call getScreenScalingDesc()
+				.desc	= "Method of upscaling, NEAREST or LINEAR",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1807,7 +1826,7 @@ static struct Config {
 			[SH_SRCTYPE1] = {
 				.key	= "minarch_shader1_srctype", 
 				.name	= "Shader 1 Source type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1817,7 +1836,7 @@ static struct Config {
 			[SH_SCALETYPE1] = {
 				.key	= "minarch_shader1_scaletype", 
 				.name	= "Shader 1 Texture Type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1827,7 +1846,7 @@ static struct Config {
 			[SH_UPSCALE1] = {
 				.key	= "minarch_shader1_upscale", 
 				.name	= "Shader 1 Scale",
-				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)",
 				.default_value = 1,
 				.value = 1,
 				.count = 9,
@@ -1837,7 +1856,7 @@ static struct Config {
 			[SH_SHADER2] = {
 				.key	= "minarch_shader2", 
 				.name	= "Shader 2",
-				.desc	= "Shader 2 program to run", // will call getScreenScalingDesc()
+				.desc	= "Shader 2 program to run",
 				.default_value = 0,
 				.value = 0,
 				.count = 0,
@@ -1848,7 +1867,7 @@ static struct Config {
 			[SH_SHADER2_FILTER] = {
 				.key	= "minarch_shader2_filter", 
 				.name	= "Shader 2 Filter",
-				.desc	= "Method of upscaling, NEAREST or LINEAR", // will call getScreenScalingDesc()
+				.desc	= "Method of upscaling, NEAREST or LINEAR",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1858,7 +1877,7 @@ static struct Config {
 			[SH_SRCTYPE2] = {
 				.key	= "minarch_shader2_srctype", 
 				.name	= "Shader 2 Source type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1868,7 +1887,7 @@ static struct Config {
 			[SH_SCALETYPE2] = {
 				.key	= "minarch_shader2_scaletype", 
 				.name	= "Shader 2 Texture Type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1878,7 +1897,7 @@ static struct Config {
 			[SH_UPSCALE2] = {
 				.key	= "minarch_shader2_upscale", 
 				.name	= "Shader 2 Scale",
-				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)",
 				.default_value = 0,
 				.value = 0,
 				.count = 9,
@@ -1888,7 +1907,7 @@ static struct Config {
 			[SH_SHADER3] = {
 				.key	= "minarch_shader3", 
 				.name	= "Shader 3",
-				.desc	= "Shader 3 program to run", // will call getScreenScalingDesc()
+				.desc	= "Shader 3 program to run",
 				.default_value = 2,
 				.value = 2,
 				.count = 0,
@@ -1899,7 +1918,7 @@ static struct Config {
 			[SH_SHADER3_FILTER] = {
 				.key	= "minarch_shader3_filter", 
 				.name	= "Shader 3 Filter",
-				.desc	= "Method of upscaling, NEAREST or LINEAR", // will call getScreenScalingDesc()
+				.desc	= "Method of upscaling, NEAREST or LINEAR",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1909,7 +1928,7 @@ static struct Config {
 			[SH_SRCTYPE3] = {
 				.key	= "minarch_shader3_srctype", 
 				.name	= "Shader 3 Source type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1919,7 +1938,7 @@ static struct Config {
 			[SH_SCALETYPE3] = {
 				.key	= "minarch_shader3_scaletype", 
 				.name	= "Shader 3 Texture Type",
-				.desc	= "This will choose resolution source to scale from", // will call getScreenScalingDesc()
+				.desc	= "This will choose resolution source to scale from",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1929,7 +1948,7 @@ static struct Config {
 			[SH_UPSCALE3] = {
 				.key	= "minarch_shader3_upscale", 
 				.name	= "Shader 3 Scale",
-				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)", // will call getScreenScalingDesc()
+				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)",
 				.default_value = 0,
 				.value = 0,
 				.count = 9,
@@ -2017,8 +2036,6 @@ static void setOverclock(int i) {
 		}
     }
 }
-static int toggle_thread = 0;
-static int shadersreload = 0;
 static void Config_syncFrontend(char* key, int value) {
 	int i = -1;
 	if (exactMatch(key,config.frontend.options[FE_OPT_SCALING].key)) {
@@ -2075,10 +2092,6 @@ static void Config_syncFrontend(char* key, int value) {
 		GFX_setSharpness(value);
 		i = FE_OPT_SHARPNESS;
 	}
-	else if (exactMatch(key,config.frontend.options[FE_OPT_TEARING].key)) {
-		prevent_tearing = value;
-		i = FE_OPT_TEARING;
-	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_SYNC_REFERENCE].key)) {
 		sync_ref = value;
 		i = FE_OPT_SYNC_REFERENCE;
@@ -2104,7 +2117,20 @@ static void Config_syncFrontend(char* key, int value) {
 	option->value = value;
 }
 
-char** list_files_in_folder(const char* folderPath, int* fileCount, const char* extensionFilter) {
+// ensure live gameplay immediately picks up scaler/effect changes triggered via shortcuts
+static void apply_live_video_reset(void) {
+	// defer work to the video thread: mark scaler dirty (shader reset not needed here)
+	renderer.dst_p = 0;
+	// If shaders are disabled (0 passes), force a reset so the default pipeline rebuilds
+	if (config.shaders.options[SH_NROFSHADERS].value == 0) {
+		GFX_resetShaders();
+		shader_reset_suppressed = 0;
+	} else {
+		shader_reset_suppressed = 1; // skip reset for >0 shader pipelines
+	}
+}
+
+char** list_files_in_folder(const char* folderPath, int* fileCount, const char* defaultElement, const char* extensionFilter) {
     DIR* dir = opendir(folderPath);
     if (!dir) {
         perror("opendir");
@@ -2116,7 +2142,21 @@ char** list_files_in_folder(const char* folderPath, int* fileCount, const char* 
     char** fileList = NULL;
     *fileCount = 0;
 
+	if(defaultElement) {
+		fileList = malloc(sizeof(char* ) * 2);
+		fileList[0] = strdup(defaultElement);
+		fileList[1] = NULL;
+		(*fileCount)++;
+	}
+
     while ((entry = readdir(dir)) != NULL) {
+		// skip all entries starting with ._ (hidden files on macOS)
+		if (entry->d_name[0] == '.' && entry->d_name[1] == '_')
+			continue;
+		// skip macOS .DS_Store files
+		if (strcmp(entry->d_name, ".DS_Store") == 0)
+			continue;
+		
         char fullPath[1024];
         snprintf(fullPath, sizeof(fullPath), "%s/%s", folderPath, entry->d_name);
 
@@ -2128,7 +2168,7 @@ char** list_files_in_folder(const char* folderPath, int* fileCount, const char* 
                 }
             }
 
-            char** temp = realloc(fileList, sizeof(char*) * (*fileCount + 2)); 
+            char** temp = realloc(fileList, sizeof(char*) * (*fileCount + 1)); 
             if (!temp) {
                 perror("realloc");
                 for (int i = 0; i < *fileCount; ++i) {
@@ -2140,7 +2180,6 @@ char** list_files_in_folder(const char* folderPath, int* fileCount, const char* 
             }
             fileList = temp;
             fileList[*fileCount] = strdup(entry->d_name);
-            fileList[*fileCount + 1] = NULL;
             (*fileCount)++;
         }
     }
@@ -2158,11 +2197,21 @@ char** list_files_in_folder(const char* folderPath, int* fileCount, const char* 
         }
     }
 
+	// NUll terminate the list
+	char** temp = realloc(fileList, sizeof(char*) * (*fileCount + 1));
+	if (!temp) {
+		perror("realloc");
+		for (int i = 0; i < *fileCount; ++i) {
+			free(fileList[i]);
+		}
+		free(fileList);
+		return NULL;
+	}
+	fileList = temp;
+	fileList[*fileCount] = NULL;
+
     return fileList;
 }
-
-
-
 
 static void OptionList_setOptionValue(OptionList* list, const char* key, const char* value);
 enum {
@@ -2239,51 +2288,36 @@ static void Config_init(void) {
 		button->retro = retro_id;
 		button->local = local_id;
 	};
+
+	// populate shader presets
+	// TODO: None option?
+	int preset_filecount;
+	char** preset_filelist = list_files_in_folder(SHADERS_FOLDER, &preset_filecount, NULL, ".cfg");
+	config.shaders.options[SH_SHADERS_PRESET].values = preset_filelist;
 	
 	// populate shader options
+	// TODO: None option?
+	// TODO: Why do we do this twice? (see OptionShaders_openMenu)
 	int filecount;
-	char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount,NULL);
-	int preset_filecount;
-	char** preset_filelist = list_files_in_folder(SHADERS_FOLDER, &preset_filecount,".cfg");
-	
+	char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount, NULL, NULL);
+
 	config.shaders.options[SH_SHADER1].values = filelist;
-	config.shaders.options[SH_SHADER2].values = filelist;
-	config.shaders.options[SH_SHADER3].values = filelist;
-	config.shaders.options[SH_SHADERS_PRESET].values = preset_filelist;
-
 	config.shaders.options[SH_SHADER1].labels = filelist;
-	config.shaders.options[SH_SHADER2].labels = filelist;
-	config.shaders.options[SH_SHADER3].labels = filelist;
-	config.shaders.options[SH_SHADERS_PRESET].labels = preset_filelist;
-
 	config.shaders.options[SH_SHADER1].count = filecount;
+
+	config.shaders.options[SH_SHADER2].values = filelist;
+	config.shaders.options[SH_SHADER2].labels = filelist;
 	config.shaders.options[SH_SHADER2].count = filecount;
+
+	config.shaders.options[SH_SHADER3].values = filelist;
+	config.shaders.options[SH_SHADER3].labels = filelist;
 	config.shaders.options[SH_SHADER3].count = filecount;
-	config.shaders.options[SH_SHADERS_PRESET].count = preset_filecount;
 	
-	char overlaypath[255];
+	char overlaypath[MAX_PATH];
 	snprintf(overlaypath, sizeof(overlaypath), "%s/%s", OVERLAYS_FOLDER, core.tag);
-	char** overlaylist = list_files_in_folder(overlaypath, &filecount,NULL);
+	char** overlaylist = list_files_in_folder(overlaypath, &filecount, "None", NULL);
 
 	if (overlaylist) {
-		int newcount = filecount + 1;
-		char** newlist = malloc(sizeof(char*) * (newcount + 1)); // +1 for NULL terminator
-		if (!newlist) {
-			LOG_info("failed to make newlist");
-			return;
-		}
-		for (int i = 0; i < filecount; i++) {
-			newlist[i + 1] = overlaylist[i];
-		}
-
-		newlist[0] = strdup("None");  
-		newlist[newcount] = NULL;  
-		
-		free(overlaylist);
-
-		overlaylist = newlist;
-		filecount = newcount;
-
 		config.frontend.options[FE_OPT_OVERLAY].labels = overlaylist;
 		config.frontend.options[FE_OPT_OVERLAY].values = overlaylist;
 		config.frontend.options[FE_OPT_OVERLAY].count = filecount;
@@ -2421,8 +2455,6 @@ static void Config_load(void) {
 	}
 	else if (exists(system_path)) config.system_cfg = allocFile(system_path);
 	else config.system_cfg = NULL;
-	
-	
 	
 	// LOG_info("config.system_cfg: %s\n", config.system_cfg);
 	
@@ -2596,18 +2628,16 @@ static void Config_restore(void) {
 }
 
 void readShadersPreset(int i) {
-		char shaderspath[MAX_PATH] = {0};
-		sprintf(shaderspath, SHADERS_FOLDER "/%s", config.shaders.options[SH_SHADERS_PRESET].values[i]);
-		LOG_info("read shaders preset %s\n",shaderspath);
-		if (exists(shaderspath)) {
-			config.shaders_preset = allocFile(shaderspath);
-			Config_readOptionsString(config.shaders_preset);
-		}
-		else config.shaders_preset = NULL;
-		
-
-		
+	char shaderspath[MAX_PATH] = {0};
+	sprintf(shaderspath, SHADERS_FOLDER "/%s", config.shaders.options[SH_SHADERS_PRESET].values[i]);
+	LOG_info("read shaders preset %s\n",shaderspath);
+	if (exists(shaderspath)) {
+		config.shaders_preset = allocFile(shaderspath);
+		Config_readOptionsString(config.shaders_preset);
+	}
+	else config.shaders_preset = NULL;
 }
+
 void loadShaderSettings(int i) {
 	int menucount = 0;
 	config.shaderpragmas[i].options = calloc(32 + 1, sizeof(Option));
@@ -2656,13 +2686,11 @@ static void Config_syncShaders(char* key, int value) {
 		readShadersPreset(value);
 		i = SH_SHADERS_PRESET;
 	}
-	if (exactMatch(key,config.shaders.options[SH_NROFSHADERS].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_NROFSHADERS].key)) {
 		GFX_setShaders(value);
-		shadersreload = 1;
 		i = SH_NROFSHADERS;
 	}
-
-	if (exactMatch(key, config.shaders.options[SH_SHADER1].key)) {
+	else if (exactMatch(key, config.shaders.options[SH_SHADER1].key)) {
 		char** shaderList = config.shaders.options[SH_SHADER1].values;
 		if (shaderList) {
 			LOG_info("minarch: updating shader 1 - %i\n",value);
@@ -2675,11 +2703,11 @@ static void Config_syncShaders(char* key, int value) {
 		}
 		loadShaderSettings(0);
 	}
-	if (exactMatch(key,config.shaders.options[SH_SHADER1_FILTER].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SHADER1_FILTER].key)) {
 		GFX_updateShader(0,NULL,NULL,&value,NULL,NULL);
 		i = SH_SHADER1_FILTER;
 	}
-	if (exactMatch(key,config.shaders.options[SH_SRCTYPE1].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SRCTYPE1].key)) {
 		GFX_updateShader(0,NULL,NULL,NULL,NULL,&value);
 		i = SH_SRCTYPE1;
 	}
@@ -2687,11 +2715,11 @@ static void Config_syncShaders(char* key, int value) {
 		GFX_updateShader(0,NULL,NULL,NULL,&value,NULL);
 		i = SH_SCALETYPE1;
 	}
-	if (exactMatch(key,config.shaders.options[SH_UPSCALE1].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_UPSCALE1].key)) {
 		GFX_updateShader(0,NULL,&value,NULL,NULL,NULL);
 		i = SH_UPSCALE1;
 	}
-	if (exactMatch(key, config.shaders.options[SH_SHADER2].key)) {
+	else if (exactMatch(key, config.shaders.options[SH_SHADER2].key)) {
 		char** shaderList = config.shaders.options[SH_SHADER2].values;
 		if (shaderList) {
 			LOG_info("minarch: updating shader 2 - %i\n",value);
@@ -2704,23 +2732,23 @@ static void Config_syncShaders(char* key, int value) {
 		}
 		loadShaderSettings(1);
 	}
-	if (exactMatch(key,config.shaders.options[SH_SHADER2_FILTER].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SHADER2_FILTER].key)) {
 		GFX_updateShader(1,NULL,NULL,&value,NULL,NULL);
 		i = SH_SHADER2_FILTER;
 	}
-	if (exactMatch(key,config.shaders.options[SH_SRCTYPE2].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SRCTYPE2].key)) {
 		GFX_updateShader(1,NULL,NULL,NULL,NULL,&value);
 		i = SH_SRCTYPE2;
 	}
-	if (exactMatch(key,config.shaders.options[SH_SCALETYPE2].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SCALETYPE2].key)) {
 		GFX_updateShader(1,NULL,NULL,NULL,&value,NULL);
 		i = SH_SCALETYPE2;
 	}
-	if (exactMatch(key,config.shaders.options[SH_UPSCALE2].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_UPSCALE2].key)) {
 		GFX_updateShader(1,NULL,&value,NULL,NULL,NULL);
 		i = SH_UPSCALE2;
 	}
-	if (exactMatch(key, config.shaders.options[SH_SHADER3].key)) {
+	else if (exactMatch(key, config.shaders.options[SH_SHADER3].key)) {
 		char** shaderList = config.shaders.options[SH_SHADER3].values;
 		if (shaderList) {
 			LOG_info("minarch: updating shader 3 - %i\n",value);
@@ -2733,7 +2761,7 @@ static void Config_syncShaders(char* key, int value) {
 		}
 		loadShaderSettings(2);
 	}
-	if (exactMatch(key,config.shaders.options[SH_SHADER3_FILTER].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SHADER3_FILTER].key)) {
 		GFX_updateShader(2,NULL,NULL,&value,NULL,NULL);
 		i = SH_SHADER3_FILTER;
 	}
@@ -2741,11 +2769,11 @@ static void Config_syncShaders(char* key, int value) {
 		GFX_updateShader(2,NULL,NULL,NULL,NULL,&value);
 		i = SH_SRCTYPE3;
 	}
-	if (exactMatch(key,config.shaders.options[SH_SCALETYPE3].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_SCALETYPE3].key)) {
 		GFX_updateShader(2,NULL,NULL,NULL,&value,NULL);
 		i = SH_SCALETYPE3;
 	}
-	if (exactMatch(key,config.shaders.options[SH_UPSCALE3].key)) {
+	else if (exactMatch(key,config.shaders.options[SH_UPSCALE3].key)) {
 		GFX_updateShader(2,NULL,&value,NULL,NULL,NULL);
 		i = SH_UPSCALE3;
 	}
@@ -2753,7 +2781,6 @@ static void Config_syncShaders(char* key, int value) {
 	if (i==-1) return;
 	Option* option = &config.shaders.options[i];
 	option->value = value;
-	shadersreload = 1;
 }
 
 ////////
@@ -2780,7 +2807,6 @@ void initShaders() {
 			Config_syncShaders(option->key, option->value);
 		}
 	}
-	shadersreload = 0;
 }
 
 ///////////////////////////////
@@ -3249,14 +3275,11 @@ static void input_poll_callback(void) {
 						putFile(GAME_SWITCHER_PERSIST_PATH, game.path + strlen(SDCARD_PATH));
 						break;
 					case SHORTCUT_CYCLE_SCALE:
-						screen_scaling += 1;
-						int count = config.frontend.options[FE_OPT_SCALING].count;
-						if (screen_scaling>=count) screen_scaling -= count;
+						screen_scaling = (screen_scaling + 1) % config.frontend.options[FE_OPT_SCALING].count;
 						Config_syncFrontend(config.frontend.options[FE_OPT_SCALING].key, screen_scaling);
 						break;
 					case SHORTCUT_CYCLE_EFFECT:
-						screen_effect += 1;
-						if (screen_effect>=EFFECT_COUNT) screen_effect -= EFFECT_COUNT;
+						screen_effect = (screen_effect + 1) % config.frontend.options[FE_OPT_EFFECT].count;
 						Config_syncFrontend(config.frontend.options[FE_OPT_EFFECT].key, screen_effect);
 						break;
 					default: break;
@@ -4082,70 +4105,162 @@ static const char* bitmap_font[] = {
         "1   1"
         "1   1"
         "1   1",
+	['D'] = 
+		"1111 "
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1111 ",
+	['J'] = 
+		"  111"
+		"    1"
+		"    1"
+		"    1"
+		"    1"
+		"1   1"
+		"1   1"
+		"1   1"
+		" 111 ",
+	['A'] = 
+		"  1  "
+		" 1 1 "
+		"1   1"
+		"1   1"
+		"11111"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1",
+	['M'] = 
+		"1   1"
+		"11 11"
+		"1 1 1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1",
+	[':'] = 
+		"     "
+		"     "
+		"  1  "
+		"     "
+		"     "
+		"     "
+		"  1  "
+		"     "
+		"     ",
+	['B'] = 
+		"1111 "
+		"1   1"
+		"1   1"
+		"1111 "
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1111 ",
+	['C'] = 
+		" 111 "
+		"1   1"
+		"1    "
+		"1    "
+		"1    "
+		"1    "
+		"1    "
+		"1   1"
+		" 111 ",
+	['N'] = 
+		"1   1"
+		"1   1"
+		"11  1"
+		"1   1"
+		"1 1 1"
+		"1   1"
+		"1  11"
+		"1   1"
+		"1   1",
+	['H'] = 
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"11111"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1",
+};
 
-	};
+void drawRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
+	for (int _x = x; _x < x + w; _x++) {
+		data[_x + y * stride] = c;
+		data[_x + (y + h - 1) * stride] = c;
+	}
+	for (int _y = y; _y < y + h; _y++) {
+		data[x + _y * stride] = c;
+		data[x + w - 1 + _y * stride] = c;
+	}
+}
 
-
-	void drawRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
+void fillRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
+	for (int _y = y; _y < y + h; _y++) {
 		for (int _x = x; _x < x + w; _x++) {
-			data[_x + y * stride] = c;
-			data[_x + (y + h - 1) * stride] = c;
-		}
-		for (int _y = y; _y < y + h; _y++) {
-			data[x + _y * stride] = c;
-			data[x + w - 1 + _y * stride] = c;
+			data[_x + _y * stride] = c;
 		}
 	}
-	
-	
-	void fillRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride) {
-		for (int _y = y; _y < y + h; _y++) {
-			for (int _x = x; _x < x + w; _x++) {
-				data[_x + _y * stride] = c;
-			}
-		}
-	}
-	
-	static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int stride, int width, int height) {
-		#define CHAR_WIDTH 5
-		#define CHAR_HEIGHT 9
-		#define LETTERSPACING 1
-	
-		int len = strlen(text);
-		int w = ((CHAR_WIDTH + LETTERSPACING) * len) - 1;
-		int h = CHAR_HEIGHT;
-	
-		if (ox < 0) ox = width - w + ox;
-		if (oy < 0) oy = height - h + oy;
-	
-		// Clamp to screen bounds (optional but recommended)
-		if (ox + w > width) w = width - ox;
-		if (oy + h > height) h = height - oy;
-	
-		// Draw background rectangle (black RGBA8888)
-		fillRect(ox, oy, w, h, 0x000000FF, data, stride);
-	
-		data += oy * stride + ox;
-	
-		for (int y = 0; y < CHAR_HEIGHT; y++) {
-			uint32_t* row = data + y * stride;
-			for (int i = 0; i < len; i++) {
-				const char* c = bitmap_font[(unsigned char)text[i]];
-				for (int x = 0; x < CHAR_WIDTH; x++) {
-					if (c[y * CHAR_WIDTH + x] == '1') {
-						*row = 0xFFFFFFFF;  // white RGBA8888
-					}
-					row++;
+}
+
+static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int stride, int width, int height) {
+	#define CHAR_WIDTH 5
+	#define CHAR_HEIGHT 9
+	#define LETTERSPACING 1
+
+	int len = strlen(text);
+	int w = ((CHAR_WIDTH + LETTERSPACING) * len) - 1;
+	int h = CHAR_HEIGHT;
+
+	if (ox < 0) ox = width - w + ox;
+	if (oy < 0) oy = height - h + oy;
+
+	if (ox < 0) ox = 0;
+	if (oy < 0) oy = 0;
+
+	// Clamp to screen bounds (optional but recommended)
+	if (ox + w > width) w = width - ox;
+	if (oy + h > height) h = height - oy;
+
+	if (w <= 0 || h <= 0) return;
+
+	// Draw background rectangle (black ARGB8888)
+	fillRect(ox, oy, w, h, 0xFF000000, data, stride);
+
+	data += oy * stride + ox;
+
+	for (int y = 0; y < h; y++) {
+		// uint32_t* row = data + y * stride;
+		int current_x = 0;
+		for (int i = 0; i < len; i++) {
+			const char* c = bitmap_font[(unsigned char)text[i]];
+			if (!c) c = bitmap_font[' '];
+			for (int x = 0; x < CHAR_WIDTH; x++) {
+				if (current_x >= w) break;
+
+				if (c[y * CHAR_WIDTH + x] == '1') {
+					data[y * stride + current_x] = 0xFFFFFFFF;  // white ARGBB8888
 				}
-				row += LETTERSPACING;
+				current_x++;
 			}
+			if (current_x >= w) break;
+			current_x += LETTERSPACING;
 		}
 	}
-	
-	
-	
-
-
+}
 
 void drawGauge(int x, int y, float percent, int width, int height, uint32_t *data, int stride) {
 	// Clamp percent to 0.0 - 1.0
@@ -4158,8 +4273,8 @@ void drawGauge(int x, int y, float percent, int width, int height, uint32_t *dat
 	uint8_t alpha = 255;
 
 	uint32_t fillColor = (red << 24) | (green << 16) | (blue << 8) | alpha;
-	uint32_t borderColor = 0xFFFFFFFF;  // White RGBA
-	uint32_t bgColor = 0x000000FF;      // Black RGBA
+	uint32_t borderColor = 0xFFFFFFFF;  // White ARGB
+	uint32_t bgColor = 0xFF000000;      // Black ARGB
 
 	// Background
 	fillRect(x, y, width, height, bgColor, data, stride);
@@ -4172,23 +4287,7 @@ void drawGauge(int x, int y, float percent, int width, int height, uint32_t *dat
 	drawRect(x, y, width, height, borderColor, data, stride);
 }
 
-
-
 ///////////////////////////////
-
-static int cpu_ticks = 0;
-static int fps_ticks = 0;
-static int use_ticks = 0;
-static double fps_double = 0;
-static double cpu_double = 0;
-static double use_double = 0;
-static uint32_t sec_start = 0;
-
-#ifdef USES_SWSCALER
-	static int fit = 1;
-#else
-	static int fit = 0;
-#endif	
 
 static void selectScaler(int src_w, int src_h, int src_p) {
 	int src_x,src_y,dst_x,dst_y,dst_w,dst_h,dst_p,scale;
@@ -4197,7 +4296,6 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 	int aspect_w = src_w;
 	int aspect_h = CEIL_DIV(aspect_w, core.aspect_ratio);
 	
-	// TODO: make sure this doesn't break fit==1 devices
 	if (aspect_h<src_h) {
 		aspect_h = src_h;
 		aspect_w = aspect_h * core.aspect_ratio;
@@ -4288,28 +4386,6 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 			dst_y = (DEVICE_HEIGHT - scaled_h) / 2; // should always be positive
 		}
 	}
-	else if (fit) {
-		// these both will use a generic nn scaler
-		if (scaling==SCALE_FULLSCREEN) {
-			sprintf(scaler_name, "full fit");
-			dst_w = DEVICE_WIDTH;
-			dst_h = DEVICE_HEIGHT;
-			dst_p = DEVICE_PITCH;
-			scale = -1; // nearest neighbor
-		}
-		else {
-			double scale_f = MIN(((double)DEVICE_WIDTH)/aspect_w, ((double)DEVICE_HEIGHT)/aspect_h);
-			LOG_info("scale_f:%f\n", scale_f);
-			
-			sprintf(scaler_name, "aspect fit");
-			dst_w = aspect_w * scale_f;
-			dst_h = aspect_h * scale_f;
-			dst_p = DEVICE_PITCH;
-			dst_x = (DEVICE_WIDTH  - dst_w) / 2;
-			dst_y = (DEVICE_HEIGHT - dst_h) / 2;
-			scale = (scale_f==1.0 && dst_w==src_w && dst_h==src_h) ? 1 : -1;
-		}
-	} 
 	else {
 		int scale_x = CEIL_DIV(DEVICE_WIDTH, src_w);
 		int scale_y = CEIL_DIV(DEVICE_HEIGHT,src_h);
@@ -4356,8 +4432,6 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 			dst_p = dst_w * FIXED_BPP;
 			
 			sprintf(scaler_name, "raw%i", scale);
-			LOG_info("ignore core aspect %ix%i\n\n",dst_w,dst_h);
-			
 		}
 		else {
 			double src_aspect_ratio = ((double)src_w) / src_h;
@@ -4413,43 +4487,22 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 		}
 	}
 	
-	// TODO: need to sanity check scale and demands on the buffer
-	
-	// LOG_info("aspect: %ix%i (%f)\n", aspect_w,aspect_h,core.aspect_ratio);
-	
 	renderer.src_x = src_x;
 	renderer.src_y = src_y;
 	renderer.src_w = src_w;
 	renderer.src_h = src_h;
 	renderer.src_p = src_p;
+
 	renderer.dst_x = dst_x;
 	renderer.dst_y = dst_y;
 	renderer.dst_w = dst_w;
 	renderer.dst_h = dst_h;
 	renderer.dst_p = dst_p;
+
 	renderer.scale = scale;
 	renderer.aspect = (scaling==SCALE_ASPECT_SCREEN) ? aspect: (scaling==SCALE_NATIVE||scaling==SCALE_CROPPED)?0:(scaling==SCALE_FULLSCREEN?-1:core.aspect_ratio);
 	renderer.blit = GFX_getScaler(&renderer);
-		
-	// LOG_info("coreAR:%0.3f fixedAR:%0.3f srcAR: %0.3f\nname:%s\nfit:%i scale:%i\nsrc_x:%i src_y:%i src_w:%i src_h:%i src_p:%i\ndst_x:%i dst_y:%i dst_w:%i dst_h:%i dst_p:%i\naspect_w:%i aspect_h:%i\n",
-	// 	core.aspect_ratio, ((double)DEVICE_WIDTH) / DEVICE_HEIGHT, ((double)src_w) / src_h,
-	// 	scaler_name,
-	// 	fit,scale,
-	// 	src_x,src_y,src_w,src_h,src_p,
-	// 	dst_x,dst_y,dst_w,dst_h,dst_p,
-	// 	aspect_w,aspect_h
-	// );
-
-	if (fit) {
-		dst_w = DEVICE_WIDTH;
-		dst_h = DEVICE_HEIGHT;
-	}
-	// dont need this anymore with OpenGL
-	// if (screen->w!=dst_w || screen->h!=dst_w || screen->pitch!=dst_p) {
-		// screen = GFX_resize(dst_w,dst_h,dst_p);
-	// }
 }
-static int firstframe = 1;
 static void screen_flip(SDL_Surface* screen) {
 	
 	if (use_core_fps) {
@@ -4460,7 +4513,6 @@ static void screen_flip(SDL_Surface* screen) {
 		// GFX_flip(screen);
 	}
 }
-
 
 // couple of animation functions for pixel data keeping them all cause wanna use them later
 void applyFadeIn(uint32_t **data, size_t pitch, unsigned width, unsigned height, int *frame_counter, int max_frames) {
@@ -4482,17 +4534,17 @@ void applyFadeIn(uint32_t **data, size_t pitch, unsigned width, unsigned height,
 
             uint32_t color = (*data)[idx];
 
-            uint8_t a = (color >> 24) & 0xFF;
-            uint8_t b = (color >> 16) & 0xFF;
-            uint8_t g = (color >> 8) & 0xFF;
-            uint8_t r = (color >> 0) & 0xFF;
+			uint8_t a = (color >> 24) & 0xFF;
+			uint8_t b = (color >> 16) & 0xFF;
+			uint8_t g = (color >> 8) & 0xFF;
+			uint8_t r = (color >> 0) & 0xFF;
 
             r = (uint8_t)(r * fade_alpha);
             g = (uint8_t)(g * fade_alpha);
             b = (uint8_t)(b * fade_alpha);
             a = (uint8_t)(a * fade_alpha);
 
-            temp_buffer[idx] = (a << 24) | (b << 16) | (g << 8) | r;
+			temp_buffer[idx] = ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
         }
     }
 
@@ -4500,108 +4552,61 @@ void applyFadeIn(uint32_t **data, size_t pitch, unsigned width, unsigned height,
     *data = temp_buffer;
 }
 
-void applyZoomFadeIn(uint32_t **data, size_t pitch, unsigned width, unsigned height, int *frame_counter, int max_frames) {
-    size_t pixels_per_row = pitch / sizeof(uint32_t);
-    static uint32_t temp_buffer[1920 * 1080];
+static void drawDebugHud(const void* data, unsigned width, unsigned height, size_t pitch, enum retro_pixel_format fmt)
+{
+	if (show_debug && !isnan(perf.ratio) && !isnan(perf.fps) && !isnan(perf.req_fps)  && !isnan(perf.buffer_ms) &&
+		perf.buffer_size >= 0  && perf.buffer_free >= 0 && SDL_GetTicks() > 5000) {
+		int x = 2 + renderer.src_x;
+		int y = 2 + renderer.src_y;
+		char debug_text[250];
+		int scale = renderer.scale;
+		if (scale==-1) scale = 1; // nearest neighbor flag
 
-    if (*frame_counter >= max_frames)
-        return;
+		sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,perf.samplerate_in,perf.samplerate_out);
+		blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
+		
+		sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", perf.ratio,
+				perf.buffer_size,perf.buffer_ms, perf.buffer_free, perf.buffer_target,perf.avg_buffer_free);
+		blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
+					height);
 
-    float progress = (float)(*frame_counter) / (float)max_frames;
-    float eased = progress * progress * (3.0f - 2.0f * progress);
+		sprintf(debug_text, "%i,%i %ix%i", renderer.dst_x,renderer.dst_y, renderer.src_w*scale,renderer.src_h*scale);
+		blitBitmapText(debug_text,-x,y,(uint32_t*)data,pitch / 4, width,height);
+	
+		sprintf(debug_text, "%ix%i,%i", renderer.dst_w,renderer.dst_h, fmt == RETRO_PIXEL_FORMAT_XRGB8888 ? 8888 : 565);
+		blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
 
-    float start_zoom = 6.0f;
-    float end_zoom = 1.0f;
-    float zoom = start_zoom - eased * (start_zoom - end_zoom);
+		// Frame timing stats
+		sprintf(debug_text, "%.1f/%.1f A:%.1f M:%.1f D:%d", perf.fps, perf.req_fps, perf.avg_frame_ms, perf.max_frame_ms, perf.frame_drops);
+		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
+		
+		// CPU stats
+		PLAT_getCPUSpeed();
+		PLAT_getCPUTemp();
+		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.cpu_usage, perf.cpu_speed, perf.cpu_temp);
+		blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
+		
+		// GPU stats
+		PLAT_getGPUUsage();
+		PLAT_getGPUSpeed();
+		PLAT_getGPUTemp();
+		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.gpu_usage, perf.gpu_speed, perf.gpu_temp);
+		blitBitmapText(debug_text,x,-y - 28,(uint32_t*)data,pitch / 4, width,height);
 
-    float fade_alpha = eased;
-
-    int center_x = width / 2;
-    int center_y = height / 2;
-
-    for (unsigned y = 0; y < height; ++y) {
-        for (unsigned x = 0; x < width; ++x) {
-            float src_x = center_x + (x - center_x) / zoom;
-            float src_y = center_y + (y - center_y) / zoom;
-
-            int ix = (int)src_x;
-            int iy = (int)src_y;
-
-            size_t dst_idx = y * pixels_per_row + x;
-            uint32_t color = 0xFF000000; 
-
-            if (ix >= 0 && ix < (int)width && iy >= 0 && iy < (int)height) {
-                size_t src_idx = iy * pixels_per_row + ix;
-                color = (*data)[src_idx];
-            }
-
-            uint8_t a = (color >> 24) & 0xFF;
-            uint8_t b = (color >> 16) & 0xFF;
-            uint8_t g = (color >> 8) & 0xFF;
-            uint8_t r = (color >> 0) & 0xFF;
-
-            r = (uint8_t)(r * fade_alpha);
-            g = (uint8_t)(g * fade_alpha);
-            b = (uint8_t)(b * fade_alpha);
-            a = (uint8_t)(a * fade_alpha);
-
-            temp_buffer[dst_idx] = (a << 24) | (b << 16) | (g << 8) | r;
-        }
-    }
-
-    (*frame_counter)++;
-    *data = temp_buffer;
-}
-
-
-// Looney Tunes opening effect :D
-void applyCircleReveal(uint32_t **data, size_t pitch, unsigned width, unsigned height, int *frame_counter, int max_frames) {
-    static uint32_t temp_buffer[1920 * 1080];
-
-    if (*frame_counter >= max_frames)
-        return;
-
-    uint32_t *src = *data;
-    size_t pixels_per_row = pitch / sizeof(uint32_t);
-
-    float progress = (float)(*frame_counter) / (float)max_frames;
-    float eased = progress * progress * (3.0f - 2.0f * progress);
-
-    float max_radius = sqrtf((float)(width * width + height * height)) * 0.5f;
-    float radius = eased * max_radius;
-
-    int cx = (int)(width / 2);
-    int cy = (int)(height / 2);
-
-    for (unsigned y = 0; y < height; ++y) {
-        for (unsigned x = 0; x < width; ++x) {
-            size_t idx = y * pixels_per_row + x;
-
-            float dx = (float)x - (float)cx;
-            float dy = (float)y - (float)cy;
-            float dist = sqrtf(dx * dx + dy * dy);
-
-            if (dist <= radius) {
-                temp_buffer[idx] = src[idx];
-            } else {
-                uint32_t color = src[idx];
-                uint8_t a = (color >> 24) & 0xFF; 
-                temp_buffer[idx] = (a << 24);  
-            }
-        }
-    }
-
-    (*frame_counter)++;
-    *data = temp_buffer;
+		if(currentshaderpass>0) {
+			sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
+			blitBitmapText(debug_text,x,-y - 42,(uint32_t*)data,pitch / 4, width,height);
+		}
+	
+		double buffer_fill = (double) (perf.buffer_size - perf.buffer_free) / (double) perf.buffer_size;
+		drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
+	}
 }
 
 static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch) {
 	// return;
 	
 	Special_render();
-	
-	// static int tmp_frameskip = 0;
-	// if ((tmp_frameskip++)%2) return;
 	
 	static uint32_t last_flip_time = 0;
 	
@@ -4618,67 +4623,31 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	// 12: 30/150
 	// 10: 30/120 (optimize text off has no effect)
 	//  8: 60/210 (with optimize text off)
-	// you can squeeze more out of every console by turning prevent tearing off
 	// eg. PS@10 60/240
 	if (!data) {
 		return;
 	}
 
-	fps_ticks += 1;
-	
-	if (downsample) pitch /= 2; // everything expects 16 but we're downsampling from 32
-	
 	// if source has changed size (or forced by dst_p==0)
 	// eg. true src + cropped src + fixed dst + cropped dst
 	if (renderer.dst_p==0 || width!=renderer.true_w || height!=renderer.true_h) {
 		selectScaler(width, height, pitch);
 		GFX_clearAll();
-		GFX_resetShaders();
+		if (!shader_reset_suppressed) {
+			GFX_resetShaders();
+		} else {
+			shader_reset_suppressed = 0; // consume suppression after one use
+		}
 	}
 	
 	// debug
-	if (show_debug && !isnan(currentratio) && !isnan(currentfps) && !isnan(currentreqfps)  && !isnan(currentbufferms) &&
-	currentbuffersize >= 0  && currentbufferfree >= 0 && SDL_GetTicks() > 5000) {
-		int x = 2 + renderer.src_x;
-		int y = 2 + renderer.src_y;
-		char debug_text[250];
-		int scale = renderer.scale;
-		if (scale==-1) scale = 1; // nearest neighbor flag
-
-		sprintf(debug_text, "%ix%i %ix %i/%i", renderer.src_w,renderer.src_h, scale,currentsampleratein,currentsamplerateout);
-		blitBitmapText(debug_text,x,y,(uint32_t*)data,pitch / 4, width,height);
-		
-		sprintf(debug_text, "%.03f/%i/%.0f/%i/%i/%i", currentratio,
-				currentbuffersize,currentbufferms, currentbufferfree, currentbuffertarget,avgbufferfree);
-		blitBitmapText(debug_text, x, y + 14, (uint32_t*)data, pitch / 4, width,
-					height);
-
-		sprintf(debug_text, "%i,%i %ix%i", renderer.dst_x,renderer.dst_y, renderer.src_w*scale,renderer.src_h*scale);
-		blitBitmapText(debug_text,-x,y,(uint32_t*)data,pitch / 4, width,height);
-	
-		sprintf(debug_text, "%ix%i", renderer.dst_w,renderer.dst_h);
-		blitBitmapText(debug_text,-x,-y,(uint32_t*)data,pitch / 4, width,height);
-
-		//want this to overwrite bottom right in case screen is too small this info more important tbh
-		PLAT_getCPUTemp();
-		sprintf(debug_text, "%.01f/%.01f/%.0f%%/%ihz/%ic", currentfps, currentreqfps,currentcpuse,currentcpuspeed,currentcputemp);
-		blitBitmapText(debug_text,x,-y,(uint32_t*)data,pitch / 4, width,height);
-
-		sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);
-		blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
-	
-		double buffer_fill = (double) (currentbuffersize - currentbufferfree) / (double) currentbuffersize;
-		drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
-	}
+	drawDebugHud(data, width, height, pitch, fmt);
 	
 	static int frame_counter = 0;
 	const int max_frames = 8; 
 	if(frame_counter<9) {
 		applyFadeIn((uint32_t **) &data, pitch, width, height, &frame_counter, max_frames);
 	}
-
-	// LOG_info("video_refresh_callback: %ix%i@%i %ix%i@%i\n",width,height,pitch,screen->w,screen->h,screen->pitch);
-
 
 	renderer.src = (void*)data;
 	renderer.dst = screen->pixels;
@@ -4688,74 +4657,202 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	last_flip_time = SDL_GetTicks();
 }
 
-
 const void* lastframe = NULL;
-
 static Uint32* rgbaData = NULL;
 static size_t rgbaDataSize = 0;
 
-static void video_refresh_callback(const void* data, unsigned width, unsigned height, size_t pitch) {
+// ARM NEON SIMD optimization for pixel format conversion
+#if defined(__ARM_NEON) || defined(__aarch64__)
+#include <arm_neon.h>
 
-	// I need to check quit here because sometimes quit is true but callback is still called by the core after and it still runs one more frame and it looks ugly :D
-	if(!quit) {
-		if (!rgbaData || rgbaDataSize != width * height) {
-			if (rgbaData) free(rgbaData);
-			rgbaDataSize = width * height;
-			rgbaData = (Uint32*)malloc(rgbaDataSize * sizeof(Uint32));
-			if (!rgbaData) {
-				printf("Failed to allocate memory for RGBA8888 data.\n");
-				return;
-			}
+// Convert 8 RGB565 pixels to RGBA using NEON (processes 16 bytes → 32 bytes)
+static inline void convert_rgb565_to_rgba_neon(const uint16_t* __restrict src, uint32_t* __restrict dst) {
+	// Load 8 RGB565 pixels (128 bits)
+	uint16x8_t rgb565 = vld1q_u16(src);
+	
+	// Extract RGB components using bit manipulation
+	// R: bits 11-15 (5 bits) → scale to 8 bits
+	// G: bits 5-10 (6 bits) → scale to 8 bits  
+	// B: bits 0-4 (5 bits) → scale to 8 bits
+	
+	uint8x8_t r5 = vmovn_u16(vshrq_n_u16(vandq_u16(rgb565, vdupq_n_u16(0xF800)), 11));
+	uint8x8_t g6 = vmovn_u16(vshrq_n_u16(vandq_u16(rgb565, vdupq_n_u16(0x07E0)), 5));
+	uint8x8_t b5 = vmovn_u16(vandq_u16(rgb565, vdupq_n_u16(0x001F)));
+	
+	// Scale 5-bit to 8-bit: (val * 255) / 31 ≈ (val << 3) | (val >> 2)
+	// Scale 6-bit to 8-bit: (val * 255) / 63 ≈ (val << 2) | (val >> 4)
+	uint8x8_t r8 = vorr_u8(vshl_n_u8(r5, 3), vshr_n_u8(r5, 2));
+	uint8x8_t g8 = vorr_u8(vshl_n_u8(g6, 2), vshr_n_u8(g6, 4));
+	uint8x8_t b8 = vorr_u8(vshl_n_u8(b5, 3), vshr_n_u8(b5, 2));
+	uint8x8_t a8 = vdup_n_u8(0xFF);
+	
+	// Interleave RGBA
+	uint8x8x4_t rgba;
+	rgba.val[0] = r8;
+	rgba.val[1] = g8;
+	rgba.val[2] = b8;
+	rgba.val[3] = a8;
+	
+	// Store as RGBA (32 bytes)
+	vst4_u8((uint8_t*)dst, rgba);
+}
+
+// Convert 4 XRGB8888 pixels to RGBA using NEON (processes 16 bytes → 16 bytes)
+static inline void convert_xrgb8888_to_rgba_neon(const uint32_t* __restrict src, uint32_t* __restrict dst) {
+	// Load 4 XRGB8888 pixels
+	uint32x4_t xrgb = vld1q_u32(src);
+	
+	// XRGB8888: 0xXXRRGGBB → RGBA: 0xAABBGGRR
+	// Extract components
+	uint32x4_t r = vandq_u32(vshrq_n_u32(xrgb, 16), vdupq_n_u32(0xFF));
+	uint32x4_t g = vandq_u32(vshrq_n_u32(xrgb, 8), vdupq_n_u32(0xFF));
+	uint32x4_t b = vandq_u32(xrgb, vdupq_n_u32(0xFF));
+	uint32x4_t a = vdupq_n_u32(0xFF);
+	
+	// Reconstruct as RGBA
+	uint32x4_t rgba = vorrq_u32(vorrq_u32(r, vshlq_n_u32(g, 8)), vorrq_u32(vshlq_n_u32(b, 16), vshlq_n_u32(a, 24)));
+	
+	vst1q_u32(dst, rgba);
+}
+#endif
+
+// Convert XRGB8888 to RGBA format (handles pitch correctly)
+static void convert_xrgb8888_to_rgba(const void* src, uint32_t* dst, unsigned width, unsigned height, size_t pitch) {
+	const uint32_t* srcData = (const uint32_t*)src;
+	unsigned srcPitchInPixels = pitch / sizeof(uint32_t);
+	
+	for (unsigned y = 0; y < height; y++) {
+		const uint32_t* srcRow = srcData + y * srcPitchInPixels;
+		uint32_t* dstRow = dst + y * width;
+		unsigned x = 0;
+
+#if defined(__ARM_NEON) || defined(__aarch64__)
+		// NEON: process 4 pixels at a time
+		for (; x + 3 < width; x += 4) {
+			convert_xrgb8888_to_rgba_neon(srcRow + x, dstRow + x);
 		}
-
-		if(ambient_mode && !fast_forward && data)
-			GFX_setAmbientColor(data, width, height,pitch,ambient_mode);
-
-		if (!data) {
-			if (lastframe) {
-				data = lastframe;
-			} else {
-				return; // No data to display
-			}
-		} else if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
-			// convert XRGB8888 to RGBA8888
-			const uint32_t* src = (const uint32_t*)data;
-			for (unsigned i = 0; i < width * height; ++i) {
-				uint32_t pixel = src[i];
-				uint8_t r = (pixel >> 16) & 0xFF;
-				uint8_t g = (pixel >> 8) & 0xFF;
-				uint8_t b = (pixel >> 0) & 0xFF;
-				uint8_t a = 0xFF;
-				rgbaData[i] = (a << 24) | (b << 16) | (g << 8) | r;
-			}
-			data = rgbaData;
-
-		} else {
-			// convert RGB565 to RGBA8888
-			const uint16_t* srcData = (const uint16_t*)data;
-			unsigned srcPitchInPixels = pitch / sizeof(uint16_t); 
-
-			for (unsigned y = 0; y < height; ++y) {
-				for (unsigned x = 0; x < width; ++x) {
-					uint16_t pixel = srcData[y * srcPitchInPixels + x];
-
-					uint8_t r = ((pixel >> 11) & 0x1F) << 3; 
-					uint8_t g = ((pixel >> 5) & 0x3F) << 2;   
-					uint8_t b = (pixel & 0x1F) << 3;          
-					uint8_t a = 0xFF;
-
-					rgbaData[y * width + x] = (a << 24) | (b << 16) | (g << 8) | r;
-				}
-			}
-			data = rgbaData;
-
+#else
+		// Scalar: process 4 pixels at a time for better cache utilization
+		for (; x + 3 < width; x += 4) {
+			uint32_t p0 = srcRow[x], p1 = srcRow[x+1], p2 = srcRow[x+2], p3 = srcRow[x+3];
+			
+			// Swizzle: XRGB -> RGBA (swap R and B, set A=0xFF)
+			dstRow[x]   = (p0 & 0x0000FF00) | ((p0 & 0x00FF0000) >> 16) | ((p0 & 0x000000FF) << 16) | 0xFF000000;
+			dstRow[x+1] = (p1 & 0x0000FF00) | ((p1 & 0x00FF0000) >> 16) | ((p1 & 0x000000FF) << 16) | 0xFF000000;
+			dstRow[x+2] = (p2 & 0x0000FF00) | ((p2 & 0x00FF0000) >> 16) | ((p2 & 0x000000FF) << 16) | 0xFF000000;
+			dstRow[x+3] = (p3 & 0x0000FF00) | ((p3 & 0x00FF0000) >> 16) | ((p3 & 0x000000FF) << 16) | 0xFF000000;
 		}
-
-		pitch = width * sizeof(Uint32);
-		lastframe = data;
-		
-		video_refresh_callback_main(data,width,height,pitch);
+#endif
+		// Handle remaining pixels in the row
+		for (; x < width; x++) {
+			uint32_t pixel = srcRow[x];
+			dstRow[x] = (pixel & 0x0000FF00) | ((pixel & 0x00FF0000) >> 16) | ((pixel & 0x000000FF) << 16) | 0xFF000000;
+		}
 	}
+}
+
+// Convert RGB565 to RGBA format (handles pitch correctly)
+static void convert_rgb565_to_rgba(const void* src, uint32_t* dst, unsigned width, unsigned height, size_t pitch) {
+	const uint16_t* srcData = (const uint16_t*)src;
+	unsigned srcPitchInPixels = pitch / sizeof(uint16_t);
+	
+	for (unsigned y = 0; y < height; y++) {
+		const uint16_t* srcRow = srcData + y * srcPitchInPixels;
+		uint32_t* dstRow = dst + y * width;
+		unsigned x = 0;
+
+#if defined(__ARM_NEON) || defined(__aarch64__)
+		// NEON: process 8 pixels at a time
+		for (; x + 7 < width; x += 8) {
+			convert_rgb565_to_rgba_neon(srcRow + x, dstRow + x);
+		}
+#else
+		// Scalar: process 4 pixels at a time
+		for (; x + 3 < width; x += 4) {
+			uint16_t p0 = srcRow[x], p1 = srcRow[x+1], p2 = srcRow[x+2], p3 = srcRow[x+3];
+			
+			uint8_t r0 = (p0 >> 11) & 0x1F, g0 = (p0 >> 5) & 0x3F, b0 = p0 & 0x1F;
+			uint8_t r1 = (p1 >> 11) & 0x1F, g1 = (p1 >> 5) & 0x3F, b1 = p1 & 0x1F;
+			uint8_t r2 = (p2 >> 11) & 0x1F, g2 = (p2 >> 5) & 0x3F, b2 = p2 & 0x1F;
+			uint8_t r3 = (p3 >> 11) & 0x1F, g3 = (p3 >> 5) & 0x3F, b3 = p3 & 0x1F;
+			
+			r0 = (r0 << 3) | (r0 >> 2); g0 = (g0 << 2) | (g0 >> 4); b0 = (b0 << 3) | (b0 >> 2);
+			r1 = (r1 << 3) | (r1 >> 2); g1 = (g1 << 2) | (g1 >> 4); b1 = (b1 << 3) | (b1 >> 2);
+			r2 = (r2 << 3) | (r2 >> 2); g2 = (g2 << 2) | (g2 >> 4); b2 = (b2 << 3) | (b2 >> 2);
+			r3 = (r3 << 3) | (r3 >> 2); g3 = (g3 << 2) | (g3 >> 4); b3 = (b3 << 3) | (b3 >> 2);
+			
+			dstRow[x]   = (0xFF << 24) | (b0 << 16) | (g0 << 8) | r0;
+			dstRow[x+1] = (0xFF << 24) | (b1 << 16) | (g1 << 8) | r1;
+			dstRow[x+2] = (0xFF << 24) | (b2 << 16) | (g2 << 8) | r2;
+			dstRow[x+3] = (0xFF << 24) | (b3 << 16) | (g3 << 8) | r3;
+		}
+#endif
+		// Handle remaining pixels in the row
+		for (; x < width; x++) {
+			uint16_t pixel = srcRow[x];
+			uint8_t r = (pixel >> 11) & 0x1F;
+			uint8_t g = (pixel >> 5) & 0x3F;
+			uint8_t b = pixel & 0x1F;
+			
+			r = (r << 3) | (r >> 2);
+			g = (g << 2) | (g >> 4);
+			b = (b << 3) | (b >> 2);
+			
+			dstRow[x] = (0xFF << 24) | (b << 16) | (g << 8) | r;
+		}
+	}
+}
+
+static void video_refresh_callback(const void* data, unsigned width, unsigned height, size_t pitch) {
+	// Log NEON availability once on first call
+	static int neon_logged = 0;
+	if (!neon_logged) {
+		neon_logged = 1;
+#if defined(__ARM_NEON) || defined(__aarch64__)
+		LOG_info("Pixel conversion: ARM NEON SIMD optimizations enabled\n");
+#else
+		LOG_info("Pixel conversion: Using scalar optimizations (NEON not available)\n");
+#endif
+	}
+
+	// Early exit if quitting to avoid rendering stale frames
+	if (quit) return;
+
+	// Allocate RGBA buffer if needed
+	if (!rgbaData || rgbaDataSize != width * height) {
+		if (rgbaData) free(rgbaData);
+		rgbaDataSize = width * height;
+		rgbaData = (Uint32*)malloc(rgbaDataSize * sizeof(Uint32));
+		if (!rgbaData) {
+			printf("Failed to allocate memory for RGBA data.\n");
+			return;
+		}
+	}
+
+	// Set ambient lighting color (if enabled)
+	if (ambient_mode && !fast_forward && data) {
+		GFX_setAmbientColor(data, width, height, pitch, ambient_mode);
+	}
+
+	// Handle NULL data by reusing last frame
+	if (!data) {
+		data = lastframe;
+		if (!data) return;
+	} else {
+		// Convert pixel format to RGBA
+		if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
+			convert_xrgb8888_to_rgba(data, rgbaData, width, height, pitch);
+		} else {
+			convert_rgb565_to_rgba(data, rgbaData, width, height, pitch);
+		}
+		
+		data = rgbaData;
+		lastframe = data;
+	}
+	pitch = width * sizeof(Uint32);
+
+	// Render the frame
+	video_refresh_callback_main(data, width, height, pitch);
 }
 ///////////////////////////////
 
@@ -4997,7 +5094,9 @@ static struct {
 };
 
 void Menu_init(void) {
-	menu.overlay = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888);
+	menu.overlay = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE,
+		DEVICE_WIDTH,DEVICE_HEIGHT,
+		screen->format->BitsPerPixel,screen->format->format);
 	SDL_SetSurfaceBlendMode(menu.overlay, SDL_BLENDMODE_BLEND);
 	Uint32 color = SDL_MapRGBA(menu.overlay->format, 0, 0, 0, 0);
 	SDL_FillRect(screen, NULL, color);
@@ -5678,10 +5777,6 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 	return MENU_CALLBACK_NOP;
 }
 
-
-
-
-
 static int OptionPragmas_optionChanged(MenuList* list, int i) {
 		MenuItem* item = &list->items[i];
 		for (int shader_index=0; shader_index < config.shaders.options[SH_NROFSHADERS].value; shader_index++) {
@@ -5739,16 +5834,20 @@ static int OptionPragmas_openMenu(MenuList* list, int i) {
 	return MENU_CALLBACK_NOP;
 }
 static int OptionShaders_optionChanged(MenuList* list, int i) {
-		MenuItem* item = &list->items[i];
-		Config_syncShaders(item->key, item->value);
-		applyShaderSettings();
-		for (int i = 0; i < config.shaders.count; i++) {
-			MenuItem* item = &list->items[i];
-			item->value = config.shaders.options[i].value;
-
-		}
-		if(i==1) initShaders();
-		return MENU_CALLBACK_NOP;
+	MenuItem* item = &list->items[i];
+	// Process menu entry change, update underlying config cruft and call handler
+	Config_syncShaders(item->key, item->value);
+	// Apply shader pragmas if needed
+	applyShaderSettings();
+	// Update menu entries to reflect any changes made by the handler
+	for (int y = 0; y < config.shaders.count; y++) {
+		MenuItem* item = &list->items[y];
+		item->value = config.shaders.options[y].value;
+	}
+	// Recursively call Config_syncShaders again for some reason
+	if(i==SH_SHADERS_PRESET) 
+		initShaders();
+	return MENU_CALLBACK_NOP;
 }
 
 static MenuList ShaderOptions_menu = {
@@ -5760,17 +5859,13 @@ static MenuList ShaderOptions_menu = {
 
 static int OptionShaders_openMenu(MenuList* list, int i) {
 	int filecount;
-	char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount,NULL);
+	char** filelist = list_files_in_folder(SHADERS_FOLDER "/glsl", &filecount,NULL,NULL);
 
 	// Check if folder read failed or no files found
 	if (!filelist || filecount == 0) {
 		Menu_message("No shaders available\n/Shaders folder or shader files not found", (char*[]){"B", "BACK", NULL});
 		return MENU_CALLBACK_NOP;
 	}
-
-	// NULL-terminate filelist just in case
-	filelist = realloc(filelist, sizeof(char*) * (filecount + 1));
-	filelist[filecount] = NULL;
 
 	ShaderOptions_menu.items = calloc(config.shaders.count + 1, sizeof(MenuItem));
 	for (int i = 0; i < config.shaders.count; i++) {
@@ -5864,6 +5959,51 @@ static bool getAlias(char* path, char* alias) {
 		}
 	}
 	return is_alias;
+}
+
+static char* findFileInDir(const char *directory, const char *filename) {
+    char *filename_copy = strdup(filename);
+    if (!filename_copy) {
+        perror("strdup");
+        return NULL;
+    }
+
+    // Strip extension from filename
+    char *dot_pos = strrchr(filename_copy, '.');
+    if (dot_pos) {
+        *dot_pos = '\0';
+    }
+
+    DIR *dir = opendir(directory);
+    if (!dir) {
+        perror("opendir");
+        free(filename_copy);
+        return NULL;
+    }
+
+    struct dirent *entry;
+    char *full_path = NULL;
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strstr(entry->d_name, filename_copy) == entry->d_name) {
+            full_path = (char *)malloc(strlen(directory) + strlen(entry->d_name) + 2); // +1 for slash, +1 for '\0'
+            if (!full_path) {
+                perror("malloc");
+                closedir(dir);
+                free(filename_copy);
+                return NULL;
+            }
+
+            snprintf(full_path, strlen(directory) + strlen(entry->d_name) + 2, "%s/%s", directory, entry->d_name);
+            closedir(dir);
+            free(filename_copy);
+            return full_path;
+        }
+    }
+
+    closedir(dir);
+    free(filename_copy);
+    return NULL;
 }
 
 static int Menu_options(MenuList* list) {
@@ -6454,7 +6594,7 @@ int save_screenshot_thread(void* data) {
 	SDL_Surface* rawSurface = SDL_CreateRGBSurfaceWithFormatFrom(
 		args->pixels, args->w, args->h, 32, args->w * 4, SDL_PIXELFORMAT_ABGR8888
 	);
-	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, SDL_PIXELFORMAT_RGBA8888, 0);
+	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, SDL_PIXELFORMAT_ARGB8888, 0);
 	SDL_FreeSurface(rawSurface);
 
     SDL_RWops* rw = SDL_RWFromFile(args->path, "wb");
@@ -6564,12 +6704,12 @@ static void Menu_loop(void) {
 	SDL_Surface* rawSurface = SDL_CreateRGBSurfaceWithFormatFrom(
 		pixels, cw, ch, 32, cw * 4, SDL_PIXELFORMAT_ABGR8888
 	);
-	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, SDL_PIXELFORMAT_RGBA8888, 0);
+	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, SDL_PIXELFORMAT_ARGB8888, 0);
 	SDL_FreeSurface(rawSurface);
 	free(pixels); 
 
 	menu.bitmap = converted;
-	SDL_Surface* backing = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_RGBA8888); 
+	SDL_Surface* backing = SDL_CreateRGBSurfaceWithFormat(0,DEVICE_WIDTH,DEVICE_HEIGHT,32,SDL_PIXELFORMAT_ARGB8888); 
 	
 
 	SDL_Rect dst = {
@@ -6589,7 +6729,6 @@ static void Menu_loop(void) {
 
 	SRAM_write();
 	RTC_write();
-	PWR_warn(0);
 	if (!HAS_POWER_BUTTON) PWR_enableSleep();
 	PWR_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
 
@@ -6841,7 +6980,7 @@ static void Menu_loop(void) {
 				if (menu.preview_exists) { // has save, has preview
 					// lotta memory churn here
 					SDL_Surface* bmp = IMG_Load(menu.bmp_path);
-					SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, SDL_PIXELFORMAT_RGBA8888,0);
+					SDL_Surface* raw_preview = SDL_ConvertSurfaceFormat(bmp, screen->format->format,0);
 					if (raw_preview) {
 						SDL_FreeSurface(bmp); 
 						bmp = raw_preview; 
@@ -6882,7 +7021,6 @@ static void Menu_loop(void) {
 	PAD_reset();
 
 	GFX_clearAll();
-	PWR_warn(1);
 	
 	int count = 0;
 	char** overlayList = config.frontend.options[FE_OPT_OVERLAY].values;
@@ -6913,37 +7051,6 @@ static void Menu_loop(void) {
 	PWR_disableAutosleep();
 }
 
-// TODO: move to PWR_*?
-static unsigned getUsage(void) { // from picoarch
-	long unsigned ticks = 0;
-	long ticksps = 0;
-	FILE *file = NULL;
-
-	file = fopen("/proc/self/stat", "r");
-	if (!file)
-		goto finish;
-
-	if (!fscanf(file, "%*d %*s %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu", &ticks))
-		goto finish;
-
-	ticksps = sysconf(_SC_CLK_TCK);
-
-	if (ticksps)
-		ticks = ticks * 100 / ticksps;
-
-finish:
-	if (file)
-		fclose(file);
-
-	return ticks;
-}
-
-static void resetFPSCounter() {
-	sec_start = SDL_GetTicks();
-	fps_ticks = 0.0;
-	fps_double = 0.0;
-}
-
 static void chooseSyncRef(void) {
 	switch (sync_ref) {
 		case SYNC_SRC_AUTO:   use_core_fps = (core.get_region() == RETRO_REGION_PAL); break;
@@ -6955,27 +7062,6 @@ static void chooseSyncRef(void) {
 		  sync_ref_labels[sync_ref],
 		  core.get_region() == RETRO_REGION_NTSC ? "NTSC" : "PAL",
 		  use_core_fps ? "yes" : "no");
-}
-
-static void trackFPS(void) {
-	cpu_ticks += 1;
-	static int last_use_ticks = 0;
-	uint32_t now = SDL_GetTicks();
-	if (now - sec_start>=1000) {
-		double last_time = (double)(now - sec_start) / 1000;
-		fps_double = fps_ticks / last_time;
-		cpu_double = cpu_ticks / last_time;
-		// use_ticks = getUsage();
-		// if (use_ticks && last_use_ticks) {
-		// 	use_double = (use_ticks - last_use_ticks) / last_time;
-		// }
-		// last_use_ticks = use_ticks;
-		sec_start = now;
-		cpu_ticks = 0;
-		fps_ticks = 0;
-		
-		// LOG_info("fps: %f cpu: %f\n", fps_double, cpu_double);
-	}
 }
 
 static void limitFF(void) {
@@ -7030,30 +7116,32 @@ void onAudioSinkChanged(int device, int watch_event)
 	else
 		SDL_setenv("AUDIODEV", "default", 1);
 
-	if(device != AUDIO_SINK_DEFAULT && !exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
-		LOG_error("asoundrc is not there yet!!!\n");
-	else if(device == AUDIO_SINK_DEFAULT && exists("/mnt/SDCARD/.userdata/tg5040/.asoundrc"))
-		LOG_error("asoundrc is not deleted yet!!!\n");
+	//if(device != AUDIO_SINK_DEFAULT && !exists(SDCARD_PATH "/.userdata/tg5040/.asoundrc"))
+	//	LOG_error("asoundrc is not there yet!!!\n");
+	//else if(device == AUDIO_SINK_DEFAULT && exists(SDCARD_PATH "/.userdata/tg5040/.asoundrc"))
+	//	LOG_error("asoundrc is not deleted yet!!!\n");
 }
 
 int main(int argc , char* argv[]) {
 	LOG_info("MinArch\n");
 
-	static char asoundpath[MAX_PATH];
-	sprintf(asoundpath, "%s/.asoundrc", getenv("HOME"));
-	LOG_info("minarch: need asoundrc at %s\n", asoundpath);
-	if(exists(asoundpath))
-		LOG_info("asoundrc exists at %s\n", asoundpath);
-	else 
-		LOG_info("asoundrc does not exist at %s\n", asoundpath);
+	//static char asoundpath[MAX_PATH];
+	//sprintf(asoundpath, "%s/.asoundrc", getenv("HOME"));
+	//LOG_info("minarch: need asoundrc at %s\n", asoundpath);
+	//if(exists(asoundpath))
+	//	LOG_info("asoundrc exists at %s\n", asoundpath);
+	//else 
+	//	LOG_info("asoundrc does not exist at %s\n", asoundpath);
 
 	pthread_t cpucheckthread;
-    pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL);
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_create(&cpucheckthread, &attr, PLAT_cpu_monitor, NULL);
+	pthread_attr_destroy(&attr);
 
-	setOverclock(overclock); // default to normal
-	// force a stack overflow to ensure asan is linked and actually working
-	// char tmp[2];
-	// tmp[2] = 'a';
+	setOverclock(2); // start up in performance mode, faster init
+	PWR_pinToCores(CPU_CORE_PERFORMANCE); // thread affinity
 	
 	char core_path[MAX_PATH];
 	char rom_path[MAX_PATH]; 
@@ -7088,9 +7176,6 @@ int main(int argc , char* argv[]) {
 	IMG_Init(IMG_INIT_PNG);
 	Core_open(core_path, tag_name);
 
-	fmt = RETRO_PIXEL_FORMAT_XRGB8888;
-	environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
-
 	Game_open(rom_path); // nes tries to load gamegenie setting before this returns ffs
 	if (!game.is_open) goto finish;
 	
@@ -7100,20 +7185,18 @@ int main(int argc , char* argv[]) {
 	Config_load(); // before init?
 	Config_init();
 	Config_readOptions(); // cores with boot logo option (eg. gb) need to load options early
-	setOverclock(overclock);
+	setOverclock(overclock); // why twice?
 	
 	Core_init();
 
-	// TODO: find a better place to do this
-	// mixing static and loaded data is messy
-	// why not move to Core_init()?
-	// ah, because it's defined before options_menu...
 	options_menu.items[1].desc = (char*)core.version;
 	Core_load();
 	Input_init(NULL);
 	Config_readOptions(); // but others load and report options later (eg. nes)
 	Config_readControls(); // restore controls (after the core has reported its defaults)
 
+	// Mute audio during startup to avoid pops (InitSettings would be logical, but too late)
+	SND_overrideMute(1);
 	SND_init(core.sample_rate, core.fps);
 	SND_registerDeviceWatcher(onAudioSinkChanged);
 	InitSettings(); // after we initialize audio
@@ -7121,7 +7204,6 @@ int main(int argc , char* argv[]) {
 	State_resume();
 	Menu_initState(); // make ready for state shortcuts
 
-	PWR_warn(1);
 	PWR_disableAutosleep();
 	// we dont need five second updates while ingame, and wifi status isnt displayed either
 	PWR_updateFrequency(PWR_UPDATE_FREQ, 0); 
@@ -7138,16 +7220,11 @@ int main(int argc , char* argv[]) {
 
 	Special_init(); // after config
 
-	sec_start = SDL_GetTicks();
-	resetFPSCounter();
 	chooseSyncRef();
 	
 	int has_pending_opt_change = 0;
-	LOG_info("Starting shaders %ims\n\n",SDL_GetTicks());
-
 
 	// then initialize custom  shaders from settings
-	
 	initShaders();
 	Config_readOptions();
 	applyShaderSettings();
@@ -7159,9 +7236,7 @@ int main(int argc , char* argv[]) {
 		GFX_startFrame();
 	
 		core.run();
-		limitFF();
-		trackFPS();
-		
+		limitFF();		
 
 		if (has_pending_opt_change) {
 			has_pending_opt_change = 0;
@@ -7169,7 +7244,6 @@ int main(int argc , char* argv[]) {
 				LOG_info("AV info changed, reset sound system");
 				SND_resetAudio(core.sample_rate, core.fps);
 			}
-			resetFPSCounter();
 			chooseSyncRef();
 		}
 
@@ -7179,7 +7253,6 @@ int main(int argc , char* argv[]) {
 			Menu_loop();
 			PWR_updateFrequency(PWR_UPDATE_FREQ_INGAME,0);
 			has_pending_opt_change = config.core.changed;
-			resetFPSCounter();
 			chooseSyncRef();
 		}
 
@@ -7198,7 +7271,7 @@ int main(int argc , char* argv[]) {
 	SDL_Surface* rawSurface = SDL_CreateRGBSurfaceWithFormatFrom(
 		pixels, cw, ch, 32, cw * 4, SDL_PIXELFORMAT_ABGR8888
 	);
-	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, SDL_PIXELFORMAT_RGBA8888, 0);
+	SDL_Surface* converted = SDL_ConvertSurfaceFormat(rawSurface, screen->format->format, 0);
 	screen = converted;
 	SDL_FreeSurface(rawSurface);
 	free(pixels); 
