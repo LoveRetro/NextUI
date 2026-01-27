@@ -41,6 +41,7 @@ jobs:
       matrix:
         toolchain:
           - tg5040
+          - tg5050
 
     steps:
       - name: Checkout
@@ -62,6 +63,7 @@ jobs:
       matrix:
         toolchain:
           - tg5040
+          - tg5050
         core: ${{ fromJson(needs.core-matrix.outputs.cores) }}
     steps:
       - name: Checkout
@@ -85,14 +87,7 @@ jobs:
       - build-core
     runs-on: ubuntu-24.04-arm
     env:
-      PLATFORM: ${{ matrix.toolchain }}
       RELEASE_NAME: ${{ needs.prepare.outputs.release-name }}
-    strategy:
-      fail-fast: true
-      matrix:
-        toolchain:
-          - tg5040
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
@@ -105,15 +100,29 @@ jobs:
       - name: Setup
         run: make setup
 
-      - name: Download Cores
+      - name: Download Cores (tg5040)
         uses: actions/download-artifact@v4.3.0
         with:
-          path: workspace/${{ env.PLATFORM }}/cores/output/
-          pattern: core-${{ matrix.toolchain }}-*
+          path: workspace/tg5040/cores/output/
+          pattern: core-tg5040-*
           merge-multiple: true
 
-      - name: Build
-        run: make ${{ matrix.toolchain }}
+      - name: Build (tg5040)
+        run: make tg5040
+        env:
+          PLATFORM: tg5040
+
+      - name: Download Cores (tg5050)
+        uses: actions/download-artifact@v4.3.0
+        with:
+          path: workspace/tg5050/cores/output/
+          pattern: core-tg5050-*
+          merge-multiple: true
+
+      - name: Build (tg5050)
+        run: make tg5050
+        env:
+          PLATFORM: tg5050
 
       - name: Special
         run: make special

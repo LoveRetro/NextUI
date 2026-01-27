@@ -7,6 +7,37 @@ UPDATE_PATH="$SDCARD_PATH/MinUI.zip"
 PAKZ_PATH="$SDCARD_PATH/*.pakz"
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
+export LD_LIBRARY_PATH=/usr/trimui/lib:$LD_LIBRARY_PATH
+export PATH=/usr/trimui/bin:$PATH
+
+TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
+if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
+	DEVICE="brick"
+fi
+
+# only show splash if either UPDATE_PATH or pakz files exist
+SHOW_SPLASH="no"
+if [ -f "$UPDATE_PATH" ]; then
+	SHOW_SPLASH="yes"
+else
+	for pakz in $PAKZ_PATH; do
+		if [ -e "$pakz" ]; then
+			SHOW_SPLASH="yes"
+			break
+		fi
+	done
+fi
+if [ "$SHOW_SPLASH" = "yes" ] ; then
+	cd $(dirname "$0")/$PLATFORM
+	if [ "$DEVICE" = "brick" ]; then
+		./show2.elf --mode=daemon --image="logo.png" --text="Installing..." --logoheight=144 --fontsize=32 --progress=-1 &
+	else
+		./show2.elf --mode=daemon --image="logo.png" --text="Installing..." --logoheight=128 --progress=-1 &
+	fi
+	#sleep 0.5
+	#SHOW_PID=$!
+fi
+
 echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
 CPU_SPEED_PERF=2000000
@@ -21,29 +52,21 @@ if [ -f "/etc/init.d/lcservice" ]; then
 	rm /etc/init.d/lcservice
 fi
 
-export LD_LIBRARY_PATH=/usr/trimui/lib:$LD_LIBRARY_PATH
-export PATH=/usr/trimui/bin:$PATH
-
-TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
-if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
-	DEVICE="brick"
-fi
-
 # leds_off
 echo 0 > /sys/class/led_anim/max_scale
 
 # generic NextUI package install
 for pakz in $PAKZ_PATH; do
 	if [ ! -e "$pakz" ]; then continue; fi
-	echo "Installing $pakz"
+	echo "TEXT:Extracting $pakz" > /tmp/show2.fifo
 	cd $(dirname "$0")/$PLATFORM
-	./show.elf ./$DEVICE/installing.png
 
 	./unzip -o -d "$SDCARD_PATH" "$pakz" # >> $pakz.txt
 	rm -f "$pakz"
 
 	# run postinstall if present
 	if [ -f $SDCARD_PATH/post_install.sh ]; then
+		echo "TEXT:Installing $pakz" > /tmp/show2.fifo
 		$SDCARD_PATH/post_install.sh # > $pakz_post.txt
 		rm -f $SDCARD_PATH/post_install.sh
 	fi
@@ -51,12 +74,11 @@ done
 
 # install/update
 if [ -f "$UPDATE_PATH" ]; then 
-	echo ok
 	cd $(dirname "$0")/$PLATFORM
 	if [ -d "$SYSTEM_PATH" ]; then
-		./show.elf ./$DEVICE/updating.png
+		echo "TEXT:Updating NextUI" > /tmp/show2.fifo
 	else
-		./show.elf ./$DEVICE/installing.png
+		echo "TEXT:Installing NextUI" > /tmp/show2.fifo
 	fi
 
 	# clean replacement for core paths
@@ -72,6 +94,8 @@ if [ -f "$UPDATE_PATH" ]; then
 		$SYSTEM_PATH/$PLATFORM/bin/install.sh # &> $SDCARD_PATH/log.txt
 	fi
 fi
+
+#kill $SHOW_PID
 
 LAUNCH_PATH="$SYSTEM_PATH/$PLATFORM/paks/MinUI.pak/launch.sh"
 if [ -f "$LAUNCH_PATH" ] ; then

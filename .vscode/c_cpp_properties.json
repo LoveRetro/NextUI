@@ -16,6 +16,22 @@
             "compilerArgs": [
                 "-DUSE_SDL2"
             ]
+        },
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/workspace/all/common"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode":"gcc-arm64",
+            "configurationProvider": "ms-vscode.makefile-tools",
+            "compilerArgs": [
+                "-DUSE_SDL2"
+            ]
         }
     ],
     "version": 4

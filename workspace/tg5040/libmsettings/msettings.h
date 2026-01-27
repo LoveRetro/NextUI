@@ -8,6 +8,7 @@
 #define SETTINGS_DEFAULT_EXPOSURE 0
 #define SETTINGS_DEFAULT_VOLUME 8
 #define SETTINGS_DEFAULT_HEADPHONE_VOLUME 4
+#define SETTINGS_DEFAULT_FAN_SPEED 0
 
 #define SETTINGS_DEFAULT_MUTE_NO_CHANGE -69
 
@@ -50,6 +51,14 @@ void SetHDMI(int value); // 0-1
 
 int GetMute(void);
 void SetMute(int value); // 0-1
+
+// unused
+inline int GetFanSpeed(void) {
+    return 0;
+}
+inline void SetFanSpeed(int value) {
+    // do nothing
+}
 
 // custom mute mode persistence layer
 

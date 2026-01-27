@@ -105,8 +105,10 @@ typedef struct
 
 	// Haptic
 	bool haptics;
-
-	// Network
+	
+	// Networking
+	bool ntp;
+	int currentTimezone; // index of timezone in tz database
 	bool wifi;
 	bool wifiDiagnostics;
 	bool bluetooth;
@@ -151,6 +153,8 @@ typedef struct
 #define CFG_DEFAULT_BLUETOOTH false
 #define CFG_DEFAULT_BLUETOOTH_DIAG false
 #define CFG_DEFAULT_BLUETOOTH_MAXRATE 48000
+#define CFG_DEFAULT_NTP false
+#define CFG_DEFAULT_TIMEZONE 320 // Europe/Berlin
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
@@ -256,6 +260,13 @@ void CFG_setBluetoothDiagnostics(bool on);
 // BT maximum sample rate to request
 int CFG_getBluetoothSamplingrateLimit(void);
 void CFG_setBluetoothSamplingrateLimit(int value);
+// NTP on/off
+bool CFG_getNTP(void);
+// \note this will only apply after reboot, unless you set it through PLAT_setNetworkTimeSync
+void CFG_setNTP(bool on);
+// Current timezone index in tz database
+int CFG_getCurrentTimezone(void);
+void CFG_setCurrentTimezone(int index);
 
 void CFG_sync(void);
 void CFG_quit(void);

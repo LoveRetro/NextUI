@@ -5,11 +5,11 @@ PLATFORM=$(UNION_PLATFORM)
 endif
 
 ifeq (,$(PLATFORM))
-	$(error please specify PLATFORM, eg. PLATFORM=trimui make)
+$(error please specify PLATFORM, eg. PLATFORM=trimui make)
 endif
 
 ifeq (,$(CROSS_COMPILE))
-	$(error missing CROSS_COMPILE for this toolchain)
+$(error missing CROSS_COMPILE for this toolchain)
 endif
 
 ###########################################################
@@ -25,29 +25,46 @@ INCDIR = -I. -I./libretro-common/include/ -I../common/ -I../../$(PLATFORM)/platf
 SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
 
 CC = $(CROSS_COMPILE)gcc
-CFLAGS  += $(OPT) -fomit-frame-pointer
+CFLAGS  += $(OPT)
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
-LDFLAGS	 += -lmsettings -lsamplerate
-LDFLAGS  += -llz4
+LDFLAGS += -lmsettings -lsamplerate
+LDFLAGS += -llz4
+
+ifeq ($(PROFILE), 1)
+CFLAGS  += -pg
+LDFLAGS += -pg
+endif
+
+ifeq ($(GPERFTOOLS), 1)
+CFLAGS  += -g
+LDFLAGS += -lprofiler
+endif
+
 ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
 CFLAGS += `pkg-config --cflags libzip`
-LDFLAGS += `pkg-config --libs libzip` -lz
+LDFLAGS += `pkg-config --libs libzip`
 else
-LDFLAGS += -lzip -lz
-endif
-else
-LDFLAGS	 +=  -Llibretro-common -lsrm -lzip -lz
+LDFLAGS += -lzip
+endif # Linux
+else # all handheld platfoms
+LDFLAGS	 +=  -Llibretro-common -lsrm -lzip
 CFLAGS   += -DHAS_SRM
+LDFLAGS +=  -lasound
 endif
-ifeq ($(PLATFORM), tg5040)
-CFLAGS += -DHAS_WIFIMG -DHAS_BTMG
-LDFLAGS +=  -lwifimg -lwifid
-LDFLAGS +=  -lbtmg -lglib-2.0 -lgio-2.0 -lshared-mainloop -lbluetooth-internal -lasound -ljson-c
-endif
+
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
-# CFLAGS  += -fsanitize=address -fno-common
-# LDFLAGS += -lasan
+
+ifeq ($(PLATFORM), desktop)
+ifeq ($(TSAN), 1)
+CFLAGS  += -fsanitize=thread
+LDFLAGS += -ltsan
+endif
+ifeq ($(ASAN), 1)
+CFLAGS  += -fsanitize=address -fno-common -fno-omit-frame-pointer
+LDFLAGS += -lasan
+endif
+endif
 
 AR=$(CROSS_COMPILE)ar
 ARFLAGS=rc
@@ -63,12 +80,12 @@ all: clean libretro-common $(PREFIX_LOCAL)/include/msettings.h
 else
 all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
-	cp $(PREFIX)/lib/libsamplerate.so.0 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libsamplerate.so.* build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
-	cp $(PREFIX)/lib/libzip.so.5 build/$(PLATFORM)
-	cp $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
-	cp $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
-	cp $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libzip.so.* build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
 	cp $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
