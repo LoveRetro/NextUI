@@ -66,6 +66,9 @@ if [ -f "/etc/init.d/lcservice" ]; then
 	rm /etc/init.d/lcservice
 fi
 
+# clear shadercache unconditionally, until it properly invalidates itself
+rm -rf $SDCARD_PATH/.shadercache
+
 #PD11 pull high for VCC-5v
 echo 107 > /sys/class/gpio/export
 echo -n out > /sys/class/gpio/gpio107/direction
