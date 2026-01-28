@@ -115,6 +115,12 @@ typedef struct
 	bool bluetoothDiagnostics;
 	int bluetoothSamplerateLimit;
 
+	// Rewind
+	bool rewindEnable;
+	int rewindBufferMB;
+	int rewindGranularity;
+	bool rewindMuteAudio;
+
 } NextUISettings;
 
 #define CFG_DEFAULT_FONT_ID 1  // Next

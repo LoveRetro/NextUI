@@ -73,6 +73,11 @@ void CFG_defaults(NextUISettings *cfg)
         .bluetooth = CFG_DEFAULT_BLUETOOTH,
         .bluetoothDiagnostics = CFG_DEFAULT_BLUETOOTH_DIAG,
         .bluetoothSamplerateLimit = CFG_DEFAULT_BLUETOOTH_MAXRATE,
+
+        .rewindEnable = false,
+        .rewindBufferMB = 64,
+        .rewindGranularity = 10,
+        .rewindMuteAudio = false,
 };
 
     *cfg = defaults;
