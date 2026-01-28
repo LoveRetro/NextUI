@@ -956,6 +956,7 @@ static void State_getPath(char* filename) {
 	}
 }
 
+#define RASTATE_HEADER_SIZE 16
 static void State_read(void) { // from picoarch
 	size_t state_size = core.serialize_size();
 	if (!state_size) return;
@@ -972,58 +973,44 @@ static void State_read(void) { // from picoarch
 	char filename[MAX_PATH];
 	State_getPath(filename);
 
+	uint8_t rastate_header[RASTATE_HEADER_SIZE] = {0};
+
 #ifdef HAS_SRM
-	RFILE *state_rfile = NULL;
 	rzipstream_t *state_rzfile = NULL;
 
-	// TODO: rzipstream_open can also handle uncompressed, else branch is probably unnecessary
-	// srm, potentially compressed
-	if (CFG_getStateFormat() == STATE_FORMAT_SRM || CFG_getStateFormat() == STATE_FORMAT_SRM_EXTRADOT) {
-		state_rzfile = rzipstream_open(filename, RETRO_VFS_FILE_ACCESS_READ);
-		if(!state_rzfile) {
-			if (state_slot!=8) { // st8 is a default state in MiniUI and may not exist, that's okay
-				LOG_error("Error opening state file: %s (%s)\n", filename, strerror(errno));
-			}
-			goto error;
-		}
-
-		// some cores report the wrong serialize size initially for some games, eg. mgba: Wario Land 4
-		// so we allow a size mismatch as long as the actual size fits in the buffer we've allocated
-		if (state_size < rzipstream_read(state_rzfile, state, state_size)) {
-			LOG_error("Error reading state data from file: %s (%s)\n", filename, strerror(errno));
-			goto error;
-		}
-
-		if (!core.unserialize(state, state_size)) {
-			LOG_error("Error restoring save state: %s (%s)\n", filename, strerror(errno));
-			goto error;
-		}
+	state_rzfile = rzipstream_open(filename, RETRO_VFS_FILE_ACCESS_READ);
+	if(!state_rzfile) {
+	  if (state_slot!=8) { // st8 is a default state in MiniUI and may not exist, that's okay
+		LOG_error("Error opening state file: %s (%s)\n", filename, strerror(errno));
+	  }
+	  goto error;
 	}
-	else {
-		state_rfile = filestream_open(filename, RETRO_VFS_FILE_ACCESS_READ, 0);
-		if (!state_rfile) {
-			if (state_slot!=8) { // st8 is a default state in MiniUI and may not exist, that's okay
-				LOG_error("Error opening state file: %s (%s)\n", filename, strerror(errno));
-			}
-			goto error;
-		}
-		
-		// some cores report the wrong serialize size initially for some games, eg. mgba: Wario Land 4
-		// so we allow a size mismatch as long as the actual size fits in the buffer we've allocated
-		if (state_size < filestream_read(state_rfile, state, state_size)) {
-			LOG_error("Error reading state data from file: %s (%s)\n", filename, strerror(errno));
-			goto error;
-		}
-	
-		if (!core.unserialize(state, state_size)) {
-			LOG_error("Error restoring save state: %s (%s)\n", filename, strerror(errno));
-			goto error;
-		}
+	if (rzipstream_read(state_rzfile, rastate_header, RASTATE_HEADER_SIZE) < RASTATE_HEADER_SIZE) {
+	  LOG_error("Error reading rastate header from file: %s (%s)\n", filename, strerror(errno));
+	  goto error;
+	}
+
+	if (memcmp(rastate_header, "RASTATE", 7) != 0) {
+	  // This file only contains raw core state data
+	  rzipstream_rewind(state_rzfile);
+	}
+	// No need to parse the header any further
+	// (we only need MEM section which will always be the first one)
+
+	// some cores report the wrong serialize size initially for some games, eg. mgba: Wario Land 4
+	// so we allow a size mismatch as long as the actual size fits in the buffer we've allocated
+	if (state_size < rzipstream_read(state_rzfile, state, state_size)) {
+	  LOG_error("Error reading state data from file: %s (%s)\n", filename, strerror(errno));
+	  goto error;
+	}
+
+	if (!core.unserialize(state, state_size)) {
+	  LOG_error("Error restoring save state: %s\n", filename);
+	  goto error;
 	}
 
 error:
 	if (state) free(state);
-	if (state_rfile) filestream_close(state_rfile);
 	if (state_rzfile) rzipstream_close(state_rzfile);
 #else
 	FILE *state_file = fopen(filename, "r");
@@ -1032,6 +1019,16 @@ error:
 			LOG_error("Error opening state file: %s (%s)\n", filename, strerror(errno));
 		}
 		goto error;
+	}
+
+	if (fread(rastate_header, 1, RASTATE_HEADER_SIZE, state_file) < RASTATE_HEADER_SIZE) {
+		LOG_error("Error reading rastate header from file: %s (%s)\n", filename, strerror(errno));
+		goto error;
+	}
+
+	if (memcmp(rastate_header, "RASTATE", 7) != 0) {
+	  // This file only contains raw core state data; rewind
+	  fseek(state_file, 0, SEEK_SET);
 	}
 	
 	// some cores report the wrong serialize size initially for some games, eg. mgba: Wario Land 4
@@ -1042,7 +1039,7 @@ error:
 	}
 
 	if (!core.unserialize(state, state_size)) {
-		LOG_error("Error restoring save state: %s (%s)\n", filename, strerror(errno));
+		LOG_error("Error restoring save state: %s\n", filename);
 		goto error;
 	}
 
