@@ -4217,13 +4217,13 @@ void fillRect(int x, int y, int w, int h, uint32_t c, uint32_t *data, int stride
 }
 
 static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int stride, int width, int height) {
-	#define CHAR_WIDTH 5
-	#define CHAR_HEIGHT 9
+	#define DEBUG_CHAR_WIDTH 5
+	#define DEBUG_CHAR_HEIGHT 9
 	#define LETTERSPACING 1
 
 	int len = strlen(text);
-	int w = ((CHAR_WIDTH + LETTERSPACING) * len) - 1;
-	int h = CHAR_HEIGHT;
+	int w = ((DEBUG_CHAR_WIDTH + LETTERSPACING) * len) - 1;
+	int h = DEBUG_CHAR_HEIGHT;
 
 	if (ox < 0) ox = width - w + ox;
 	if (oy < 0) oy = height - h + oy;
@@ -4248,10 +4248,10 @@ static void blitBitmapText(char* text, int ox, int oy, uint32_t* data, int strid
 		for (int i = 0; i < len; i++) {
 			const char* c = bitmap_font[(unsigned char)text[i]];
 			if (!c) c = bitmap_font[' '];
-			for (int x = 0; x < CHAR_WIDTH; x++) {
+			for (int x = 0; x < DEBUG_CHAR_WIDTH; x++) {
 				if (current_x >= w) break;
 
-				if (c[y * CHAR_WIDTH + x] == '1') {
+				if (c[y * DEBUG_CHAR_WIDTH + x] == '1') {
 					data[y * stride + current_x] = 0xFFFFFFFF;  // white ARGBB8888
 				}
 				current_x++;

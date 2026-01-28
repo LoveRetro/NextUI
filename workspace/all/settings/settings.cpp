@@ -7,6 +7,7 @@ extern "C"
 #include "utils.h"
 }
 
+#include <csignal>
 #include <fstream>
 #include <sstream>
 #include <regex>
