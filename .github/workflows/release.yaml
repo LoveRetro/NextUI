@@ -60,6 +60,7 @@ jobs:
       matrix:
         toolchain:
           - tg5040
+          - tg5050
 
     steps:
       - name: Checkout
@@ -81,6 +82,7 @@ jobs:
       matrix:
         toolchain:
           - tg5040
+          - tg5050
         core: ${{ fromJson(needs.core-matrix.outputs.cores) }}
     steps:
       - name: Checkout
@@ -100,19 +102,11 @@ jobs:
 
   build:
     needs:
-      - build-core
       - prepare
+      - build-core
     runs-on: ubuntu-24.04-arm
     env:
-      PLATFORM: ${{ matrix.toolchain }}
       RELEASE_NAME: ${{ needs.prepare.outputs.release-name }}
-      RELEASE_VERSION: ${{ needs.prepare.outputs.next-tag }}
-    strategy:
-      fail-fast: true
-      matrix:
-        toolchain:
-          - tg5040
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
@@ -125,34 +119,63 @@ jobs:
       - name: Setup
         run: make setup
 
-      - name: Download Cores
+      - name: Download Cores (tg5040)
         uses: actions/download-artifact@v4.3.0
         with:
-          path: workspace/${{ env.PLATFORM }}/cores/output/
-          pattern: core-${{ matrix.toolchain }}-*
+          path: workspace/tg5040/cores/output/
+          pattern: core-tg5040-*
           merge-multiple: true
 
-      - name: Build
-        run: make ${{ matrix.toolchain }}
+      - name: Build (tg5040)
+        run: make tg5040
+        env:
+          PLATFORM: tg5040
+
+      - name: Download Cores (tg5050)
+        uses: actions/download-artifact@v4.3.0
+        with:
+          path: workspace/tg5050/cores/output/
+          pattern: core-tg5050-*
+          merge-multiple: true
+
+      - name: Build (tg5050)
+        run: make tg5050
+        env:
+          PLATFORM: tg5050
 
       - name: Special
         run: make special
 
-      # note: when multiple platforms are built
-      # the package step will need to be revamped to
-      # merge the release files from each platform into
-      # a single release
       - name: Package
         run: make package
 
-      - name: Upload Artifacts
+      - name: Upload All
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: release-${{ matrix.toolchain }}.zip
-          path: releases/
+          name: ${{ env.RELEASE_NAME }}-all.zip
+          path: releases/${{ env.RELEASE_NAME }}-all.zip
+
+      - name: Upload Base
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: ${{ env.RELEASE_NAME }}-base.zip
+          path: releases/${{ env.RELEASE_NAME }}-base.zip
+
+      - name: Upload Extras
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: ${{ env.RELEASE_NAME }}-extras.zip
+          path: releases/${{ env.RELEASE_NAME }}-extras.zip
+
+      - name: Skip Attest for PRs from forks
+        id: skip
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo '::warning title=Attest skipped::Attest action requires permissions and is performed only for main branch.'
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2.3.0
+        if: github.ref == 'refs/heads/main'
         with:
           subject-path: |
             releases/${{ env.RELEASE_NAME }}-all.zip
