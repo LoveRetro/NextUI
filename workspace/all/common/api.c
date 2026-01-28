@@ -3757,11 +3757,11 @@ static void PWR_exitSleep(void)
 			VIB_singlePulse(VIB_sleepStrength, VIB_sleepDuration_ms);
 		}
 		PLAT_enableBacklight(1);
+		SND_overrideMute(1);
 		SetVolume(GetVolume());
 	}
 	// reinitialize audio after sleep otherwise it doesnt come back on sometimes
 	LOG_info("Reinitialize audio after sleep\n");
-	SND_overrideMute(1);
 	SND_resetAudio(snd.sample_rate_in, snd.frame_rate);
 
 	sync();
