@@ -197,7 +197,7 @@ jobs:
         uses: actions/download-artifact@v4.3.0
         with:
           path: releases/
-          pattern: release-*
+          pattern: NextUI-*
           merge-multiple: true
 
       - name: Create and Push Tag
