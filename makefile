@@ -38,7 +38,7 @@ RELEASE_NAME ?= $(RELEASE_BASE)-$(RELEASE_DOT)
 VENDOR_DEST := ./build/VENDOR/Tools
 PACKAGE_URL_MAPPINGS := \
 	"https://github.com/UncleJunVIP/nextui-pak-store/releases/latest/download/Pak.Store.pakz nextui.pak_store.pakz" \
-	"https://github.com/LanderN/nextui-updater-pak/releases/latest/download/nextui-updater-pak.zip nextui.updater.pakz"
+	"https://github.com/frysee/nextui-updater-pak/releases/latest/download/nextui.updater.pakz nextui.updater.pakz"
 	# add more URLs as needed
 
 ###########################################################
