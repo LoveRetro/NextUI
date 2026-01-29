@@ -275,8 +275,12 @@ int PLAT_bluetoothScan(struct BT_device *devices, int max) {
 	
 	// Get list of discovered devices from bluetoothctl
 	char output[8192];
-	if (bt_run_cmd("bluetoothctl devices 2>/dev/null", output, sizeof(output)) != 0) {
-		btlog("Failed to get device list\n");
+	output[0] = '\0';  // Initialize in case bt_run_cmd fails early
+	int ret = bt_run_cmd("bluetoothctl devices 2>/dev/null", output, sizeof(output));
+
+	// Only fail if command returned error AND produced no output
+	if (ret != 0 && output[0] == '\0') {
+		btlog("Failed to get device list (exit=%d, no output)\n", ret);
 		return 0;
 	}
 	
@@ -343,11 +347,19 @@ int PLAT_bluetoothPaired(struct BT_devicePaired *paired, int max) {
 	}
 	
 	// Get list of paired devices
+	// Note: newer bluetoothctl uses "devices Paired" instead of "paired-devices"
 	char output[8192];
-	if (bt_run_cmd("bluetoothctl paired-devices 2>/dev/null", output, sizeof(output)) != 0) {
-		btlog("Failed to get paired device list\n");
+	output[0] = '\0';  // Initialize in case bt_run_cmd fails early
+	int ret = bt_run_cmd("bluetoothctl devices Paired 2>/dev/null", output, sizeof(output));
+
+	// Only fail if command returned error AND produced no output
+	// bluetoothctl can return non-zero even with valid output
+	if (ret != 0 && output[0] == '\0') {
+		btlog("Failed to get paired device list (exit=%d, no output)\n", ret);
 		return 0;
 	}
+
+	btlog("Paired devices output (exit=%d): %s\n", ret, output[0] ? output : "(empty)");
 	
 	int count = 0;
 	char *line = strtok(output, "\n");
