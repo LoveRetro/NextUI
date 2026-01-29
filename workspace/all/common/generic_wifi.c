@@ -77,6 +77,34 @@ static bool wifi_get_ip(char *ip, size_t len) {
     return false;
 }
 
+// Helper to escape a string for wpa_cli (double quotes/backslashes) and shell (single quotes)
+static void wifi_escape(char *dest, const char *src, size_t dest_len) {
+    size_t j = 0;
+    for (size_t i = 0; src[i] != '\0' && j < dest_len - 1; i++) {
+        // Double quotes and backslashes need to be escaped for wpa_cli (inside its own quotes)
+        if (src[i] == '"' || src[i] == '\\') {
+            if (j < dest_len - 2) {
+                dest[j++] = '\\';
+            }
+        } 
+        // Single quotes need to be escaped for the shell (outside wpa_cli's quotes but inside shell's)
+        else if (src[i] == '\'') {
+            if (j < dest_len - 5) {
+                dest[j++] = '\''; // close single quote
+                dest[j++] = '\\'; // escape
+                dest[j++] = '\''; // the actual quote
+                dest[j++] = '\''; // open single quote again
+            }
+            continue;
+        }
+        
+        if (j < dest_len - 1) {
+            dest[j++] = src[i];
+        }
+    }
+    dest[j] = '\0';
+}
+
 void PLAT_wifiInit() {
     // We should never have to do this manually, as wifi_init.sh should be
     // started/stopped by the platform init scripts.
@@ -467,11 +495,32 @@ void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pa
 		return;
 	}
 
+	// Validation
+	for (int i = 0; ssid[i]; i++) {
+		if (ssid[i] == '\t' || ssid[i] == '\n' || ssid[i] == '\r') {
+			LOG_error("PLAT_wifiConnectPass: SSID contains invalid characters\n");
+			return;
+		}
+	}
+	if (pass) {
+		for (int i = 0; pass[i]; i++) {
+			if (pass[i] == '\n' || pass[i] == '\r') {
+				LOG_error("PLAT_wifiConnectPass: Password contains invalid characters\n");
+				return;
+			}
+		}
+	}
+
 	wifilog("PLAT_wifiConnectPass: Attempting to connect to SSID '%s' (security=%d)\n", ssid, sec);
+
+	char escaped_ssid[SSID_MAX * 5];
+	char escaped_pass[SSID_MAX * 5];
+	wifi_escape(escaped_ssid, ssid, sizeof(escaped_ssid));
+	if (pass) wifi_escape(escaped_pass, pass, sizeof(escaped_pass));
 
 	// Check if network already exists
 	int network_id = wifi_find_network_id(ssid);
-	char cmd[512];
+	char cmd[1024];
 	char output[128];
 	
 	if (network_id < 0) {
@@ -486,13 +535,13 @@ void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pa
 		
 		// Set SSID (needs quotes for wpa_cli)
 		wifilog("Setting network SSID...\n");
-		snprintf(cmd, sizeof(cmd), "%s set_network %d ssid '\"%s\"' 2>/dev/null", WPA_CLI_CMD, network_id, ssid);
+		snprintf(cmd, sizeof(cmd), "%s set_network %d ssid '\"%s\"' 2>/dev/null", WPA_CLI_CMD, network_id, escaped_ssid);
 		system(cmd);
 		
 		// Set password or open network
 		if (pass && pass[0] != '\0') {
 			wifilog("Setting network password...\n");
-			snprintf(cmd, sizeof(cmd), "%s set_network %d psk '\"%s\"' 2>/dev/null", WPA_CLI_CMD, network_id, pass);
+			snprintf(cmd, sizeof(cmd), "%s set_network %d psk '\"%s\"' 2>/dev/null", WPA_CLI_CMD, network_id, escaped_pass);
 			system(cmd);
 		} else if (sec == SECURITY_NONE) {
 			wifilog("Configuring as open network...\n");
@@ -506,7 +555,7 @@ void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pa
 	} else if (pass && pass[0] != '\0') {
 		// Update password for existing network
 		wifilog("Updating password for existing network...\n");
-		snprintf(cmd, sizeof(cmd), "%s set_network %d psk '\"%s\"' 2>/dev/null", WPA_CLI_CMD, network_id, pass);
+		snprintf(cmd, sizeof(cmd), "%s set_network %d psk '\"%s\"' 2>/dev/null", WPA_CLI_CMD, network_id, escaped_pass);
 		system(cmd);
 		system(WPA_CLI_CMD " save_config 2>/dev/null");
 	} else {
