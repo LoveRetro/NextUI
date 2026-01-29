@@ -1227,6 +1227,19 @@ static RewindContext rewind_ctx = {0};
 static int rewind_warn_empty = 0;
 static int last_rewind_pressed = 0;
 
+typedef enum {
+	REWIND_BUF_EMPTY = 0,
+	REWIND_BUF_HAS_DATA = 1,
+	REWIND_BUF_FULL = 2
+} RewindBufferState;
+
+static RewindBufferState Rewind_buffer_state_locked(void) {
+	if (rewind_ctx.entry_count == 0) return REWIND_BUF_EMPTY;
+	// head == tail with entries means the ring buffer wrapped and is full
+	if (rewind_ctx.head == rewind_ctx.tail) return REWIND_BUF_FULL;
+	return REWIND_BUF_HAS_DATA;
+}
+
 static void* Rewind_worker_thread(void *arg);
 static int Rewind_write_entry_locked(const uint8_t *compressed, size_t dest_len, int is_keyframe);
 static int Rewind_compress_state(const uint8_t *src, size_t *dest_len, int *is_keyframe_out);
@@ -1307,7 +1320,9 @@ static void Rewind_reset(void) {
 }
 
 static size_t Rewind_free_space_locked(void) {
-	if (rewind_ctx.entry_count > 0 && rewind_ctx.head == rewind_ctx.tail) return 0;
+	RewindBufferState state = Rewind_buffer_state_locked();
+	if (state == REWIND_BUF_FULL) return 0;
+	if (state == REWIND_BUF_EMPTY) return rewind_ctx.capacity;
 	if (rewind_ctx.head >= rewind_ctx.tail)
 		return rewind_ctx.capacity - (rewind_ctx.head - rewind_ctx.tail);
 	else
@@ -1821,7 +1836,8 @@ static int Rewind_step_back(void) {
 	}
 
 	pthread_mutex_lock(&rewind_ctx.lock);
-	if (!rewind_ctx.entry_count) {
+	RewindBufferState state = Rewind_buffer_state_locked();
+	if (state == REWIND_BUF_EMPTY) {
 		pthread_mutex_unlock(&rewind_ctx.lock);
 		if (!rewind_warn_empty) {
 			LOG_info("Rewind: no buffered states yet\n");
@@ -8295,27 +8311,44 @@ int main(int argc , char* argv[]) {
 		int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
 		if (do_rewind) {
 			// Rewind_step_back returns: 0=buffer empty, 1=stepped back, 2=waiting for cadence
+			int was_rewinding = rewinding;
 			int rewind_result = Rewind_step_back();
-			rewinding = (rewind_result != 0);
 			if (rewind_result == 1) {
 				// Actually stepped back - run one frame to render the restored state
+				rewinding = 1;
 				fast_forward = 0;
 				core.run();
 			}
 			else if (rewind_result == 2) {
 				// Waiting for cadence - don't run core, just re-render current frame
+				rewinding = 1;
 				fast_forward = 0;
+				// Poll input manually since core.run() isn't called
+				input_poll_callback();
 				// Skip core.run() entirely to avoid advancing the game
 			}
 			else {
-				// Buffer empty: auto untoggle rewind, resume FF if it was paused for a hold
-				if (rewind_toggle) rewind_toggle = 0;
-				if (ff_paused_by_rewind_hold && ff_toggled) {
-					ff_paused_by_rewind_hold = 0;
-					fast_forward = setFastForward(1);
+				int hold_empty = rewind_ctx.enabled && rewind_pressed && !rewind_toggle;
+				if (hold_empty) {
+					// Hold-to-rewind: freeze when empty to avoid advance/rewind oscillation.
+					rewinding = was_rewinding ? 1 : 0;
+					// Poll input manually so release is detected while core.run() is skipped
+					input_poll_callback();
+				} else {
+					// Buffer empty: auto untoggle rewind, resume FF if it was paused for a hold
+					if (rewind_toggle) rewind_toggle = 0;
+					if (ff_paused_by_rewind_hold && ff_toggled) {
+						ff_paused_by_rewind_hold = 0;
+						fast_forward = setFastForward(1);
+					}
+					if (was_rewinding) {
+						rewinding = 1;
+						Rewind_sync_encode_state();
+					}
+					rewinding = 0;
+					core.run();
+					Rewind_push(0);
 				}
-				core.run();
-				Rewind_push(0);
 			}
 		}
 		else {
