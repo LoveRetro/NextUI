@@ -2042,6 +2042,9 @@ int animWorker(void* unused) {
 		}
 			
 		for (int frame = 0; frame <= total_frames; frame++) {
+			// Check for shutdown at start of each frame
+			if (SDL_AtomicGet(&workerThreadsShutdown)) break;
+
 			float t = (float)frame / total_frames;
 			if (t > 1.0f) t = 1.0f;
 
@@ -2060,7 +2063,7 @@ int animWorker(void* unused) {
 			if(frame >= total_frames) finaltask->done=1;
 			task->callback(finaltask);
 			SDL_LockMutex(frameMutex);
-			while (!frameReady) {
+			while (!frameReady && !SDL_AtomicGet(&workerThreadsShutdown)) {
 				SDL_CondWait(flipCond, frameMutex);
 			}
 			frameReady = false;
@@ -2152,6 +2155,7 @@ void cleanupImageLoaderPool() {
 	if (bgqueueCond) SDL_CondSignal(bgqueueCond);
 	if (thumbqueueCond) SDL_CondSignal(thumbqueueCond);
 	if (animqueueCond) SDL_CondSignal(animqueueCond);
+	if (flipCond) SDL_CondSignal(flipCond);  // Wake up animWorker if stuck waiting for frame flip
 	
 	// Wait for all worker threads to finish
 	if (bgLoadThread) {
