@@ -14,7 +14,7 @@ index 62cb321..e50aa6e 100644
 +   LDFLAGS += -shared -Wl,--version-script=$(CORE_DIR)/libretro/link.T
 +   HAVE_NEON = 1
 +   CFLAGS += -DARM -DALIGN_DWORD -falign-functions=16 -pipe -fstack-protector
-+   CFLAGS += -mtune=cortex-a35 -mcpu=cortex-a35 -march=armv8-a
++   CFLAGS += -mtune=cortex-a55 -mcpu=cortex-a55 -march=armv8-a
 +
  # Wincross64
  else ifeq ($(platform), wincross64)

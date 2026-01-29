@@ -17,7 +17,7 @@ index c3d5d3b30d71a8f9ed332482fa2af1c21b02605d..5e710154e499ddd7b1ae699122c38753
 +   SHARED := -shared -Wl,--no-undefined -Wl,--version-script=link.T
 +   LDFLAGS += -lrt
 +   CFLAGS += -fomit-frame-pointer -ffast-math -fPIC -flto
-+   CFLAGS += -mcpu=cortex-a35 -mtune=cortex-a35  
++   CFLAGS += -mcpu=cortex-a55 -mtune=cortex-a55  
 +   CPPFLAGS += $(CFLAGS)
 +   LDFLAGS += -flto
 +   ifeq (,$(DEBUG))

@@ -15,7 +15,7 @@ index 3d068a5..7d14f14 100644
 +   AR = $(CROSS_COMPILE)ar
 +   fpic := -fPIC
 +   LDFLAGS += -s $(fpic) -shared -Wl,--version-script=libretro/link.T -Wl,-no-undefined
-+   CFLAGS += -mtune=cortex-a35 -mcpu=cortex-a35 -march=armv8-a
++   CFLAGS += -mtune=cortex-a55 -mcpu=cortex-a55 -march=armv8.2-a
 +   CFLAGS += -fomit-frame-pointer -ffast-math -fPIC -flto
 +   $(MYARCH)
 +   CXXFLAGS += $(CFLAGS)

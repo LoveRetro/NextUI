@@ -16,7 +16,7 @@ index 108148f4579f4727146e5b8c1e05ef7382654208..35e6399147a4ef75947ecb2ad4a94f08
 +   fpic := -fPIC
 +   PLATFORM_DEFINES += -D_GNU_SOURCE -DHAVE_STRTOF_L -DHAVE_LOCALE
 +   CFLAGS += -fomit-frame-pointer -ffast-math
-+   CFLAGS += -mcpu=cortex-a35 -mtune=cortex-a35  
++   CFLAGS += -mcpu=cortex-a55 -mtune=cortex-a55  
 +   CFLAGS += -fno-common -ftree-vectorize -funswitch-loops
 +   HAVE_NEON = 1
 +   ARCH = arm64

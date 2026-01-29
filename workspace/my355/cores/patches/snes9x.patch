@@ -11,7 +11,7 @@ index 466fa6b..ec40f1a
 +   CC=$(CROSS_COMPILE)gcc
 +   CXX=$(CROSS_COMPILE)g++
 +   CFLAGS += $(LTO)
-+   CXXFLAGS += $(LTO) -O3 -Ofast -march=armv8-a+simd -mtune=cortex-a35 -ffast-math
++   CXXFLAGS += $(LTO) -O3 -Ofast -march=armv8.2-a+simd -mtune=cortex-a55 -ffast-math
 +   LDFLAGS += $(LTO) -lstdc++ -flto
 +   TARGET := $(TARGET_NAME)_libretro.so
 +   fpic := -fPIC

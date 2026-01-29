@@ -6,7 +6,7 @@ index 67a7e1f..184ec33 100644
  	FLAGS += -fomit-frame-pointer -ffast-math -mcpu=arm926ej-s
  	fpic := -fPIC
  
-+# target platform my355 trimUI brick
++# target platform my355
 +else ifeq ($(platform), my355)
 +	TARGET := $(TARGET_NAME)_libretro.so
 +	CC = $(CROSS_COMPILE)gcc
@@ -14,7 +14,7 @@ index 67a7e1f..184ec33 100644
 +	AR = $(CROSS_COMPILE)ar
 +	SHARED := -shared -Wl,--no-undefined
 +	LDFLAGS += -shared -Wl,--version-script=link.T
-+	FLAGS += -fomit-frame-pointer -ffast-math -mtune=cortex-a35 -mcpu=cortex-a35 -march=armv8-a
++	FLAGS += -fomit-frame-pointer -ffast-math -mtune=cortex-a55 -mcpu=cortex-a55 -march=armv8.2-a
 +	fpic := -fPIC
 +	HAVE_NEON = 1
 +

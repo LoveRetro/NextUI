@@ -15,7 +15,7 @@ index ffaba21e7a88f90786d818ab550b68acd05738bf..2095b2f843eaf6be9abec24ce3da69b5
 +	SHARED := -shared -Wl,--version-script=$(version_script)
 +	LDFLAGS += -fPIC -flto
 +	PLATFORM_DEFINES := -DCC_RESAMPLER -DCC_RESAMPLER_NO_HIGHPASS
-+	CFLAGS += -mcpu=cortex-a35 -mtune=cortex-a35  
++	CFLAGS += -mcpu=cortex-a55 -mtune=cortex-a55  
 +	CFLAGS += -fomit-frame-pointer -ffast-math -fPIC -flto
 +	CXXFLAGS += $(CFLAGS)
 +

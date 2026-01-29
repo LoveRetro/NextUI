@@ -16,7 +16,7 @@ index ef2f9e7d1c6041bea8e2c8a61cdd363ed73a7482..ada8785f566af89cc77f5ab2dd9e670b
 +	fpic := -fPIC
 +	CFLAGS += -DARM
 +	CFLAGS += $(PTHREAD_FLAGS)
-+	CFLAGS += -mcpu=cortex-a35 -mtune=cortex-a35  
++	CFLAGS += -mcpu=cortex-a55 -mtune=cortex-a55  
 +	CFLAGS += -ffast-math -fomit-frame-pointer
 +	CFLAGS += -DDINGUX
 +	HAVE_NEON = 1

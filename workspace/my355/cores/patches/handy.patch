@@ -14,7 +14,7 @@ index 088c344..9573f27 100644
 +	AR = $(CROSS_COMPILE)ar
 +	fpic := -fPIC
 +	SHARED := -shared -Wl,--no-undefined -Wl,-version-script=$(LIBRETRO_DIR)/link.T
-+	FLAGS += -fomit-frame-pointer -ffast-math -mtune=cortex-a35 -mcpu=cortex-a35 -march=armv8-a
++	FLAGS += -fomit-frame-pointer -ffast-math -mtune=cortex-a55 -mcpu=cortex-a55 -march=armv8.2-a
 +	HAVE_NEON = 1
 +
  # Nintendo Switch (libnx)

@@ -17,7 +17,7 @@ index f34a01587cda48cc28ebdfd7f00151b06ea88c42..6966d3c4802b200dea33bdbe8e96b208
 +   NEED_BPP := 16
 +   fpic := -fPIC
 +   SHARED := -shared -Wl,--no-undefined -Wl,--version-script=link.T
-+   CFLAGS += -mcpu=cortex-a35 -mtune=cortex-a35  
++   CFLAGS += -mcpu=cortex-a55 -mtune=cortex-a55  
 +   CFLAGS += -Ofast \
 +   -flto=4 -fwhole-program -fuse-linker-plugin \
 +   -fdata-sections -ffunction-sections -Wl,--gc-sections \

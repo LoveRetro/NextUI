@@ -13,7 +13,7 @@ index 7e5ff625..d0e5bdf9 100644
 +   LDFLAGS += -lm -lpthread -ldl
 +   LDFLAGS += -fPIC -flto
 +   fpic := -fPIC
-+   CFLAGS += -mtune=cortex-a35 -mcpu=cortex-a35 -march=armv8-a+crc+simd
++   CFLAGS += -mtune=cortex-a55 -mcpu=cortex-a55 -march=armv8.2-a+crc+simd
 +   CFLAGS += -fomit-frame-pointer -ffast-math -fPIC -flto
 +   CFLAGS += -Ofast -flto=4 -fmerge-all-constants -fno-math-errno
 +   CXXFLAGS += $(CFLAGS)

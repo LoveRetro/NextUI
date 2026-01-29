@@ -14,7 +14,7 @@ index be0f1b46bb3ab10be4a9f896f5e8841dd630b35b..f6b4d892627ec2a81b01ddb4da7f0c7a
 +   CXX = $(CROSS_COMPILE)g++
 +   AR = $(CROSS_COMPILE)ar
 +   STRIP = $(CROSS_COMPILE)strip
-+   CXXFLAGS += -mcpu=cortex-a35 -mtune=cortex-a35
++   CXXFLAGS += -mcpu=cortex-a55 -mtune=cortex-a55
 +   fpic := -fPIC
 +   SHARED := -shared -Wl,--version-script=link.T
  else ifeq ($(platform), gcw0)

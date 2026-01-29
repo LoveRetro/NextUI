@@ -6,7 +6,7 @@ index a22eb5d..c55c8cf 100644
  	FLAGS += -fomit-frame-pointer -ffast-math -march=armv5te -mtune=arm926ej-s
  	fpic := -fPIC
 
-+# target platform my355 trimUI brick
++# target platform my355
 +else ifeq ($(platform), my355)
 +	TARGET := $(TARGET_NAME)_libretro.so
 +	CC = $(CROSS_COMPILE)gcc
@@ -15,7 +15,7 @@ index a22eb5d..c55c8cf 100644
 +	SHARED := -shared -Wl,--no-undefined
 +	LDFLAGS += -shared -Wl,--version-script=link.T -ffast-math
 +	CFLAGS += -DARM -DALIGN_DWORD -falign-functions=16 -pipe -fstack-protector
-+	CFLAGS += -mtune=cortex-a35 -mcpu=cortex-a35 -march=armv8-a
++	CFLAGS += -mtune=cortex-a55 -mcpu=cortex-a55 -march=armv8.2-a
 +	fpic := -fPIC
 +	HAVE_NEON = 1
 +

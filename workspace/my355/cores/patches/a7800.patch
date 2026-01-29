@@ -14,7 +14,7 @@ index dc2a31c..2a8bca2 100644
 +	AR = $(CROSS_COMPILE)ar
 +	SHARED := -shared -Wl,--no-undefined
 +	LDFLAGS += -shared -Wl,--version-script=link.T
-+	FLAGS += -fomit-frame-pointer -ffast-math -mtune=cortex-a35 -mcpu=cortex-a35 -march=armv8-a
++	FLAGS += -fomit-frame-pointer -ffast-math -mtune=cortex-a55 -mcpu=cortex-a55 -march=armv8.2-a
 +	fpic := -fPIC
 +	HAVE_NEON = 1
 +
