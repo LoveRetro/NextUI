@@ -1,7 +1,7 @@
 #!/bin/sh
 
 WIFI_INTERFACE="wlan0"
-WPA_SUPPLICANT_CONF="/etc/wifi/wpa_supplicant/wpa_supplicant.conf"
+WPA_SUPPLICANT_CONF="/etc/wifi/wpa_supplicant.conf"
 
 start() {
 	# Unblock wifi via rfkill
@@ -11,7 +11,7 @@ start() {
 	if [ ! -f "$WPA_SUPPLICANT_CONF" ]; then
 		mkdir -p "$(dirname "$WPA_SUPPLICANT_CONF")"
 		cat > "$WPA_SUPPLICANT_CONF" << 'EOF'
-# cat /etc/wifi/wpa_supplicant/wpa_supplicant.conf
+# cat /etc/wifi/wpa_supplicant.conf
 ctrl_interface=/etc/wifi/sockets
 disable_scan_offload=1
 update_config=1
