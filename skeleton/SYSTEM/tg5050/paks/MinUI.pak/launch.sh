@@ -141,19 +141,21 @@ batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 rm -f $USERDATA_PATH/.asoundrc
 audiomon.elf & #&> $SDCARD_PATH/audiomon.txt &
 
-# BT handling
-bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')
-if [ "$bluetoothon" -eq 1 ]; then
-	$SYSTEM_PATH/etc/bluetooth/bt_init.sh start > /dev/null 2>&1 &
-fi
-echo after bluetooth `cat /proc/uptime` >> /tmp/nextui_boottime
-
 # wifi handling
 wifion=$(nextval.elf wifi | sed -n 's/.*"wifi": \([0-9]*\).*/\1/p')
-if [ "$wifion" -eq 1 ]; then
-	$SYSTEM_PATH/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
+if [ "$wifion" -eq 0 ]; then
+else
+	$SYSTEM_PATH/etc/wifi/wifi_init.sh start >> /tmp/nextui_boottime 2>&1 &
 fi
 echo after wifi `cat /proc/uptime` >> /tmp/nextui_boottime
+
+# BT handling
+bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')
+if [ "$bluetoothon" -eq 0 ]; then
+else
+	$SYSTEM_PATH/etc/bluetooth/bt_init.sh start >> /tmp/nextui_boottime 2>&1 &
+fi
+echo after bluetooth `cat /proc/uptime` >> /tmp/nextui_boottime
 
 #######################################
 
