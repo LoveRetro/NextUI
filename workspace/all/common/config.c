@@ -73,11 +73,6 @@ void CFG_defaults(NextUISettings *cfg)
         .bluetooth = CFG_DEFAULT_BLUETOOTH,
         .bluetoothDiagnostics = CFG_DEFAULT_BLUETOOTH_DIAG,
         .bluetoothSamplerateLimit = CFG_DEFAULT_BLUETOOTH_MAXRATE,
-
-        .rewindEnable = false,
-        .rewindBufferMB = 64,
-        .rewindGranularity = 10,
-        .rewindMuteAudio = false,
 };
 
     *cfg = defaults;
@@ -602,50 +597,6 @@ bool CFG_getUseExtractedFileName(void)
 void CFG_setUseExtractedFileName(bool use)
 {
     settings.useExtractedFileName = use;
-    CFG_sync();
-}
-
-bool CFG_getRewindEnable(void)
-{
-    return settings.rewindEnable;
-}
-
-void CFG_setRewindEnable(bool enable)
-{
-    settings.rewindEnable = enable;
-    CFG_sync();
-}
-
-int CFG_getRewindBufferMB(void)
-{
-    return settings.rewindBufferMB;
-}
-
-void CFG_setRewindBufferMB(int mb)
-{
-    settings.rewindBufferMB = clamp(mb, 1, 256);
-    CFG_sync();
-}
-
-int CFG_getRewindGranularity(void)
-{
-    return settings.rewindGranularity;
-}
-
-void CFG_setRewindGranularity(int granularity)
-{
-    settings.rewindGranularity = clamp(granularity, 1, 60);
-    CFG_sync();
-}
-
-bool CFG_getRewindMuteAudio(void)
-{
-    return settings.rewindMuteAudio;
-}
-
-void CFG_setRewindMuteAudio(bool enable)
-{
-    settings.rewindMuteAudio = enable;
     CFG_sync();
 }
 

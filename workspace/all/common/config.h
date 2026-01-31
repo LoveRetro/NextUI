@@ -115,12 +115,6 @@ typedef struct
 	bool bluetoothDiagnostics;
 	int bluetoothSamplerateLimit;
 
-	// Rewind
-	bool rewindEnable;
-	int rewindBufferMB;
-	int rewindGranularity;
-	bool rewindMuteAudio;
-
 } NextUISettings;
 
 #define CFG_DEFAULT_FONT_ID 1  // Next
@@ -149,10 +143,6 @@ typedef struct
 #define CFG_DEFAULT_SAVEFORMAT SAVE_FORMAT_SAV
 #define CFG_DEFAULT_STATEFORMAT STATE_FORMAT_SAV
 #define CFG_DEFAULT_EXTRACTEDFILENAME false
-#define CFG_DEFAULT_REWIND_ENABLE false
-#define CFG_DEFAULT_REWIND_BUFFER_MB 16
-#define CFG_DEFAULT_REWIND_GRANULARITY 1
-#define CFG_DEFAULT_REWIND_MUTE_AUDIO true
 #define CFG_DEFAULT_MUTELEDS false
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
