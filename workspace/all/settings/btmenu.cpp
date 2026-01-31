@@ -143,7 +143,7 @@ void Menu::updater()
             std::vector<BT_devicePaired> kl(SCAN_MAX_RESULTS);
             int known = BT_pairedDevices(kl.data(), SCAN_MAX_RESULTS);
             for (int i = 0; i < known; i++)
-                pairedMap.emplace(kl[i].remote_name, kl[i]);
+                pairedMap.emplace(kl[i].remote_addr, kl[i]);  // Use MAC address as key (unique)
 
             // grab list and compare it to previous result
             // only relayout the menu if changes happended
