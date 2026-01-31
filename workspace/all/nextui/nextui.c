@@ -1451,10 +1451,14 @@ static void openDirectory(char* path, int auto_launch) {
 		Array_push(stack, top);
 	}
 	else {
+		// keep a copy of path, which might be a reference into stack which is about to be freed
+		char temp_path[256];
+		strcpy(temp_path, path);
+
 		// construct a fresh stack by walking upwards until SDCARD_ROOT
 		DirectoryArray_free(stack);
 
-		stack = pathToStack(path);
+		stack = pathToStack(temp_path);
 		top = stack->items[stack->count - 1];
 	}
 }
