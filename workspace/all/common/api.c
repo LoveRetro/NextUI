@@ -3267,27 +3267,51 @@ FALLBACK_IMPLEMENTATION int PLAT_supportsDeepSleep(void) { return 0; }
 FALLBACK_IMPLEMENTATION int PLAT_deepSleep(void)
 {
 	const char *state_path = "/sys/power/state";
+	int state_fd = 0;
 
-	int state_fd = open(state_path, O_WRONLY);
-	if (state_fd < 0)
-	{
-		LOG_error("failed to open %s: %d\n", state_path, errno);
-		return -1;
-	}
+	for (int i = 0; i < 5; i++) {
 
-	LOG_info("suspending to RAM\n");
-	int ret = write(state_fd, "mem", 3);
-	if (ret < 0)
-	{
-		// Can fail shortly after resuming with EBUSY
-		LOG_error("failed to set power state: %d\n", errno);
+		// Check for power button press while waiting to retry
+		uint32_t attempt_ticks  = SDL_GetTicks();
+		if (i > 0) { // Don't wait on first attempt
+			while (1) {
+				if (pwr.requested_wake || PAD_wake()) {
+					pwr.requested_wake = 0;
+					return 0;
+				}
+				SDL_Delay(200);
+				if (SDL_GetTicks() - attempt_ticks >= 2000) {
+					break;
+				}
+			}
+		}
+
+		state_fd = open(state_path, O_WRONLY);
+		if (state_fd < 0)
+		{
+			LOG_error("failed to open %s: %d\n", state_path, errno);
+			LOG_info("retrying suspend in 2 seconds...\n");
+			close(state_fd);
+			continue;
+		}
+
+		LOG_info("suspending to RAM\n");
+		int ret = write(state_fd, "mem", 3);
+		if (ret < 0)
+		{
+			// Can fail shortly after resuming with EBUSY
+			LOG_error("failed to set power state: %d\n", errno);
+			LOG_info("retrying suspend in 2 seconds...\n");
+			close(state_fd);
+			continue;
+		}
+
+		LOG_info("returned from suspend\n");
 		close(state_fd);
-		return -1;
+		return 0;
 	}
 
-	LOG_info("returned from suspend\n");
-	close(state_fd);
-	return 0;
+	return -1;
 }
 
 int PAD_anyJustPressed(void) { return pad.just_pressed != BTN_NONE; }
@@ -3795,13 +3819,6 @@ static void PWR_waitForWake(void)
 					if (ret == 0)
 					{
 						return;
-					}
-					else if (deep_sleep_attempts < 3)
-					{
-						LOG_warn("failed to enter deep sleep - retrying in 5 seconds\n");
-						sleep_ticks += 5000;
-						deep_sleep_attempts++;
-						continue;
 					}
 					else
 					{
