@@ -90,14 +90,21 @@ all: clean libretro-common $(PREFIX_LOCAL)/include/msettings.h
 else
 all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
-	cp $(PREFIX)/lib/libsamplerate.so.0 build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
+ifeq ($(PLATFORM), my355)
+	cp $(LIB_PATH)/libcrypto.so.3 build/$(PLATFORM)
+	cp $(LIB_PATH)/libsamplerate.so.0 build/$(PLATFORM)
+	cp $(LIB_PATH)/libzip.so.4 build/$(PLATFORM)
+	cp $(LIB_PATH)/libbz2.so.1.0 build/$(PLATFORM)
+	cp $(LIB_PATH)/liblzma.so.5 build/$(PLATFORM)
+	cp $(LIB_PATH)/libzstd.so.1 build/$(PLATFORM)
+	cp $(LIB_PATH)/libsqlite3.so.0 build/$(PLATFORM)
+else 
+	cp $(PREFIX)/lib/libsamplerate.so.0 build/$(PLATFORM)
 	cp $(PREFIX)/lib/libzip.so.5 build/$(PLATFORM)
 	cp $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
 	cp $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
 	cp $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
-ifeq ($(PLATFORM), my355)
-	cp $(LIB_PATH)/libcrypto.so.3 build/$(PLATFORM)
 endif
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif

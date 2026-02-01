@@ -1,5 +1,6 @@
 $(PLATFORM):
 	# installer
+	cp ./workspace/$@/install/boot.sh ./build/BOOT/common/$@.sh
 	cp ./workspace/$@/install/update.sh ./build/SYSTEM/$@/bin/install.sh
 	mkdir -p ./build/BOOT/common/$@/
 	cp ./workspace/$@/install/*.png ./build/BOOT/common/$@/

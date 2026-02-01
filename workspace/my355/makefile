@@ -20,10 +20,10 @@ all: readmes
 
 early: $(REQUIRES_EVTEST) $(REQUIRES_MKBOOTIMG) $(REQUIRES_RSCEGO) $(REQUIRES_COMMANDER)
 	mkdir -p other
-	#cd $(REQUIRES_FILEMGR) && make -j
+	cd $(REQUIRES_FILEMGR) && make -j
 	cd $(REQUIRES_EVTEST) && $(CROSS_COMPILE)gcc -o evtest evtest.c
-	# cd $(REQUIRES_MKBOOTIMG) && make
-	# cd $(REQUIRES_RSCEGO) && go build -o rsce_tool
+	cd $(REQUIRES_MKBOOTIMG) && make
+	cd $(REQUIRES_RSCEGO) && go build -o rsce_tool
 
 clean:
 	cd $(REQUIRES_FILEMGR) && make clean
@@ -35,9 +35,9 @@ $(REQUIRES_FILEMGR):
 $(REQUIRES_EVTEST):
 	git clone --depth 1 https://github.com/freedesktop-unofficial-mirror/evtest.git $(REQUIRES_EVTEST)
 $(REQUIRES_MKBOOTIMG):
-	git clone --depth 1 https://github.com/osm0sis/mkbootimg $(REQUIRES_MKBOOTIMG)
+	git clone --depth 1 https://github.com/LoveRetro/mkbootimg $(REQUIRES_MKBOOTIMG)
 $(REQUIRES_RSCEGO):
 	git clone --depth 1 https://github.com/Evsio0n/rsce-go $(REQUIRES_RSCEGO)
-	cd $(REQUIRES_RSCEGO) && go mod tidy && go mod download
+	cd $(REQUIRES_RSCEGO) && go mod tidy -e && go mod download
 
 include ../all/readmes/makefile
