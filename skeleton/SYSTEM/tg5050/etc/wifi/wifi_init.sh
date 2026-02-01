@@ -15,6 +15,8 @@ start() {
 	
 	# Bring up the interface
 	ip link set $WIFI_INTERFACE up 2>/dev/null
+
+	mkdir -p /etc/wifi/sockets
 	
 	# Create default wpa_supplicant.conf if it doesn't exist
 	if [ ! -f "$WPA_SUPPLICANT_CONF" ]; then
@@ -31,7 +33,7 @@ EOF
 	
 	# Start wpa_supplicant if not running
 	if ! pidof wpa_supplicant > /dev/null 2>&1; then
-		wpa_supplicant -B -i $WIFI_INTERFACE -c $WPA_SUPPLICANT_CONF -D nl80211 2>/dev/null
+		wpa_supplicant -B -i $WIFI_INTERFACE -c $WPA_SUPPLICANT_CONF -O /etc/wifi/sockets -D nl80211 2>/dev/null
 		sleep 0.5
 	fi
 
@@ -43,7 +45,7 @@ EOF
 
 stop() {
 	# Disconnect and disable
-	wpa_cli -i $WIFI_INTERFACE disconnect 2>/dev/null
+	wpa_cli -p /etc/wifi/sockets -i $WIFI_INTERFACE disconnect 2>/dev/null
 	
 	# Bring down interface
 	ip link set $WIFI_INTERFACE down 2>/dev/null
