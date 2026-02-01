@@ -34,6 +34,7 @@ ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/rfkill && make all
 	cd ./$(PLATFORM)/btmanager && make all
 	cd ./$(PLATFORM)/poweroff_next/ && make
+	cd ./$(PLATFORM)/waitforwake/ && make
 endif
 	cd ./$(PLATFORM)/libmsettings && make
 	cd ./$(PLATFORM) && make early # eg. other libs
@@ -84,6 +85,7 @@ ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/rfkill && make clean
 	cd ./$(PLATFORM)/btmanager && make clean
 	cd ./$(PLATFORM)/poweroff_next/ && make clean
+	cd ./$(PLATFORM)/waitforwake/ && make clean
 endif
 endif
 	cd ./$(PLATFORM)/libmsettings && make clean

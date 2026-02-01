@@ -13,6 +13,14 @@ sleep_retval=
 
 asound_state_dir=/tmp/asound-suspend
 
+wakeup() {
+	echo 1 > /sys/class/led_anim/enable
+	>&2 echo "Deep sleep: User requested wake"
+	# Resume services in background to reduce UI latency
+	after &
+	exit $sleep_retval
+}
+
 before() {
 	>&2 echo "Preparing for suspend..."
 
@@ -30,7 +38,13 @@ before() {
 		wifid_running=1
 		>&2 echo "Stopping wpa_supplicant..."
 		/etc/wifi/wifi_init.sh stop || true
+		waitforwake.elf 10
+		if [ $? -eq 1 ]; then
+			sleep_retval=0
+			wakeup
+		fi
 	fi
+	
 }
 
 after() {
@@ -51,13 +65,18 @@ after() {
 	# alsactl --file "$asound_state_dir/asound.state.pre" restore || true
 }
 
+echo 0 > /sys/class/led_anim/enable
+
 before
 
+	
 >&2 echo "Suspending..."
 sleep_max_tries=10
 for i in $(seq 1 $sleep_max_tries); do
   >&2 echo "Deep sleep attempt $i of $sleep_max_tries"
 
+  sleep_time=$(date +%s)
+  
   # Can't use | true here, it would crash out on non-zero return.
   echo mem >/sys/power/state
   sleep_retval=$?
@@ -67,11 +86,29 @@ for i in $(seq 1 $sleep_max_tries); do
      break
   fi
 
+  # Really hard to debug this edge case where the system sleeps successfully
+  # but still returns nonzero
+  wake_time=$(date +%s)
+
+  time_asleep=$(($wake_time-$sleep_time))
+
+  if [ $time_asleep -gt 5 ]; then
+	  >&2 echo "Deep sleep: bug caught - (sleep for $time_asleep secs)"
+	  sleep_retval=0
+	  wakeup
+  fi
+  
+
   >&2 echo "Deep sleep failed: retrying in 2 seconds"
-  sleep 2
+  waitforwake.elf 2
+  if [ $? -eq 1 ]; then
+	  sleep_retval=0
+	  wakeup
+  fi
 done
 
-# Resume services in background to reduce UI latency
-after &
+# api.c: if sleep_retval is still non-zero at this point
+# (i.e. many failed attempts)
+# the calling program will safely shutdown the system
+wakeup
 
-exit $sleep_retval
