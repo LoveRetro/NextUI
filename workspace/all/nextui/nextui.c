@@ -462,6 +462,8 @@ static int quit = 0;
 static int can_resume = 0;
 static int should_resume = 0; // set to 1 on BTN_RESUME but only if can_resume==1
 static int has_preview = 0;
+static char boxart_path[256];
+static int has_boxart = 0;
 static int simple_mode = 0;
 static int switcher_selected = 0;
 static char slot_path[256];
@@ -1130,6 +1132,7 @@ static void readyResumePath(char* rom_path, int type) {
 	char* tmp;
 	can_resume = 0;
 	has_preview = 0;
+	has_boxart = 0;
 	char path[256];
 	strcpy(path, rom_path);
 	
@@ -1170,6 +1173,37 @@ static void readyResumePath(char* rom_path, int type) {
 		int s = atoi(slot);
 		sprintf(preview_path, "%s/.minui/%s/%s.%0d.bmp", SHARED_USERDATA_PATH, emu_name, rom_file, s); // /.userdata/.minui/<EMU>/<romname>.ext.<n>.bmp
 		has_preview = exists(preview_path);
+	}
+
+	// Boxart fallback: if no savestate preview, check for boxart in .media folder
+	if (!has_preview) {
+		char rom_dir[256];
+		char rom_name[256];
+		strcpy(rom_dir, rom_path);
+		char* last_slash = strrchr(rom_dir, '/');
+		if (last_slash) {
+			*last_slash = '\0';  // rom_dir now has directory
+			strcpy(rom_name, last_slash + 1);  // rom_name has filename with ext
+			char* dot = strrchr(rom_name, '.');
+			if (dot) *dot = '\0';  // remove extension
+			sprintf(boxart_path, "%s/.media/%s.png", rom_dir, rom_name);
+			has_boxart = exists(boxart_path);
+
+			// For multi-disk games in folders: if boxart not found, check parent folder
+			// e.g., /Roms/PS1/GameFolder/game.m3u -> check /Roms/PS1/.media/GameFolder.png
+			if (!has_boxart) {
+				char parent_dir[256];
+				char folder_name[256];
+				strcpy(parent_dir, rom_dir);
+				char* parent_slash = strrchr(parent_dir, '/');
+				if (parent_slash) {
+					*parent_slash = '\0';  // parent_dir now has grandparent directory
+					strcpy(folder_name, parent_slash + 1);  // folder_name has the game folder name
+					sprintf(boxart_path, "%s/.media/%s.png", parent_dir, folder_name);
+					has_boxart = exists(boxart_path);
+				}
+			}
+		}
 	}
 }
 static void readyResume(Entry* entry) {
@@ -2892,17 +2926,84 @@ int main (int argc, char *argv[]) {
 							SDL_FreeSurface(bmp);  // Free after rendering
 						}
 					}
+					else if (has_boxart) {
+						// Load and display boxart as fallback
+						SDL_Surface* boxart = IMG_Load(boxart_path);
+						if (boxart) {
+							SDL_Surface* converted = SDL_ConvertSurfaceFormat(boxart, screen->format->format, 0);
+							if (converted) {
+								SDL_FreeSurface(boxart);
+								boxart = converted;
+							}
+
+							// Apply game art settings (sizing)
+							int img_w = boxart->w;
+							int img_h = boxart->h;
+							double aspect_ratio = (double)img_h / img_w;
+							int max_w = (int)(screen->w * CFG_getGameArtWidth());
+							int max_h = (int)(screen->h * 0.6);
+							int new_w = max_w;
+							int new_h = (int)(new_w * aspect_ratio);
+
+							if (new_h > max_h) {
+								new_h = max_h;
+								new_w = (int)(new_h / aspect_ratio);
+							}
+
+							// Apply rounded corners
+							GFX_ApplyRoundedCorners_8888(
+								boxart,
+								&(SDL_Rect){0, 0, boxart->w, boxart->h},
+								SCALE1((float)CFG_getThumbnailRadius() * ((float)img_w / (float)new_w))
+							);
+
+							// Center the boxart on screen
+							int ax = (screen->w - new_w) / 2;
+							int ay = (screen->h - new_h) / 2;
+
+							// Handle animations based on transition direction
+							if(lastScreen == SCREEN_GAME) {
+								GFX_flipHidden();
+								GFX_drawOnLayer(blackBG,0,0,screen->w, screen->h,1.0f,0,LAYER_BACKGROUND);
+								GFX_animateSurfaceOpacity(boxart,ax,ay,new_w,new_h,0,255,CFG_getMenuTransitions() ? 150:20,LAYER_ALL);
+							} else if(lastScreen == SCREEN_GAMELIST) {
+								GFX_drawOnLayer(blackBG,0,0,screen->w,screen->h,1.0f,0,LAYER_BACKGROUND);
+								GFX_drawOnLayer(boxart,ax,ay,new_w,new_h,1.0f,0,LAYER_BACKGROUND);
+								GFX_flipHidden();
+								SDL_Surface *tmpNewScreen = GFX_captureRendererToSurface();
+								GFX_clearLayers(LAYER_ALL);
+								folderbgchanged=1;
+								GFX_drawOnLayer(tmpOldScreen,0,0,screen->w, screen->h,1.0f,0,LAYER_ALL);
+								GFX_animateSurface(tmpNewScreen,0,0-screen->h,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 100:20,255,255,LAYER_BACKGROUND);
+								SDL_FreeSurface(tmpNewScreen);
+							} else if(lastScreen == SCREEN_GAMESWITCHER) {
+								GFX_flipHidden();
+								GFX_drawOnLayer(blackBG,0,0,screen->w, screen->h,1.0f,0,LAYER_BACKGROUND);
+								if(gsanimdir == SLIDE_LEFT)
+									GFX_animateSurface(boxart,ax+screen->w,ay,ax,ay,new_w,new_h,CFG_getMenuTransitions() ? 80:20,0,255,LAYER_ALL);
+								else if(gsanimdir == SLIDE_RIGHT)
+									GFX_animateSurface(boxart,ax-screen->w,ay,ax,ay,new_w,new_h,CFG_getMenuTransitions() ? 80:20,0,255,LAYER_ALL);
+								GFX_drawOnLayer(boxart,ax,ay,new_w,new_h,1.0f,0,LAYER_BACKGROUND);
+							} else if(lastScreen == SCREEN_QUICKMENU) {
+								GFX_flipHidden();
+								GFX_drawOnLayer(blackBG,0,0,screen->w, screen->h,1.0f,0,LAYER_BACKGROUND);
+								GFX_drawOnLayer(boxart,ax,ay,new_w,new_h,1.0f,0,LAYER_BACKGROUND);
+							}
+							SDL_FreeSurface(boxart);
+						}
+					}
 					else {
+						// No savestate preview and no boxart - show "No Preview"
 						SDL_Rect preview_rect = {ox,oy,screen->w,screen->h};
 						SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,screen->format->BitsPerPixel,screen->format->format);
 						SDL_FillRect(tmpsur, &preview_rect, SDL_MapRGBA(screen->format,0,0,0,255));
 						if(lastScreen == SCREEN_GAME) {
 							GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,LAYER_BACKGROUND);
-						} else if(lastScreen == SCREEN_GAMELIST) { 
+						} else if(lastScreen == SCREEN_GAMELIST) {
 							GFX_animateSurface(tmpsur,0,0-screen->h,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 100:20,255,255,LAYER_ALL);
 						} else if(lastScreen == SCREEN_GAMESWITCHER) {
 							GFX_flipHidden();
-							if(gsanimdir == SLIDE_LEFT) 
+							if(gsanimdir == SLIDE_LEFT)
 								GFX_animateSurface(tmpsur,0+screen->w,0,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 80:20,0,255,LAYER_ALL);
 							else if(gsanimdir == SLIDE_RIGHT)
 								GFX_animateSurface(tmpsur,0-screen->w,0,0,0,screen->w,screen->h,CFG_getMenuTransitions() ? 80:20,0,255,LAYER_ALL);
