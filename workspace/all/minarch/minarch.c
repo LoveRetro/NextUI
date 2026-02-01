@@ -90,7 +90,7 @@ static int rewind_cfg_enable = MINARCH_DEFAULT_REWIND_ENABLE;
 static int rewind_cfg_buffer_mb = MINARCH_DEFAULT_REWIND_BUFFER_MB;
 static int rewind_cfg_granularity = MINARCH_DEFAULT_REWIND_GRANULARITY;
 static int rewind_cfg_audio = MINARCH_DEFAULT_REWIND_AUDIO;
-static int rewind_cfg_skip_compress = 0;
+static int rewind_cfg_compress = 1;
 static int rewind_cfg_lz4_acceleration = MINARCH_DEFAULT_REWIND_LZ4_ACCELERATION;
 static int overclock = 3; // auto
 static int has_custom_controllers = 0;
@@ -1206,7 +1206,6 @@ typedef struct {
 	pthread_cond_t queue_cv;
 	int worker_stop;
 	int worker_running;
-	int drop_warned;
 	int locks_ready;
 
 	uint8_t **capture_pool;
@@ -1294,7 +1293,7 @@ static void Rewind_reset(void) {
 	rewind_ctx.last_push_ms = 0;
 	rewind_ctx.last_step_ms = 0;
 	rewind_ctx.generation += 1;
-	rewind_ctx.drop_warned = 0;
+
 	rewind_ctx.worker_stop = 0;
 	if (!rewind_ctx.generation) rewind_ctx.generation = 1; // avoid zero if it wrapped
 	// clear pending async work so new snapshots don't mix with stale ones
@@ -1483,9 +1482,8 @@ static int Rewind_init(size_t state_size) {
 	int buf_mb = rewind_cfg_buffer_mb;
 	int gran = rewind_cfg_granularity;
 	int audio = rewind_cfg_audio;
-	int skip_compress = rewind_cfg_skip_compress;
+	int compress = rewind_cfg_compress;
 	if (!enable) {
-		LOG_info("Rewind: disabled via config\n");
 		return 0;
 	}
 	if (!state_size) {
@@ -1499,7 +1497,7 @@ static int Rewind_init(size_t state_size) {
 	size_t buffer_mb = (size_t)buf_mb;
 
 	rewind_ctx.capacity = buffer_mb * 1024 * 1024;
-	rewind_ctx.compress = skip_compress ? 0 : 1;
+	rewind_ctx.compress = compress;
 	if (!rewind_ctx.compress && rewind_ctx.capacity <= state_size) {
 		LOG_warn("Rewind: raw snapshots (%zu bytes) do not fit in %zu-byte buffer; falling back to compression\n",
 			state_size, rewind_ctx.capacity);
@@ -1582,7 +1580,7 @@ static int Rewind_init(size_t state_size) {
 	rewind_ctx.generation = 1;
 	rewind_ctx.worker_stop = 0;
 	rewind_ctx.queue_head = rewind_ctx.queue_tail = rewind_ctx.queue_count = 0;
-	rewind_ctx.drop_warned = 0;
+
 
 	pthread_mutex_init(&rewind_ctx.lock, NULL);
 	pthread_mutex_init(&rewind_ctx.queue_mx, NULL);
@@ -1784,7 +1782,7 @@ static void Rewind_push(int force) {
 		rewind_ctx.queue_count += 1;
 		pthread_cond_signal(&rewind_ctx.queue_cv);
 		pthread_mutex_unlock(&rewind_ctx.queue_mx);
-		rewind_ctx.drop_warned = 0;
+	
 		return;
 	}
 
@@ -1806,17 +1804,21 @@ static void Rewind_push(int force) {
 
 	Rewind_write_entry_locked(rewind_ctx.scratch, dest_len, is_keyframe);
 	pthread_mutex_unlock(&rewind_ctx.lock);
-	rewind_ctx.drop_warned = 0;
+
 }
 
-// Returns: 0 = buffer empty/disabled, 1 = stepped back successfully, 2 = waiting for cadence (don't run core)
+enum {
+	REWIND_STEP_EMPTY    = 0, // buffer empty or disabled
+	REWIND_STEP_OK       = 1, // stepped back successfully
+	REWIND_STEP_CADENCE  = 2, // waiting for playback cadence (don't run core)
+};
 static int Rewind_step_back(void) {
-	if (!rewind_ctx.enabled) return 0;
+	if (!rewind_ctx.enabled) return REWIND_STEP_EMPTY;
 	uint32_t now_ms = SDL_GetTicks();
 	if (rewind_ctx.playback_interval_ms > 0 && rewind_ctx.last_step_ms &&
 		(int)(now_ms - rewind_ctx.last_step_ms) < rewind_ctx.playback_interval_ms) {
 		// still rewinding, just waiting for cadence; don't run core, just re-render
-		return 2;
+		return REWIND_STEP_CADENCE;
 	}
 
 	// On first rewind step, we need to:
@@ -1843,7 +1845,7 @@ static int Rewind_step_back(void) {
 			LOG_info("Rewind: no buffered states yet\n");
 			rewind_warn_empty = 1;
 		}
-		return 0;
+		return REWIND_STEP_EMPTY;
 	}
 
 	int idx = rewind_ctx.entry_head - 1;
@@ -1907,14 +1909,14 @@ static int Rewind_step_back(void) {
 			rewind_ctx.head = rewind_ctx.tail = 0;
 		}
 		pthread_mutex_unlock(&rewind_ctx.lock);
-		return 0;
+		return REWIND_STEP_EMPTY;
 	}
 
 	if (!core.unserialize(rewind_ctx.state_buf, rewind_ctx.state_size)) {
 		LOG_error("Rewind: unserialize failed\n");
 		Rewind_drop_oldest_locked();
 		pthread_mutex_unlock(&rewind_ctx.lock);
-		return 0;
+		return REWIND_STEP_EMPTY;
 	}
 
 	// pop newest
@@ -1927,7 +1929,7 @@ static int Rewind_step_back(void) {
 
 	rewinding = 1;
 	rewind_ctx.last_step_ms = now_ms;
-	return 1;
+	return REWIND_STEP_OK;
 }
 
 // Call this when rewind ends to sync the encode buffer with the last decoded state
@@ -2300,7 +2302,7 @@ enum {
 	FE_OPT_REWIND_ENABLE,
 	FE_OPT_REWIND_BUFFER,
 	FE_OPT_REWIND_GRANULARITY,
-	FE_OPT_REWIND_SKIP_COMPRESSION,
+	FE_OPT_REWIND_COMPRESSION,
 	FE_OPT_REWIND_COMPRESSION_ACCEL,
 	FE_OPT_REWIND_AUDIO,
 	FE_OPT_COUNT,
@@ -2691,12 +2693,12 @@ static struct Config {
 				.values = rewind_granularity_values,
 				.labels = rewind_granularity_labels,
 			},
-			[FE_OPT_REWIND_SKIP_COMPRESSION] = {
-				.key	= "minarch_rewind_skip_compression",
-				.name	= "Skip Rewind Compression",
-				.desc	= "Store raw rewind snapshots instead of compressing them.\nUses more memory but less CPU.",
-				.default_value = 0,
-				.value = 0,
+			[FE_OPT_REWIND_COMPRESSION] = {
+				.key	= "minarch_rewind_compression",
+				.name	= "Rewind Compression",
+				.desc	= "Compress rewind snapshots to save memory at the cost of CPU.",
+				.default_value = 1,
+				.value = 1,
 				.count = 2,
 				.values = onoff_labels,
 				.labels = onoff_labels,
@@ -3087,8 +3089,8 @@ static void Config_syncFrontend(char* key, int value) {
 	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_AUDIO].key)) {
 		i = FE_OPT_REWIND_AUDIO;
 	}
-	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_SKIP_COMPRESSION].key)) {
-		i = FE_OPT_REWIND_SKIP_COMPRESSION;
+	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_COMPRESSION].key)) {
+		i = FE_OPT_REWIND_COMPRESSION;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_COMPRESSION_ACCEL].key)) {
 		i = FE_OPT_REWIND_COMPRESSION_ACCEL;
@@ -3096,10 +3098,10 @@ static void Config_syncFrontend(char* key, int value) {
 	if (i==-1) return;
 	Option* option = &config.frontend.options[i];
 	option->value = value;
-	if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_BUFFER || i==FE_OPT_REWIND_GRANULARITY || i==FE_OPT_REWIND_AUDIO || i==FE_OPT_REWIND_SKIP_COMPRESSION || i==FE_OPT_REWIND_COMPRESSION_ACCEL) {
+	if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_BUFFER || i==FE_OPT_REWIND_GRANULARITY || i==FE_OPT_REWIND_AUDIO || i==FE_OPT_REWIND_COMPRESSION || i==FE_OPT_REWIND_COMPRESSION_ACCEL) {
 		const char* sval = option->values && option->values[value] ? option->values[value] : "0";
 		int parsed = 0;
-		if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_AUDIO || i==FE_OPT_REWIND_SKIP_COMPRESSION) {
+		if (i==FE_OPT_REWIND_ENABLE || i==FE_OPT_REWIND_AUDIO || i==FE_OPT_REWIND_COMPRESSION) {
 			// use option index (Off/On)
 			parsed = value;
 		}
@@ -3111,7 +3113,7 @@ static void Config_syncFrontend(char* key, int value) {
 			case FE_OPT_REWIND_BUFFER: rewind_cfg_buffer_mb = parsed; break;
 			case FE_OPT_REWIND_GRANULARITY: rewind_cfg_granularity = parsed; break;
 			case FE_OPT_REWIND_AUDIO: rewind_cfg_audio = parsed; break;
-			case FE_OPT_REWIND_SKIP_COMPRESSION: rewind_cfg_skip_compress = parsed; break;
+			case FE_OPT_REWIND_COMPRESSION: rewind_cfg_compress = parsed; break;
 			case FE_OPT_REWIND_COMPRESSION_ACCEL: rewind_cfg_lz4_acceleration = parsed; break;
 		}
 		// Only call Rewind_init if core is initialized; early config reads happen before
@@ -4283,7 +4285,6 @@ static void input_poll_callback(void) {
 			else if (i==SHORTCUT_TOGGLE_REWIND) {
 				if (PAD_justPressed(btn)) {
 					rewind_toggle = !rewind_toggle;
-					LOG_info("Rewind toggle %s\n", rewind_toggle ? "on" : "off");
 					if (rewind_toggle && ff_toggled) {
 						// disable fast forward toggle when rewinding is toggled on
 						ff_toggled = 0;
@@ -8161,6 +8162,73 @@ static void limitFF(void) {
 	last_time = now;
 }
 
+static void Rewind_run_frame(void) {
+	// if rewind is toggled, fast-forward toggle must stay off; fast-forward hold pauses rewind
+	int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
+	if (do_rewind) {
+		int was_rewinding = rewinding;
+		int rewind_result = Rewind_step_back();
+		if (rewind_result == REWIND_STEP_OK) {
+			// Actually stepped back - run one frame to render the restored state
+			rewinding = 1;
+			fast_forward = 0;
+			core.run();
+		}
+		else if (rewind_result == REWIND_STEP_CADENCE) {
+			// Waiting for cadence - don't run core, just re-render current frame
+			rewinding = 1;
+			fast_forward = 0;
+			// Poll input manually since core.run() isn't called
+			input_poll_callback();
+			// Skip core.run() entirely to avoid advancing the game
+		}
+		else {
+			int hold_empty = rewind_ctx.enabled && rewind_pressed && !rewind_toggle;
+			if (hold_empty) {
+				// Hold-to-rewind: freeze when empty to avoid advance/rewind oscillation.
+				rewinding = was_rewinding ? 1 : 0;
+				// Poll input manually so release is detected while core.run() is skipped
+				input_poll_callback();
+			} else {
+				// Buffer empty: auto untoggle rewind, resume FF if it was paused for a hold
+				if (rewind_toggle) rewind_toggle = 0;
+				if (ff_paused_by_rewind_hold && ff_toggled) {
+					ff_paused_by_rewind_hold = 0;
+					fast_forward = setFastForward(1);
+				}
+				if (was_rewinding) {
+					rewinding = 1;
+					Rewind_sync_encode_state();
+				}
+				rewinding = 0;
+				core.run();
+				Rewind_push(0);
+			}
+		}
+	}
+	else {
+		Rewind_sync_encode_state();
+		rewinding = 0;
+		if (ff_paused_by_rewind_hold && !rewind_pressed) {
+			// resume fast forward after hold rewind ends
+			if (ff_toggled) fast_forward = setFastForward(1);
+			ff_paused_by_rewind_hold = 0;
+		}
+
+		int ff_runs = 1;
+		if (fast_forward) {
+			// when "None" is selected, assume a modest 2x instead of unbounded spam
+			ff_runs = max_ff_speed ? max_ff_speed + 1 : 2;
+		}
+
+		for (int ff_step = 0; ff_step < ff_runs; ff_step++) {
+			core.run();
+			Rewind_push(0);
+		}
+	}
+	limitFF();
+}
+
 #define PWR_UPDATE_FREQ 5
 #define PWR_UPDATE_FREQ_INGAME 20
 
@@ -8307,71 +8375,7 @@ int main(int argc , char* argv[]) {
 	while (!quit) {
 		GFX_startFrame();
 
-		// if rewind is toggled, fast-forward toggle must stay off; fast-forward hold pauses rewind
-		int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
-		if (do_rewind) {
-			// Rewind_step_back returns: 0=buffer empty, 1=stepped back, 2=waiting for cadence
-			int was_rewinding = rewinding;
-			int rewind_result = Rewind_step_back();
-			if (rewind_result == 1) {
-				// Actually stepped back - run one frame to render the restored state
-				rewinding = 1;
-				fast_forward = 0;
-				core.run();
-			}
-			else if (rewind_result == 2) {
-				// Waiting for cadence - don't run core, just re-render current frame
-				rewinding = 1;
-				fast_forward = 0;
-				// Poll input manually since core.run() isn't called
-				input_poll_callback();
-				// Skip core.run() entirely to avoid advancing the game
-			}
-			else {
-				int hold_empty = rewind_ctx.enabled && rewind_pressed && !rewind_toggle;
-				if (hold_empty) {
-					// Hold-to-rewind: freeze when empty to avoid advance/rewind oscillation.
-					rewinding = was_rewinding ? 1 : 0;
-					// Poll input manually so release is detected while core.run() is skipped
-					input_poll_callback();
-				} else {
-					// Buffer empty: auto untoggle rewind, resume FF if it was paused for a hold
-					if (rewind_toggle) rewind_toggle = 0;
-					if (ff_paused_by_rewind_hold && ff_toggled) {
-						ff_paused_by_rewind_hold = 0;
-						fast_forward = setFastForward(1);
-					}
-					if (was_rewinding) {
-						rewinding = 1;
-						Rewind_sync_encode_state();
-					}
-					rewinding = 0;
-					core.run();
-					Rewind_push(0);
-				}
-			}
-		}
-		else {
-			Rewind_sync_encode_state();
-			rewinding = 0;
-			if (ff_paused_by_rewind_hold && !rewind_pressed) {
-				// resume fast forward after hold rewind ends
-				if (ff_toggled) fast_forward = setFastForward(1);
-				ff_paused_by_rewind_hold = 0;
-			}
-
-			int ff_runs = 1;
-			if (fast_forward) {
-				// when "None" is selected, assume a modest 2x instead of unbounded spam
-				ff_runs = max_ff_speed ? max_ff_speed + 1 : 2;
-			}
-
-			for (int ff_step = 0; ff_step < ff_runs; ff_step++) {
-				core.run();
-				Rewind_push(0);
-			}
-		}
-		limitFF();
+		Rewind_run_frame();
 
 		if (has_pending_opt_change) {
 			has_pending_opt_change = 0;
