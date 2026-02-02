@@ -31,6 +31,7 @@ before() {
 		>&2 echo "Stopping wpa_supplicant..."
 		/etc/wifi/wifi_init.sh stop || true
 	fi
+	
 }
 
 after() {
@@ -51,27 +52,45 @@ after() {
 	# alsactl --file "$asound_state_dir/asound.state.pre" restore || true
 }
 
+
 before
 
+	
 >&2 echo "Suspending..."
-sleep_max_tries=10
+sleep_max_tries=5
 for i in $(seq 1 $sleep_max_tries); do
-  >&2 echo "Deep sleep attempt $i of $sleep_max_tries"
+	>&2 echo "Deep sleep attempt $i of $sleep_max_tries"
 
-  # Can't use | true here, it would crash out on non-zero return.
-  echo mem >/sys/power/state
-  sleep_retval=$?
+	sleep_time=$(date +%s)
+	
+	echo mem >/sys/power/state
+	sleep_retval=$?
 
-  >&2 echo "Deep sleep: kernel returned $sleep_retval"
-  if [ $sleep_retval -eq 0 ]; then
-     break
-  fi
+	>&2 echo "Deep sleep: kernel returned $sleep_retval"
+	if [ $sleep_retval -eq 0 ]; then
+		break
+	fi
 
-  >&2 echo "Deep sleep failed: retrying in 2 seconds"
-  sleep 2
+	# Really hard to debug this edge case where the system sleeps successfully
+	# but still returns nonzero
+	wake_time=$(date +%s)
+
+	time_asleep=$(($wake_time-$sleep_time))
+
+	# This device has a nasty habit of returning false negatives
+	# once in a blue moon; if device was asleep for more than
+	# x seconds, wake up regardless of return value.
+	if [ $time_asleep -gt 5 ]; then
+		>&2 echo "Deep sleep: false negative caught - (sleep for $time_asleep secs)"
+		sleep_retval=0
+		break
+	fi
+	
+
+	>&2 echo "Deep sleep failed: retrying in 3 seconds"
+	sleep 3
 done
 
 # Resume services in background to reduce UI latency
 after &
-
 exit $sleep_retval
