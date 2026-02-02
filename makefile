@@ -128,18 +128,6 @@ ifeq ($(PLATFORM), tg5050)
 	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.* ./build/SYSTEM/$(PLATFORM)/lib/
 endif
-ifeq ($(PLATFORM), tg5050)
-	cp ./workspace/all/ledcontrol/build/$(PLATFORM)/ledcontrol.elf ./build/EXTRAS/Tools/$(PLATFORM)/LedControl.pak/
-	cp ./workspace/all/bootlogo/build/$(PLATFORM)/bootlogo.elf ./build/EXTRAS/Tools/$(PLATFORM)/Bootlogo.pak/
-	
-	# lib dependencies
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libsamplerate.* ./build/SYSTEM/$(PLATFORM)/lib/
-	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libzip.* ./build/SYSTEM/$(PLATFORM)/lib/
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libbz2.* ./build/SYSTEM/$(PLATFORM)/lib/
-	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.* ./build/SYSTEM/$(PLATFORM)/lib/
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.* ./build/SYSTEM/$(PLATFORM)/lib/
-endif
 ifeq ($(PLATFORM), my355)
 	cp ./workspace/all/bootlogo/build/$(PLATFORM)/bootlogo.elf ./build/EXTRAS/Tools/$(PLATFORM)/Bootlogo.pak/
 	
@@ -168,7 +156,6 @@ cores: # TODO: can't assume every platform will have the same stock cores (platf
 	cp ./workspace/$(PLATFORM)/cores/output/picodrive_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
 	cp ./workspace/$(PLATFORM)/cores/output/snes9x_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
 	cp ./workspace/$(PLATFORM)/cores/output/pcsx_rearmed_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
-endif
 	# extras
 	cp ./workspace/$(PLATFORM)/cores/output/a5200_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/A5200.pak
 	cp ./workspace/$(PLATFORM)/cores/output/prosystem_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/A7800.pak
@@ -194,6 +181,7 @@ endif
 	cp ./workspace/$(PLATFORM)/cores/output/vice_xvic_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/VIC.pak
 	cp ./workspace/$(PLATFORM)/cores/output/bluemsx_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/MSX.pak
 	cp ./workspace/$(PLATFORM)/cores/output/gearcoleco_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/COLECO.pak
+endif
 
 common: build system cores
 
@@ -273,13 +261,12 @@ package: tidy
 
 	# Fetch, rename, and stage vendored packages
 	mkdir -p $(VENDOR_DEST)
-	touch $(VENDOR_DEST)/placeholder
-	# @for entry in $(PACKAGE_URL_MAPPINGS); do \
-	# 	url=$$(echo $$entry | awk '{print $$1}'); \
-	# 	target=$$(echo $$entry | awk '{print $$2}'); \
-	# 	echo "Downloading $$url → $(VENDOR_DEST)/$$target"; \
-	# 	curl -Ls -o "$(VENDOR_DEST)/$$target" "$$url"; \
-	# done
+	@for entry in $(PACKAGE_URL_MAPPINGS); do \
+		url=$$(echo $$entry | awk '{print $$1}'); \
+		target=$$(echo $$entry | awk '{print $$2}'); \
+		echo "Downloading $$url → $(VENDOR_DEST)/$$target"; \
+		curl -Ls -o "$(VENDOR_DEST)/$$target" "$$url"; \
+	done
 
 	# Move renamed .pakz files into base folder
 	mkdir -p ./build/BASE
