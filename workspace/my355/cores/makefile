@@ -25,7 +25,7 @@ CORES+= snes9x
 CORES+= vic
 CORES+= prboom
 CORES+= bluemsx
-#CORES+= gearcoleco
+CORES+= gearcoleco
 
 ###############################
 
