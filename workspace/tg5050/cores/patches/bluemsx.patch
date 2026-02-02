@@ -3,7 +3,7 @@ index 6f412c7..9a8a14a 100644
 --- a/Makefile.libretro
 +++ b/Makefile.libretro
 @@ -188,6 +188,25 @@ else ifeq ($(platform), classic_armv8_a35)
- 	LDFLAGS += -marm -mcpu=cortex-a55 -mfpu=neon-fp-armv8 -mfloat-abi=hard -Ofast -flto -fuse-linker-plugin
+ 	LDFLAGS += -marm -mcpu=cortex-a35 -mfpu=neon-fp-armv8 -mfloat-abi=hard -Ofast -flto -fuse-linker-plugin
  #######################################
  
 +# target platform tg5050 trimUI smart pro s
