@@ -58,6 +58,18 @@
             "envFile": "${workspaceFolder}/.env_desktop",
         },
         {
+            "name": "App: Clock",
+            "request": "launch",
+            "type": "cppdbg",
+            "osx": {
+              "MIMode": "lldb"
+            },
+            "cwd": "${workspaceFolder}/workspace/all/clock/build/desktop",
+            "program": "${workspaceFolder}/workspace/all/clock/build/desktop/clock.elf",
+            "preLaunchTask": "make desktop",
+            "envFile": "${workspaceFolder}/.env_desktop",
+        },
+        {
             "name": "App: Gametimectl",
             "request": "launch",
             "type": "cppdbg",

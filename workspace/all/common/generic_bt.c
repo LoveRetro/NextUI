@@ -20,12 +20,55 @@
 #include "utils.h"
 
 #include <pthread.h>
+#include <unistd.h>
 
 bool PLAT_hasBluetooth() { return true; }
 bool PLAT_bluetoothEnabled() { return CFG_getBluetooth(); }
 
 #define btlog(fmt, ...) \
     LOG_note(PLAT_bluetoothDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, fmt, ##__VA_ARGS__)
+
+// Forward declaration
+static int bt_run_cmd(const char *cmd, char *output, size_t output_len);
+
+// Bluetoothctl version detection
+static int bluetoothctl_major_version = 0;
+static int bluetoothctl_minor_version = 0;
+
+static void bt_detect_version(void) {
+	static bool detected = false;
+	if (detected) return;
+	
+	char output[256];
+	if (bt_run_cmd("bluetoothctl --version 2>/dev/null | head -1", output, sizeof(output)) == 0) {
+		// Parse version like "bluetoothctl: 5.54" or "5.78"
+		int major = 0, minor = 0;
+		if (sscanf(output, "bluetoothctl: %d.%d", &major, &minor) == 2 ||
+		    sscanf(output, "%d.%d", &major, &minor) == 2) {
+			bluetoothctl_major_version = major;
+			bluetoothctl_minor_version = minor;
+			btlog("Detected bluetoothctl version %d.%d\n", major, minor);
+		} else {
+			// Default to 5.54 if detection fails
+			bluetoothctl_major_version = 5;
+			bluetoothctl_minor_version = 54;
+			btlog("Failed to detect bluetoothctl version, assuming 5.54\n");
+		}
+	} else {
+		// Assume older version if --version doesn't work
+		bluetoothctl_major_version = 5;
+		bluetoothctl_minor_version = 54;
+		btlog("bluetoothctl --version failed, assuming 5.54\n");
+	}
+	detected = true;
+}
+
+// Helper to check if bluetoothctl version is >= specified version
+static bool bt_version_gte(int major, int minor) {
+	if (bluetoothctl_major_version > major) return true;
+	if (bluetoothctl_major_version == major && bluetoothctl_minor_version >= minor) return true;
+	return false;
+}
 
 // Device class definitions for parsing
 #define COD_MAJOR_MASK     0x1F00
@@ -214,6 +257,9 @@ void PLAT_bluetoothInit() {
 		return;
 	}
 	
+	// Detect bluetoothctl version
+	bt_detect_version();
+	
 	bt_initialized = true;
 	PLAT_bluetoothEnable(CFG_getBluetooth());
 }
@@ -254,12 +300,22 @@ void PLAT_bluetoothDiscovery(int on) {
 		btlog("Starting BT discovery.\n");
 		// Clear old discovered devices
 		bt_clear_discovered_devices();
-		// Start scanning
-		system("bluetoothctl --timeout 60 scan on 2>/dev/null &");
+		
+		// Start scanning - version-dependent command
+		if (bt_version_gte(5, 70)) {
+			// In 5.70+, timeout option works differently
+			// Start scan in background and schedule auto-stop
+			system("sh -c 'bluetoothctl scan on 2>/dev/null & BT_PID=$!; sleep 60; bluetoothctl scan off 2>/dev/null; kill $BT_PID 2>/dev/null' &");
+		} else {
+			// For 5.54 and similar versions
+			system("bluetoothctl --timeout 60 scan on 2>/dev/null &");
+		}
 		bt_discovering = true;
 	} else {
 		btlog("Stopping BT discovery.\n");
 		system("bluetoothctl scan off 2>/dev/null");
+		// Also try to kill any background scan processes
+		system("pkill -f 'bluetoothctl scan on' 2>/dev/null");
 		bt_discovering = false;
 	}
 }
@@ -342,9 +398,16 @@ int PLAT_bluetoothPaired(struct BT_devicePaired *paired, int max) {
 		return 0;
 	}
 	
-	// Get list of paired devices
+	// Get list of paired devices - try both command formats
 	char output[8192];
-	if (bt_run_cmd("bluetoothctl paired-devices 2>/dev/null", output, sizeof(output)) != 0) {
+	int ret = bt_run_cmd("bluetoothctl paired-devices 2>/dev/null", output, sizeof(output));
+	
+	// If paired-devices doesn't work (5.78+), try alternative command
+	if (ret != 0 || strlen(output) == 0) {
+		ret = bt_run_cmd("bluetoothctl devices Paired 2>/dev/null", output, sizeof(output));
+	}
+	
+	if (ret != 0) {
 		btlog("Failed to get paired device list\n");
 		return 0;
 	}
@@ -398,11 +461,22 @@ void PLAT_bluetoothPair(char *addr) {
 	snprintf(cmd, sizeof(cmd), "bluetoothctl trust %s 2>/dev/null", addr);
 	system(cmd);
 	
+	// Small delay to ensure trust command completes
+	usleep(100000);
+	
 	// Pair with the device
 	snprintf(cmd, sizeof(cmd), "bluetoothctl pair %s 2>/dev/null", addr);
 	int ret = system(cmd);
 	if (ret != 0) {
 		LOG_error("BT pair failed: %d\n", ret);
+		// In newer versions, try alternative pairing method
+		if (bt_version_gte(5, 70)) {
+			snprintf(cmd, sizeof(cmd), "echo 'pair %s' | bluetoothctl 2>/dev/null", addr);
+			ret = system(cmd);
+			if (ret != 0) {
+				LOG_error("BT pair (alternative method) failed: %d\n", ret);
+			}
+		}
 	}
 	
 	// Remove from discovered list since it's now paired

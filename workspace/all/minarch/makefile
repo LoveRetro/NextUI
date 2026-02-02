@@ -104,13 +104,13 @@ ifeq ($(PLATFORM), my355)
 	cp $(LIB_PATH)/libzstd.so.1 build/$(PLATFORM)
 	cp $(LIB_PATH)/libsqlite3.so.0 build/$(PLATFORM)
 else 
-	cp $(PREFIX)/lib/libsamplerate.so.0 build/$(PLATFORM)
-	cp $(PREFIX)/lib/libzip.so.5 build/$(PLATFORM)
-	cp $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
-	cp $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
-	cp $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
-endif
+	cp -L $(PREFIX)/lib/libsamplerate.so.* build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libzip.so.* build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
+endif
 endif
 
 libretro-common:

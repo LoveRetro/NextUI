@@ -56,21 +56,21 @@ start_bt() {
 		# bluealsa -p a2dp-source --keep-alive=-1 &
 		bluealsa -p a2dp-source &
 		sleep 1
+		# Power on adapter
+		bluetoothctl power on 2>/dev/null
+		
+		# Set discoverable and pairable
+		bluetoothctl discoverable on 2>/dev/null
+		bluetoothctl pairable on 2>/dev/null
+		
+		# Set default agent for automatic pairing (no input/output)
+		bluetoothctl agent NoInputNoOutput 2>/dev/null
+		bluetoothctl default-agent 2>/dev/null
+		
+		# Set adapter name
+		bluetoothctl system-alias "$DEVICE_NAME" 2>/dev/null
     }
 
-	# Power on adapter
-	bluetoothctl power on 2>/dev/null
-	
-	# Set discoverable and pairable
-	bluetoothctl discoverable on 2>/dev/null
-	bluetoothctl pairable on 2>/dev/null
-	
-	# Set default agent for automatic pairing (no input/output)
-	bluetoothctl agent NoInputNoOutput 2>/dev/null
-	bluetoothctl default-agent 2>/dev/null
-	
-	# Set adapter name
-	bluetoothctl system-alias "$DEVICE_NAME" 2>/dev/null
 }
 
 ble_start() {
@@ -104,16 +104,15 @@ stop_bt() {
 	# stop bluealsa
 	killall bluealsa 2>/dev/null
 
-	# stop bluetoothctl
-	bluetoothctl power off 2>/dev/null
-	#bluetoothctl discoverable off 2>/dev/null
-	bluetoothctl pairable off 2>/dev/null
-	#bluetoothctl remove $(bluetoothctl devices | awk '{print $2}') 2>/dev/null
-	killall bluetoothctl 2>/dev/null
-
 	# Stop bluetooth service
 	d=`ps | grep bluetoothd | grep -v grep`
 	[ -n "$d" ] && {
+		# stop bluetoothctl
+		bluetoothctl power off 2>/dev/null
+		#bluetoothctl discoverable off 2>/dev/null
+		bluetoothctl pairable off 2>/dev/null
+		#bluetoothctl remove $(bluetoothctl devices | awk '{print $2}') 2>/dev/null
+		killall bluetoothctl 2>/dev/null
 		killall bluetoothd
 		sleep 1
 	}

@@ -28,7 +28,7 @@ int main(int argc , char* argv[]) {
 	InitSettings();
 	
 	// TODO: make use of SCALE1()
-	SDL_Surface* digits = SDL_CreateRGBSurface(SDL_SWSURFACE, SCALE2(120,16), FIXED_DEPTH,RGBA_MASK_AUTO);
+	SDL_Surface* digits =  SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, SCALE1(120), SCALE1(16), 32, screen->format->format);
 	SDL_FillRect(digits, NULL, RGB_BLACK);
 	
 	SDL_Surface* digit;
