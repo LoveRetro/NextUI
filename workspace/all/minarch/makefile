@@ -78,7 +78,9 @@ BUILD_HASH!=cat ../../hash.txt
 CFLAGS += -DBUILD_DATE=\"${BUILD_DATE}\" -DBUILD_HASH=\"${BUILD_HASH}\"
 
 ifeq ($(PLATFORM), my355)
-LIB_PATH=/usr/lib/aarch64-linux-gnu
+# old toolchain libs
+#LIB_PATH=/usr/lib/aarch64-linux-gnu
+LIB_PATH=$(PREFIX)/lib
 else
 LIB_PATH=$(PREFIX)/lib
 endif
@@ -92,9 +94,11 @@ all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
 ifeq ($(PLATFORM), my355)
-	cp $(LIB_PATH)/libcrypto.so.3 build/$(PLATFORM)
+	#cp $(LIB_PATH)/libcrypto.so.3 build/$(PLATFORM)
+	#cp $(LIB_PATH)/libzip.so.4 build/$(PLATFORM)
+	cp $(LIB_PATH)/libcrypto.so.1.1 build/$(PLATFORM)
 	cp $(LIB_PATH)/libsamplerate.so.0 build/$(PLATFORM)
-	cp $(LIB_PATH)/libzip.so.4 build/$(PLATFORM)
+	cp $(LIB_PATH)/libzip.so.5 build/$(PLATFORM)
 	cp $(LIB_PATH)/libbz2.so.1.0 build/$(PLATFORM)
 	cp $(LIB_PATH)/liblzma.so.5 build/$(PLATFORM)
 	cp $(LIB_PATH)/libzstd.so.1 build/$(PLATFORM)
