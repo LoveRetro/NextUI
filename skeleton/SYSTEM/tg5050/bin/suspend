@@ -54,11 +54,10 @@ after() {
 before
 
 >&2 echo "Suspending..."
-sleep_max_tries=10
+sleep_max_tries=5
 for i in $(seq 1 $sleep_max_tries); do
 	>&2 echo "Deep sleep attempt $i of $sleep_max_tries"
 
-	# Can't use | true here, it would crash out on non-zero return.
 	echo mem >/sys/power/state
 	sleep_retval=$?
 
@@ -67,8 +66,8 @@ for i in $(seq 1 $sleep_max_tries); do
 	    break
 	fi
 
-	>&2 echo "Deep sleep failed: retrying in 2 seconds"
-	sleep 2
+	>&2 echo "Deep sleep failed: retrying in 3 seconds"
+	sleep 3
 done
 
 # Resume services in background to reduce UI latency
