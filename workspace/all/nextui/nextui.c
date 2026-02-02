@@ -11,6 +11,7 @@
 #include "api.h"
 #include "utils.h"
 #include "config.h"
+#include "shortcuts.h"
 #include <sys/resource.h>
 #include <pthread.h>
 #include <assert.h>
@@ -575,6 +576,21 @@ static int hasM3u(char* rom_path, char* m3u_path) { // NOTE: rom_path not dir_pa
 	return exists(m3u_path);
 }
 
+// Check if entry can be pinned (PAK, ROM, or multi-disc directory with cue/m3u)
+static int canPinEntry(Entry* entry) {
+	// PAK and ROM can always be pinned
+	if (entry->type == ENTRY_PAK || entry->type == ENTRY_ROM) {
+		return 1;
+	}
+	// ENTRY_DIR can be pinned only if it has a .cue or .m3u file (multi-disc game)
+	if (entry->type == ENTRY_DIR) {
+		char cue_path[256];
+		char m3u_path[256];
+		return hasCue(entry->path, cue_path) || hasM3u(entry->path, m3u_path);
+	}
+	return 0;
+}
+
 static int hasRecents(void) {
 	LOG_info("hasRecents %s\n", RECENT_PATH);
 	int has = 0;
@@ -866,6 +882,38 @@ static Array* getRoot(void) {
         } else { // No visible systems, promote collections to root
 			Array *collections = getCollections();
 			Array_yoink(entries, collections);
+        }
+    }
+
+    // Add shortcuts (after Recents and Collections, before user root folders)
+    if (Shortcuts_getCount() > 0 && !simple_mode) {
+        Shortcuts_validate();
+        for (int i = 0; i < Shortcuts_getCount(); i++) {
+            char* path = Shortcuts_getPath(i);
+            char* name = Shortcuts_getName(i);
+            char sd_path[256];
+            sprintf(sd_path, "%s%s", SDCARD_PATH, path);
+
+            // Determine entry type based on path
+            int type;
+            if (suffixMatch(".pak", sd_path)) {
+                type = ENTRY_PAK;
+            } else {
+                DIR* dh = opendir(sd_path);
+                if (dh) {
+                    closedir(dh);
+                    type = ENTRY_DIR;
+                } else {
+                    type = ENTRY_ROM;
+                }
+            }
+
+            Entry* entry = Entry_new(sd_path, type);
+            if (name) {
+                free(entry->name);
+                entry->name = strdup(name);
+            }
+            Array_push(root, entry);
         }
     }
 
@@ -1622,6 +1670,7 @@ static void QuickMenu_quit(void) {
 static void Menu_init(void) {
 	stack = Array_new(); // array of open Directories
 	recents = Array_new();
+	Shortcuts_init();
 
 	openDirectory(SDCARD_PATH, 0);
 	loadLast(); // restore state when available
@@ -1630,6 +1679,7 @@ static void Menu_init(void) {
 }
 static void Menu_quit(void) {
 	RecentArray_free(recents);
+	Shortcuts_quit();
 	DirectoryArray_free(stack);
 
 	QuickMenu_quit();
@@ -1640,6 +1690,10 @@ static void Menu_quit(void) {
 static int dirty = 1;
 static int previous_row = 0;
 static int previous_depth = 0;
+
+// Shortcut confirmation dialog state
+static int confirm_shortcut_action = 0;  // 0=none, 1=add, 2=remove
+static Entry* confirm_shortcut_entry = NULL;
 
 ///////////////////////////////////////
 
@@ -1947,6 +2001,7 @@ void onBackgroundLoaded(SDL_Surface* surface) {
 	if (folderbgbmp) SDL_FreeSurface(folderbgbmp);
     if (!surface) {
 		folderbgbmp = NULL;
+		setNeedDraw(1);
 		SDL_UnlockMutex(bgMutex);
 		return;
 	}
@@ -2467,12 +2522,12 @@ int main (int argc, char *argv[]) {
 				folderbgchanged = 1; // The background painting code is a clusterfuck, just force a repaint here
 				if (!HAS_POWER_BUTTON && !simple_mode) PWR_enableSleep();
 			}
-			else if (PAD_tappedSelect(now)) {
+			else if (PAD_tappedSelect(now) && confirm_shortcut_action == 0) {
 				currentScreen = SCREEN_GAMESWITCHER;
 				switcher_selected = 0; 
 				dirty = 1;
 			}
-			else if (total>0) {
+			else if (total>0 && confirm_shortcut_action == 0) {
 				if (PAD_justRepeated(BTN_UP)) {
 					if (selected==0 && !PAD_justPressed(BTN_UP)) {
 						// stop at top
@@ -2537,7 +2592,7 @@ int main (int argc, char *argv[]) {
 				}
 			}
 		
-			if (PAD_justRepeated(BTN_L1) && !PAD_isPressed(BTN_R1) && !PWR_ignoreSettingInput(BTN_L1, show_setting)) { // previous alpha
+			if (confirm_shortcut_action == 0 && PAD_justRepeated(BTN_L1) && !PAD_isPressed(BTN_R1) && !PWR_ignoreSettingInput(BTN_L1, show_setting)) { // previous alpha
 				Entry* entry = top->entries->items[selected];
 				int i = entry->alpha-1;
 				if (i>=0) {
@@ -2550,7 +2605,7 @@ int main (int argc, char *argv[]) {
 					}
 				}
 			}
-			else if (PAD_justRepeated(BTN_R1) && !PAD_isPressed(BTN_L1) && !PWR_ignoreSettingInput(BTN_R1, show_setting)) { // next alpha
+			else if (confirm_shortcut_action == 0 && PAD_justRepeated(BTN_R1) && !PAD_isPressed(BTN_L1) && !PWR_ignoreSettingInput(BTN_R1, show_setting)) { // next alpha
 				Entry* entry = top->entries->items[selected];
 				int i = entry->alpha+1;
 				if (i<top->alphas->count) {
@@ -2574,10 +2629,49 @@ int main (int argc, char *argv[]) {
 			if (dirty && total>0) 
 				readyResume(entry);
 
-			if (total>0 && can_resume && PAD_justReleased(BTN_RESUME)) {
+			// Handle confirmation dialog for shortcuts
+			if (confirm_shortcut_action > 0) {
+				if (PAD_justPressed(BTN_A)) {
+					Shortcuts_confirmAction(confirm_shortcut_action, confirm_shortcut_entry);
+					confirm_shortcut_action = 0;
+					confirm_shortcut_entry = NULL;
+
+					// Refresh root directory to show updated shortcuts
+					Directory* root = stack->items[0];
+					EntryArray_free(root->entries);
+					root->entries = getRoot();
+					IntArray_free(root->alphas);
+					root->alphas = IntArray_new();
+					Directory_index(root);
+					// Keep selected in bounds
+					if (root->selected >= root->entries->count) {
+						root->selected = root->entries->count > 0 ? root->entries->count - 1 : 0;
+					}
+
+					dirty = 1;
+				}
+				else if (PAD_justPressed(BTN_B)) {
+					confirm_shortcut_action = 0;
+					confirm_shortcut_entry = NULL;
+					dirty = 1;
+				}
+			}
+			else if (total>0 && can_resume && PAD_justReleased(BTN_RESUME)) {
 				should_resume = 1;
 				Entry_open(entry);
-				
+
+				dirty = 1;
+			}
+			// Y to add/remove shortcut (only in Tools folder or console directory)
+			else if (total > 0 &&
+			         (Shortcuts_isInToolsFolder(top->path) || Shortcuts_isInConsoleDir(top->path)) &&
+			         canPinEntry(entry) && PAD_justReleased(BTN_Y)) {
+				if (Shortcuts_exists(entry->path + strlen(SDCARD_PATH))) {
+					confirm_shortcut_action = 2;  // remove
+				} else {
+					confirm_shortcut_action = 1;  // add
+				}
+				confirm_shortcut_entry = entry;
 				dirty = 1;
 			}
 			else if (total>0 && PAD_justPressed(BTN_A)) {
@@ -2958,22 +3052,50 @@ int main (int argc, char *argv[]) {
 				char defaultBgPath[512];
 				snprintf(defaultBgPath, sizeof(defaultBgPath), SDCARD_PATH "/bg.png");
 
-				if(((entry->type == ENTRY_DIR || entry->type == ENTRY_ROM) && CFG_getRomsUseFolderBackground())) {
-					char *newBg = entry->type == ENTRY_DIR ? entry->path:rompath;
-					if((strcmp(newBg, folderBgPath) != 0 || lastType != entry->type) && sizeof(folderBgPath) != 1) {
+				if(entry->type == ENTRY_DIR || entry->type == ENTRY_ROM) {
+					int is_shortcut = Shortcuts_exists(entry->path + strlen(SDCARD_PATH));
+					if (is_shortcut) {
+						// Shortcut - clear background
 						lastType = entry->type;
-						char tmppath[512];
-						strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
-						if (entry->type == ENTRY_DIR)
-							snprintf(tmppath, sizeof(tmppath), "%s/.media/bg.png", folderBgPath);
-						else if (entry->type == ENTRY_ROM)
-							snprintf(tmppath, sizeof(tmppath), "%s/.media/bglist.png", folderBgPath);
-						if(!exists(tmppath)) {
-							// Safeguard: If no background is available, still render the text to leave the user a way out
-							list_show_entry_names = true;
-							snprintf(tmppath, sizeof(tmppath), defaultBgPath, folderBgPath);
+						strncpy(folderBgPath, entry->path, sizeof(folderBgPath) - 1);
+						onBackgroundLoaded(NULL);
+						GFX_clearLayers(LAYER_BACKGROUND);
+						list_show_entry_names = true;
+					} else if (CFG_getRomsUseFolderBackground()) {
+						// Not a shortcut - load folder background
+						char *newBg = entry->type == ENTRY_DIR ? entry->path : rompath;
+						if((strcmp(newBg, folderBgPath) != 0 || lastType != entry->type) && sizeof(folderBgPath) != 1) {
+							lastType = entry->type;
+							char tmppath[512];
+							strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
+							if (entry->type == ENTRY_DIR)
+								snprintf(tmppath, sizeof(tmppath), "%s/.media/bg.png", folderBgPath);
+							else if (entry->type == ENTRY_ROM)
+								snprintf(tmppath, sizeof(tmppath), "%s/.media/bglist.png", folderBgPath);
+							if(!exists(tmppath)) {
+								// Safeguard: If no background is available, still render the text to leave the user a way out
+								list_show_entry_names = true;
+								snprintf(tmppath, sizeof(tmppath), defaultBgPath, folderBgPath);
+							}
+							startLoadFolderBackground(tmppath, onBackgroundLoaded, NULL);
 						}
-						startLoadFolderBackground(tmppath, onBackgroundLoaded, NULL);
+					}
+				}
+				// Handle PAK entries (tools and shortcuts) - load background from Tools/.media folder
+				else if(entry->type == ENTRY_PAK && suffixMatch(".pak", entry->path)) {
+					char tmppath[512];
+					// Look for background in Tools/$PLATFORM/.media/PAK_NAME/bg.png
+					snprintf(tmppath, sizeof(tmppath), TOOLS_PATH "/.media/%s/bg.png", Shortcuts_getPakBasename(entry->path));
+					if(strcmp(entry->path, folderBgPath) != 0 || lastType != entry->type) {
+						lastType = entry->type;
+						strncpy(folderBgPath, entry->path, sizeof(folderBgPath) - 1);
+						if(exists(tmppath)) {
+							startLoadFolderBackground(tmppath, onBackgroundLoaded, NULL);
+						}
+						else {
+							onBackgroundLoaded(NULL);
+							list_show_entry_names = true;
+						}
 					}
 				} 
 				else if(strcmp(defaultBgPath, folderBgPath) != 0 && exists(defaultBgPath)) {
@@ -3007,6 +3129,11 @@ int main (int argc, char *argv[]) {
 				// buttons
 				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
 				else if (can_resume) GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, 0, screen, 0);
+				else if (total > 0 && (Shortcuts_isInToolsFolder(top->path) || Shortcuts_isInConsoleDir(top->path)) &&
+				         canPinEntry(entry)) {
+					char* label = Shortcuts_exists(entry->path + strlen(SDCARD_PATH)) ? "UNPIN" : "PIN";
+					GFX_blitButtonGroup((char*[]){ "Y", label, NULL }, 0, screen, 0);
+				}
 				else GFX_blitButtonGroup((char*[]){ 
 					BTN_SLEEP==BTN_POWER?"POWER":"MENU",
 					BTN_SLEEP==BTN_POWER||simple_mode?"SLEEP":"INFO",  
@@ -3017,7 +3144,7 @@ int main (int argc, char *argv[]) {
 						GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
 					}
 				}
-				else {
+				else if (confirm_shortcut_action == 0) {
 					if (stack->count>1) {
 						GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
 					}
@@ -3125,7 +3252,17 @@ int main (int argc, char *argv[]) {
 					// TODO: for some reason screen's dimensions end up being 0x0 in GFX_blitMessage...
 					GFX_blitMessage(font.large, "Empty folder", screen, &(SDL_Rect){0,0,screen->w,screen->h}); //, NULL);
 				}
-				
+
+				// Render confirmation dialog for shortcuts
+				if (confirm_shortcut_action > 0 && confirm_shortcut_entry) {
+					char message[256];
+					char* fmt = confirm_shortcut_action == 1 ? "Pin \"%s\"?" : "Unpin \"%s\"?";
+					snprintf(message, sizeof(message), fmt, confirm_shortcut_entry->name);
+					SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0, 0, 0));
+					GFX_blitMessage(font.large, message, screen, &(SDL_Rect){0, 0, screen->w, screen->h});
+					GFX_blitButtonGroup((char*[]){ "B","CANCEL","A","CONFIRM", NULL }, 0, screen, 1);
+				}
+
 				lastScreen = SCREEN_GAMELIST;
 			}
 
@@ -3169,7 +3306,12 @@ int main (int argc, char *argv[]) {
 				}
 				SDL_UnlockMutex(bgMutex);
 				SDL_LockMutex(thumbMutex);
-				if(thumbbmp && thumbchanged) {
+				// Hide thumbnail and scrolling text when confirmation dialog is shown
+				if (confirm_shortcut_action > 0) {
+					GFX_clearLayers(LAYER_THUMBNAIL);
+					GFX_clearLayers(LAYER_SCROLLTEXT);
+				}
+				else if(thumbbmp && thumbchanged) {
 					int img_w = thumbbmp->w;
 					int img_h = thumbbmp->h;
 					double aspect_ratio = (double)img_h / img_w;
@@ -3177,7 +3319,7 @@ int main (int argc, char *argv[]) {
 					int max_h = (int)(screen->h * 0.6);  
 					int new_w = max_w;
 					int new_h = (int)(new_w * aspect_ratio); 
-					
+
 					if (new_h > max_h) {
 						new_h = max_h;
 						new_w = (int)(new_h / aspect_ratio);
@@ -3222,22 +3364,27 @@ int main (int argc, char *argv[]) {
 			}
 			SDL_UnlockMutex(bgMutex);
 			SDL_LockMutex(thumbMutex);
-			if(thumbbmp && thumbchanged) {
+			// Hide thumbnail and scrolling text when confirmation dialog is shown
+			if (confirm_shortcut_action > 0) {
+				GFX_clearLayers(LAYER_THUMBNAIL);
+				GFX_clearLayers(LAYER_SCROLLTEXT);
+			}
+			else if(thumbbmp && thumbchanged) {
 				int img_w = thumbbmp->w;
 				int img_h = thumbbmp->h;
 				double aspect_ratio = (double)img_h / img_w;
-				
-				int max_w = (int)(screen->w * CFG_getGameArtWidth()); 
-				int max_h = (int)(screen->h * 0.6);  
+
+				int max_w = (int)(screen->w * CFG_getGameArtWidth());
+				int max_h = (int)(screen->h * 0.6);
 				
 				int new_w = max_w;
-				int new_h = (int)(new_w * aspect_ratio); 
-				
+				int new_h = (int)(new_w * aspect_ratio);
+
 				if (new_h > max_h) {
 					new_h = max_h;
 					new_w = (int)(new_h / aspect_ratio);
 				}
-	
+
 				int target_x = screen->w-(new_w + SCALE1(BUTTON_MARGIN*3));
 				int target_y = (int)(screen->h * 0.50);
 				int center_y = target_y - (new_h / 2); // FIX: use new_h instead of thumbbmp->h
@@ -3258,7 +3405,8 @@ int main (int argc, char *argv[]) {
 			}
 			SDL_UnlockMutex(animMutex);
 			if (currentScreen != SCREEN_GAMESWITCHER && currentScreen != SCREEN_QUICKMENU) {
-				if(is_scrolling && pillanimdone && currentAnimQueueSize < 1) {
+				// Skip scrolling text when confirmation dialog is shown
+				if(is_scrolling && pillanimdone && currentAnimQueueSize < 1 && confirm_shortcut_action == 0) {
 					int ow = GFX_blitHardwareGroup(screen, show_setting);
 					Entry* entry = top->entries->items[top->selected];
 					trimSortingMeta(&entry->name);
