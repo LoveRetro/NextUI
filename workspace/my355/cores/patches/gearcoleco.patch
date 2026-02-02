@@ -7,7 +7,7 @@ index 581ee84..d9db102 100644
  	CFLAGS += -fomit-frame-pointer -ffast-math -march=armv5te -mtune=arm926ej-s
  	CXXFLAGS += $(CFLAGS)
 +# Miyoo FLip
-+else ifeq ($(platform), tg5040)
++else ifeq ($(platform), my355)
 +	TARGET := $(TARGET_NAME)_libretro.so
 +	CC = $(CROSS_COMPILE)gcc
 +	CXX = $(CROSS_COMPILE)g++
