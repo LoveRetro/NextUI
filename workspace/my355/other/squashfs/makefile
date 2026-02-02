@@ -1,18 +1,28 @@
-#my355
+###########################################################
+
+ifeq (,$(PLATFORM))
+PLATFORM=$(UNION_PLATFORM)
+endif
+
+ifeq (,$(PLATFORM))
+	$(error please specify PLATFORM, eg. PLATFORM=trimui make)
+endif
 
 ifeq (,$(CROSS_COMPILE))
-$(error missing CROSS_COMPILE for this toolchain)
+	$(error missing CROSS_COMPILE for this toolchain)
 endif
+
+###########################################################
 
 all:
 	mkdir -p output
 	mkdir -p output/bin
 	mkdir -p output/lib
-	cp /usr/bin/*squashfs output/bin/
-	# cp /usr/lib/aarch64-linux-gnu/liblzma.so.5.4.1 output/lib/liblzma.so.5
-	# cp /usr/lib/aarch64-linux-gnu/liblzo2.so.2.0.0 output/lib/liblzo2.so.2
-	# cp /usr/lib/aarch64-linux-gnu/liblz4.so.1.9.4 output/lib/liblz4.so.1
-	# cp /usr/lib/aarch64-linux-gnu/libzstd.so.1.5.4 output/lib/libzstd.so.1
+	cp $(PREFIX)/bin/*squashfs output/bin
+	cp $(PREFIX)/lib/liblzma.so.5.8.2 output/lib
+	cp $(PREFIX)/lib/liblzo2.so.2.0.0 output/lib
+	cp $(PREFIX)/lib/liblz4.so.1.10.0 output/lib
+	cp $(PREFIX)/lib/libzstd.so.1.6.0 output/lib
 
 clean:
 	rm -rf output
