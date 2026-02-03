@@ -15,6 +15,8 @@ extern "C"
 #include "btmenu.hpp"
 #include "keyboardprompt.hpp"
 
+#define BUSYBOX_STOCK_VERSION "1.27.2"
+
 static int appQuit = false;
 static bool appSuspend = false;
 
@@ -475,6 +477,19 @@ int main(int argc, char *argv[])
         // TODO: check BT_supported(), hide menu otherwise
         auto btMenu = new Bluetooth::Menu(appQuit, ctx.dirty);
 
+        // We need to alert the user about potential issues if the 
+        // stock OS was modified in way that are known to cause issues
+        std::string bbver = extractBusyBoxVersion(execCommand("cat --help"));
+        if (bbver.empty())
+            bbver = "BusyBox version not found.";
+        else if(bbver.find(BUSYBOX_STOCK_VERSION) == std::string::npos)
+            ctx.menu->showOverlay(
+                "Stock OS changes detected.\n"
+                "This may cause instability or issues.\n"
+                "If you experience problems, please consider\n"
+                "reverting to clean stock firmware.", 
+                OverlayDismissMode::DismissOnA);
+
         auto aboutMenu = new MenuList(MenuItemType::Fixed, "About",
         {
             new StaticMenuItem{ListItemType::Generic, "NextUI version", "", 
@@ -495,13 +510,7 @@ int main(int argc, char *argv[])
                 return std::string(osver); }
             },
             new StaticMenuItem{ListItemType::Generic, "Busybox version", "", 
-            []() -> std::any { 
-                std::string output = execCommand("cat --help");
-                std::string version = extractBusyBoxVersion(output);
-
-                if (!version.empty())
-                    return version;
-                return std::string("BusyBox version not found."); }
+            [&]() -> std::any { return bbver; }
             },
         });
 
