@@ -73,6 +73,23 @@ void CFG_defaults(NextUISettings *cfg)
         .bluetooth = CFG_DEFAULT_BLUETOOTH,
         .bluetoothDiagnostics = CFG_DEFAULT_BLUETOOTH_DIAG,
         .bluetoothSamplerateLimit = CFG_DEFAULT_BLUETOOTH_MAXRATE,
+
+        .notifyManualSave = CFG_DEFAULT_NOTIFY_MANUAL_SAVE,
+        .notifyLoad = CFG_DEFAULT_NOTIFY_LOAD,
+        .notifyScreenshot = CFG_DEFAULT_NOTIFY_SCREENSHOT,
+        .notifyAdjustments = CFG_DEFAULT_NOTIFY_ADJUSTMENTS,
+        .notifyDuration = CFG_DEFAULT_NOTIFY_DURATION,
+
+        .raEnable = CFG_DEFAULT_RA_ENABLE,
+        .raUsername = CFG_DEFAULT_RA_USERNAME,
+        .raPassword = CFG_DEFAULT_RA_PASSWORD,
+        .raHardcoreMode = CFG_DEFAULT_RA_HARDCOREMODE,
+        .raToken = CFG_DEFAULT_RA_TOKEN,
+        .raAuthenticated = CFG_DEFAULT_RA_AUTHENTICATED,
+        .raShowNotifications = CFG_DEFAULT_RA_SHOW_NOTIFICATIONS,
+        .raNotificationDuration = CFG_DEFAULT_RA_NOTIFICATION_DURATION,
+        .raProgressNotificationDuration = CFG_DEFAULT_RA_PROGRESS_NOTIFICATION_DURATION,
+        .raAchievementSortOrder = CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER,
 };
 
     *cfg = defaults;
@@ -290,6 +307,87 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "currentTimezone=%i", &temp_value) == 1)
             {
                 CFG_setCurrentTimezone(temp_value);
+                continue;
+            }
+            if (sscanf(line, "notifyManualSave=%i", &temp_value) == 1)
+            {
+                CFG_setNotifyManualSave((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "notifyLoad=%i", &temp_value) == 1)
+            {
+                CFG_setNotifyLoad((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "notifyScreenshot=%i", &temp_value) == 1)
+            {
+                CFG_setNotifyScreenshot((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "notifyAdjustments=%i", &temp_value) == 1)
+            {
+                CFG_setNotifyAdjustments((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "notifyDuration=%i", &temp_value) == 1)
+            {
+                CFG_setNotifyDuration(temp_value);
+                continue;
+            }
+            if (sscanf(line, "raEnable=%i", &temp_value) == 1)
+            {
+                CFG_setRAEnable((bool)temp_value);
+                continue;
+            }
+            if (strncmp(line, "raUsername=", 11) == 0)
+            {
+                char *value = line + 11;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setRAUsername(value);
+                continue;
+            }
+            if (strncmp(line, "raPassword=", 11) == 0)
+            {
+                char *value = line + 11;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setRAPassword(value);
+                continue;
+            }
+            if (sscanf(line, "raHardcoreMode=%i", &temp_value) == 1)
+            {
+                CFG_setRAHardcoreMode((bool)temp_value);
+                continue;
+            }
+            if (strncmp(line, "raToken=", 8) == 0)
+            {
+                char *value = line + 8;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setRAToken(value);
+                continue;
+            }
+            if (sscanf(line, "raAuthenticated=%i", &temp_value) == 1)
+            {
+                CFG_setRAAuthenticated((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "raShowNotifications=%i", &temp_value) == 1)
+            {
+                CFG_setRAShowNotifications((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "raNotificationDuration=%i", &temp_value) == 1)
+            {
+                CFG_setRANotificationDuration(temp_value);
+                continue;
+            }
+            if (sscanf(line, "raProgressNotificationDuration=%i", &temp_value) == 1)
+            {
+                CFG_setRAProgressNotificationDuration(temp_value);
+                continue;
+            }
+            if (sscanf(line, "raAchievementSortOrder=%i", &temp_value) == 1)
+            {
+                CFG_setRAAchievementSortOrder(temp_value);
                 continue;
             }
         }
@@ -721,6 +819,186 @@ void CFG_setCurrentTimezone(int index)
     CFG_sync();
 }
 
+bool CFG_getNotifyManualSave(void)
+{
+    return settings.notifyManualSave;
+}
+
+void CFG_setNotifyManualSave(bool enable)
+{
+    settings.notifyManualSave = enable;
+    CFG_sync();
+}
+
+bool CFG_getNotifyLoad(void)
+{
+    return settings.notifyLoad;
+}
+
+void CFG_setNotifyLoad(bool enable)
+{
+    settings.notifyLoad = enable;
+    CFG_sync();
+}
+
+bool CFG_getNotifyScreenshot(void)
+{
+    return settings.notifyScreenshot;
+}
+
+void CFG_setNotifyScreenshot(bool enable)
+{
+    settings.notifyScreenshot = enable;
+    CFG_sync();
+}
+
+bool CFG_getNotifyAdjustments(void)
+{
+    return settings.notifyAdjustments;
+}
+
+void CFG_setNotifyAdjustments(bool enable)
+{
+    settings.notifyAdjustments = enable;
+    CFG_sync();
+}
+
+int CFG_getNotifyDuration(void)
+{
+    return settings.notifyDuration;
+}
+
+void CFG_setNotifyDuration(int seconds)
+{
+    settings.notifyDuration = (seconds < 1) ? 1 : (seconds > 3) ? 3 : seconds;
+    CFG_sync();
+}
+
+bool CFG_getRAEnable(void)
+{
+    return settings.raEnable;
+}
+
+void CFG_setRAEnable(bool enable)
+{
+    settings.raEnable = enable;
+    CFG_sync();
+}
+
+const char* CFG_getRAUsername(void)
+{
+    return settings.raUsername;
+}
+
+void CFG_setRAUsername(const char* username)
+{
+    if (username) {
+        strncpy(settings.raUsername, username, sizeof(settings.raUsername) - 1);
+        settings.raUsername[sizeof(settings.raUsername) - 1] = '\0';
+    } else {
+        settings.raUsername[0] = '\0';
+    }
+    CFG_sync();
+}
+
+const char* CFG_getRAPassword(void)
+{
+    return settings.raPassword;
+}
+
+void CFG_setRAPassword(const char* password)
+{
+    if (password) {
+        strncpy(settings.raPassword, password, sizeof(settings.raPassword) - 1);
+        settings.raPassword[sizeof(settings.raPassword) - 1] = '\0';
+    } else {
+        settings.raPassword[0] = '\0';
+    }
+    CFG_sync();
+}
+
+bool CFG_getRAHardcoreMode(void)
+{
+    return settings.raHardcoreMode;
+}
+
+void CFG_setRAHardcoreMode(bool enable)
+{
+    settings.raHardcoreMode = enable;
+    CFG_sync();
+}
+
+const char* CFG_getRAToken(void)
+{
+    return settings.raToken;
+}
+
+void CFG_setRAToken(const char* token)
+{
+    if (token) {
+        strncpy(settings.raToken, token, sizeof(settings.raToken) - 1);
+        settings.raToken[sizeof(settings.raToken) - 1] = '\0';
+    } else {
+        settings.raToken[0] = '\0';
+    }
+    CFG_sync();
+}
+
+bool CFG_getRAAuthenticated(void)
+{
+    return settings.raAuthenticated;
+}
+
+void CFG_setRAAuthenticated(bool authenticated)
+{
+    settings.raAuthenticated = authenticated;
+    CFG_sync();
+}
+
+bool CFG_getRAShowNotifications(void)
+{
+    return settings.raShowNotifications;
+}
+
+void CFG_setRAShowNotifications(bool show)
+{
+    settings.raShowNotifications = show;
+    CFG_sync();
+}
+
+int CFG_getRANotificationDuration(void)
+{
+    return settings.raNotificationDuration;
+}
+
+void CFG_setRANotificationDuration(int seconds)
+{
+    settings.raNotificationDuration = (seconds < 1) ? 1 : (seconds > 5) ? 5 : seconds;
+    CFG_sync();
+}
+
+int CFG_getRAProgressNotificationDuration(void)
+{
+    return settings.raProgressNotificationDuration;
+}
+
+void CFG_setRAProgressNotificationDuration(int seconds)
+{
+    settings.raProgressNotificationDuration = (seconds < 0) ? 0 : (seconds > 5) ? 5 : seconds;
+    CFG_sync();
+}
+
+int CFG_getRAAchievementSortOrder(void)
+{
+    return settings.raAchievementSortOrder;
+}
+
+void CFG_setRAAchievementSortOrder(int sortOrder)
+{
+    settings.raAchievementSortOrder = clamp(sortOrder, 0, RA_SORT_COUNT - 1);
+    CFG_sync();
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -943,6 +1221,21 @@ void CFG_sync(void)
     fprintf(file, "btMaxRate=%i\n", settings.bluetoothSamplerateLimit);
     fprintf(file, "ntp=%i\n", settings.ntp);
     fprintf(file, "currentTimezone=%i\n", settings.currentTimezone);
+    fprintf(file, "notifyManualSave=%i\n", settings.notifyManualSave);
+    fprintf(file, "notifyLoad=%i\n", settings.notifyLoad);
+    fprintf(file, "notifyScreenshot=%i\n", settings.notifyScreenshot);
+    fprintf(file, "notifyAdjustments=%i\n", settings.notifyAdjustments);
+    fprintf(file, "notifyDuration=%i\n", settings.notifyDuration);
+    fprintf(file, "raEnable=%i\n", settings.raEnable);
+    fprintf(file, "raUsername=%s\n", settings.raUsername);
+    fprintf(file, "raPassword=%s\n", settings.raPassword);
+    fprintf(file, "raHardcoreMode=%i\n", settings.raHardcoreMode);
+    fprintf(file, "raToken=%s\n", settings.raToken);
+    fprintf(file, "raAuthenticated=%i\n", settings.raAuthenticated);
+    fprintf(file, "raShowNotifications=%i\n", settings.raShowNotifications);
+    fprintf(file, "raNotificationDuration=%i\n", settings.raNotificationDuration);
+    fprintf(file, "raProgressNotificationDuration=%i\n", settings.raProgressNotificationDuration);
+    fprintf(file, "raAchievementSortOrder=%i\n", settings.raAchievementSortOrder);
 
     fclose(file);
 }

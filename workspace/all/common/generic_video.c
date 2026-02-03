@@ -20,6 +20,8 @@
 #include "utils.h"
 #include <stdlib.h>
 #include <pthread.h>
+#include <dirent.h>
+#include <stdint.h>
 
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)
@@ -106,6 +108,26 @@ static uint32_t SDL_transparentBlack = 0;
 #define OVERLAYS_FOLDER SDCARD_PATH "/Overlays"
 
 static char* overlay_path = NULL;
+
+// Notification surface for RA achievements overlay
+static SDL_Surface* notification_surface = NULL;
+static int notification_x = 0;
+static int notification_y = 0;
+static int notification_dirty = 0;
+static GLuint notification_tex = 0;
+static int notif_tex_w = 0, notif_tex_h = 0;
+
+void PLAT_setNotificationSurface(SDL_Surface* surface, int x, int y) {
+    notification_surface = surface;
+    notification_x = x;
+    notification_y = y;
+    notification_dirty = 1;
+}
+
+void PLAT_clearNotificationSurface(void) {
+    notification_surface = NULL;
+    notification_dirty = 1;
+}
 
 
 #define MAX_SHADERLINE_LENGTH 512
@@ -427,6 +449,18 @@ void PLAT_initShaders() {
 	g_noshader = link_program(vertex, fragment,"noshader.glsl");
 	
 	LOG_info("default shaders loaded, %i\n\n",g_shader_default);
+
+	// Pre-allocate notification texture to avoid frame skip on first notification
+	glGenTextures(1, &notification_tex);
+	glBindTexture(GL_TEXTURE_2D, notification_tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	// Allocate full-screen texture with transparent pixels
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, device_width, device_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	notif_tex_w = device_width;
+	notif_tex_h = device_height;
 }
 
 static void sdl_log_stdout(
@@ -445,6 +479,70 @@ static void sdl_log_stdout(
 void PLAT_resetShaders() {
 	reloadShaderTextures = 1;
 	shaderResetRequested = 1;
+}
+
+char* PLAT_findFileInDir(const char *directory, const char *filename) {
+    char *filename_copy = strdup(filename);
+    if (!filename_copy) {
+        perror("strdup");
+        return NULL;
+    }
+
+    // Strip extension from filename
+    char *dot_pos = strrchr(filename_copy, '.');
+    if (dot_pos) {
+        *dot_pos = '\0';
+    }
+
+    DIR *dir = opendir(directory);
+    if (!dir) {
+        perror("opendir");
+        free(filename_copy);
+        return NULL;
+    }
+
+    struct dirent *entry;
+    char *full_path = NULL;
+
+    // Track the best (shortest) match to avoid prefix collisions.
+    // e.g., searching for "Advance Wars" should match "Advance Wars (USA).gba"
+    // over "Advance Wars 2 - Black Hole Rising (USA).gba"
+    char *best_match_name = NULL;
+    size_t best_match_len = SIZE_MAX;
+
+    while ((entry = readdir(dir)) != NULL) {
+        // Strip extension from entry for comparison
+        char *entry_base = strdup(entry->d_name);
+        if (!entry_base) continue;
+
+        char *entry_dot = strrchr(entry_base, '.');
+        if (entry_dot) *entry_dot = '\0';
+
+        if (strstr(entry_base, filename_copy) == entry_base) {
+            // Prefer shorter matches (closer to exact match)
+            size_t entry_len = strlen(entry_base);
+            if (entry_len < best_match_len) {
+                free(best_match_name);
+                best_match_name = strdup(entry->d_name);
+                best_match_len = entry_len;
+            }
+        }
+        free(entry_base);
+    }
+
+    closedir(dir);
+
+    if (best_match_name) {
+        full_path = (char *)malloc(strlen(directory) + strlen(best_match_name) + 2);
+        if (full_path) {
+            snprintf(full_path, strlen(directory) + strlen(best_match_name) + 2, "%s/%s", directory, best_match_name);
+            LOG_info("PLAT_findFileInDir: matched '%s' for search '%s'\n", best_match_name, filename_copy);
+        }
+        free(best_match_name);
+    }
+
+    free(filename_copy);
+    return full_path;
 }
 
 SDL_Surface* PLAT_initVideo(void) {
@@ -2094,6 +2192,24 @@ void PLAT_GL_Swap() {
             NULL,
             0, 0, device_width, device_height,
             &(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_h, .texw = overlay_w, .texh = overlay_h},
+            1, GL_NONE
+        );
+    }
+
+    // Render notification overlay if present (texture pre-allocated in PLAT_initShaders)
+    if (notification_dirty && notification_surface) {
+        glBindTexture(GL_TEXTURE_2D, notification_tex);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, notification_surface->w, notification_surface->h, GL_RGBA, GL_UNSIGNED_BYTE, notification_surface->pixels);
+        notification_dirty = 0;
+    }
+    
+    if (notification_tex && notification_surface) {
+        runShaderPass(
+            notification_tex,
+            g_shader_overlay,
+            NULL,
+            notification_x, notification_y, notif_tex_w, notif_tex_h,
+            &(Shader){.srcw = notif_tex_w, .srch = notif_tex_h, .texw = notif_tex_w, .texh = notif_tex_h},
             1, GL_NONE
         );
     }

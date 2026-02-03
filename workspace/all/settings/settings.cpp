@@ -5,6 +5,7 @@ extern "C"
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+#include "ra_auth.h"
 }
 
 #include <csignal>
@@ -78,6 +79,42 @@ static const std::vector<std::string> on_off = {"Off", "On"};
 
 static const std::vector<std::string> scaling_strings = {"Fullscreen", "Fit", "Fill"};
 static const std::vector<std::any> scaling = {(int)GFX_SCALE_FULLSCREEN, (int)GFX_SCALE_FIT, (int)GFX_SCALE_FILL};
+
+// Notification duration options (in seconds)
+static const std::vector<std::any> notify_duration_values = {1, 2, 3, 4, 5};
+static const std::vector<std::string> notify_duration_labels = {"1s", "2s", "3s", "4s", "5s"};
+
+// Progress notification duration options (in seconds, 0 = disabled)
+static const std::vector<std::any> progress_duration_values = {0, 1, 2, 3, 4, 5};
+static const std::vector<std::string> progress_duration_labels = {"Off", "1s", "2s", "3s", "4s", "5s"};
+
+// RetroAchievements sort order options
+static const std::vector<std::any> ra_sort_values = {
+    (int)RA_SORT_UNLOCKED_FIRST,
+    (int)RA_SORT_DISPLAY_ORDER_FIRST,
+    (int)RA_SORT_DISPLAY_ORDER_LAST,
+    (int)RA_SORT_WON_BY_MOST,
+    (int)RA_SORT_WON_BY_LEAST,
+    (int)RA_SORT_POINTS_MOST,
+    (int)RA_SORT_POINTS_LEAST,
+    (int)RA_SORT_TITLE_AZ,
+    (int)RA_SORT_TITLE_ZA,
+    (int)RA_SORT_TYPE_ASC,
+    (int)RA_SORT_TYPE_DESC
+};
+static const std::vector<std::string> ra_sort_labels = {
+    "Unlocked First",
+    "Display Order (First)",
+    "Display Order (Last)",
+    "Won By (Most)",
+    "Won By (Least)",
+    "Points (Most)",
+    "Points (Least)",
+    "Title (A-Z)",
+    "Title (Z-A)",
+    "Type (Asc)",
+    "Type (Desc)"
+};
 
 namespace {
     std::string execCommand(const char* cmd) {
@@ -475,6 +512,132 @@ int main(int argc, char *argv[])
         // TODO: check BT_supported(), hide menu otherwise
         auto btMenu = new Bluetooth::Menu(appQuit, ctx.dirty);
 
+        auto notificationsMenu = new MenuList(MenuItemType::Fixed, "Notifications",
+        {
+            new MenuItem{ListItemType::Generic, "Save states", "Show notification when saving game state", {false, true}, on_off, 
+            []() -> std::any { return CFG_getNotifyManualSave(); },
+            [](const std::any &value) { CFG_setNotifyManualSave(std::any_cast<bool>(value)); },
+            []() { CFG_setNotifyManualSave(CFG_DEFAULT_NOTIFY_MANUAL_SAVE);}},
+            new MenuItem{ListItemType::Generic, "Load states", "Show notification when loading game state", {false, true}, on_off, 
+            []() -> std::any { return CFG_getNotifyLoad(); },
+            [](const std::any &value) { CFG_setNotifyLoad(std::any_cast<bool>(value)); },
+            []() { CFG_setNotifyLoad(CFG_DEFAULT_NOTIFY_LOAD);}},
+            new MenuItem{ListItemType::Generic, "Screenshots", "Show notification when taking a screenshot", {false, true}, on_off, 
+            []() -> std::any { return CFG_getNotifyScreenshot(); },
+            [](const std::any &value) { CFG_setNotifyScreenshot(std::any_cast<bool>(value)); },
+            []() { CFG_setNotifyScreenshot(CFG_DEFAULT_NOTIFY_SCREENSHOT);}},
+            new MenuItem{ListItemType::Generic, "Vol / Display Adjustments", "Show overlay for volume, brightness,\nand color temp adjustments", {false, true}, on_off, 
+            []() -> std::any { return CFG_getNotifyAdjustments(); },
+            [](const std::any &value) { CFG_setNotifyAdjustments(std::any_cast<bool>(value)); },
+            []() { CFG_setNotifyAdjustments(CFG_DEFAULT_NOTIFY_ADJUSTMENTS);}},
+            new MenuItem{ListItemType::Generic, "Duration", "How long notifications stay on screen", notify_duration_values, notify_duration_labels, 
+            []() -> std::any { return CFG_getNotifyDuration(); },
+            [](const std::any &value) { CFG_setNotifyDuration(std::any_cast<int>(value)); },
+            []() { CFG_setNotifyDuration(CFG_DEFAULT_NOTIFY_DURATION);}},
+            new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
+        });
+
+        // RetroAchievements keyboard prompts
+        auto raUsernamePrompt = new KeyboardPrompt("Enter Username", [](AbstractMenuItem &item) -> InputReactionHint {
+            CFG_setRAUsername(item.getName().c_str());
+            return Exit;
+        });
+        
+        auto raPasswordPrompt = new KeyboardPrompt("Enter Password", [](AbstractMenuItem &item) -> InputReactionHint {
+            CFG_setRAPassword(item.getName().c_str());
+            return Exit;
+        });
+
+        auto retroAchievementsMenu = new MenuList(MenuItemType::Fixed, "RetroAchievements",
+        {
+            new MenuItem{ListItemType::Generic, "Enable Achievements", "Enable RetroAchievements integration", {false, true}, on_off, 
+            []() -> std::any { return CFG_getRAEnable(); },
+            [](const std::any &value) { CFG_setRAEnable(std::any_cast<bool>(value)); },
+            []() { CFG_setRAEnable(CFG_DEFAULT_RA_ENABLE);}},
+            new TextInputMenuItem{"Username", "RetroAchievements username",
+            []() -> std::any { 
+                std::string username = CFG_getRAUsername();
+                return username.empty() ? std::string("(not set)") : username;
+            },
+            [raUsernamePrompt](AbstractMenuItem &item) -> InputReactionHint {
+                raUsernamePrompt->setInitialText(CFG_getRAUsername());
+                item.defer(true);
+                return NoOp;
+            }, raUsernamePrompt},
+            new TextInputMenuItem{"Password", "RetroAchievements password",
+            []() -> std::any { 
+                std::string password = CFG_getRAPassword();
+                return password.empty() ? std::string("(not set)") : std::string("********");
+            },
+            [raPasswordPrompt](AbstractMenuItem &item) -> InputReactionHint {
+                raPasswordPrompt->setInitialText(CFG_getRAPassword());
+                item.defer(true);
+                return NoOp;
+            }, raPasswordPrompt},
+            new MenuItem{ListItemType::Button, "Authenticate", "Test credentials and retrieve API token",
+            [](AbstractMenuItem &item) -> InputReactionHint {
+                const char* username = CFG_getRAUsername();
+                const char* password = CFG_getRAPassword();
+                
+                if (!username || strlen(username) == 0 || !password || strlen(password) == 0) {
+                    item.setDesc("Error: Username and password required");
+                    return NoOp;
+                }
+                
+                item.setDesc("Authenticating...");
+                
+                RA_AuthResponse response;
+                RA_AuthResult result = RA_authenticateSync(username, password, &response);
+                
+                if (result == RA_AUTH_SUCCESS) {
+                    CFG_setRAToken(response.token);
+                    CFG_setRAAuthenticated(true);
+                    std::string desc = "Authenticated as " + std::string(response.display_name);
+                    item.setDesc(desc);
+                } else {
+                    CFG_setRAToken("");
+                    CFG_setRAAuthenticated(false);
+                    std::string desc = "Error: " + std::string(response.error_message);
+                    item.setDesc(desc);
+                }
+                return NoOp;
+            }},
+            new StaticMenuItem{ListItemType::Generic, "Status", "Authentication status",
+            []() -> std::any {
+                if (CFG_getRAAuthenticated() && strlen(CFG_getRAToken()) > 0) {
+                    return std::string("Authenticated");
+                }
+                return std::string("Not authenticated");
+            }},
+            new MenuItem{ListItemType::Generic, "Hardcore Mode", "Disable save states and cheats for achievements", {false, true}, on_off, 
+            []() -> std::any { return CFG_getRAHardcoreMode(); },
+            [](const std::any &value) { CFG_setRAHardcoreMode(std::any_cast<bool>(value)); },
+            []() { CFG_setRAHardcoreMode(CFG_DEFAULT_RA_HARDCOREMODE);}},
+            new MenuItem{ListItemType::Generic, "Show Notifications", "Show achievement unlock notifications", {false, true}, on_off, 
+            []() -> std::any { return CFG_getRAShowNotifications(); },
+            [](const std::any &value) { CFG_setRAShowNotifications(std::any_cast<bool>(value)); },
+            []() { CFG_setRAShowNotifications(CFG_DEFAULT_RA_SHOW_NOTIFICATIONS);}},
+            new MenuItem{ListItemType::Generic, "Notification Duration", "How long achievement notifications stay on screen", notify_duration_values, notify_duration_labels, 
+            []() -> std::any { return CFG_getRANotificationDuration(); },
+            [](const std::any &value) { CFG_setRANotificationDuration(std::any_cast<int>(value)); },
+            []() { CFG_setRANotificationDuration(CFG_DEFAULT_RA_NOTIFICATION_DURATION);}},
+            new MenuItem{ListItemType::Generic, "Progress Duration", "Duration for progress updates (top-left). Off to disable.", progress_duration_values, progress_duration_labels, 
+            []() -> std::any { return CFG_getRAProgressNotificationDuration(); },
+            [](const std::any &value) { CFG_setRAProgressNotificationDuration(std::any_cast<int>(value)); },
+            []() { CFG_setRAProgressNotificationDuration(CFG_DEFAULT_RA_PROGRESS_NOTIFICATION_DURATION);}},
+            new MenuItem{ListItemType::Generic, "Achievement Sort Order", "How achievements are sorted in the in-game menu", ra_sort_values, ra_sort_labels, 
+            []() -> std::any { return CFG_getRAAchievementSortOrder(); },
+            [](const std::any &value) { CFG_setRAAchievementSortOrder(std::any_cast<int>(value)); },
+            []() { CFG_setRAAchievementSortOrder(CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER);}},
+            new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
+        });
+
+        auto minarchMenu = new MenuList(MenuItemType::List, "In-Game",
+        {
+            new MenuItem{ListItemType::Generic, "Notifications", "Save state notifications", {}, {}, nullptr, nullptr, DeferToSubmenu, notificationsMenu},
+            new MenuItem{ListItemType::Generic, "RetroAchievements", "Achievement tracking settings", {}, {}, nullptr, nullptr, DeferToSubmenu, retroAchievementsMenu},
+        });
+
         auto aboutMenu = new MenuList(MenuItemType::Fixed, "About",
         {
             new StaticMenuItem{ListItemType::Generic, "NextUI version", "", 
@@ -511,6 +674,7 @@ int main(int argc, char *argv[])
             new MenuItem{ListItemType::Generic, "Display", "", {}, {}, nullptr, nullptr, DeferToSubmenu, displayMenu},
             new MenuItem{ListItemType::Generic, "System", "", {}, {}, nullptr, nullptr, DeferToSubmenu, systemMenu},
             new MenuItem{ListItemType::Generic, "FN switch", "FN switch settings", {}, {}, nullptr, nullptr, DeferToSubmenu, muteMenu},
+            new MenuItem{ListItemType::Generic, "In-Game", "In-game settings for MinArch", {}, {}, nullptr, nullptr, DeferToSubmenu, minarchMenu},
             new MenuItem{ListItemType::Generic, "Network", "", {}, {}, nullptr, nullptr, DeferToSubmenu, networkMenu},
             new MenuItem{ListItemType::Generic, "Bluetooth", "", {}, {}, nullptr, nullptr, DeferToSubmenu, btMenu},
             new MenuItem{ListItemType::Generic, "About", "", {}, {}, nullptr, nullptr, DeferToSubmenu, aboutMenu},

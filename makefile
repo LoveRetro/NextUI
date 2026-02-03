@@ -115,6 +115,8 @@ ifeq ($(PLATFORM), tg5040)
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libbz2.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.* ./build/SYSTEM/$(PLATFORM)/lib/
+	# libchdr for RetroAchievements CHD hashing (use -L to dereference symlinks)
+	cp -L ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.0 ./build/SYSTEM/$(PLATFORM)/lib/
 endif
 ifeq ($(PLATFORM), tg5050)
 	cp ./workspace/all/ledcontrol/build/$(PLATFORM)/ledcontrol.elf ./build/EXTRAS/Tools/$(PLATFORM)/LedControl.pak/
@@ -127,6 +129,8 @@ ifeq ($(PLATFORM), tg5050)
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libbz2.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.* ./build/SYSTEM/$(PLATFORM)/lib/
+	# libchdr for RetroAchievements CHD hashing (use -L to dereference symlinks)
+	cp -L ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.0 ./build/SYSTEM/$(PLATFORM)/lib/
 endif
 
 

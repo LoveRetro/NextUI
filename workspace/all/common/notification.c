@@ -1,0 +1,570 @@
+#include "notification.h"
+#include "defines.h"
+#include "api.h"
+#include "config.h"
+#include <string.h>
+#include <stdio.h>
+
+///////////////////////////////
+// Internal state
+///////////////////////////////
+
+static Notification notifications[NOTIFICATION_MAX_QUEUE];
+static int notification_count = 0;
+static int initialized = 0;
+
+// Screen dimensions for layer rendering
+static int screen_width = 0;
+static int screen_height = 0;
+
+// Visual constants (will be set after init with proper scaling)
+static int notif_padding_x;
+static int notif_padding_y;
+static int notif_margin;
+static int notif_stack_gap;
+static int notif_icon_gap;
+
+// Track if we need to re-render (only when notifications change)
+static int render_dirty = 1;
+static int last_notification_count = 0;
+
+///////////////////////////////
+// System indicator state
+///////////////////////////////
+
+static SystemIndicatorType system_indicator_type = SYSTEM_INDICATOR_NONE;
+static uint32_t system_indicator_start_time = 0;
+static int system_indicator_dirty = 0;
+static int last_system_indicator_type = SYSTEM_INDICATOR_NONE;
+
+///////////////////////////////
+// Progress indicator state
+///////////////////////////////
+
+#define PROGRESS_TITLE_MAX 48
+#define PROGRESS_STRING_MAX 16
+
+static char progress_indicator_title[PROGRESS_TITLE_MAX];
+static char progress_indicator_progress[PROGRESS_STRING_MAX];
+static SDL_Surface* progress_indicator_icon = NULL;
+static uint32_t progress_indicator_start_time = 0;
+static int progress_indicator_active = 0;
+static int progress_indicator_dirty = 0;
+
+///////////////////////////////
+// Rounded rectangle drawing
+///////////////////////////////
+
+// Draw a filled rounded rectangle (pill shape) on an RGBA surface
+static void draw_rounded_rect(SDL_Surface* surface, int x, int y, int w, int h, int radius, Uint32 color) {
+    if (!surface || w <= 0 || h <= 0) return;
+    
+    // Clamp radius to half the smallest dimension
+    if (radius > w / 2) radius = w / 2;
+    if (radius > h / 2) radius = h / 2;
+    
+    Uint32* pixels = (Uint32*)surface->pixels;
+    int pitch = surface->pitch / 4; // pitch in pixels (32-bit)
+    
+    for (int py = 0; py < h; py++) {
+        for (int px = 0; px < w; px++) {
+            int draw = 1;
+            
+            // Check corners
+            if (px < radius && py < radius) {
+                // Top-left corner
+                int dx = radius - px - 1;
+                int dy = radius - py - 1;
+                if (dx * dx + dy * dy > radius * radius) draw = 0;
+            } else if (px >= w - radius && py < radius) {
+                // Top-right corner
+                int dx = px - (w - radius);
+                int dy = radius - py - 1;
+                if (dx * dx + dy * dy > radius * radius) draw = 0;
+            } else if (px < radius && py >= h - radius) {
+                // Bottom-left corner
+                int dx = radius - px - 1;
+                int dy = py - (h - radius);
+                if (dx * dx + dy * dy > radius * radius) draw = 0;
+            } else if (px >= w - radius && py >= h - radius) {
+                // Bottom-right corner
+                int dx = px - (w - radius);
+                int dy = py - (h - radius);
+                if (dx * dx + dy * dy > radius * radius) draw = 0;
+            }
+            
+            if (draw) {
+                pixels[(y + py) * pitch + (x + px)] = color;
+            }
+        }
+    }
+}
+
+///////////////////////////////
+// Internal helpers
+///////////////////////////////
+
+static void remove_notification(int index) {
+    if (index < 0 || index >= notification_count) return;
+    
+    // Shift remaining notifications down
+    for (int i = index; i < notification_count - 1; i++) {
+        notifications[i] = notifications[i + 1];
+    }
+    notification_count--;
+    render_dirty = 1;
+}
+
+///////////////////////////////
+// Public API
+///////////////////////////////
+
+void Notification_init(void) {
+    notification_count = 0;
+    memset(notifications, 0, sizeof(notifications));
+    
+    // Initialize scaled visual constants (compact pills)
+    notif_padding_x = SCALE1(8);
+    notif_padding_y = SCALE1(4);
+    notif_margin = SCALE1(12);
+    notif_stack_gap = SCALE1(6);
+    notif_icon_gap = SCALE1(4);    // Gap between icon and text
+    
+    // Store screen dimensions for layer rendering
+    screen_width = FIXED_WIDTH;
+    screen_height = FIXED_HEIGHT;
+    
+    render_dirty = 1;
+    last_notification_count = 0;
+    initialized = 1;
+}
+
+void Notification_push(NotificationType type, const char* message, SDL_Surface* icon) {
+    if (!initialized) {
+        return;
+    }
+    
+    // Check if notifications are enabled for this type
+    if (type == NOTIFICATION_ACHIEVEMENT && !CFG_getRAShowNotifications()) {
+        return;
+    }
+    
+    // If queue is full, remove oldest notification
+    if (notification_count >= NOTIFICATION_MAX_QUEUE) {
+        remove_notification(0);
+    }
+    
+    // Add new notification at end of queue
+    Notification* n = &notifications[notification_count];
+    n->type = type;
+    strncpy(n->message, message, NOTIFICATION_MAX_MESSAGE - 1);
+    n->message[NOTIFICATION_MAX_MESSAGE - 1] = '\0';
+    n->icon = icon;
+    n->start_time = SDL_GetTicks();
+    
+    // Use RA-specific duration for achievement notifications
+    if (type == NOTIFICATION_ACHIEVEMENT) {
+        n->duration_ms = CFG_getRANotificationDuration() * 1000;
+    } else {
+        n->duration_ms = CFG_getNotifyDuration() * 1000;
+    }
+    n->state = NOTIFICATION_STATE_VISIBLE;
+    
+    notification_count++;
+    render_dirty = 1;
+}
+
+void Notification_update(uint32_t now) {
+    if (!initialized) return;
+    
+    // Update system indicator timeout
+    if (system_indicator_type != SYSTEM_INDICATOR_NONE) {
+        uint32_t elapsed = now - system_indicator_start_time;
+        if (elapsed >= SYSTEM_INDICATOR_DURATION_MS) {
+            system_indicator_type = SYSTEM_INDICATOR_NONE;
+            system_indicator_dirty = 1;
+        }
+    }
+    
+    // Update progress indicator timeout
+    if (progress_indicator_active) {
+        uint32_t elapsed = now - progress_indicator_start_time;
+        int duration_seconds = CFG_getRAProgressNotificationDuration();
+        if (duration_seconds > 0 && elapsed >= (uint32_t)(duration_seconds * 1000)) {
+            progress_indicator_active = 0;
+            progress_indicator_dirty = 1;
+        }
+    }
+    
+    // Check each notification for expiration
+    for (int i = 0; i < notification_count; i++) {
+        Notification* n = &notifications[i];
+        uint32_t elapsed = now - n->start_time;
+        
+        if (n->state == NOTIFICATION_STATE_VISIBLE && elapsed >= n->duration_ms) {
+            n->state = NOTIFICATION_STATE_DONE;
+        }
+    }
+    
+    // Remove completed notifications (iterate backwards to avoid index issues)
+    for (int i = notification_count - 1; i >= 0; i--) {
+        if (notifications[i].state == NOTIFICATION_STATE_DONE) {
+            remove_notification(i);
+        }
+    }
+}
+
+// Persistent surface for GL rendering
+static SDL_Surface* gl_notification_surface = NULL;
+static int needs_clear_frame = 0;
+
+void Notification_renderToLayer(int layer) {
+    (void)layer; // unused now, kept for API compatibility
+    
+    if (!initialized) {
+        PLAT_clearNotificationSurface();
+        return;
+    }
+    
+    int has_notifications = notification_count > 0;
+    int has_system_indicator = system_indicator_type != SYSTEM_INDICATOR_NONE;
+    int has_progress_indicator = progress_indicator_active;
+    
+    if (!has_notifications && !has_system_indicator && !has_progress_indicator) {
+        // When all notifications and indicators are gone, render one final transparent frame
+        if (gl_notification_surface) {
+            if (needs_clear_frame) {
+                SDL_FillRect(gl_notification_surface, NULL, 0);
+                PLAT_setNotificationSurface(gl_notification_surface, 0, 0);
+                needs_clear_frame = 0;
+                render_dirty = 0;
+                system_indicator_dirty = 0;
+                progress_indicator_dirty = 0;
+                last_system_indicator_type = SYSTEM_INDICATOR_NONE;
+                return;
+            }
+            PLAT_clearNotificationSurface();
+            SDL_FreeSurface(gl_notification_surface);
+            gl_notification_surface = NULL;
+        }
+        return;
+    }
+    
+    // We have notifications or indicators
+    needs_clear_frame = 1;
+    
+    // Check if anything changed
+    int notifications_changed = render_dirty || notification_count != last_notification_count;
+    int indicator_changed = system_indicator_dirty || system_indicator_type != last_system_indicator_type;
+    int progress_changed = progress_indicator_dirty;
+    
+    if (!notifications_changed && !indicator_changed && !progress_changed) {
+        // Nothing changed, just keep the existing surface
+        return;
+    }
+    
+    // Create surface if needed
+    if (!gl_notification_surface) {
+        gl_notification_surface = SDL_CreateRGBSurfaceWithFormat(
+            0, screen_width, screen_height, 32, SDL_PIXELFORMAT_ABGR8888
+        );
+        if (!gl_notification_surface) {
+            return;
+        }
+    }
+    
+    // Clear to transparent
+    SDL_FillRect(gl_notification_surface, NULL, 0);
+    
+    // Render system indicator in top-right if active
+    if (has_system_indicator) {
+        // Calculate position: top-right corner with padding
+        int indicator_width = SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
+        int indicator_height = SCALE1(PILL_SIZE);
+        int indicator_x = screen_width - SCALE1(PADDING) - indicator_width;
+        int indicator_y = SCALE1(PADDING);
+        
+        // Create a temporary surface with the SAME format as gfx.screen
+        // This is critical because theme colors (THEME_COLOR2, etc.) were mapped
+        // using SDL_MapRGB(gfx.screen->format, ...), so they only work correctly
+        // on surfaces with that same pixel format.
+        SDL_Surface* indicator_surface = GFX_createScreenFormatSurface(indicator_width, indicator_height);
+        if (indicator_surface) {
+            // Clear to transparent/black
+            SDL_FillRect(indicator_surface, NULL, 0);
+            
+            // Render the indicator at (0,0) on the temp surface
+            GFX_blitHardwareIndicator(indicator_surface, 0, 0, system_indicator_type);
+            
+            // Convert to RGBA for the notification overlay
+            SDL_Surface* converted = SDL_ConvertSurfaceFormat(indicator_surface, SDL_PIXELFORMAT_ABGR8888, 0);
+            if (converted) {
+                SDL_SetSurfaceBlendMode(converted, SDL_BLENDMODE_NONE);
+                SDL_Rect dst_rect = {indicator_x, indicator_y, indicator_width, indicator_height};
+                SDL_BlitSurface(converted, NULL, gl_notification_surface, &dst_rect);
+                SDL_FreeSurface(converted);
+            }
+            SDL_FreeSurface(indicator_surface);
+        }
+    }
+    
+    // Render progress indicator in top-left if active
+    if (has_progress_indicator) {
+        // Get theme colors
+        SDL_Color text_color = uintToColour(THEME_COLOR1_255);  // Main Color
+        SDL_Color bg_color_sdl = uintToColour(THEME_COLOR2_255);  // Primary Accent Color
+        
+        // Format: "Title: Progress" (e.g., "Coin Collector: 50/100")
+        char progress_text[PROGRESS_TITLE_MAX + PROGRESS_STRING_MAX + 4];
+        snprintf(progress_text, sizeof(progress_text), "%s: %s", 
+                 progress_indicator_title, progress_indicator_progress);
+        
+        // Calculate text size using tiny font
+        int text_w = 0, text_h = 0;
+        TTF_SizeUTF8(font.tiny, progress_text, &text_w, &text_h);
+        
+        // Calculate icon dimensions if present
+        int icon_w = 0;
+        int icon_h = 0;
+        int icon_total_w = 0;
+        if (progress_indicator_icon) {
+            icon_h = text_h;  // Match text height
+            icon_w = (progress_indicator_icon->w * icon_h) / progress_indicator_icon->h;
+            icon_total_w = icon_w + notif_icon_gap;
+        }
+        
+        // Calculate pill dimensions
+        int pill_w = icon_total_w + text_w + (notif_padding_x * 2);
+        int pill_h = text_h + (notif_padding_y * 2);
+        int corner_radius = pill_h / 2;
+        
+        // Position: top-left corner with padding
+        int x = notif_margin;
+        int y = notif_margin;
+        
+        // Create temporary surface for the progress pill
+        SDL_Surface* progress_surface = SDL_CreateRGBSurfaceWithFormat(
+            0, pill_w, pill_h, 32, SDL_PIXELFORMAT_ABGR8888
+        );
+        if (progress_surface) {
+            // Clear to transparent
+            SDL_FillRect(progress_surface, NULL, 0);
+            
+            // Draw rounded pill background
+            Uint32 bg_color = SDL_MapRGBA(progress_surface->format, 
+                                          bg_color_sdl.r, bg_color_sdl.g, bg_color_sdl.b, 255);
+            draw_rounded_rect(progress_surface, 0, 0, pill_w, pill_h, corner_radius, bg_color);
+            
+            int content_x = notif_padding_x;
+            
+            // Draw icon if present
+            if (progress_indicator_icon && icon_w > 0 && icon_h > 0) {
+                SDL_Rect icon_dst = {content_x, notif_padding_y, icon_w, icon_h};
+                SDL_SetSurfaceBlendMode(progress_indicator_icon, SDL_BLENDMODE_BLEND);
+                SDL_BlitScaled(progress_indicator_icon, NULL, progress_surface, &icon_dst);
+                content_x += icon_total_w;
+            }
+            
+            // Draw text
+            SDL_Surface* text_surf = TTF_RenderUTF8_Blended(font.tiny, progress_text, text_color);
+            if (text_surf) {
+                SDL_SetSurfaceBlendMode(text_surf, SDL_BLENDMODE_BLEND);
+                SDL_Rect text_dst = {content_x, notif_padding_y, text_surf->w, text_surf->h};
+                SDL_BlitSurface(text_surf, NULL, progress_surface, &text_dst);
+                SDL_FreeSurface(text_surf);
+            }
+            
+            // Blit to the full notification surface
+            SDL_SetSurfaceBlendMode(progress_surface, SDL_BLENDMODE_NONE);
+            SDL_Rect dst_rect = {x, y, pill_w, pill_h};
+            SDL_BlitSurface(progress_surface, NULL, gl_notification_surface, &dst_rect);
+            
+            SDL_FreeSurface(progress_surface);
+        }
+    }
+    
+    // Render text notifications (bottom-left by default)
+    if (has_notifications) {
+        // Get theme colors
+        SDL_Color text_color = uintToColour(THEME_COLOR1_255);  // Main Color
+        SDL_Color bg_color_sdl = uintToColour(THEME_COLOR2_255);  // Primary Accent Color
+        
+        int base_x = notif_margin;
+        int base_y = screen_height - notif_margin;
+        
+        for (int i = 0; i < notification_count; i++) {
+            Notification* n = &notifications[i];
+            
+            // Calculate text size using tiny font
+            int text_w = 0, text_h = 0;
+            TTF_SizeUTF8(font.tiny, n->message, &text_w, &text_h);
+            
+            // Calculate icon dimensions if present
+            int icon_w = 0;
+            int icon_h = 0;
+            int icon_total_w = 0;  // icon width + gap
+            if (n->icon) {
+                // Scale icon to fit notification height
+                icon_h = text_h;  // Match text height
+                icon_w = (n->icon->w * icon_h) / n->icon->h;
+                icon_total_w = icon_w + notif_icon_gap;
+            }
+            
+            // Calculate pill dimensions (icon + text)
+            int pill_w = icon_total_w + text_w + (notif_padding_x * 2);
+            int pill_h = text_h + (notif_padding_y * 2);
+            int corner_radius = pill_h / 2; // Fully rounded ends (pill shape)
+            
+            // Position: stack upward from bottom
+            int stack_offset = 0;
+            for (int j = i + 1; j < notification_count; j++) {
+                int other_text_h = 0;
+                TTF_SizeUTF8(font.tiny, notifications[j].message, NULL, &other_text_h);
+                int other_icon_h = notifications[j].icon ? other_text_h : 0;
+                int other_pill_h = (other_text_h > other_icon_h ? other_text_h : other_icon_h) + (notif_padding_y * 2);
+                stack_offset += other_pill_h + notif_stack_gap;
+            }
+            
+            int x = base_x;
+            int y = base_y - pill_h - stack_offset;
+            
+            // Create temporary surface for this notification pill
+            SDL_Surface* notif_surface = SDL_CreateRGBSurfaceWithFormat(
+                0, pill_w, pill_h, 32, SDL_PIXELFORMAT_ABGR8888
+            );
+            if (!notif_surface) continue;
+            
+            // Clear to transparent first
+            SDL_FillRect(notif_surface, NULL, 0);
+            
+            // Draw rounded pill background with accent color (fully opaque)
+            Uint32 bg_color = SDL_MapRGBA(notif_surface->format, bg_color_sdl.r, bg_color_sdl.g, bg_color_sdl.b, 255);
+            draw_rounded_rect(notif_surface, 0, 0, pill_w, pill_h, corner_radius, bg_color);
+            
+            int content_x = notif_padding_x;
+            
+            // Draw icon if present
+            if (n->icon && icon_w > 0 && icon_h > 0) {
+                // Scale and blit icon
+                SDL_Rect icon_dst = {content_x, notif_padding_y, icon_w, icon_h};
+                SDL_SetSurfaceBlendMode(n->icon, SDL_BLENDMODE_BLEND);
+                SDL_BlitScaled(n->icon, NULL, notif_surface, &icon_dst);
+                content_x += icon_total_w;
+            }
+            
+            // Draw text with main color
+            SDL_Surface* text_surf = TTF_RenderUTF8_Blended(font.tiny, n->message, text_color);
+            if (text_surf) {
+                SDL_SetSurfaceBlendMode(text_surf, SDL_BLENDMODE_BLEND);
+                SDL_Rect text_dst = {content_x, notif_padding_y, text_surf->w, text_surf->h};
+                SDL_BlitSurface(text_surf, NULL, notif_surface, &text_dst);
+                SDL_FreeSurface(text_surf);
+            }
+            
+            // Blit to the full notification surface
+            SDL_SetSurfaceBlendMode(notif_surface, SDL_BLENDMODE_NONE);
+            SDL_Rect dst_rect = {x, y, pill_w, pill_h};
+            SDL_BlitSurface(notif_surface, NULL, gl_notification_surface, &dst_rect);
+            
+            SDL_FreeSurface(notif_surface);
+        }
+    }
+    
+    // Set the notification surface for GL rendering
+    PLAT_setNotificationSurface(gl_notification_surface, 0, 0);
+    
+    render_dirty = 0;
+    last_notification_count = notification_count;
+    system_indicator_dirty = 0;
+    progress_indicator_dirty = 0;
+    last_system_indicator_type = system_indicator_type;
+}
+
+bool Notification_isActive(void) {
+    return initialized && notification_count > 0;
+}
+
+void Notification_clear(void) {
+    notification_count = 0;
+    progress_indicator_active = 0;
+    progress_indicator_icon = NULL;
+    render_dirty = 1;
+    progress_indicator_dirty = 1;
+    PLAT_clearNotificationSurface();
+    if (gl_notification_surface) {
+        SDL_FreeSurface(gl_notification_surface);
+        gl_notification_surface = NULL;
+    }
+}
+
+void Notification_quit(void) {
+    Notification_clear();
+    system_indicator_type = SYSTEM_INDICATOR_NONE;
+    progress_indicator_active = 0;
+    initialized = 0;
+}
+
+///////////////////////////////
+// System Indicator Functions
+///////////////////////////////
+
+void Notification_showSystemIndicator(SystemIndicatorType type) {
+    if (!initialized) return;
+    if (type == SYSTEM_INDICATOR_NONE) return;
+    
+    // Update or start the indicator
+    system_indicator_type = type;
+    system_indicator_start_time = SDL_GetTicks();
+    system_indicator_dirty = 1;
+}
+
+bool Notification_hasSystemIndicator(void) {
+    return initialized && system_indicator_type != SYSTEM_INDICATOR_NONE;
+}
+
+int Notification_getSystemIndicatorWidth(void) {
+    if (!initialized || system_indicator_type == SYSTEM_INDICATOR_NONE) {
+        return 0;
+    }
+    return SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
+}
+
+///////////////////////////////
+// Progress Indicator Functions
+///////////////////////////////
+
+void Notification_showProgressIndicator(const char* title, const char* progress, SDL_Surface* icon) {
+    if (!initialized) return;
+    
+    // Check if RA notifications are enabled
+    if (!CFG_getRAShowNotifications()) return;
+    
+    // Copy the title and progress strings
+    strncpy(progress_indicator_title, title, PROGRESS_TITLE_MAX - 1);
+    progress_indicator_title[PROGRESS_TITLE_MAX - 1] = '\0';
+    
+    strncpy(progress_indicator_progress, progress, PROGRESS_STRING_MAX - 1);
+    progress_indicator_progress[PROGRESS_STRING_MAX - 1] = '\0';
+    
+    // Store icon reference (caller retains ownership)
+    progress_indicator_icon = icon;
+    
+    // Activate and reset timer
+    progress_indicator_active = 1;
+    progress_indicator_start_time = SDL_GetTicks();
+    progress_indicator_dirty = 1;
+}
+
+void Notification_hideProgressIndicator(void) {
+    if (!initialized) return;
+    
+    if (progress_indicator_active) {
+        progress_indicator_active = 0;
+        progress_indicator_icon = NULL;
+        progress_indicator_dirty = 1;
+    }
+}
+
+bool Notification_hasProgressIndicator(void) {
+    return initialized && progress_indicator_active;
+}
