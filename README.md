@@ -77,6 +77,7 @@ For other devices we recommend checking out [MinUI](https://github.com/shauninma
 ## Currently supported devices:
 - Trimui Brick
 - Trimui Smart Pro
+- Trimui Smart Pro S
 
 ---
 
@@ -109,11 +110,9 @@ After two minutes the device will go into deep sleep. The leds will turn complet
 
 ## What about X feature?
 
-NextUI supports a variety of optional extras called Paks.
+NextUI supports a variety of optional extras called Paks that are maintained by community members.
 
-These Paks introduce a variety of new features and emulators.
-
-Our community has currated a [list of favorite Paks](https://nextui.loveretro.games/paks/community-favorites/) and a [list of standalone emulators](https://nextui.loveretro.games/paks/standalone-emulators/).
+Our wiki has a [list of all available Paks](https://nextui.loveretro.games/pak-store/) that can be downloaded from our Pak Store straight on your device.
 
 ---
 
