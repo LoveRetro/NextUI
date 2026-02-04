@@ -13,6 +13,14 @@ typedef std::shared_mutex Lock;
 typedef std::unique_lock< Lock >  WriteLock;
 typedef std::shared_lock< Lock >  ReadLock;
 
+static std::string overlayMessage;
+static bool overlayVisible = false;
+static OverlayDismissMode overlayDismissMode = OverlayDismissMode::None;
+static SDL_Surface* overlaySurface = nullptr;
+static Lock overlayLock;
+
+static void drawOverlayLocal(SDL_Surface* screen);
+
 ///////////////////////////////////////////////////////////
 
 MenuItem::MenuItem(ListItemType type, const std::string &name, const std::string &desc,
@@ -381,6 +389,28 @@ bool MenuList::selectByName(const std::string &name)
 // returns true if the input was handled
 InputReactionHint MenuList::handleInput(int &dirty, int &quit)
 {
+    bool tryDismiss = false;
+    {
+        ReadLock r(overlayLock);
+        if (overlayVisible) {
+             bool dismissed = false;
+             if (overlayDismissMode == OverlayDismissMode::DismissOnA && PAD_justPressed(BTN_A)) dismissed = true;
+             else if (overlayDismissMode == OverlayDismissMode::DismissOnB && PAD_justPressed(BTN_B)) dismissed = true;
+
+             if (dismissed) {
+                 tryDismiss = true;
+             } else {
+                 return NoOp;
+             }
+        }
+    }
+
+    if (tryDismiss) {
+        hideOverlay();
+        dirty = 1;
+        return NoOp;
+    }
+
     ReadLock r(itemLock);
     InputReactionHint handled = items.at(scope.selected)->handleInput(dirty);
     if(handled == ResetAllItems) {
@@ -545,6 +575,13 @@ void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
             GFX_blitTextCPP(font.tiny, description.c_str(), SCALE1(FONT_SMALL), uintToColour(THEME_COLOR4_255), surface, {(dst.x + dst.w - w) / 2, dst.y + dst.h - h, w, h});
         }
     }
+
+    {
+        WriteLock w(overlayLock);
+        overlaySurface = surface;
+    }
+
+    drawOverlayLocal(surface);
 }
 
 void MenuList::drawList(SDL_Surface *surface, const SDL_Rect &dst)
@@ -818,6 +855,69 @@ void MenuList::resetAllItems()
         if(item->on_reset) {
             item->on_reset();
             item->initSelection();
+ 
+        }
+    }
+}
+
+void MenuList::showOverlay(const std::string& message, OverlayDismissMode dismissMode)
+{
+    {
+        WriteLock w(overlayLock);
+        overlayMessage = message;
+        overlayVisible = true;
+        overlayDismissMode = dismissMode;
+    }
+    
+    // We want to force a draw right now since usually we are about to block
+    WriteLock w(overlayLock);
+    if (overlaySurface) {
+        drawOverlayLocal(overlaySurface);
+        GFX_flip(overlaySurface);
+    }
+}
+
+void MenuList::hideOverlay()
+{
+    WriteLock w(overlayLock);
+    overlayVisible = false;
+}
+
+bool MenuList::isOverlayVisible()
+{
+    ReadLock r(overlayLock);
+    return overlayVisible;
+}
+
+static void drawOverlayLocal(SDL_Surface* screen) {
+    // ReadLock r(overlayLock); // Assumes caller held lock or is safe
+    if (!overlayVisible) return;
+    
+    if (!screen) return;
+
+    // Use a static shadow surface to create a semi-transparent overlay
+    static SDL_Surface* shadow = nullptr;
+    if (!shadow || shadow->w != screen->w || shadow->h != screen->h) {
+        if (shadow) SDL_FreeSurface(shadow);
+        shadow = SDL_CreateRGBSurface(SDL_SWSURFACE, screen->w, screen->h, 
+                                      screen->format->BitsPerPixel, 
+                                      screen->format->Rmask, screen->format->Gmask, screen->format->Bmask, 0);
+        SDL_FillRect(shadow, NULL, SDL_MapRGB(shadow->format, 0, 0, 0));
+        SDLX_SetAlpha(shadow, SDL_SRCALPHA, 200); // Semi-transparent black
+    }
+    SDL_BlitSurface(shadow, NULL, screen, NULL);
+
+    SDL_Rect screenRect = {0, 0, screen->w, screen->h};
+
+    GFX_blitMessageCPP(font.medium, overlayMessage, screen, screenRect);
+    
+    if (overlayDismissMode != OverlayDismissMode::None) {
+        if (overlayDismissMode == OverlayDismissMode::DismissOnB) {
+            char *hints[] = {(char *)("B"), (char *)("BACK"), NULL};
+            GFX_blitButtonGroup(hints, 1, screen, 1);
+        } else if (overlayDismissMode == OverlayDismissMode::DismissOnA) {
+            char *hints[] = {(char *)("A"), (char *)("OK"), NULL};
+            GFX_blitButtonGroup(hints, 1, screen, 1);
         }
     }
 }

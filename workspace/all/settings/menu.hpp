@@ -121,6 +121,13 @@ enum InputReactionHint
     ResetAllItems
 };
 
+enum class OverlayDismissMode
+{
+    None,
+    DismissOnA,
+    DismissOnB
+};
+
 class AbstractMenuItem;
 class MenuList;
 // typedef InputReactionHint (*MenuListCallback)(MenuList* list, int i);
@@ -284,6 +291,10 @@ public:
     ~MenuList();
     MenuList(MenuList &) = delete;
 
+    static void showOverlay(const std::string& message, OverlayDismissMode dismissMode = OverlayDismissMode::None);
+    static void hideOverlay();
+    static bool isOverlayVisible();
+
     void performLayout(const SDL_Rect &dst);
     bool selectNext();
     bool selectPrev();
@@ -306,6 +317,19 @@ public:
     void drawMain(SDL_Surface *surface, const SDL_Rect &dst);
     void drawMainItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
     virtual void drawCustom(SDL_Surface *surface, const SDL_Rect &dst) {};
+};
+
+// Moved here to ensure MenuList is fully defined
+struct ScopedOverlay {
+    ScopedOverlay(const std::string& message, OverlayDismissMode dismissMode = OverlayDismissMode::None) {
+        MenuList::showOverlay(message, dismissMode);
+    }
+    ~ScopedOverlay() {
+        MenuList::hideOverlay();
+    }
+    // Prevent copying to ensure single ownership/cleanup
+    ScopedOverlay(const ScopedOverlay&) = delete;
+    ScopedOverlay& operator=(const ScopedOverlay&) = delete;
 };
 
 const MenuListCallback DeferToSubmenu = [](AbstractMenuItem &itm) -> InputReactionHint
