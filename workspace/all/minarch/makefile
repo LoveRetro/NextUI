@@ -5,11 +5,11 @@ PLATFORM=$(UNION_PLATFORM)
 endif
 
 ifeq (,$(PLATFORM))
-	$(error please specify PLATFORM, eg. PLATFORM=trimui make)
+$(error please specify PLATFORM, eg. PLATFORM=trimui make)
 endif
 
 ifeq (,$(CROSS_COMPILE))
-	$(error missing CROSS_COMPILE for this toolchain)
+$(error missing CROSS_COMPILE for this toolchain)
 endif
 
 ###########################################################
@@ -38,6 +38,7 @@ CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(OPT)
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS	 += -lmsettings -lsamplerate
+LDFLAGS  += -llz4
 
 ifeq ($(PROFILE), 1)
 CFLAGS  += -pg
@@ -52,12 +53,12 @@ endif
 ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
 CFLAGS += `pkg-config --cflags libzip`
-LDFLAGS += `pkg-config --libs libzip`
+LDFLAGS += `pkg-config --libs libzip` -lz
 else
-LDFLAGS += -lzip
+LDFLAGS += -lzip -lz
 endif # Linux
-else # all handheld platfoms
-LDFLAGS	 +=  -Llibretro-common -lsrm -lzip
+else # all handheld platforms
+LDFLAGS	 +=  -Llibretro-common -lsrm -lzip -lz
 CFLAGS   += -DHAS_SRM
 LDFLAGS +=  -lasound
 endif
@@ -119,6 +120,7 @@ all: clean libretro-common libsrm.a rcheevos libchdr $(PREFIX_LOCAL)/include/mse
 	cp -L $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
 	cp -L ../libchdr/build/$(PLATFORM)/libchdr.so.0.2 build/$(PLATFORM)/libchdr.so.0
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 else
@@ -130,6 +132,7 @@ all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	cp -L $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
 
