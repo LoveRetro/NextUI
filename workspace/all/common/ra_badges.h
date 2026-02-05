@@ -11,7 +11,7 @@
  * Downloads and caches achievement badge images for display in notifications
  * and the achievements list.
  * 
- * Cache location: /mnt/SDCARD/.cache/ra/badges/{badge_name}.png
+ * Cache location: SHARED_USERDATA_PATH/.ra/badges/{badge_name}.png
  * Badge URLs: https://media.retroachievements.org/Badge/{badge_name}.png
  * Locked badges: https://media.retroachievements.org/Badge/{badge_name}_lock.png
  */
@@ -21,7 +21,7 @@
 #define RA_BADGE_NOTIFY_SIZE 24  // Size for notification icons
 
 // Cache directory path (under SDCARD_PATH)
-#define RA_BADGE_CACHE_DIR "/.cache/ra/badges"
+#define RA_BADGE_CACHE_DIR SHARED_USERDATA_PATH "/.ra/badges"
 
 // Badge state
 typedef enum {

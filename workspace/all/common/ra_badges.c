@@ -76,17 +76,12 @@ static BadgeCacheEntry* find_or_create_entry(const char* badge_name, bool locked
 static void ensure_cache_dir(void) {
 	char path[MAX_PATH];
 	
-	// Create .cache directory
-	snprintf(path, sizeof(path), "%s/.cache", SDCARD_PATH);
+	// Create .ra directory
+	snprintf(path, sizeof(path), SHARED_USERDATA_PATH "/.ra");
 	mkdir(path, 0755);
 	
-	// Create .cache/ra directory
-	snprintf(path, sizeof(path), "%s/.cache/ra", SDCARD_PATH);
-	mkdir(path, 0755);
-	
-	// Create .cache/ra/badges directory
-	snprintf(path, sizeof(path), "%s%s", SDCARD_PATH, RA_BADGE_CACHE_DIR);
-	mkdir(path, 0755);
+	// Create .ra/badges directory
+	mkdir(RA_BADGE_CACHE_DIR, 0755);
 }
 
 // Check if cache file exists
@@ -399,11 +394,11 @@ bool RA_Badges_hasPendingDownloads(void) {
 
 void RA_Badges_getCachePath(const char* badge_name, bool locked, char* buffer, size_t buffer_size) {
 	if (locked) {
-		snprintf(buffer, buffer_size, "%s%s/%s_lock.png", 
-		         SDCARD_PATH, RA_BADGE_CACHE_DIR, badge_name);
+		snprintf(buffer, buffer_size, "%s/%s_lock.png", 
+		         RA_BADGE_CACHE_DIR, badge_name);
 	} else {
-		snprintf(buffer, buffer_size, "%s%s/%s.png",
-		         SDCARD_PATH, RA_BADGE_CACHE_DIR, badge_name);
+		snprintf(buffer, buffer_size, "%s/%s.png",
+		         RA_BADGE_CACHE_DIR, badge_name);
 	}
 }
 
