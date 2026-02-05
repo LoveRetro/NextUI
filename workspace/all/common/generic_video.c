@@ -116,6 +116,7 @@ static int notification_y = 0;
 static int notification_dirty = 0;
 static GLuint notification_tex = 0;
 static int notif_tex_w = 0, notif_tex_h = 0;
+static int notification_clear_frames = 0;  // Frames to clear framebuffer after notification ends
 
 void PLAT_setNotificationSurface(SDL_Surface* surface, int x, int y) {
     notification_surface = surface;
@@ -126,7 +127,8 @@ void PLAT_setNotificationSurface(SDL_Surface* surface, int x, int y) {
 
 void PLAT_clearNotificationSurface(void) {
     notification_surface = NULL;
-    notification_dirty = 1;
+    notification_dirty = 0;  // Nothing to update since surface is NULL
+    notification_clear_frames = 3;  // Clear for 3 frames (triple buffering safety)
 }
 
 
@@ -1950,8 +1952,10 @@ void PLAT_GL_Swap() {
 
     static int lastframecount = 0;
     if (reloadShaderTextures) lastframecount = frame_count;
-    if (frame_count < lastframecount + 3)
+    if (frame_count < lastframecount + 3 || notification_clear_frames > 0) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (notification_clear_frames > 0) notification_clear_frames--;
+    }
 
     SDL_Rect dst_rect = {0, 0, device_width, device_height};
     setRectToAspectRatio(&dst_rect);
