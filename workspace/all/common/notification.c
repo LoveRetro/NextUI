@@ -26,6 +26,10 @@ static Notification notifications[NOTIFICATION_MAX_QUEUE];
 static int notification_count = 0;
 static int initialized = 0;
 
+// Persistent surface for GL rendering
+static SDL_Surface* gl_notification_surface = NULL;
+static int needs_clear_frame = 0;
+
 // Screen dimensions for layer rendering
 static int screen_width = 0;
 static int screen_height = 0;
@@ -73,7 +77,11 @@ static ProgressIndicatorState progress_state = {0};
 // Rounded rectangle drawing
 ///////////////////////////////
 
-// Draw a filled rounded rectangle (pill shape) on an RGBA surface
+// Draw a filled rounded rectangle directly to RGBA pixel buffer.
+// This is separate from GFX_blitPill* functions in api.c because:
+// 1. Notifications render to an RGBA surface for GL overlay compositing
+// 2. GFX_blitPill* use pre-made theme assets requiring screen format surfaces
+// 3. Direct pixel manipulation avoids format conversion overhead during animation
 static void draw_rounded_rect(SDL_Surface* surface, int x, int y, int w, int h, int radius, Uint32 color) {
     if (!surface || w <= 0 || h <= 0) return;
     
@@ -231,10 +239,6 @@ void Notification_update(uint32_t now) {
         }
     }
 }
-
-// Persistent surface for GL rendering
-static SDL_Surface* gl_notification_surface = NULL;
-static int needs_clear_frame = 0;
 
 // Render system indicator (top-right)
 static void render_system_indicator(void) {
