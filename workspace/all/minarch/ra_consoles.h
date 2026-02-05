@@ -12,6 +12,96 @@
 #include <string.h>
 
 /**
+ * Mapping entry from EMU tag to RetroAchievements console ID
+ */
+typedef struct {
+	const char* emu_tag;
+	int console_id;
+} RA_ConsoleMapping;
+
+/**
+ * Lookup table mapping NextUI EMU tags to RC_CONSOLE_* constants.
+ * Sorted alphabetically by emu_tag for readability/maintainability.
+ */
+static const RA_ConsoleMapping ra_console_table[] = {
+	// Atari
+	{ "A2600",   RC_CONSOLE_ATARI_2600 },
+	{ "A5200",   RC_CONSOLE_ATARI_5200 },
+	{ "A7800",   RC_CONSOLE_ATARI_7800 },
+	// Sega 32X
+	{ "32X",     RC_CONSOLE_SEGA_32X },
+	// Commodore
+	{ "C128",    RC_CONSOLE_COMMODORE_64 },  // Uses C64 for RA
+	{ "C64",     RC_CONSOLE_COMMODORE_64 },
+	// ColecoVision
+	{ "COLECO", RC_CONSOLE_COLECOVISION },
+	// Amstrad
+	{ "CPC",     RC_CONSOLE_AMSTRAD_PC },
+	// Nintendo
+	{ "FC",      RC_CONSOLE_NINTENDO },
+	// FinalBurn Neo
+	{ "FBN",     RC_CONSOLE_ARCADE },
+	// Famicom Disk System
+	{ "FDS",     RC_CONSOLE_FAMICOM_DISK_SYSTEM },
+	// Game Boy
+	{ "GB",      RC_CONSOLE_GAMEBOY },
+	// Game Boy Advance
+	{ "GBA",     RC_CONSOLE_GAMEBOY_ADVANCE },
+	// Game Boy Color
+	{ "GBC",     RC_CONSOLE_GAMEBOY_COLOR },
+	// Game Gear
+	{ "GG",      RC_CONSOLE_GAME_GEAR },
+	// Atari Lynx
+	{ "LYNX",    RC_CONSOLE_ATARI_LYNX },
+	// Mega Drive/Genesis
+	{ "MD",      RC_CONSOLE_MEGA_DRIVE },
+	// GBA (mGBA)
+	{ "MGBA",    RC_CONSOLE_GAMEBOY_ADVANCE },
+	// MSX
+	{ "MSX",     RC_CONSOLE_MSX },
+	// Neo Geo Pocket
+	{ "NGP",     RC_CONSOLE_NEOGEO_POCKET },
+	// Neo Geo Pocket Color
+	{ "NGPC",    RC_CONSOLE_NEOGEO_POCKET },
+	// PICO-8
+	{ "P8",      RC_CONSOLE_PICO },
+	// PC Engine
+	{ "PCE",     RC_CONSOLE_PC_ENGINE },
+	// Not supported (no RA)
+	{ "PET",     RC_CONSOLE_UNKNOWN },
+	// Pokemon Mini
+	{ "PKM",     RC_CONSOLE_POKEMON_MINI },
+	// Not supported (no RA)
+	{ "PLUS4",   RC_CONSOLE_UNKNOWN },
+	// PrBoom (no RA)
+	{ "PRBOOM", RC_CONSOLE_UNKNOWN },
+	// PlayStation
+	{ "PS",      RC_CONSOLE_PLAYSTATION },
+	// PlayStation (SwanStation)
+	{ "PSX",     RC_CONSOLE_PLAYSTATION },
+	// Amiga
+	{ "PUAE",    RC_CONSOLE_AMIGA },
+	// Sega CD
+	{ "SEGACD", RC_CONSOLE_SEGA_CD },
+	// Super Famicom/SNES
+	{ "SFC",     RC_CONSOLE_SUPER_NINTENDO },
+	// SG-1000
+	{ "SG1000", RC_CONSOLE_SG1000 },
+	// Super Game Boy
+	{ "SGB",     RC_CONSOLE_GAMEBOY },
+	// Master System
+	{ "SMS",     RC_CONSOLE_MASTER_SYSTEM },
+	// Super Famicom (Supafaust)
+	{ "SUPA",    RC_CONSOLE_SUPER_NINTENDO },
+	// Virtual Boy
+	{ "VB",      RC_CONSOLE_VIRTUAL_BOY },
+	// VIC-20
+	{ "VIC",     RC_CONSOLE_VIC20 },
+};
+
+#define RA_CONSOLE_TABLE_SIZE (sizeof(ra_console_table) / sizeof(ra_console_table[0]))
+
+/**
  * Get the RetroAchievements console ID for a given EMU tag.
  * @param emu_tag The NextUI emulator tag (e.g., "GB", "SFC", "PS")
  * @return The RC_CONSOLE_* constant, or RC_CONSOLE_UNKNOWN if not supported
@@ -21,61 +111,11 @@ static inline int RA_getConsoleId(const char* emu_tag) {
 		return RC_CONSOLE_UNKNOWN;
 	}
 	
-	// Nintendo
-	if (strcmp(emu_tag, "FC") == 0)      return RC_CONSOLE_NINTENDO;           // Famicom/NES
-	if (strcmp(emu_tag, "FDS") == 0)     return RC_CONSOLE_FAMICOM_DISK_SYSTEM; // Famicom Disk System
-	if (strcmp(emu_tag, "SFC") == 0)     return RC_CONSOLE_SUPER_NINTENDO;     // Super Famicom/SNES
-	if (strcmp(emu_tag, "SUPA") == 0)    return RC_CONSOLE_SUPER_NINTENDO;     // Super Famicom (Supafaust)
-	if (strcmp(emu_tag, "GB") == 0)      return RC_CONSOLE_GAMEBOY;            // Game Boy
-	if (strcmp(emu_tag, "GBC") == 0)     return RC_CONSOLE_GAMEBOY_COLOR;      // Game Boy Color
-	if (strcmp(emu_tag, "SGB") == 0)     return RC_CONSOLE_GAMEBOY;            // Super Game Boy
-	if (strcmp(emu_tag, "GBA") == 0)     return RC_CONSOLE_GAMEBOY_ADVANCE;    // Game Boy Advance
-	if (strcmp(emu_tag, "MGBA") == 0)    return RC_CONSOLE_GAMEBOY_ADVANCE;    // GBA (mGBA)
-	if (strcmp(emu_tag, "VB") == 0)      return RC_CONSOLE_VIRTUAL_BOY;        // Virtual Boy
-	if (strcmp(emu_tag, "PKM") == 0)     return RC_CONSOLE_POKEMON_MINI;       // Pokemon Mini
-	
-	// Sega
-	if (strcmp(emu_tag, "MD") == 0)      return RC_CONSOLE_MEGA_DRIVE;         // Mega Drive/Genesis
-	if (strcmp(emu_tag, "32X") == 0)     return RC_CONSOLE_SEGA_32X;           // Sega 32X
-	if (strcmp(emu_tag, "SEGACD") == 0)  return RC_CONSOLE_SEGA_CD;            // Sega CD
-	if (strcmp(emu_tag, "SMS") == 0)     return RC_CONSOLE_MASTER_SYSTEM;      // Master System
-	if (strcmp(emu_tag, "GG") == 0)      return RC_CONSOLE_GAME_GEAR;          // Game Gear
-	if (strcmp(emu_tag, "SG1000") == 0)  return RC_CONSOLE_SG1000;             // SG-1000
-	
-	// Sony
-	if (strcmp(emu_tag, "PS") == 0)      return RC_CONSOLE_PLAYSTATION;        // PlayStation
-	if (strcmp(emu_tag, "PSX") == 0)     return RC_CONSOLE_PLAYSTATION;        // PlayStation (SwanStation)
-	
-	// NEC
-	if (strcmp(emu_tag, "PCE") == 0)     return RC_CONSOLE_PC_ENGINE;          // TurboGrafx-16/PC Engine
-	
-	// Atari
-	if (strcmp(emu_tag, "A2600") == 0)   return RC_CONSOLE_ATARI_2600;         // Atari 2600
-	if (strcmp(emu_tag, "A5200") == 0)   return RC_CONSOLE_ATARI_5200;         // Atari 5200
-	if (strcmp(emu_tag, "A7800") == 0)   return RC_CONSOLE_ATARI_7800;         // Atari 7800
-	if (strcmp(emu_tag, "LYNX") == 0)    return RC_CONSOLE_ATARI_LYNX;         // Atari Lynx
-	
-	// SNK
-	if (strcmp(emu_tag, "NGP") == 0)     return RC_CONSOLE_NEOGEO_POCKET;      // Neo Geo Pocket
-	if (strcmp(emu_tag, "NGPC") == 0)    return RC_CONSOLE_NEOGEO_POCKET;      // Neo Geo Pocket Color
-	
-	// Arcade
-	if (strcmp(emu_tag, "FBN") == 0)     return RC_CONSOLE_ARCADE;             // FinalBurn Neo (varies)
-	
-	// Home Computers
-	if (strcmp(emu_tag, "C64") == 0)     return RC_CONSOLE_COMMODORE_64;       // Commodore 64
-	if (strcmp(emu_tag, "C128") == 0)    return RC_CONSOLE_COMMODORE_64;       // Commodore 128 (uses C64 for RA)
-	if (strcmp(emu_tag, "VIC") == 0)     return RC_CONSOLE_VIC20;              // Commodore VIC-20
-	if (strcmp(emu_tag, "PET") == 0)     return RC_CONSOLE_UNKNOWN;            // Commodore PET (no RA support)
-	if (strcmp(emu_tag, "PLUS4") == 0)   return RC_CONSOLE_UNKNOWN;            // Commodore Plus/4 (no RA support)
-	if (strcmp(emu_tag, "CPC") == 0)     return RC_CONSOLE_AMSTRAD_PC;         // Amstrad CPC
-	if (strcmp(emu_tag, "MSX") == 0)     return RC_CONSOLE_MSX;                // MSX
-	if (strcmp(emu_tag, "PUAE") == 0)    return RC_CONSOLE_AMIGA;              // Amiga (PUAE)
-	
-	// Other
-	if (strcmp(emu_tag, "COLECO") == 0)  return RC_CONSOLE_COLECOVISION;       // ColecoVision
-	if (strcmp(emu_tag, "P8") == 0)      return RC_CONSOLE_PICO;               // PICO-8 (fantasy console)
-	if (strcmp(emu_tag, "PRBOOM") == 0)  return RC_CONSOLE_UNKNOWN;            // PrBoom (DOOM - no RA)
+	for (size_t i = 0; i < RA_CONSOLE_TABLE_SIZE; i++) {
+		if (strcmp(emu_tag, ra_console_table[i].emu_tag) == 0) {
+			return ra_console_table[i].console_id;
+		}
+	}
 	
 	return RC_CONSOLE_UNKNOWN;
 }

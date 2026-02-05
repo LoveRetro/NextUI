@@ -312,7 +312,7 @@ void GFX_scrollTextSurface(TTF_Font* font, const char* in_name, SDL_Surface** ou
 int GFX_getTextWidth(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
 int GFX_getTextHeight(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
 int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
-int GFX_blitWrappedText(TTF_Font* font, const char* text, int max_width, int max_lines, SDL_Color color, SDL_Surface* screen, int center_x, int y); // returns new y position
+int GFX_blitWrappedText(TTF_Font* font, const char* text, int max_width, int max_lines, SDL_Color color, SDL_Surface* surface, int y); // returns new y position
 
 #define GFX_getScaler PLAT_getScaler		// scaler_t:(GFX_Renderer* renderer)
 #define GFX_blitRenderer PLAT_blitRenderer	// void:(GFX_Renderer* renderer)
@@ -354,16 +354,22 @@ void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_
 int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
 void GFX_blitHardwareHints(SDL_Surface* dst, int show_setting);
 
+typedef enum {
+	INDICATOR_BRIGHTNESS = 1,
+	INDICATOR_VOLUME = 2,
+	INDICATOR_COLORTEMP = 3,
+} IndicatorType;
+
 /**
  * Render a hardware indicator (volume/brightness/colortemp) at a specific position.
  * This is the reusable helper extracted from GFX_blitHardwareGroup for in-game use.
  * @param dst The destination surface
  * @param x X position for the indicator
  * @param y Y position for the indicator  
- * @param indicator_type 1=brightness, 2=volume, 3=colortemp (matches show_setting values)
+ * @param indicator_type Which indicator to display
  * @return The width of the rendered indicator
  */
-int GFX_blitHardwareIndicator(SDL_Surface* dst, int x, int y, int indicator_type);
+int GFX_blitHardwareIndicator(SDL_Surface* dst, int x, int y, IndicatorType indicator_type);
 
 /**
  * Create a surface with the same pixel format as gfx.screen.

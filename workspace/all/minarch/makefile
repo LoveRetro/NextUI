@@ -139,7 +139,7 @@ libretro-common:
 rcheevos:
 	cd ../rcheevos && make build PLATFORM=$(PLATFORM)
 
-# Desktop rcheevos build (native compiler)
+# Desktop rcheevos build - uses native gcc instead of cross-compiler
 rcheevos-desktop:
 	cd ../rcheevos && make build PLATFORM=desktop
 

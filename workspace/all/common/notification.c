@@ -294,7 +294,7 @@ void Notification_renderToLayer(int layer) {
             SDL_FillRect(indicator_surface, NULL, 0);
             
             // Render the indicator at (0,0) on the temp surface
-            GFX_blitHardwareIndicator(indicator_surface, 0, 0, system_indicator_type);
+            GFX_blitHardwareIndicator(indicator_surface, 0, 0, (IndicatorType)system_indicator_type);
             
             // Convert to RGBA for the notification overlay
             SDL_Surface* converted = SDL_ConvertSurfaceFormat(indicator_surface, SDL_PIXELFORMAT_ABGR8888, 0);

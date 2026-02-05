@@ -19,8 +19,11 @@
 #include <errno.h>
 #include <SDL2/SDL.h>
 
-// Logging macro
-#define RA_LOG(fmt, ...) printf("[RA] " fmt, ##__VA_ARGS__)
+// Logging macros - use NextUI log levels
+#define RA_LOG_DEBUG(fmt, ...) LOG_debug("[RA] " fmt, ##__VA_ARGS__)
+#define RA_LOG_INFO(fmt, ...)  LOG_info("[RA] " fmt, ##__VA_ARGS__)
+#define RA_LOG_WARN(fmt, ...)  LOG_warn("[RA] " fmt, ##__VA_ARGS__)
+#define RA_LOG_ERROR(fmt, ...) LOG_error("[RA] " fmt, ##__VA_ARGS__)
 
 /*****************************************************************************
  * Static state
@@ -244,7 +247,7 @@ static void ra_init_cdreader(void) {
 	// Get default callbacks to use as fallback
 	rc_hash_get_default_cdreader(&ra_default_cdreader);
 	
-	RA_LOG("Initializing CHD-aware CD reader\n");
+	RA_LOG_DEBUG("Initializing CHD-aware CD reader\n");
 }
 
 /*****************************************************************************
@@ -271,7 +274,7 @@ static void ra_reset_login_state(void) {
  * Helper: Start a login attempt
  *****************************************************************************/
 static void ra_start_login(void) {
-	RA_LOG("Attempting login (attempt %d/%d)...\n", 
+	RA_LOG_DEBUG("Attempting login (attempt %d/%d)...\n", 
 	       ra_login_retry_count + 1, RA_LOGIN_MAX_RETRIES);
 	rc_client_begin_login_with_token(ra_client,
 		CFG_getRAUsername(), CFG_getRAToken(),
@@ -344,7 +347,7 @@ static bool ra_queue_push(const char* body, size_t body_length, int http_status,
 		ra_response_queue_count++;
 		success = true;
 	} else {
-		RA_LOG("Warning: Response queue full, dropping response\n");
+		RA_LOG_WARN("Warning: Response queue full, dropping response\n");
 	}
 	
 	SDL_UnlockMutex(ra_queue_mutex);
@@ -448,7 +451,7 @@ static void ra_load_muted_achievements(void) {
 	}
 	
 	fclose(f);
-	RA_LOG("Loaded %d muted achievements for game %s\n", ra_muted_count, ra_game_hash);
+	RA_LOG_DEBUG("Loaded %d muted achievements for game %s\n", ra_muted_count, ra_game_hash);
 }
 
 /*****************************************************************************
@@ -477,7 +480,7 @@ static void ra_save_muted_achievements(void) {
 	
 	FILE* f = fopen(path, "w");
 	if (!f) {
-		RA_LOG("Error: Failed to save mute file: %s\n", path);
+		RA_LOG_ERROR("Error: Failed to save mute file: %s\n", path);
 		return;
 	}
 	
@@ -487,7 +490,7 @@ static void ra_save_muted_achievements(void) {
 	
 	fclose(f);
 	ra_muted_dirty = false;
-	RA_LOG("Saved %d muted achievements for game %s\n", ra_muted_count, ra_game_hash);
+	RA_LOG_DEBUG("Saved %d muted achievements for game %s\n", ra_muted_count, ra_game_hash);
 }
 
 /*****************************************************************************
@@ -586,7 +589,7 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 	} else {
 		// Error case
 		if (response && response->error) {
-			RA_LOG("HTTP error: %s\n", response->error);
+			RA_LOG_ERROR("HTTP error: %s\n", response->error);
 		}
 	}
 	
@@ -594,7 +597,7 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 	// The queue makes a copy of the body, so we can free the response after
 	if (!ra_queue_push(body, body_length, http_status, data->callback, data->callback_data)) {
 		// Queue failed (full or not initialized) - log but don't crash
-		RA_LOG("Warning: Failed to queue HTTP response\n");
+		RA_LOG_WARN("Warning: Failed to queue HTTP response\n");
 	}
 	
 	// Cleanup - safe to free now since queue copied the data
@@ -638,7 +641,7 @@ static void ra_server_call(const rc_api_request_t* request,
 
 static void ra_log_message(const char* message, const rc_client_t* client) {
 	(void)client;
-	RA_LOG("%s\n", message);
+	RA_LOG_DEBUG("%s\n", message);
 }
 
 /*****************************************************************************
@@ -656,7 +659,7 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 	case RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED:
 		// Hide "Unknown Emulator" notification when hardcore mode is disabled
 		if (!CFG_getRAHardcoreMode() && event->achievement->id == 101000001) {
-			RA_LOG("Skipping Unknown Emulator notification (not in hardcore mode)\n");
+			RA_LOG_DEBUG("Skipping Unknown Emulator notification (not in hardcore mode)\n");
 			break;
 		}
 		snprintf(message, sizeof(message), "Achievement Unlocked: %s",
@@ -664,16 +667,16 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		// Get the unlocked badge icon (not locked)
 		badge_icon = RA_Badges_getNotificationSize(event->achievement->badge_name, false);
 		Notification_push(NOTIFICATION_ACHIEVEMENT, message, badge_icon);
-		RA_LOG("Achievement unlocked: %s (%d points)\n",
+		RA_LOG_INFO("Achievement unlocked: %s (%d points)\n",
 		       event->achievement->title, event->achievement->points);
 		break;
 		
 	case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_SHOW:
-		RA_LOG("Challenge started: %s\n", event->achievement->title);
+		RA_LOG_DEBUG("Challenge started: %s\n", event->achievement->title);
 		break;
 		
 	case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_HIDE:
-		RA_LOG("Challenge ended: %s\n", event->achievement->title);
+		RA_LOG_DEBUG("Challenge ended: %s\n", event->achievement->title);
 		break;
 		
 	case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_SHOW:
@@ -720,32 +723,32 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		snprintf(message, sizeof(message), "Leaderboard: %s",
 		         event->leaderboard->title);
 		Notification_push(NOTIFICATION_ACHIEVEMENT, message, NULL);
-		RA_LOG("Leaderboard started: %s\n", event->leaderboard->title);
+		RA_LOG_INFO("Leaderboard started: %s\n", event->leaderboard->title);
 		break;
 		
 	case RC_CLIENT_EVENT_LEADERBOARD_FAILED:
-		RA_LOG("Leaderboard failed: %s\n", event->leaderboard->title);
+		RA_LOG_INFO("Leaderboard failed: %s\n", event->leaderboard->title);
 		break;
 		
 	case RC_CLIENT_EVENT_LEADERBOARD_SUBMITTED:
 		snprintf(message, sizeof(message), "Submitted %s to %s",
 		         event->leaderboard->tracker_value, event->leaderboard->title);
 		Notification_push(NOTIFICATION_ACHIEVEMENT, message, NULL);
-		RA_LOG("Leaderboard submitted: %s - %s\n",
+		RA_LOG_INFO("Leaderboard submitted: %s - %s\n",
 		       event->leaderboard->title, event->leaderboard->tracker_value);
 		break;
 		
 	case RC_CLIENT_EVENT_GAME_COMPLETED:
 		Notification_push(NOTIFICATION_ACHIEVEMENT, "Game Mastered!", NULL);
-		RA_LOG("Game mastered!\n");
+		RA_LOG_INFO("Game mastered!\n");
 		break;
 		
 	case RC_CLIENT_EVENT_RESET:
-		RA_LOG("Reset requested (hardcore mode enabled)\n");
+		RA_LOG_WARN("Reset requested (hardcore mode enabled)\n");
 		break;
 		
 	case RC_CLIENT_EVENT_SERVER_ERROR:
-		RA_LOG("Server error: %s\n",
+		RA_LOG_ERROR("Server error: %s\n",
 		       event->server_error ? event->server_error->error_message : "unknown");
 		// Show notification for server errors
 		snprintf(message, sizeof(message), "RA Server Error: %s",
@@ -754,17 +757,17 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		break;
 		
 	case RC_CLIENT_EVENT_DISCONNECTED:
-		RA_LOG("Disconnected - unlocks pending\n");
+		RA_LOG_WARN("Disconnected - unlocks pending\n");
 		Notification_push(NOTIFICATION_ACHIEVEMENT, "RetroAchievements: Offline mode", NULL);
 		break;
 		
 	case RC_CLIENT_EVENT_RECONNECTED:
-		RA_LOG("Reconnected - pending unlocks submitted\n");
+		RA_LOG_INFO("Reconnected - pending unlocks submitted\n");
 		Notification_push(NOTIFICATION_ACHIEVEMENT, "RetroAchievements: Reconnected", NULL);
 		break;
 		
 	default:
-		RA_LOG("Unhandled event type: %d\n", event->type);
+		RA_LOG_DEBUG("Unhandled event type: %d\n", event->type);
 		break;
 	}
 }
@@ -783,20 +786,20 @@ static void ra_login_callback(int result, const char* error_message,
 		ra_logged_in = true;
 		
 		const rc_client_user_t* user = rc_client_get_user_info(client);
-		RA_LOG("Logged in as %s (score: %u)\n",
+		RA_LOG_INFO("Logged in as %s (score: %u)\n",
 		       user ? user->display_name : "unknown",
 		       user ? user->score : 0);
 		
 		// Check if we have a pending game to load
 		if (pending_game_load) {
-			RA_LOG("Processing deferred game load: %s\n", pending_rom_path);
+			RA_LOG_DEBUG("Processing deferred game load: %s\n", pending_rom_path);
 			ra_do_load_game(pending_rom_path, pending_rom_data, pending_rom_size, pending_emu_tag);
 			ra_clear_pending_game();
 		}
 	} else {
 		// Failure - attempt retry or give up
 		ra_logged_in = false;
-		RA_LOG("Login failed: %s\n", error_message ? error_message : "unknown error");
+		RA_LOG_ERROR("Login failed: %s\n", error_message ? error_message : "unknown error");
 		
 		if (ra_login_retry_count < RA_LOGIN_MAX_RETRIES) {
 			// Schedule retry
@@ -805,7 +808,7 @@ static void ra_login_callback(int result, const char* error_message,
 			ra_login_retry_pending = true;
 			ra_login_retry_count++;
 			
-			RA_LOG("Scheduling retry %d/%d in %ums\n", 
+			RA_LOG_DEBUG("Scheduling retry %d/%d in %ums\n", 
 			       ra_login_retry_count, RA_LOGIN_MAX_RETRIES, delay);
 			
 			// Show "Connecting..." notification on first retry only
@@ -816,7 +819,7 @@ static void ra_login_callback(int result, const char* error_message,
 			}
 		} else {
 			// All retries exhausted
-			RA_LOG("All login retries exhausted\n");
+			RA_LOG_ERROR("All login retries exhausted\n");
 			Notification_push(NOTIFICATION_ACHIEVEMENT, 
 			                  "RetroAchievements: Connection failed", NULL);
 			ra_reset_login_state();
@@ -835,7 +838,7 @@ static void ra_prefetch_badges(rc_client_t* client) {
 		RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_LOCK_STATE);
 	
 	if (!list) {
-		RA_LOG("Failed to get achievement list for badge prefetch\n");
+		RA_LOG_WARN("Failed to get achievement list for badge prefetch\n");
 		return;
 	}
 	
@@ -872,7 +875,7 @@ static void ra_prefetch_badges(rc_client_t* client) {
 	free(badge_names);
 	rc_client_destroy_achievement_list(list);
 	
-	RA_LOG("Prefetching %d achievement badges\n", idx);
+	RA_LOG_DEBUG("Prefetching %d achievement badges\n", idx);
 }
 
 /*****************************************************************************
@@ -888,7 +891,7 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 		ra_game_loaded = true;
 		
 		if (game && game->id != 0) {
-			RA_LOG("Game loaded: %s (ID: %u)\n", game->title, game->id);
+			RA_LOG_INFO("Game loaded: %s (ID: %u)\n", game->title, game->id);
 			
 			// Store game hash for mute file path
 			if (game->hash && game->hash[0] != '\0') {
@@ -942,11 +945,11 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 			         game->title, display_unlocked, display_total);
 			Notification_push(NOTIFICATION_ACHIEVEMENT, message, NULL);
 		} else {
-			RA_LOG("Game not recognized by RetroAchievements\n");
+			RA_LOG_WARN("Game not recognized by RetroAchievements\n");
 		}
 	} else {
 		ra_game_loaded = false;
-		RA_LOG("Game load failed: %s\n", error_message ? error_message : "unknown error");
+		RA_LOG_ERROR("Game load failed: %s\n", error_message ? error_message : "unknown error");
 	}
 }
 
@@ -956,18 +959,18 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 
 void RA_init(void) {
 	if (!CFG_getRAEnable()) {
-		RA_LOG("RetroAchievements disabled in settings\n");
+		RA_LOG_DEBUG("RetroAchievements disabled in settings\n");
 		return;
 	}
 	
 	if (ra_client) {
-		RA_LOG("Already initialized\n");
+		RA_LOG_DEBUG("Already initialized\n");
 		return;
 	}
 	
 	// Check wifi state before attempting to connect
 	if (!PLAT_wifiEnabled()) {
-		RA_LOG("WiFi disabled - cannot connect to RetroAchievements\n");
+		RA_LOG_WARN("WiFi disabled - cannot connect to RetroAchievements\n");
 		Notification_push(NOTIFICATION_ACHIEVEMENT, 
 		                  "RetroAchievements requires WiFi", NULL);
 		return;
@@ -975,7 +978,7 @@ void RA_init(void) {
 	
 	// Wait for wifi to connect (handles wake-from-sleep scenario)
 	if (!PLAT_wifiConnected()) {
-		RA_LOG("WiFi enabled but not connected, waiting up to %dms...\n", RA_WIFI_WAIT_MAX_MS);
+		RA_LOG_DEBUG("WiFi enabled but not connected, waiting up to %dms...\n", RA_WIFI_WAIT_MAX_MS);
 		uint32_t start = SDL_GetTicks();
 		while (!PLAT_wifiConnected() && 
 		       (SDL_GetTicks() - start) < RA_WIFI_WAIT_MAX_MS) {
@@ -983,15 +986,15 @@ void RA_init(void) {
 		}
 		
 		if (!PLAT_wifiConnected()) {
-			RA_LOG("WiFi did not connect within %dms\n", RA_WIFI_WAIT_MAX_MS);
+			RA_LOG_WARN("WiFi did not connect within %dms\n", RA_WIFI_WAIT_MAX_MS);
 			Notification_push(NOTIFICATION_ACHIEVEMENT, 
 			                  "RetroAchievements requires WiFi", NULL);
 			return;
 		}
-		RA_LOG("WiFi connected after %ums\n", SDL_GetTicks() - start);
+		RA_LOG_DEBUG("WiFi connected after %ums\n", SDL_GetTicks() - start);
 	}
 	
-	RA_LOG("Initializing...\n");
+	RA_LOG_INFO("Initializing...\n");
 	
 	// Initialize the response queue (must be before any HTTP requests)
 	ra_queue_init();
@@ -999,7 +1002,7 @@ void RA_init(void) {
 	// Create rc_client with our callbacks
 	ra_client = rc_client_create(ra_read_memory, ra_server_call);
 	if (!ra_client) {
-		RA_LOG("Failed to create rc_client\n");
+		RA_LOG_ERROR("Failed to create rc_client\n");
 		return;
 	}
 	
@@ -1023,7 +1026,7 @@ void RA_init(void) {
 		hash_callbacks.cdreader.first_track_sector = ra_cdreader_first_track_sector;
 		
 		rc_client_set_hash_callbacks(ra_client, &hash_callbacks);
-		RA_LOG("CHD disc image support enabled\n");
+		RA_LOG_DEBUG("CHD disc image support enabled\n");
 	}
 	
 	// Configure hardcore mode from settings
@@ -1034,10 +1037,10 @@ void RA_init(void) {
 	
 	// Attempt login with stored token
 	if (CFG_getRAAuthenticated() && strlen(CFG_getRAToken()) > 0) {
-		RA_LOG("Logging in with stored token...\n");
+		RA_LOG_INFO("Logging in with stored token...\n");
 		ra_start_login();
 	} else {
-		RA_LOG("No stored token - user needs to authenticate in settings\n");
+		RA_LOG_WARN("No stored token - user needs to authenticate in settings\n");
 	}
 }
 
@@ -1068,7 +1071,7 @@ void RA_quit(void) {
 	}
 	
 	if (ra_client) {
-		RA_LOG("Shutting down...\n");
+		RA_LOG_INFO("Shutting down...\n");
 		rc_client_destroy(ra_client);
 		ra_client = NULL;
 	}
@@ -1097,7 +1100,7 @@ void RA_setMemoryMap(const void* mmap) {
 	}
 	
 	if (!mmap) {
-		RA_LOG("Memory map cleared\n");
+		RA_LOG_DEBUG("Memory map cleared\n");
 		return;
 	}
 	
@@ -1105,14 +1108,14 @@ void RA_setMemoryMap(const void* mmap) {
 	const struct retro_memory_map* src = (const struct retro_memory_map*)mmap;
 	
 	if (src->num_descriptors == 0 || !src->descriptors) {
-		RA_LOG("Memory map has no descriptors\n");
+		RA_LOG_WARN("Memory map has no descriptors\n");
 		return;
 	}
 	
 	// Allocate our copy of the memory map structure
 	ra_memory_map = (struct retro_memory_map*)malloc(sizeof(struct retro_memory_map));
 	if (!ra_memory_map) {
-		RA_LOG("Failed to allocate memory map\n");
+		RA_LOG_ERROR("Failed to allocate memory map\n");
 		return;
 	}
 	
@@ -1122,7 +1125,7 @@ void RA_setMemoryMap(const void* mmap) {
 	if (!ra_memory_map_descriptors) {
 		free(ra_memory_map);
 		ra_memory_map = NULL;
-		RA_LOG("Failed to allocate memory map descriptors\n");
+		RA_LOG_ERROR("Failed to allocate memory map descriptors\n");
 		return;
 	}
 	
@@ -1130,7 +1133,7 @@ void RA_setMemoryMap(const void* mmap) {
 	ra_memory_map->num_descriptors = src->num_descriptors;
 	ra_memory_map->descriptors = ra_memory_map_descriptors;
 	
-	RA_LOG("Memory map set by core: %u descriptors (deep copied)\n", ra_memory_map->num_descriptors);
+	RA_LOG_DEBUG("Memory map set by core: %u descriptors (deep copied)\n", ra_memory_map->num_descriptors);
 }
 
 void RA_initMemoryRegions(uint32_t console_id) {
@@ -1148,10 +1151,10 @@ void RA_initMemoryRegions(uint32_t console_id) {
 	
 	if (result) {
 		ra_memory_regions_initialized = true;
-		RA_LOG("Memory regions initialized: %u regions, %zu total bytes\n",
+		RA_LOG_DEBUG("Memory regions initialized: %u regions, %zu total bytes\n",
 		       ra_memory_regions.count, ra_memory_regions.total_size);
 	} else {
-		RA_LOG("Warning: Failed to initialize memory regions for console %u\n", console_id);
+		RA_LOG_WARN("Warning: Failed to initialize memory regions for console %u\n", console_id);
 	}
 }
 
@@ -1193,7 +1196,7 @@ static int ra_is_cd_extension(const char* path) {
 static void ra_do_load_game(const char* rom_path, const uint8_t* rom_data, size_t rom_size, const char* emu_tag) {
 	int console_id = RA_getConsoleId(emu_tag);
 	if (console_id == RC_CONSOLE_UNKNOWN) {
-		RA_LOG("Unknown console for tag '%s' - achievements disabled\n", emu_tag);
+		RA_LOG_WARN("Unknown console for tag '%s' - achievements disabled\n", emu_tag);
 		return;
 	}
 	
@@ -1201,15 +1204,15 @@ static void ra_do_load_game(const char* rom_path, const uint8_t* rom_data, size_
 	// PCE tag is used for both HuCard and CD games in NextUI
 	if (console_id == RC_CONSOLE_PC_ENGINE && ra_is_cd_extension(rom_path)) {
 		console_id = RC_CONSOLE_PC_ENGINE_CD;
-		RA_LOG("Detected PC Engine CD image, using console ID %d\n", console_id);
+		RA_LOG_DEBUG("Detected PC Engine CD image, using console ID %d\n", console_id);
 	}
 	// MD tag is used for both cartridge and Sega CD games in NextUI
 	else if (console_id == RC_CONSOLE_MEGA_DRIVE && ra_is_cd_extension(rom_path)) {
 		console_id = RC_CONSOLE_SEGA_CD;
-		RA_LOG("Detected Sega CD image, using console ID %d\n", console_id);
+		RA_LOG_DEBUG("Detected Sega CD image, using console ID %d\n", console_id);
 	}
 	
-	RA_LOG("Loading game: %s (console: %s, ID: %d)\n",
+	RA_LOG_INFO("Loading game: %s (console: %s, ID: %d)\n",
 	       rom_path, rc_console_name(console_id), console_id);
 	
 	// Initialize memory regions for this console type BEFORE loading the game
@@ -1223,7 +1226,7 @@ static void ra_do_load_game(const char* rom_path, const uint8_t* rom_data, size_
 		ra_game_loaded_callback, NULL);
 #else
 	// Fallback for builds without hash support
-	RA_LOG("Hash support not compiled in - cannot identify game\n");
+	RA_LOG_ERROR("Hash support not compiled in - cannot identify game\n");
 #endif
 }
 
@@ -1234,7 +1237,7 @@ void RA_loadGame(const char* rom_path, const uint8_t* rom_data, size_t rom_size,
 	
 	// If not logged in yet, store the game info for deferred loading
 	if (!ra_logged_in) {
-		RA_LOG("Login in progress - deferring game load for: %s\n", rom_path);
+		RA_LOG_DEBUG("Login in progress - deferring game load for: %s\n", rom_path);
 		
 		// Clear any previous pending game
 		ra_clear_pending_game();
@@ -1254,7 +1257,7 @@ void RA_loadGame(const char* rom_path, const uint8_t* rom_data, size_t rom_size,
 				memcpy(pending_rom_data, rom_data, rom_size);
 				pending_rom_size = rom_size;
 			} else {
-				RA_LOG("Warning: Failed to allocate memory for pending ROM data\n");
+				RA_LOG_WARN("Failed to allocate memory for pending ROM data\n");
 				pending_rom_size = 0;
 			}
 		}
@@ -1273,7 +1276,7 @@ void RA_unloadGame(void) {
 	}
 	
 	if (ra_game_loaded) {
-		RA_LOG("Unloading game\n");
+		RA_LOG_INFO("Unloading game\n");
 		
 		// Save any pending muted achievements
 		ra_save_muted_achievements();
@@ -1448,9 +1451,9 @@ void RA_setAchievementMuted(uint32_t achievement_id, bool muted) {
 			if (ra_muted_count < RA_MAX_MUTED_ACHIEVEMENTS) {
 				ra_muted_achievements[ra_muted_count++] = achievement_id;
 				ra_muted_dirty = true;
-				RA_LOG("Achievement %u muted\n", achievement_id);
+				RA_LOG_DEBUG("Achievement %u muted\n", achievement_id);
 			} else {
-				RA_LOG("Warning: Max muted achievements reached, cannot mute %u\n", achievement_id);
+				RA_LOG_WARN("Max muted achievements reached, cannot mute %u\n", achievement_id);
 			}
 		}
 	} else {
@@ -1463,7 +1466,7 @@ void RA_setAchievementMuted(uint32_t achievement_id, bool muted) {
 				}
 				ra_muted_count--;
 				ra_muted_dirty = true;
-				RA_LOG("Achievement %u unmuted\n", achievement_id);
+				RA_LOG_DEBUG("Achievement %u unmuted\n", achievement_id);
 				break;
 			}
 		}

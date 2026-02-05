@@ -6103,11 +6103,11 @@ static int OptionAchievements_showDetail(MenuList* list, int i) {
 			
 			// Title centered - wrap to max 2 lines with ellipsis if needed
 			int max_text_width = screen->w - SCALE1(PADDING * 2);
-			content_y = GFX_blitWrappedText(font.medium, ach->title, max_text_width, 2, COLOR_WHITE, screen, center_x, content_y);
+			content_y = GFX_blitWrappedText(font.medium, ach->title, max_text_width, 2, COLOR_WHITE, screen, content_y);
 			content_y += SCALE1(2);  // Spacing after title
 			
 			// Description - unlimited lines
-			content_y = GFX_blitWrappedText(font.small, ach->description, max_text_width, 0, COLOR_WHITE, screen, center_x, content_y);
+			content_y = GFX_blitWrappedText(font.small, ach->description, max_text_width, 0, COLOR_WHITE, screen, content_y);
 			content_y += SCALE1(4);  // Spacing after description
 			
 			// Points (singular/plural) - use tiny font like other metadata

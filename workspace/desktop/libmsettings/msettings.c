@@ -345,28 +345,12 @@ int InitializedSettings(void){
 
 // not implemented here
 
-// Desktop test helpers - read values from /tmp/desktop_settings_* files
-static int read_setting_file(const char* name, int default_value) {
-    char path[256];
-    snprintf(path, sizeof(path), "/tmp/desktop_settings_%s", name);
-    FILE* f = fopen(path, "r");
-    if (f) {
-        int value;
-        if (fscanf(f, "%d", &value) == 1) {
-            fclose(f);
-            return value;
-        }
-        fclose(f);
-    }
-    return default_value;
-}
-
-int GetBrightness(void) { return read_setting_file("brightness", 5); }
-int GetColortemp(void) { return read_setting_file("colortemp", 10); }
+int GetBrightness(void) { return 0; }
+int GetColortemp(void) { return 0; }
 int GetContrast(void) { return 0; }
 int GetSaturation(void) { return 0; }
 int GetExposure(void) { return 0; }
-int GetVolume(void) { return read_setting_file("volume", 10); }
+int GetVolume(void) { return 0; }
 
 int GetMutedBrightness(void) { return 0; }
 int GetMutedColortemp(void) { return 0; }

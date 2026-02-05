@@ -923,10 +923,12 @@ int GFX_wrapText(TTF_Font *font, char *str, int max_width, int max_lines)
 	return max_line_width;
 }
 
-int GFX_blitWrappedText(TTF_Font *font, const char *text, int max_width, int max_lines, SDL_Color color, SDL_Surface *screen, int center_x, int y)
+int GFX_blitWrappedText(TTF_Font *font, const char *text, int max_width, int max_lines, SDL_Color color, SDL_Surface *surface, int y)
 {
 	if (!text || !text[0])
 		return y;
+
+	int center_x = surface->w / 2;
 
 	char *text_copy = strdup(text);
 	if (!text_copy)
@@ -962,7 +964,7 @@ int GFX_blitWrappedText(TTF_Font *font, const char *text, int max_width, int max
 				// Render line and continue to next
 				SDL_Surface *line_surface = TTF_RenderUTF8_Blended(font, line, color);
 				if (line_surface) {
-					SDL_BlitSurface(line_surface, NULL, screen, &(SDL_Rect){
+					SDL_BlitSurface(line_surface, NULL, surface, &(SDL_Rect){
 						center_x - line_surface->w / 2, y
 					});
 					y += line_surface->h;
@@ -976,7 +978,7 @@ int GFX_blitWrappedText(TTF_Font *font, const char *text, int max_width, int max
 				snprintf(truncated, sizeof(truncated), "%s...", line);
 				SDL_Surface *line_surface = TTF_RenderUTF8_Blended(font, truncated, color);
 				if (line_surface) {
-					SDL_BlitSurface(line_surface, NULL, screen, &(SDL_Rect){
+					SDL_BlitSurface(line_surface, NULL, surface, &(SDL_Rect){
 						center_x - line_surface->w / 2, y
 					});
 					y += line_surface->h;
@@ -994,7 +996,7 @@ int GFX_blitWrappedText(TTF_Font *font, const char *text, int max_width, int max
 	if (line[0] != '\0') {
 		SDL_Surface *line_surface = TTF_RenderUTF8_Blended(font, line, color);
 		if (line_surface) {
-			SDL_BlitSurface(line_surface, NULL, screen, &(SDL_Rect){
+			SDL_BlitSurface(line_surface, NULL, surface, &(SDL_Rect){
 				center_x - line_surface->w / 2, y
 			});
 			y += line_surface->h;
@@ -1870,8 +1872,7 @@ void GFX_blitBatteryAtPosition(SDL_Surface *dst, int x, int y)
 
 // Helper function to render a hardware indicator (volume/brightness/colortemp) at a specific position.
 // This is the reusable core extracted from GFX_blitHardwareGroup for use in notifications.
-// indicator_type values: 1=brightness, 2=volume, 3=colortemp (matches show_setting from PWR_update)
-int GFX_blitHardwareIndicator(SDL_Surface *dst, int x, int y, int indicator_type)
+int GFX_blitHardwareIndicator(SDL_Surface *dst, int x, int y, IndicatorType indicator_type)
 {
 	int setting_value;
 	int setting_min;
@@ -1883,25 +1884,24 @@ int GFX_blitHardwareIndicator(SDL_Surface *dst, int x, int y, int indicator_type
 	int oy = y;
 	
 	// Draw the pill background
-	GFX_blitPillColor(ASSET_WHITE_PILL, dst, &(SDL_Rect){ox, oy, ow, SCALE1(PILL_SIZE)}, THEME_COLOR2, RGB_WHITE);
+	GFX_blitPillLight(ASSET_WHITE_PILL, dst, &(SDL_Rect){ox, oy, ow, SCALE1(PILL_SIZE)});
 	
 	// Determine which setting to display
-	// 1=brightness, 2=volume, 3=colortemp
-	if (indicator_type == 1) // brightness
+	if (indicator_type == INDICATOR_BRIGHTNESS)
 	{
 		setting_value = GetBrightness();
 		setting_min = BRIGHTNESS_MIN;
 		setting_max = BRIGHTNESS_MAX;
 		asset = ASSET_BRIGHTNESS;
 	}
-	else if (indicator_type == 3) // colortemp
+	else if (indicator_type == INDICATOR_COLORTEMP)
 	{
 		setting_value = GetColortemp();
 		setting_min = COLORTEMP_MIN;
 		setting_max = COLORTEMP_MAX;
 		asset = ASSET_COLORTEMP;
 	}
-	else // volume (2 or any other value)
+	else // INDICATOR_VOLUME
 	{
 		setting_value = GetVolume();
 		setting_min = VOLUME_MIN;
@@ -1939,7 +1939,7 @@ SDL_Surface* GFX_createScreenFormatSurface(int width, int height)
 {
 	if (!gfx.screen) return NULL;
 	return SDL_CreateRGBSurfaceWithFormat(
-		0, width, height, 
+		SDL_SWSURFACE, width, height, 
 		gfx.screen->format->BitsPerPixel, 
 		gfx.screen->format->format
 	);
@@ -1957,7 +1957,7 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 		ow = SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
 		ox = dst->w - SCALE1(PADDING) - ow;
 		oy = SCALE1(PADDING);
-		GFX_blitHardwareIndicator(dst, ox, oy, show_setting);
+		GFX_blitHardwareIndicator(dst, ox, oy, (IndicatorType)show_setting);
 	}
 	else
 	{
