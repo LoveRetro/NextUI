@@ -870,7 +870,7 @@ int CFG_getNotifyDuration(void)
 
 void CFG_setNotifyDuration(int seconds)
 {
-    settings.notifyDuration = (seconds < 1) ? 1 : (seconds > 3) ? 3 : seconds;
+    settings.notifyDuration = clamp(seconds, 1, 3);
     CFG_sync();
 }
 
@@ -973,7 +973,7 @@ int CFG_getRANotificationDuration(void)
 
 void CFG_setRANotificationDuration(int seconds)
 {
-    settings.raNotificationDuration = (seconds < 1) ? 1 : (seconds > 5) ? 5 : seconds;
+    settings.raNotificationDuration = clamp(seconds, 1, 5);
     CFG_sync();
 }
 
@@ -984,7 +984,7 @@ int CFG_getRAProgressNotificationDuration(void)
 
 void CFG_setRAProgressNotificationDuration(int seconds)
 {
-    settings.raProgressNotificationDuration = (seconds < 0) ? 0 : (seconds > 5) ? 5 : seconds;
+    settings.raProgressNotificationDuration = clamp(seconds, 0, 5);
     CFG_sync();
 }
 
