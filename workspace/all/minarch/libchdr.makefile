@@ -6,15 +6,9 @@ PLATFORM ?= tg5040
 BUILD_DIR = build/$(PLATFORM)
 
 # Cross-compilation settings (only for non-desktop platforms)
+# Uses the toolchain file provided by the build container
 ifneq ($(PLATFORM),desktop)
-ifeq ($(PLATFORM),tg5040)
-TOOLCHAIN_FILE = $(BUILD_DIR)/toolchain.cmake
-CMAKE_EXTRA = -DCMAKE_TOOLCHAIN_FILE=$(TOOLCHAIN_FILE)
-endif
-ifeq ($(PLATFORM),tg5050)
-TOOLCHAIN_FILE = $(BUILD_DIR)/toolchain.cmake
-CMAKE_EXTRA = -DCMAKE_TOOLCHAIN_FILE=$(TOOLCHAIN_FILE)
-endif
+CMAKE_EXTRA = -DCMAKE_TOOLCHAIN_FILE=$(CMAKE_TOOLCHAIN_FILE)
 endif
 
 .PHONY: all build clean
@@ -24,26 +18,6 @@ all: build
 build: $(BUILD_DIR)/libchdr.so
 
 $(BUILD_DIR)/libchdr.so: | $(BUILD_DIR)
-ifeq ($(PLATFORM),tg5040)
-	@echo "Creating CMake toolchain file for cross-compilation..."
-	@echo 'set(CMAKE_SYSTEM_NAME Linux)' > $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_SYSTEM_PROCESSOR aarch64)' >> $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_C_COMPILER aarch64-nextui-linux-gnu-gcc)' >> $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_CXX_COMPILER aarch64-nextui-linux-gnu-g++)' >> $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)' >> $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)' >> $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)' >> $(TOOLCHAIN_FILE)
-endif
-ifeq ($(PLATFORM),tg5050)
-	@echo "Creating CMake toolchain file for cross-compilation..."
-	@echo 'set(CMAKE_SYSTEM_NAME Linux)' > $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_SYSTEM_PROCESSOR aarch64)' >> $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_C_COMPILER aarch64-nextui-linux-gnu-gcc)' >> $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_CXX_COMPILER aarch64-nextui-linux-gnu-g++)' >> $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)' >> $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)' >> $(TOOLCHAIN_FILE)
-	@echo 'set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)' >> $(TOOLCHAIN_FILE)
-endif
 	cd $(BUILD_DIR) && cmake ../.. \
 		-DBUILD_SHARED_LIBS=ON \
 		-DINSTALL_STATIC_LIBS=OFF \
