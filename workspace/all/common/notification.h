@@ -142,6 +142,14 @@ void Notification_showProgressIndicator(const char* title, const char* progress,
 void Notification_hideProgressIndicator(void);
 
 /**
+ * Set the progress indicator to persistent mode.
+ * When persistent, the indicator won't auto-hide after the timeout.
+ * Call hideProgressIndicator to dismiss it.
+ * @param persistent true to keep visible until explicitly hidden
+ */
+void Notification_setProgressIndicatorPersistent(bool persistent);
+
+/**
  * Check if a progress indicator is currently being displayed.
  * @return true if a progress indicator is active
  */

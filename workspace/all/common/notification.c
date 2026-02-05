@@ -50,6 +50,7 @@ static SDL_Surface* progress_indicator_icon = NULL;
 static uint32_t progress_indicator_start_time = 0;
 static int progress_indicator_active = 0;
 static int progress_indicator_dirty = 0;
+static int progress_indicator_persistent = 0;
 
 ///////////////////////////////
 // Rounded rectangle drawing
@@ -186,8 +187,8 @@ void Notification_update(uint32_t now) {
         }
     }
     
-    // Update progress indicator timeout
-    if (progress_indicator_active) {
+    // Update progress indicator timeout (skip if persistent)
+    if (progress_indicator_active && !progress_indicator_persistent) {
         uint32_t elapsed = now - progress_indicator_start_time;
         int duration_seconds = CFG_getRAProgressNotificationDuration();
         if (duration_seconds > 0 && elapsed >= (uint32_t)(duration_seconds * 1000)) {
@@ -315,9 +316,15 @@ void Notification_renderToLayer(int layer) {
         SDL_Color bg_color_sdl = uintToColour(THEME_COLOR2_255);  // Primary Accent Color
         
         // Format: "Title: Progress" (e.g., "Coin Collector: 50/100")
+        // Or just "Title" if progress is empty
         char progress_text[PROGRESS_TITLE_MAX + PROGRESS_STRING_MAX + 4];
-        snprintf(progress_text, sizeof(progress_text), "%s: %s", 
-                 progress_indicator_title, progress_indicator_progress);
+        if (progress_indicator_progress[0] != '\0') {
+            snprintf(progress_text, sizeof(progress_text), "%s: %s", 
+                     progress_indicator_title, progress_indicator_progress);
+        } else {
+            snprintf(progress_text, sizeof(progress_text), "%s", 
+                     progress_indicator_title);
+        }
         
         // Calculate text size using tiny font
         int text_w = 0, text_h = 0;
@@ -560,9 +567,14 @@ void Notification_hideProgressIndicator(void) {
     
     if (progress_indicator_active) {
         progress_indicator_active = 0;
+        progress_indicator_persistent = 0;
         progress_indicator_icon = NULL;
         progress_indicator_dirty = 1;
     }
+}
+
+void Notification_setProgressIndicatorPersistent(bool persistent) {
+    progress_indicator_persistent = persistent ? 1 : 0;
 }
 
 bool Notification_hasProgressIndicator(void) {

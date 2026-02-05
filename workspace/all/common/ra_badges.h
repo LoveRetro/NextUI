@@ -99,13 +99,6 @@ SDL_Surface* RA_Badges_getNotificationSize(const char* badge_name, bool locked);
 RA_BadgeState RA_Badges_getState(const char* badge_name, bool locked);
 
 /**
- * Check if the badge cache system has any pending downloads.
- * 
- * @return true if downloads are in progress
- */
-bool RA_Badges_hasPendingDownloads(void);
-
-/**
  * Get the cache file path for a badge.
  * 
  * @param badge_name The badge name
