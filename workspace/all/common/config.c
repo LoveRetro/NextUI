@@ -984,7 +984,7 @@ int CFG_getRAProgressNotificationDuration(void)
 
 void CFG_setRAProgressNotificationDuration(int seconds)
 {
-    settings.raProgressNotificationDuration = (seconds < 0) ? 0 : (seconds > 5) ? 5 : seconds;
+    settings.raProgressNotificationDuration = clamp(seconds, 0, 5);
     CFG_sync();
 }
 
