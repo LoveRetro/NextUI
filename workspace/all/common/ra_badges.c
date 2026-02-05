@@ -1,5 +1,5 @@
 #include "ra_badges.h"
-#include "http.h"
+#include "../minarch/http.h"
 #include "defines.h"
 #include "api.h"
 #include "sdl.h"
