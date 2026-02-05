@@ -60,11 +60,15 @@ static int pending_downloads = 0;
 static bool initialized = false;
 
 // Download queue for rate limiting
-static QueuedDownload download_queue[MAX_QUEUED_DOWNLOADS];
-static int queue_head = 0;
-static int queue_tail = 0;
-static int queued_count = 0;
-static int active_downloads = 0;
+typedef struct {
+	QueuedDownload items[MAX_QUEUED_DOWNLOADS];
+	int head;
+	int tail;
+	int count;
+	int active;
+} DownloadQueueState;
+
+static DownloadQueueState download_queue = {0};
 
 /*****************************************************************************
  * Internal helpers
@@ -190,27 +194,27 @@ static void badge_download_callback(HTTP_Response* response, void* userdata);
 
 // Queue a download for later processing (must hold mutex)
 static void queue_download(const char* badge_name, bool locked) {
-	if (queued_count >= MAX_QUEUED_DOWNLOADS) {
+	if (download_queue.count >= MAX_QUEUED_DOWNLOADS) {
 		BADGE_LOG_WARN("Download queue full, dropping badge %s\n", badge_name);
 		return;
 	}
 	
-	QueuedDownload* item = &download_queue[queue_tail];
+	QueuedDownload* item = &download_queue.items[download_queue.tail];
 	strncpy(item->badge_name, badge_name, MAX_BADGE_NAME - 1);
 	item->badge_name[MAX_BADGE_NAME - 1] = '\0';
 	item->locked = locked;
 	
-	queue_tail = (queue_tail + 1) % MAX_QUEUED_DOWNLOADS;
-	queued_count++;
+	download_queue.tail = (download_queue.tail + 1) % MAX_QUEUED_DOWNLOADS;
+	download_queue.count++;
 }
 
 // Dequeue and start a download (must hold mutex)
 static bool dequeue_and_start_download(void) {
-	if (queued_count == 0) return false;
+	if (download_queue.count == 0) return false;
 	
-	QueuedDownload* item = &download_queue[queue_head];
-	queue_head = (queue_head + 1) % MAX_QUEUED_DOWNLOADS;
-	queued_count--;
+	QueuedDownload* item = &download_queue.items[download_queue.head];
+	download_queue.head = (download_queue.head + 1) % MAX_QUEUED_DOWNLOADS;
+	download_queue.count--;
 	
 	// Get entry and check if still needs download
 	BadgeCacheEntry* entry = find_or_create_entry(item->badge_name, item->locked);
@@ -244,7 +248,7 @@ static bool dequeue_and_start_download(void) {
 	ctx->cache_path[MAX_PATH - 1] = '\0';
 	
 	entry->state = RA_BADGE_STATE_DOWNLOADING;
-	active_downloads++;
+	download_queue.active++;
 	pending_downloads++;
 	
 	HTTP_getAsync(url, badge_download_callback, ctx);
@@ -253,7 +257,7 @@ static bool dequeue_and_start_download(void) {
 
 // Process queued downloads up to the concurrency limit (must hold mutex)
 static void process_download_queue(void) {
-	while (active_downloads < MAX_CONCURRENT_DOWNLOADS && queued_count > 0) {
+	while (download_queue.active < MAX_CONCURRENT_DOWNLOADS && download_queue.count > 0) {
 		if (!dequeue_and_start_download()) {
 			// Item was skipped (already cached), try next
 			continue;
@@ -283,8 +287,8 @@ static void badge_download_callback(HTTP_Response* response, void* userdata) {
 	// Only hold mutex briefly to update state
 	if (badge_mutex) SDL_LockMutex(badge_mutex);
 	
-	active_downloads--;
-	if (active_downloads < 0) active_downloads = 0;
+	download_queue.active--;
+	if (download_queue.active < 0) download_queue.active = 0;
 	
 	pending_downloads--;
 	if (pending_downloads < 0) pending_downloads = 0;
@@ -299,7 +303,7 @@ static void badge_download_callback(HTTP_Response* response, void* userdata) {
 	process_download_queue();
 	
 	// Hide progress indicator when all downloads complete
-	if (pending_downloads == 0 && queued_count == 0) {
+	if (pending_downloads == 0 && download_queue.count == 0) {
 		Notification_hideProgressIndicator();
 	}
 	
@@ -346,10 +350,10 @@ void RA_Badges_init(void) {
 	badge_mutex = SDL_CreateMutex();
 	badge_cache_count = 0;
 	pending_downloads = 0;
-	queue_head = 0;
-	queue_tail = 0;
-	queued_count = 0;
-	active_downloads = 0;
+	download_queue.head = 0;
+	download_queue.tail = 0;
+	download_queue.count = 0;
+	download_queue.active = 0;
 	memset(badge_cache, 0, sizeof(badge_cache));
 	
 	ensure_cache_dir();
@@ -404,7 +408,7 @@ void RA_Badges_prefetch(const char** badge_names, size_t count) {
 	}
 	
 	// Show progress indicator if downloads were queued
-	if (queued_count > 0) {
+	if (download_queue.count > 0) {
 		Notification_setProgressIndicatorPersistent(true);
 		Notification_showProgressIndicator("Loading achievement badges...", "", NULL);
 		

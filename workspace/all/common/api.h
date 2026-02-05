@@ -666,6 +666,7 @@ void PLAT_resetShaders();
 void PLAT_clearShaders();
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *inputtype);
 void PLAT_initShaders();
+void PLAT_initNotificationTexture(void);
 ShaderParam* PLAT_getShaderPragmas(int i);
 int PLAT_supportsOverscan(void);
 

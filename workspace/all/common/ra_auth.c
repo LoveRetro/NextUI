@@ -9,9 +9,7 @@
 // RetroAchievements API endpoints
 #define RA_API_URL "https://retroachievements.org/dorequest.php"
 
-// Simple JSON parsing helpers (minimal implementation for RA responses)
-// RA login response format: {"Success":true,"User":"username","Token":"token","Score":0,...}
-// RA error format: {"Success":false,"Error":"error message"}
+// Minimal JSON helpers for RA login responses
 
 static const char* find_json_string(const char* json, const char* key, char* out, size_t out_size) {
     if (!json || !key || !out || out_size == 0) return NULL;

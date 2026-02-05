@@ -1,12 +1,8 @@
 #ifndef __RA_AUTH_H__
 #define __RA_AUTH_H__
 
-/**
- * RetroAchievements Authentication Helper
- * 
- * Provides functions to authenticate with RetroAchievements servers
- * and manage API tokens.
- */
+// Handles RA login outside of rc_client for use before rc_client initialization.
+// See: https://github.com/RetroAchievements/rcheevos/wiki/rc_client-integration#login
 
 /**
  * Authentication result codes

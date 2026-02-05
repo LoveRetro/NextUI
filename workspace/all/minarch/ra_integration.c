@@ -57,18 +57,26 @@ static bool ra_memory_regions_initialized = false;
 
 // Pending game load storage (for async login race condition)
 #define RA_MAX_PATH 512
-static char pending_rom_path[RA_MAX_PATH];
-static uint8_t* pending_rom_data = NULL;
-static size_t pending_rom_size = 0;
-static char pending_emu_tag[16];
-static bool pending_game_load = false;
+typedef struct {
+	char rom_path[RA_MAX_PATH];
+	uint8_t* rom_data;
+	size_t rom_size;
+	char emu_tag[16];
+	bool active;
+} RAPendingLoad;
+
+static RAPendingLoad ra_pending_load = {0};
 
 // Login retry state
-static int ra_login_retry_count = 0;
 #define RA_LOGIN_MAX_RETRIES 5
-static uint32_t ra_login_retry_time = 0;      // SDL_GetTicks() timestamp for next retry
-static bool ra_login_retry_pending = false;
-static bool ra_login_notified_connecting = false;  // Track if we showed "Connecting..." notification
+typedef struct {
+	int count;
+	uint32_t next_time;           // SDL_GetTicks() timestamp for next retry
+	bool pending;
+	bool notified_connecting;     // Track if we showed "Connecting..." notification
+} RALoginRetry;
+
+static RALoginRetry ra_login_retry = {0};
 
 // Wifi wait config
 #define RA_WIFI_WAIT_MAX_MS 3000   // 3 seconds max blocking wait
@@ -264,10 +272,10 @@ static uint32_t ra_get_retry_delay_ms(int attempt) {
  * Helper: Reset login retry state
  *****************************************************************************/
 static void ra_reset_login_state(void) {
-	ra_login_retry_count = 0;
-	ra_login_retry_pending = false;
-	ra_login_retry_time = 0;
-	ra_login_notified_connecting = false;
+	ra_login_retry.count = 0;
+	ra_login_retry.pending = false;
+	ra_login_retry.next_time = 0;
+	ra_login_retry.notified_connecting = false;
 }
 
 /*****************************************************************************
@@ -275,7 +283,7 @@ static void ra_reset_login_state(void) {
  *****************************************************************************/
 static void ra_start_login(void) {
 	RA_LOG_DEBUG("Attempting login (attempt %d/%d)...\n", 
-	       ra_login_retry_count + 1, RA_LOGIN_MAX_RETRIES);
+	       ra_login_retry.count + 1, RA_LOGIN_MAX_RETRIES);
 	rc_client_begin_login_with_token(ra_client,
 		CFG_getRAUsername(), CFG_getRAToken(),
 		ra_login_callback, NULL);
@@ -791,9 +799,10 @@ static void ra_login_callback(int result, const char* error_message,
 		       user ? user->score : 0);
 		
 		// Check if we have a pending game to load
-		if (pending_game_load) {
-			RA_LOG_DEBUG("Processing deferred game load: %s\n", pending_rom_path);
-			ra_do_load_game(pending_rom_path, pending_rom_data, pending_rom_size, pending_emu_tag);
+		if (ra_pending_load.active) {
+			RA_LOG_DEBUG("Processing deferred game load: %s\n", ra_pending_load.rom_path);
+			ra_do_load_game(ra_pending_load.rom_path, ra_pending_load.rom_data, 
+			                ra_pending_load.rom_size, ra_pending_load.emu_tag);
 			ra_clear_pending_game();
 		}
 	} else {
@@ -801,19 +810,19 @@ static void ra_login_callback(int result, const char* error_message,
 		ra_logged_in = false;
 		RA_LOG_ERROR("Login failed: %s\n", error_message ? error_message : "unknown error");
 		
-		if (ra_login_retry_count < RA_LOGIN_MAX_RETRIES) {
+		if (ra_login_retry.count < RA_LOGIN_MAX_RETRIES) {
 			// Schedule retry
-			uint32_t delay = ra_get_retry_delay_ms(ra_login_retry_count);
-			ra_login_retry_time = SDL_GetTicks() + delay;
-			ra_login_retry_pending = true;
-			ra_login_retry_count++;
+			uint32_t delay = ra_get_retry_delay_ms(ra_login_retry.count);
+			ra_login_retry.next_time = SDL_GetTicks() + delay;
+			ra_login_retry.pending = true;
+			ra_login_retry.count++;
 			
 			RA_LOG_DEBUG("Scheduling retry %d/%d in %ums\n", 
-			       ra_login_retry_count, RA_LOGIN_MAX_RETRIES, delay);
+			       ra_login_retry.count, RA_LOGIN_MAX_RETRIES, delay);
 			
 			// Show "Connecting..." notification on first retry only
-			if (ra_login_retry_count == 1 && !ra_login_notified_connecting) {
-				ra_login_notified_connecting = true;
+			if (ra_login_retry.count == 1 && !ra_login_retry.notified_connecting) {
+				ra_login_retry.notified_connecting = true;
 				Notification_push(NOTIFICATION_ACHIEVEMENT, 
 				                  "Connecting to RetroAchievements...", NULL);
 			}
@@ -1162,14 +1171,14 @@ void RA_initMemoryRegions(uint32_t console_id) {
  * Helper: Clear pending game data
  *****************************************************************************/
 static void ra_clear_pending_game(void) {
-	if (pending_rom_data) {
-		free(pending_rom_data);
-		pending_rom_data = NULL;
+	if (ra_pending_load.rom_data) {
+		free(ra_pending_load.rom_data);
+		ra_pending_load.rom_data = NULL;
 	}
-	pending_rom_size = 0;
-	pending_rom_path[0] = '\0';
-	pending_emu_tag[0] = '\0';
-	pending_game_load = false;
+	ra_pending_load.rom_size = 0;
+	ra_pending_load.rom_path[0] = '\0';
+	ra_pending_load.emu_tag[0] = '\0';
+	ra_pending_load.active = false;
 }
 
 /*****************************************************************************
@@ -1243,26 +1252,26 @@ void RA_loadGame(const char* rom_path, const uint8_t* rom_data, size_t rom_size,
 		ra_clear_pending_game();
 		
 		// Store the path
-		strncpy(pending_rom_path, rom_path, RA_MAX_PATH - 1);
-		pending_rom_path[RA_MAX_PATH - 1] = '\0';
+		strncpy(ra_pending_load.rom_path, rom_path, RA_MAX_PATH - 1);
+		ra_pending_load.rom_path[RA_MAX_PATH - 1] = '\0';
 		
 		// Store the emu tag
-		strncpy(pending_emu_tag, emu_tag, sizeof(pending_emu_tag) - 1);
-		pending_emu_tag[sizeof(pending_emu_tag) - 1] = '\0';
+		strncpy(ra_pending_load.emu_tag, emu_tag, sizeof(ra_pending_load.emu_tag) - 1);
+		ra_pending_load.emu_tag[sizeof(ra_pending_load.emu_tag) - 1] = '\0';
 		
 		// Copy ROM data if provided (some cores need it)
 		if (rom_data && rom_size > 0) {
-			pending_rom_data = (uint8_t*)malloc(rom_size);
-			if (pending_rom_data) {
-				memcpy(pending_rom_data, rom_data, rom_size);
-				pending_rom_size = rom_size;
+			ra_pending_load.rom_data = (uint8_t*)malloc(rom_size);
+			if (ra_pending_load.rom_data) {
+				memcpy(ra_pending_load.rom_data, rom_data, rom_size);
+				ra_pending_load.rom_size = rom_size;
 			} else {
 				RA_LOG_WARN("Failed to allocate memory for pending ROM data\n");
-				pending_rom_size = 0;
+				ra_pending_load.rom_size = 0;
 			}
 		}
 		
-		pending_game_load = true;
+		ra_pending_load.active = true;
 		return;
 	}
 	
@@ -1323,8 +1332,8 @@ void RA_idle(void) {
 	}
 	
 	// Check for pending login retry
-	if (ra_login_retry_pending && SDL_GetTicks() >= ra_login_retry_time) {
-		ra_login_retry_pending = false;
+	if (ra_login_retry.pending && SDL_GetTicks() >= ra_login_retry.next_time) {
+		ra_login_retry.pending = false;
 		ra_start_login();
 	}
 	

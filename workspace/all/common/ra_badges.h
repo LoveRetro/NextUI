@@ -5,16 +5,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-/**
- * RetroAchievements Badge Cache System
- * 
- * Downloads and caches achievement badge images for display in notifications
- * and the achievements list.
- * 
- * Cache location: SHARED_USERDATA_PATH/.ra/badges/{badge_name}.png
- * Badge URLs: https://media.retroachievements.org/Badge/{badge_name}.png
- * Locked badges: https://media.retroachievements.org/Badge/{badge_name}_lock.png
- */
+// Implements the badge download/caching that the integration guide leaves to the emulator.
+// See: https://github.com/RetroAchievements/rcheevos/wiki/rc_client-integration#showing-the-game-placard
 
 // Badge size for notifications (will be scaled)
 #define RA_BADGE_SIZE 64

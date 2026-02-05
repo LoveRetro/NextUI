@@ -9021,6 +9021,7 @@ int main(int argc , char* argv[]) {
 
 	// initialize default shaders
 	GFX_initShaders();
+	PLAT_initNotificationTexture();
 
 	PAD_init();
 	DEVICE_WIDTH = screen->w;

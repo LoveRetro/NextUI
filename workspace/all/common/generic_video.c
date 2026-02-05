@@ -451,7 +451,9 @@ void PLAT_initShaders() {
 	g_noshader = link_program(vertex, fragment,"noshader.glsl");
 	
 	LOG_info("default shaders loaded, %i\n\n",g_shader_default);
+}
 
+void PLAT_initNotificationTexture(void) {
 	// Pre-allocate notification texture to avoid frame skip on first notification
 	glGenTextures(1, &notification_tex);
 	glBindTexture(GL_TEXTURE_2D, notification_tex);

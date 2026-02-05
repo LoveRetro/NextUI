@@ -5,16 +5,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-/**
- * RetroAchievements Integration for minarch
- * 
- * This module provides the glue between minarch (libretro frontend) and
- * rcheevos (RetroAchievements library). It handles:
- * - rc_client initialization and lifecycle
- * - Memory read callbacks for achievement checking
- * - HTTP server callbacks for API communication
- * - Event handling for achievement unlocks/notifications
- */
+// See: https://github.com/RetroAchievements/rcheevos/wiki/rc_client-integration
 
 /**
  * Initialize the RetroAchievements client.

@@ -44,13 +44,17 @@ static int last_system_indicator_type = SYSTEM_INDICATOR_NONE;
 #define PROGRESS_TITLE_MAX 48
 #define PROGRESS_STRING_MAX 16
 
-static char progress_indicator_title[PROGRESS_TITLE_MAX];
-static char progress_indicator_progress[PROGRESS_STRING_MAX];
-static SDL_Surface* progress_indicator_icon = NULL;
-static uint32_t progress_indicator_start_time = 0;
-static int progress_indicator_active = 0;
-static int progress_indicator_dirty = 0;
-static int progress_indicator_persistent = 0;
+typedef struct {
+    char title[PROGRESS_TITLE_MAX];
+    char progress[PROGRESS_STRING_MAX];
+    SDL_Surface* icon;
+    uint32_t start_time;
+    int active;
+    int dirty;
+    int persistent;
+} ProgressIndicatorState;
+
+static ProgressIndicatorState progress_state = {0};
 
 ///////////////////////////////
 // Rounded rectangle drawing
@@ -188,12 +192,12 @@ void Notification_update(uint32_t now) {
     }
     
     // Update progress indicator timeout (skip if persistent)
-    if (progress_indicator_active && !progress_indicator_persistent) {
-        uint32_t elapsed = now - progress_indicator_start_time;
+    if (progress_state.active && !progress_state.persistent) {
+        uint32_t elapsed = now - progress_state.start_time;
         int duration_seconds = CFG_getRAProgressNotificationDuration();
         if (duration_seconds > 0 && elapsed >= (uint32_t)(duration_seconds * 1000)) {
-            progress_indicator_active = 0;
-            progress_indicator_dirty = 1;
+            progress_state.active = 0;
+            progress_state.dirty = 1;
         }
     }
     
@@ -229,7 +233,7 @@ void Notification_renderToLayer(int layer) {
     
     int has_notifications = notification_count > 0;
     int has_system_indicator = system_indicator_type != SYSTEM_INDICATOR_NONE;
-    int has_progress_indicator = progress_indicator_active;
+    int has_progress_indicator = progress_state.active;
     
     if (!has_notifications && !has_system_indicator && !has_progress_indicator) {
         // When all notifications and indicators are gone, render one final transparent frame
@@ -240,7 +244,7 @@ void Notification_renderToLayer(int layer) {
                 needs_clear_frame = 0;
                 render_dirty = 0;
                 system_indicator_dirty = 0;
-                progress_indicator_dirty = 0;
+                progress_state.dirty = 0;
                 last_system_indicator_type = SYSTEM_INDICATOR_NONE;
                 return;
             }
@@ -257,7 +261,7 @@ void Notification_renderToLayer(int layer) {
     // Check if anything changed
     int notifications_changed = render_dirty || notification_count != last_notification_count;
     int indicator_changed = system_indicator_dirty || system_indicator_type != last_system_indicator_type;
-    int progress_changed = progress_indicator_dirty;
+    int progress_changed = progress_state.dirty;
     
     if (!notifications_changed && !indicator_changed && !progress_changed) {
         // Nothing changed, just keep the existing surface
@@ -318,12 +322,12 @@ void Notification_renderToLayer(int layer) {
         // Format: "Title: Progress" (e.g., "Coin Collector: 50/100")
         // Or just "Title" if progress is empty
         char progress_text[PROGRESS_TITLE_MAX + PROGRESS_STRING_MAX + 4];
-        if (progress_indicator_progress[0] != '\0') {
+        if (progress_state.progress[0] != '\0') {
             snprintf(progress_text, sizeof(progress_text), "%s: %s", 
-                     progress_indicator_title, progress_indicator_progress);
+                     progress_state.title, progress_state.progress);
         } else {
             snprintf(progress_text, sizeof(progress_text), "%s", 
-                     progress_indicator_title);
+                     progress_state.title);
         }
         
         // Calculate text size using tiny font
@@ -334,9 +338,9 @@ void Notification_renderToLayer(int layer) {
         int icon_w = 0;
         int icon_h = 0;
         int icon_total_w = 0;
-        if (progress_indicator_icon) {
+        if (progress_state.icon) {
             icon_h = text_h;  // Match text height
-            icon_w = (progress_indicator_icon->w * icon_h) / progress_indicator_icon->h;
+            icon_w = (progress_state.icon->w * icon_h) / progress_state.icon->h;
             icon_total_w = icon_w + notif_icon_gap;
         }
         
@@ -365,10 +369,10 @@ void Notification_renderToLayer(int layer) {
             int content_x = notif_padding_x;
             
             // Draw icon if present
-            if (progress_indicator_icon && icon_w > 0 && icon_h > 0) {
+            if (progress_state.icon && icon_w > 0 && icon_h > 0) {
                 SDL_Rect icon_dst = {content_x, notif_padding_y, icon_w, icon_h};
-                SDL_SetSurfaceBlendMode(progress_indicator_icon, SDL_BLENDMODE_BLEND);
-                SDL_BlitScaled(progress_indicator_icon, NULL, progress_surface, &icon_dst);
+                SDL_SetSurfaceBlendMode(progress_state.icon, SDL_BLENDMODE_BLEND);
+                SDL_BlitScaled(progress_state.icon, NULL, progress_surface, &icon_dst);
                 content_x += icon_total_w;
             }
             
@@ -483,7 +487,7 @@ void Notification_renderToLayer(int layer) {
     render_dirty = 0;
     last_notification_count = notification_count;
     system_indicator_dirty = 0;
-    progress_indicator_dirty = 0;
+    progress_state.dirty = 0;
     last_system_indicator_type = system_indicator_type;
 }
 
@@ -493,10 +497,10 @@ bool Notification_isActive(void) {
 
 void Notification_clear(void) {
     notification_count = 0;
-    progress_indicator_active = 0;
-    progress_indicator_icon = NULL;
+    progress_state.active = 0;
+    progress_state.icon = NULL;
     render_dirty = 1;
-    progress_indicator_dirty = 1;
+    progress_state.dirty = 1;
     PLAT_clearNotificationSurface();
     if (gl_notification_surface) {
         SDL_FreeSurface(gl_notification_surface);
@@ -507,7 +511,7 @@ void Notification_clear(void) {
 void Notification_quit(void) {
     Notification_clear();
     system_indicator_type = SYSTEM_INDICATOR_NONE;
-    progress_indicator_active = 0;
+    progress_state.active = 0;
     initialized = 0;
 }
 
@@ -547,36 +551,36 @@ void Notification_showProgressIndicator(const char* title, const char* progress,
     if (!CFG_getRAShowNotifications()) return;
     
     // Copy the title and progress strings
-    strncpy(progress_indicator_title, title, PROGRESS_TITLE_MAX - 1);
-    progress_indicator_title[PROGRESS_TITLE_MAX - 1] = '\0';
+    strncpy(progress_state.title, title, PROGRESS_TITLE_MAX - 1);
+    progress_state.title[PROGRESS_TITLE_MAX - 1] = '\0';
     
-    strncpy(progress_indicator_progress, progress, PROGRESS_STRING_MAX - 1);
-    progress_indicator_progress[PROGRESS_STRING_MAX - 1] = '\0';
+    strncpy(progress_state.progress, progress, PROGRESS_STRING_MAX - 1);
+    progress_state.progress[PROGRESS_STRING_MAX - 1] = '\0';
     
     // Store icon reference (caller retains ownership)
-    progress_indicator_icon = icon;
+    progress_state.icon = icon;
     
     // Activate and reset timer
-    progress_indicator_active = 1;
-    progress_indicator_start_time = SDL_GetTicks();
-    progress_indicator_dirty = 1;
+    progress_state.active = 1;
+    progress_state.start_time = SDL_GetTicks();
+    progress_state.dirty = 1;
 }
 
 void Notification_hideProgressIndicator(void) {
     if (!initialized) return;
     
-    if (progress_indicator_active) {
-        progress_indicator_active = 0;
-        progress_indicator_persistent = 0;
-        progress_indicator_icon = NULL;
-        progress_indicator_dirty = 1;
+    if (progress_state.active) {
+        progress_state.active = 0;
+        progress_state.persistent = 0;
+        progress_state.icon = NULL;
+        progress_state.dirty = 1;
     }
 }
 
 void Notification_setProgressIndicatorPersistent(bool persistent) {
-    progress_indicator_persistent = persistent ? 1 : 0;
+    progress_state.persistent = persistent ? 1 : 0;
 }
 
 bool Notification_hasProgressIndicator(void) {
-    return initialized && progress_indicator_active;
+    return initialized && progress_state.active;
 }
