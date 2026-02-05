@@ -614,10 +614,11 @@ int main(int argc, char *argv[])
                 }
                 return std::string("Not authenticated");
             }},
-            new MenuItem{ListItemType::Generic, "Hardcore Mode", "Disable save states and cheats for achievements", {false, true}, on_off, 
-            []() -> std::any { return CFG_getRAHardcoreMode(); },
-            [](const std::any &value) { CFG_setRAHardcoreMode(std::any_cast<bool>(value)); },
-            []() { CFG_setRAHardcoreMode(CFG_DEFAULT_RA_HARDCOREMODE);}},
+            // TODO: Hardcore mode hidden until feature is fully implemented and ready for the emulator approval process done by the RetroAchievements team
+            // new MenuItem{ListItemType::Generic, "Hardcore Mode", "Disable save states and cheats for achievements", {false, true}, on_off, 
+            // []() -> std::any { return CFG_getRAHardcoreMode(); },
+            // [](const std::any &value) { CFG_setRAHardcoreMode(std::any_cast<bool>(value)); },
+            // []() { CFG_setRAHardcoreMode(CFG_DEFAULT_RA_HARDCOREMODE);}},
             new MenuItem{ListItemType::Generic, "Show Notifications", "Show achievement unlock notifications", {false, true}, on_off, 
             []() -> std::any { return CFG_getRAShowNotifications(); },
             [](const std::any &value) { CFG_setRAShowNotifications(std::any_cast<bool>(value)); },
