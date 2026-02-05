@@ -109,26 +109,30 @@ static uint32_t SDL_transparentBlack = 0;
 
 static char* overlay_path = NULL;
 
-// Notification surface for RA achievements overlay
-static SDL_Surface* notification_surface = NULL;
-static int notification_x = 0;
-static int notification_y = 0;
-static int notification_dirty = 0;
-static GLuint notification_tex = 0;
-static int notif_tex_w = 0, notif_tex_h = 0;
-static int notification_clear_frames = 0;  // Frames to clear framebuffer after notification ends
+// Notification overlay state for RA achievements
+typedef struct {
+    SDL_Surface* surface;
+    int x;
+    int y;
+    int dirty;
+    GLuint tex;
+    int tex_w, tex_h;
+    int clear_frames;  // Frames to clear framebuffer after notification ends
+} NotificationOverlay;
+
+static NotificationOverlay notif = {0};
 
 void PLAT_setNotificationSurface(SDL_Surface* surface, int x, int y) {
-    notification_surface = surface;
-    notification_x = x;
-    notification_y = y;
-    notification_dirty = 1;
+    notif.surface = surface;
+    notif.x = x;
+    notif.y = y;
+    notif.dirty = 1;
 }
 
 void PLAT_clearNotificationSurface(void) {
-    notification_surface = NULL;
-    notification_dirty = 0;  // Nothing to update since surface is NULL
-    notification_clear_frames = 3;  // Clear for 3 frames (triple buffering safety)
+    notif.surface = NULL;
+    notif.dirty = 0;  // Nothing to update since surface is NULL
+    notif.clear_frames = 3;  // Clear for 3 frames (triple buffering safety)
 }
 
 
@@ -455,16 +459,16 @@ void PLAT_initShaders() {
 
 void PLAT_initNotificationTexture(void) {
 	// Pre-allocate notification texture to avoid frame skip on first notification
-	glGenTextures(1, &notification_tex);
-	glBindTexture(GL_TEXTURE_2D, notification_tex);
+	glGenTextures(1, &notif.tex);
+	glBindTexture(GL_TEXTURE_2D, notif.tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	// Allocate full-screen texture with transparent pixels
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, device_width, device_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	notif_tex_w = device_width;
-	notif_tex_h = device_height;
+	notif.tex_w = device_width;
+	notif.tex_h = device_height;
 }
 
 static void sdl_log_stdout(
@@ -1954,9 +1958,9 @@ void PLAT_GL_Swap() {
 
     static int lastframecount = 0;
     if (reloadShaderTextures) lastframecount = frame_count;
-    if (frame_count < lastframecount + 3 || notification_clear_frames > 0) {
+    if (frame_count < lastframecount + 3 || notif.clear_frames > 0) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (notification_clear_frames > 0) notification_clear_frames--;
+        if (notif.clear_frames > 0) notif.clear_frames--;
     }
 
     SDL_Rect dst_rect = {0, 0, device_width, device_height};
@@ -2203,19 +2207,19 @@ void PLAT_GL_Swap() {
     }
 
     // Render notification overlay if present (texture pre-allocated in PLAT_initShaders)
-    if (notification_dirty && notification_surface) {
-        glBindTexture(GL_TEXTURE_2D, notification_tex);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, notification_surface->w, notification_surface->h, GL_RGBA, GL_UNSIGNED_BYTE, notification_surface->pixels);
-        notification_dirty = 0;
+    if (notif.dirty && notif.surface) {
+        glBindTexture(GL_TEXTURE_2D, notif.tex);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, notif.surface->w, notif.surface->h, GL_RGBA, GL_UNSIGNED_BYTE, notif.surface->pixels);
+        notif.dirty = 0;
     }
     
-    if (notification_tex && notification_surface) {
+    if (notif.tex && notif.surface) {
         runShaderPass(
-            notification_tex,
+            notif.tex,
             g_shader_overlay,
             NULL,
-            notification_x, notification_y, notif_tex_w, notif_tex_h,
-            &(Shader){.srcw = notif_tex_w, .srch = notif_tex_h, .texw = notif_tex_w, .texh = notif_tex_h},
+            notif.x, notif.y, notif.tex_w, notif.tex_h,
+            &(Shader){.srcw = notif.tex_w, .srch = notif.tex_h, .texw = notif.tex_w, .texh = notif.tex_h},
             1, GL_NONE
         );
     }
