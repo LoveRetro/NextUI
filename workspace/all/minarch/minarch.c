@@ -6579,13 +6579,38 @@ static MenuList options_menu = {
 	}
 };
 
-static void OptionSaveChanges_updateDesc(void) {
-	options_menu.items[7].desc = getSaveDesc();
+// Track the index of Save Changes menu item (changes based on RA visibility)
+static int save_changes_index = 7;
+
+// Update options menu visibility based on RA enable state
+static void Options_updateVisibility(void) {
+	if (CFG_getRAEnable()) {
+		// RA enabled: show Achievements at index 6, Save Changes at index 7
+		options_menu.items[6].name = "Achievements";
+		options_menu.items[6].on_confirm = OptionAchievements_openMenu;
+		options_menu.items[7].name = "Save Changes";
+		options_menu.items[7].on_confirm = OptionSaveChanges_openMenu;
+		save_changes_index = 7;
+	} else {
+		// RA disabled: hide Achievements, move Save Changes to index 6
+		options_menu.items[6].name = "Save Changes";
+		options_menu.items[6].desc = NULL;
+		options_menu.items[6].on_confirm = OptionSaveChanges_openMenu;
+		options_menu.items[7].name = NULL;
+		options_menu.items[7].on_confirm = NULL;
+		save_changes_index = 6;
+	}
 }
 
-// Update the Achievements menu item to show count
+static void OptionSaveChanges_updateDesc(void) {
+	options_menu.items[save_changes_index].desc = getSaveDesc();
+}
+
+// Update the Achievements menu item to show count (only when RA enabled)
 static char ach_desc_buffer[64] = {0};
 static void OptionAchievements_updateDesc(void) {
+	if (!CFG_getRAEnable()) return;
+	
 	if (RA_isGameLoaded()) {
 		uint32_t unlocked, total;
 		RA_getAchievementSummary(&unlocked, &total);
@@ -7554,6 +7579,7 @@ static void Menu_loop(void) {
 					}
 					else {
 						int old_scaling = screen_scaling;
+						Options_updateVisibility();
 						Menu_options(&options_menu);
 						if (screen_scaling!=old_scaling) {
 							selectScaler(renderer.true_w,renderer.true_h,renderer.src_p);
