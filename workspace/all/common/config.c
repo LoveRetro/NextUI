@@ -870,7 +870,7 @@ int CFG_getNotifyDuration(void)
 
 void CFG_setNotifyDuration(int seconds)
 {
-    settings.notifyDuration = (seconds < 1) ? 1 : (seconds > 3) ? 3 : seconds;
+    settings.notifyDuration = clamp(seconds, 1, 3);
     CFG_sync();
 }
 
