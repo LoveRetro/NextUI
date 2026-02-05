@@ -63,28 +63,15 @@ CFLAGS   += -DHAS_SRM
 LDFLAGS +=  -lasound
 endif
 
-ifeq ($(PLATFORM), tg5040)
-# rcheevos static library
+# RA support: rcheevos and libchdr linking for tg5040, tg5050, and desktop
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 desktop))
 LDFLAGS += -L../rcheevos/build/$(PLATFORM) -lrcheevos
-# libchdr shared library (for CHD disc image hashing)
 LDFLAGS += -L../libchdr/build/$(PLATFORM) -lchdr
 CFLAGS += -DRC_CLIENT_SUPPORTS_HASH
-endif
-
-ifeq ($(PLATFORM), tg5050)
-# rcheevos static library
-LDFLAGS += -L../rcheevos/build/$(PLATFORM) -lrcheevos
-# libchdr shared library (for CHD disc image hashing)
-LDFLAGS += -L../libchdr/build/$(PLATFORM) -lchdr
-CFLAGS += -DRC_CLIENT_SUPPORTS_HASH
-endif
-
 ifeq ($(PLATFORM), desktop)
-# rcheevos static library (built for desktop)
-LDFLAGS += -L../rcheevos/build/$(PLATFORM) -lrcheevos
-# libchdr (built from source for desktop)
-LDFLAGS += -L../libchdr/build/$(PLATFORM) -lchdr -Wl,-rpath,'$$ORIGIN'
-CFLAGS += -DRC_CLIENT_SUPPORTS_HASH
+# Desktop needs rpath for local shared library lookup
+LDFLAGS += -Wl,-rpath,'$$ORIGIN'
+endif
 endif
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 
