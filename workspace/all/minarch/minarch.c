@@ -107,13 +107,6 @@ static int DEVICE_HEIGHT = 0;
 static int DEVICE_PITCH = 0;
 static int shader_reset_suppressed = 0;
 
-// FPS tracking variables
-static int cpu_ticks = 0;
-static int fps_ticks = 0;
-static double fps_double = 0;
-static double cpu_double = 0;
-static uint32_t sec_start = 0;
-
 GFX_Renderer renderer;
 
 ///////////////////////////////////////
@@ -5735,8 +5728,6 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		return;
 	}
 
-	fps_ticks += 1;
-
 	// if source has changed size (or forced by dst_p==0)
 	// eg. true src + cropped src + fixed dst + cropped dst
 	if (renderer.dst_p==0 || width!=renderer.true_w || height!=renderer.true_h) {
@@ -8894,19 +8885,6 @@ static void limitFF(void) {
 	last_time = now;
 }
 
-static void trackFPS(void) {
-	cpu_ticks += 1;
-	uint32_t now = SDL_GetTicks();
-	if (now - sec_start >= 1000) {
-		double last_time = (double)(now - sec_start) / 1000;
-		fps_double = fps_ticks / last_time;
-		cpu_double = cpu_ticks / last_time;
-		sec_start = now;
-		cpu_ticks = 0;
-		fps_ticks = 0;
-	}
-}
-
 static void Rewind_run_frame(void) {
 	// if rewind is toggled, fast-forward toggle must stay off; fast-forward hold pauses rewind
 	int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
@@ -9143,8 +9121,6 @@ int main(int argc , char* argv[]) {
 		
 		// Process RetroAchievements for this frame
 		RA_doFrame();
-		
-		trackFPS();
 		
 		// Update and render notifications overlay
 		Notification_update(SDL_GetTicks());
