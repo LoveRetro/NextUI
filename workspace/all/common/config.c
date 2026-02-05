@@ -973,7 +973,7 @@ int CFG_getRANotificationDuration(void)
 
 void CFG_setRANotificationDuration(int seconds)
 {
-    settings.raNotificationDuration = (seconds < 1) ? 1 : (seconds > 5) ? 5 : seconds;
+    settings.raNotificationDuration = clamp(seconds, 1, 5);
     CFG_sync();
 }
 
