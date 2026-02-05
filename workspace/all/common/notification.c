@@ -6,6 +6,19 @@
 #include <stdio.h>
 
 ///////////////////////////////
+// Layout constants (unscaled)
+///////////////////////////////
+
+#define NOTIF_PADDING_X      8   // Horizontal padding inside pill
+#define NOTIF_PADDING_Y      4   // Vertical padding inside pill
+#define NOTIF_MARGIN        12   // Margin from screen edge
+#define NOTIF_STACK_GAP      6   // Gap between stacked notifications
+#define NOTIF_ICON_GAP       4   // Gap between icon and text
+
+// System indicator sizing (must match GFX_blitHardwareIndicator dimensions)
+#define SYS_INDICATOR_EXTRA_PAD  4   // Extra padding for indicator pill
+
+///////////////////////////////
 // Internal state
 ///////////////////////////////
 
@@ -129,11 +142,11 @@ void Notification_init(void) {
     memset(notifications, 0, sizeof(notifications));
     
     // Initialize scaled visual constants (compact pills)
-    notif_padding_x = SCALE1(8);
-    notif_padding_y = SCALE1(4);
-    notif_margin = SCALE1(12);
-    notif_stack_gap = SCALE1(6);
-    notif_icon_gap = SCALE1(4);    // Gap between icon and text
+    notif_padding_x = SCALE1(NOTIF_PADDING_X);
+    notif_padding_y = SCALE1(NOTIF_PADDING_Y);
+    notif_margin = SCALE1(NOTIF_MARGIN);
+    notif_stack_gap = SCALE1(NOTIF_STACK_GAP);
+    notif_icon_gap = SCALE1(NOTIF_ICON_GAP);
     
     // Store screen dimensions for layer rendering
     screen_width = FIXED_WIDTH;
@@ -284,7 +297,7 @@ void Notification_renderToLayer(int layer) {
     // Render system indicator in top-right if active
     if (has_system_indicator) {
         // Calculate position: top-right corner with padding
-        int indicator_width = SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
+        int indicator_width = SCALE1(PILL_SIZE + SETTINGS_WIDTH + PADDING + SYS_INDICATOR_EXTRA_PAD);
         int indicator_height = SCALE1(PILL_SIZE);
         int indicator_x = screen_width - SCALE1(PADDING) - indicator_width;
         int indicator_y = SCALE1(PADDING);
@@ -537,7 +550,7 @@ int Notification_getSystemIndicatorWidth(void) {
     if (!initialized || system_indicator_type == SYSTEM_INDICATOR_NONE) {
         return 0;
     }
-    return SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
+    return SCALE1(PILL_SIZE + SETTINGS_WIDTH + PADDING + SYS_INDICATOR_EXTRA_PAD);
 }
 
 ///////////////////////////////
