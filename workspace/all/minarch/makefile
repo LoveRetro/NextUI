@@ -77,14 +77,6 @@ BUILD_DATE!=date +%Y.%m.%d
 BUILD_HASH!=cat ../../hash.txt
 CFLAGS += -DBUILD_DATE=\"${BUILD_DATE}\" -DBUILD_HASH=\"${BUILD_HASH}\"
 
-ifeq ($(PLATFORM), my355)
-# old toolchain libs
-#LIB_PATH=/usr/lib/aarch64-linux-gnu
-LIB_PATH=$(PREFIX)/lib
-else
-LIB_PATH=$(PREFIX)/lib
-endif
-
 ifeq ($(PLATFORM), desktop)
 all: clean libretro-common $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
@@ -94,14 +86,15 @@ all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
 ifeq ($(PLATFORM), my355)
-	cp -L $(PREFIX)/lib/libcrypto.so build/$(PLATFORM)
-	cp -L $(PREFIX)/lib/libsqlite3.so build/$(PLATFORM)
+	cp $(PREFIX)/lib/libcrypto.so* build/$(PLATFORM)
+	cp $(PREFIX)/lib/libsqlite3.so* build/$(PLATFORM)
+	cp $(PREFIX)/lib/libtinyalsa.so* build/$(PLATFORM)
 endif
-	cp -L $(PREFIX)/lib/libsamplerate.so build/$(PLATFORM)
-	cp -L $(PREFIX)/lib/libzip.so build/$(PLATFORM)
-	cp -L $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
-	cp -L $(PREFIX)/lib/liblzma.so build/$(PLATFORM)
-	cp -L $(PREFIX)/lib/libzstd.so build/$(PLATFORM)
+	cp $(PREFIX)/lib/libsamplerate.so* build/$(PLATFORM)
+	cp $(PREFIX)/lib/libzip.so* build/$(PLATFORM)
+	cp $(PREFIX)/lib/libbz2.so* build/$(PLATFORM)
+	cp $(PREFIX)/lib/liblzma.so* build/$(PLATFORM)
+	cp $(PREFIX)/lib/libzstd.so* build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
 

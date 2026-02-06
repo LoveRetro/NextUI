@@ -12,7 +12,7 @@ endif
 
 ifeq (,$(PLATFORMS))
 #PLATFORMS = miyoomini trimuismart rg35xx rg35xxplus my355 tg5040 zero28 rgb30 m17 gkdpixel my282 magicmini
-PLATFORMS = tg5050 tg5040 my355
+PLATFORMS =  my355
 endif
 
 ###########################################################
@@ -134,6 +134,7 @@ ifeq ($(PLATFORM), my355)
 	# lib dependencies
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libcrypto.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libsamplerate.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libtinyalsa.* ./build/SYSTEM/$(PLATFORM)/lib/
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libzip.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libbz2.* ./build/SYSTEM/$(PLATFORM)/lib/
@@ -226,6 +227,7 @@ special:
 ifneq (,$(findstring my355, $(PLATFORMS)))
 	cp -R ./workspace/my355/init ./build/BASE/miyoo355/app/my355
 	cp -r ./workspace/my355/other/squashfs/output/* ./build/BASE/miyoo355/app/my355/payload/
+	cp ./workspace/all/show2/build/my355/show2.elf ./build/BASE/miyoo355/app/my355/payload/bin/
 endif
 
 tidy:

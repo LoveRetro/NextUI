@@ -19,10 +19,10 @@ all:
 	mkdir -p output/bin
 	mkdir -p output/lib
 	cp $(PREFIX)/bin/*squashfs output/bin
-	cp -L $(PREFIX)/lib/liblzma.so output/lib
-	cp -L $(PREFIX)/lib/liblzo2.so output/lib
-	cp -L $(PREFIX)/lib/liblz4.so output/lib
-	cp -L $(PREFIX)/lib/libzstd.so output/lib
+	cp $(PREFIX)/lib/liblz4.so.1 output/lib
+	cp $(PREFIX)/lib/liblzma.so.5 output/lib
+	cp $(PREFIX)/lib/liblzo2.so.2 output/lib
+	cp $(PREFIX)/lib/libzstd.so.1 output/lib
 
 clean:
 	rm -rf output
