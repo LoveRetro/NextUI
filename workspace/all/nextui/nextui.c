@@ -3304,7 +3304,7 @@ int main (int argc, char *argv[]) {
 				} 
 			}
 			else {
-				SDL_Delay(100); // why are we running long delays on the render thread, wtf?
+				SDL_Delay(16); // ~60fps instead of ~10fps
 			}
 			dirty = 0;
 		} 
