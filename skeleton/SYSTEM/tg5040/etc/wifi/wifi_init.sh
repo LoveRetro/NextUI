@@ -5,7 +5,7 @@ WPA_SUPPLICANT_CONF="/etc/wifi/wpa_supplicant.conf"
 
 start() {
 	# Unblock wifi via rfkill
-	rfkill unblock wifi 2>/dev/null
+	rfkill.elf unblock wifi 2>/dev/null
 	
 	# Create default wpa_supplicant.conf if it doesn't exist
 	if [ ! -f "$WPA_SUPPLICANT_CONF" ]; then
