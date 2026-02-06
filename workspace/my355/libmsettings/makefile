@@ -12,8 +12,8 @@ TARGET=msettings
 
 CC = $(CROSS_COMPILE)gcc
 
-CFLAGS = 
-LDFLAGS = -ltinyalsa -ldl -lrt -s
+CFLAGS = $$(pkg-config --cflags tinyalsa)
+LDFLAGS = $$(pkg-config --libs tinyalsa) -ldl -lrt -s
 
 OPTM=-Ofast
 
