@@ -21,14 +21,19 @@ SDL?=SDL
 
 TARGET = minarch
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
-INCDIR = -I. -I./libretro-common/include/ -I../common/ -I../../$(PLATFORM)/platform/
-SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
+MANUAL_PRODUCT = build/$(PLATFORM)/manual.so
+INCDIR = -I. -I./libretro-common/include/ -I../common/ -I../manual/ -I../../$(PLATFORM)/platform/
+SOURCE = $(TARGET).c ../manual/manual_runtime.c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
+MANUAL_SOURCE = ../manual/manual.c
+MANUAL_CFLAGS =
+MANUAL_LIBS =
 
 CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(OPT)
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS	 += -lmsettings -lsamplerate
 LDFLAGS  += -llz4
+LDFLAGS  += -ldl
 
 ifeq ($(PROFILE), 1)
 CFLAGS  += -pg
@@ -53,6 +58,14 @@ CFLAGS   += -DHAS_SRM
 LDFLAGS +=  -lasound
 endif
 
+ifeq ($(PLATFORM), tg5040)
+TG5040_LIBS ?= ../../tg5040/libs
+ifneq (,$(wildcard $(TG5040_LIBS)/lib/libmupdf.a))
+MANUAL_CFLAGS += -I$(TG5040_LIBS)/include -DENABLE_PDF_MANUAL
+MANUAL_LIBS += -L$(TG5040_LIBS)/lib -lmupdf -lmupdf-third -lm
+endif
+endif
+
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 
 ifeq ($(PLATFORM), desktop)
@@ -74,11 +87,11 @@ BUILD_HASH!=cat ../../hash.txt
 CFLAGS += -DBUILD_DATE=\"${BUILD_DATE}\" -DBUILD_HASH=\"${BUILD_HASH}\"
 
 ifeq ($(PLATFORM), desktop)
-all: clean libretro-common $(PREFIX_LOCAL)/include/msettings.h
+all: clean libretro-common $(PREFIX_LOCAL)/include/msettings.h manual-plugin
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 else
-all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
+all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h manual-plugin
 	mkdir -p build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libsamplerate.so.* build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
@@ -89,6 +102,10 @@ all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	cp -L $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
+
+manual-plugin:
+	mkdir -p build/$(PLATFORM)
+	$(CC) $(MANUAL_SOURCE) -o $(MANUAL_PRODUCT) $(CFLAGS) $(MANUAL_CFLAGS) -fPIC -shared $(MANUAL_LIBS)
 
 libretro-common:
 	git clone https://github.com/libretro/libretro-common
@@ -107,4 +124,5 @@ libsrm.a: $(OBJECTS)
 
 clean:
 	rm -f $(PRODUCT)
+	rm -f $(MANUAL_PRODUCT)
 	rm -f $(OBJECTS) $(LIBRARY)

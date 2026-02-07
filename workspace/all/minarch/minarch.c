@@ -29,6 +29,7 @@
 #include <dirent.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL.h>
+#include "manual.h"
 
 ///////////////////////////////////////
 
@@ -6110,13 +6111,14 @@ void Core_close(void) {
 
 ///////////////////////////////////////
 
-#define MENU_ITEM_COUNT 5
+#define MENU_ITEM_COUNT 6
 #define MENU_SLOT_COUNT 8
 
 enum {
 	ITEM_CONT,
 	ITEM_SAVE,
 	ITEM_LOAD,
+	ITEM_MANUAL,
 	ITEM_OPTS,
 	ITEM_QUIT,
 };
@@ -6158,6 +6160,7 @@ static struct {
 		[ITEM_CONT] = "Continue",
 		[ITEM_SAVE] = "Save",
 		[ITEM_LOAD] = "Load",
+		[ITEM_MANUAL] = "Manual",
 		[ITEM_OPTS] = "Options",
 		[ITEM_QUIT] = "Quit",
 	}
@@ -6229,6 +6232,82 @@ void Menu_beforeSleep() {
 void Menu_afterSleep() {
 	unlink(AUTO_RESUME_PATH);
 	setOverclock(overclock);
+}
+
+static int ManualHost_toBtn(ManualButton button) {
+	switch (button) {
+		case MANUAL_BTN_A: return BTN_A;
+		case MANUAL_BTN_B: return BTN_B;
+		case MANUAL_BTN_UP: return BTN_UP;
+		case MANUAL_BTN_DOWN: return BTN_DOWN;
+		case MANUAL_BTN_LEFT: return BTN_LEFT;
+		case MANUAL_BTN_RIGHT: return BTN_RIGHT;
+		case MANUAL_BTN_L1: return BTN_L1;
+		case MANUAL_BTN_R1: return BTN_R1;
+		default: return 0;
+	}
+}
+
+static void ManualHost_startFrame(void) {
+	GFX_startFrame();
+}
+
+static void ManualHost_pollInput(void) {
+	PAD_poll();
+}
+
+static void ManualHost_resetInput(void) {
+	PAD_reset();
+}
+
+static int ManualHost_justPressed(ManualButton button) {
+	int btn = ManualHost_toBtn(button);
+	if (!btn) return 0;
+	return PAD_justPressed(btn);
+}
+
+static int ManualHost_isPressed(ManualButton button) {
+	int btn = ManualHost_toBtn(button);
+	if (!btn) return 0;
+	return PAD_isPressed(btn);
+}
+
+static void ManualHost_powerUpdate(int* dirty) {
+	PWR_update(dirty, NULL, Menu_beforeSleep, Menu_afterSleep);
+}
+
+static void ManualHost_clear(SDL_Surface* dst) {
+	if (!dst) return;
+	GFX_clear(dst);
+}
+
+static void ManualHost_flip(SDL_Surface* dst) {
+	if (!dst) return;
+	GFX_flip(dst);
+}
+
+static void ManualHost_delay(void) {
+	GFX_delay();
+}
+
+static void ManualHost_drawNotice(SDL_Surface* dst, const char* msg) {
+	if (!dst || !msg) return;
+	GFX_blitMessage(font.medium, (char*)msg, dst,
+	                &(SDL_Rect){SCALE1(PADDING), SCALE1(PADDING),
+	                            dst->w - SCALE1(PADDING * 2),
+	                            dst->h - SCALE1(PADDING * 2)});
+	GFX_blitButtonGroup((char*[]){"B", "BACK", NULL}, 1, dst, 1);
+}
+
+static void ManualHost_drawOverlay(SDL_Surface* dst, const char* page_info) {
+	if (!dst) return;
+	GFX_blitButtonGroup((char*[]){"B", "BACK", NULL}, 1, dst, 0);
+	GFX_blitButtonGroup((char*[]){"L1/R1", "ZOOM", NULL}, 1, dst, 1);
+	if (page_info && page_info[0]) {
+		GFX_blitMessage(font.small, (char*)page_info, dst,
+		                &(SDL_Rect){SCALE1(PADDING), SCALE1(PADDING),
+		                            SCALE1(90), SCALE1(PILL_SIZE)});
+	}
 }
 
 typedef struct MenuList MenuList;
@@ -7914,6 +7993,12 @@ static void Menu_loop(void) {
 					show_menu = 0;
 				}
 				break;
+				case ITEM_MANUAL: {
+					Manual_open(game.path);
+					PAD_reset();
+					dirty = 1;
+				}
+				break;
 				case ITEM_OPTS: {
 					if (simple_mode) {
 						core.reset();
@@ -8339,6 +8424,23 @@ int main(int argc , char* argv[]) {
 	SND_registerDeviceWatcher(onAudioSinkChanged);
 	InitSettings(); // after we initialize audio
 	Menu_init();
+	Manual_setHost(&(ManualHost){
+		.screen = &screen,
+		.quit = &quit,
+		.before_sleep = Menu_beforeSleep,
+		.after_sleep = Menu_afterSleep,
+		.start_frame = ManualHost_startFrame,
+		.poll_input = ManualHost_pollInput,
+		.reset_input = ManualHost_resetInput,
+		.just_pressed = ManualHost_justPressed,
+		.is_pressed = ManualHost_isPressed,
+		.power_update = ManualHost_powerUpdate,
+		.clear = ManualHost_clear,
+		.flip = ManualHost_flip,
+		.delay = ManualHost_delay,
+		.draw_notice = ManualHost_drawNotice,
+		.draw_overlay = ManualHost_drawOverlay,
+	});
 	State_resume();
 	Menu_initState(); // make ready for state shortcuts
 
