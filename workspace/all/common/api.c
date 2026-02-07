@@ -455,11 +455,14 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 	}
 
 	const uint16_t *pixels = (const uint16_t *)data;
-	int pixel_count = width * height;
+	int pixel_count = 0;
 
 	uint64_t total_r = 0;
 	uint64_t total_g = 0;
 	uint64_t total_b = 0;
+	uint64_t total_rc = 0;
+	uint64_t total_gc = 0;
+	uint64_t total_bc = 0;
 	uint32_t colorful_pixel_count = 0;
 
 	for (unsigned y = 0; y < height; y++)
@@ -480,44 +483,31 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 			uint8_t min_c = fminf(fminf(r, g), b);
 			uint8_t saturation = max_c == 0 ? 0 : (max_c - min_c) * 255 / max_c;
 
+			total_r += r;
+			total_g += g;
+			total_b += b;
+			pixel_count++;
 			if (saturation > 50 && max_c > 50)
 			{
-				total_r += r;
-				total_g += g;
-				total_b += b;
+				total_rc += r;
+				total_gc += g;
+				total_bc += b;
 				colorful_pixel_count++;
 			}
 		}
 	}
 
-	if (colorful_pixel_count == 0)
+	if (colorful_pixel_count > 0)
 	{
-
-		colorful_pixel_count = pixel_count;
-		total_r = total_g = total_b = 0;
-		for (unsigned y = 0; y < height; y++)
-		{
-			for (unsigned x = 0; x < width; x++)
-			{
-				uint16_t pixel = pixels[y * (pitch / 2) + x];
-				uint8_t r = ((pixel & 0xF800) >> 11) << 3;
-				uint8_t g = ((pixel & 0x07E0) >> 5) << 2;
-				uint8_t b = (pixel & 0x001F) << 3;
-
-				r |= r >> 5;
-				g |= g >> 6;
-				b |= b >> 5;
-
-				total_r += r;
-				total_g += g;
-				total_b += b;
-			}
-		}
+	  total_r = total_rc;
+	  total_g = total_gc;
+	  total_b = total_bc;
+	  pixel_count = colorful_pixel_count;
 	}
 
-	uint8_t avg_r = total_r / colorful_pixel_count;
-	uint8_t avg_g = total_g / colorful_pixel_count;
-	uint8_t avg_b = total_b / colorful_pixel_count;
+	uint8_t avg_r = total_r / pixel_count;
+	uint8_t avg_g = total_g / pixel_count;
+	uint8_t avg_b = total_b / pixel_count;
 
 	return (avg_r << 16) | (avg_g << 8) | avg_b;
 }
