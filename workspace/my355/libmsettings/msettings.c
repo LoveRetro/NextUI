@@ -19,10 +19,8 @@
 typedef struct SettingsV1 {
 	int version; // future proofing
 	int brightness;
-	int colortemperature;
 	int headphones;
 	int speaker;
-	int mute;
 	int contrast;
 	int saturation;
 	int exposure;
@@ -40,10 +38,8 @@ typedef SettingsV1 Settings;
 static Settings DefaultSettings = {
 	.version = SETTINGS_VERSION,
 	.brightness = SETTINGS_DEFAULT_BRIGHTNESS,
-	.colortemperature = SETTINGS_DEFAULT_COLORTEMP,
 	.headphones = SETTINGS_DEFAULT_HEADPHONE_VOLUME,
 	.speaker = SETTINGS_DEFAULT_VOLUME,
-	.mute = 0,
 	.contrast = SETTINGS_DEFAULT_CONTRAST,
 	.saturation = SETTINGS_DEFAULT_SATURATION,
 	.exposure = SETTINGS_DEFAULT_EXPOSURE,
@@ -65,17 +61,6 @@ int scaleContrast(int);
 int scaleSaturation(int);
 int scaleExposure(int);
 int scaleVolume(int);
-
-void disableDpad(int);
-void emulateJoystick(int);
-void turboA(int);
-void turboB(int);
-void turboX(int);
-void turboY(int);
-void turboL1(int);
-void turboL2(int);
-void turboR1(int);
-void turboR2(int);
 
 int getInt(char* path) {
 	int i = 0;
@@ -133,11 +118,11 @@ int peekVersion(const char *filename) {
 }
 
 #define JACK_STATE_PATH "/sys/class/gpio/gpio150/value"
-#define HDMI_STATE_PATH "/sys/class/drm/card0-HDMI-A-1/status"
-
 static int JACK_enabled(void) {
 	return !getInt(JACK_STATE_PATH);
 }
+
+#define HDMI_STATE_PATH "/sys/class/drm/card0-HDMI-A-1/status"
 static int HDMI_enabled(void) {
 	char value[64];
 	getFile(HDMI_STATE_PATH, value, 64);
@@ -212,7 +197,6 @@ void InitSettings(void) {
 
 	SetVolume(GetVolume());
 	SetBrightness(GetBrightness());
-	// system("echo $(< " BRIGHTNESS_PATH ")");
 }
 int InitializedSettings(void) {
 	return (settings != NULL);
@@ -236,7 +220,7 @@ int GetBrightness(void) { // 0-10
 	return settings->brightness;
 }
 int GetColortemp(void) { // 0-10
-	return settings->colortemperature;
+	return 0; // not supported on this device
 }
 int GetVolume(void) { // 0-20
 	if(settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
@@ -254,7 +238,6 @@ int GetAudioSink(void) {
 }
 
 int GetHDMI(void) {
-	// printf("GetHDMI() %i\n", settings->hdmi); fflush(stdout);
 	return settings->hdmi;
 };
 
@@ -346,11 +329,7 @@ void SetBrightness(int value) {
 	settings->brightness = value;
 	SaveSettings();
 }
-void SetColortemp(int value) {
-	SetRawColortemp(scaleColortemp(value));
-	settings->colortemperature = value;
-	SaveSettings();
-}
+void SetColortemp(int value) {}
 void SetVolume(int value) { // 0-20
 	if (settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
 		settings->headphones = value;
@@ -491,52 +470,7 @@ int scaleBrightness(int value) {
 	return raw;
 }
 int scaleColortemp(int value) {
-	int raw;
-
-	switch (value) {
-		case 0: raw=-200; break; 		// 8
-		case 1: raw=-190; break; 		// 8
-		case 2: raw=-180; break; 		// 16
-		case 3: raw=-170; break;		// 16
-		case 4: raw=-160; break;		// 24
-		case 5: raw=-150; break;		// 24
-		case 6: raw=-140; break;		// 32
-		case 7: raw=-130; break;		// 32
-		case 8: raw=-120; break;		// 32
-		case 9: raw=-110; break;	// 64
-		case 10: raw=-100; break; 		// 0
-		case 11: raw=-90; break; 		// 8
-		case 12: raw=-80; break; 		// 8
-		case 13: raw=-70; break; 		// 16
-		case 14: raw=-60; break;		// 16
-		case 15: raw=-50; break;		// 24
-		case 16: raw=-40; break;		// 24
-		case 17: raw=-30; break;		// 32
-		case 18: raw=-20; break;		// 32
-		case 19: raw=-10; break;		// 32
-		case 20: raw=0; break;	// 64
-		case 21: raw=10; break; 		// 0
-		case 22: raw=20; break; 		// 8
-		case 23: raw=30; break; 		// 8
-		case 24: raw=40; break; 		// 16
-		case 25: raw=50; break;		// 16
-		case 26: raw=60; break;		// 24
-		case 27: raw=70; break;		// 24
-		case 28: raw=80; break;		// 32
-		case 29: raw=90; break;		// 32
-		case 30: raw=100; break;		// 32
-		case 31: raw=110; break;	// 64
-		case 32: raw=120; break; 		// 0
-		case 33: raw=130; break; 		// 8
-		case 34: raw=140; break; 		// 8
-		case 35: raw=150; break; 		// 16
-		case 36: raw=160; break;		// 16
-		case 37: raw=170; break;		// 24
-		case 38: raw=180; break;		// 24
-		case 39: raw=190; break;		// 32
-		case 40: raw=200; break;		// 32
-	}
-	return raw;
+	return 0; // not supported on this device
 }
 int scaleContrast(int value) {
 	int raw;
@@ -575,22 +509,7 @@ int scaleSaturation(int value) {
 	return raw;
 }
 int scaleExposure(int value) {
-	int raw;
-
-	switch (value) {
-		// stock OS also avoids setting anything lower, so we do the same here.
-		case -4: raw=10; break;
-		case -3: raw=20; break;
-		case -2: raw=30; break;
-		case -1: raw=40; break;
-		case 0: raw=50; break;
-		case 1: raw=60; break;
-		case 2: raw=70; break;
-		case 3: raw=80; break;
-		case 4: raw=90; break;
-		case 5: raw=100; break;
-	}
-	return raw;
+	return 0; // not supported on this device
 }
 
 ///////// Platform specific, unscaled accessors
@@ -600,14 +519,28 @@ void SetRawBrightness(int val) { // 0 - 255
 	putInt("/sys/class/backlight/backlight/brightness", val);
 }
 
-void SetRawColortemp(int val) { // 0 - 255
-	printf("SetRawColortemp(%i)\n", val); fflush(stdout);
+void SetRawColortemp(int val) { // 0 - 100
+	// not supported on this device, so do nothing
+}
 
-	FILE *fd = fopen("/sys/class/disp/disp/attr/color_temperature", "w");
-	if (fd) {
-		fprintf(fd, "%i", val);
-		fclose(fd);
-	}
+void SetRawContrast(int val){
+	printf("SetRawContrast(%i)\n", val); fflush(stdout);
+
+	// modetest -M rockchip -w 179:contrast:<val>
+	char cmd[128];
+    snprintf(cmd, sizeof(cmd), "modetest -M rockchip -w 179:contrast:%d", val);
+	system(cmd);
+}
+void SetRawSaturation(int val){
+	printf("SetRawSaturation(%i)\n", val); fflush(stdout);
+
+	// modetest -M rockchip -w 179:saturation:<val>
+	char cmd[128];
+    snprintf(cmd, sizeof(cmd), "modetest -M rockchip -w 179:saturation:%d", val);
+	system(cmd);
+}
+void SetRawExposure(int val){
+	// not supported on this device, so do nothing
 }
 
 // Find the first A2DP playback volume control via amixer
@@ -711,33 +644,5 @@ void SetRawVolume(int val) { // 0-100
 		sprintf(cmd, "amixer sset 'SPK' %i%% > /dev/null 2>&1", val);
 		puts(cmd); fflush(stdout);
 		system(cmd);
-	}
-}
-
-void SetRawContrast(int val){
-	printf("SetRawContrast(%i)\n", val); fflush(stdout);
-
-	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_contrast", "w");
-	if (fd) {
-		fprintf(fd, "%i", val);
-		fclose(fd);
-	}
-}
-void SetRawSaturation(int val){
-	printf("SetRawSaturation(%i)\n", val); fflush(stdout);
-
-	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_saturation", "w");
-	if (fd) {
-		fprintf(fd, "%i", val);
-		fclose(fd);
-	}
-}
-void SetRawExposure(int val){
-	printf("SetRawExposure(%i)\n", val); fflush(stdout);
-
-	FILE *fd = fopen("/sys/class/disp/disp/attr/enhance_bright", "w");
-	if (fd) {
-		fprintf(fd, "%i", val);
-		fclose(fd);
 	}
 }

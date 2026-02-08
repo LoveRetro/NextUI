@@ -40,10 +40,6 @@ echo -n 0 > /sys/class/gpio/gpio20/value
 #keyboard
 echo 0 > /sys/class/miyooio_chr_dev/joy_type
 
-#screen adjustment for now here
-modetest -M rockchip -w 179:hue:60
-modetest -M rockchip -w 179:saturation:60
-
 # disable system-level lid handling
 mv /dev/input/event1 /dev/input/event1.disabled
 

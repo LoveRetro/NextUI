@@ -160,7 +160,15 @@ namespace {
         Model getModel() const { return m_model; }
         Platform getPlatform() const { return m_platform; }
 
-        bool hasDisplayEngine() const {
+        bool hasColorTemperature() const {
+            return m_platform == tg5040;
+        }
+
+        bool hasContrastSaturation() const {
+            return m_platform == my355 || m_platform == tg5040;
+        }
+
+        bool hasExposure() const {
             return m_platform == tg5040;
         }
 
@@ -328,13 +336,17 @@ int main(int argc, char *argv[])
 
         };
 
-        if(deviceInfo.hasDisplayEngine())
+        if(deviceInfo.hasColorTemperature())
         {
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "Color temperature", "Color temperature (0 to 40)", 0, 40, "",[]() -> std::any
                 { return GetColortemp(); }, [](const std::any &value)
                 { SetColortemp(std::any_cast<int>(value)); },
                 []() { SetColortemp(SETTINGS_DEFAULT_COLORTEMP);}});
+        }
+
+        if(deviceInfo.hasContrastSaturation())
+        {
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "Contrast", "Contrast enhancement (-4 to 5)", -4, 5, "",[]() -> std::any
                 { return GetContrast(); }, [](const std::any &value)
@@ -345,6 +357,10 @@ int main(int argc, char *argv[])
                 { return GetSaturation(); }, [](const std::any &value)
                 { SetSaturation(std::any_cast<int>(value)); },
                 []() { SetSaturation(SETTINGS_DEFAULT_SATURATION);}});
+        }
+
+        if(deviceInfo.hasExposure())
+        {
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "Exposure", "Exposure enhancement (-4 to 5)", -4, 5, "",[]() -> std::any
                 { return GetExposure(); }, [](const std::any &value)
@@ -465,14 +481,18 @@ int main(int argc, char *argv[])
         
         if(deviceInfo.hasMuteToggle())
         {
-            if(deviceInfo.hasDisplayEngine())
-                muteItems.insert(muteItems.end(), {
+            if(deviceInfo.hasColorTemperature()) {
+                muteItems.push_back(
                     new MenuItem{ListItemType::Generic, "Color temperature when toggled", "Color temperature (0 to 40)", 
                     {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40}, 
                     {"Unchanged","0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40"},
                     []() -> std::any{ return GetMutedColortemp(); }, [](const std::any &value)
                     { SetMutedColortemp(std::any_cast<int>(value)); },
-                    []() { SetMutedColortemp(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+                    []() { SetMutedColortemp(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}}
+                );
+            }
+            if(deviceInfo.hasContrastSaturation()) {
+                muteItems.insert(muteItems.end(), {
                     new MenuItem{ListItemType::Generic, "Contrast when toggled", "Contrast enhancement (-4 to 5)", 
                     {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
                     {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
@@ -484,13 +504,20 @@ int main(int argc, char *argv[])
                     {"Unchanged","-5","-4","-3","-2","-1","0","1","2","3","4","5"}, 
                     []() -> std::any{ return GetMutedSaturation(); }, [](const std::any &value)
                     { SetMutedSaturation(std::any_cast<int>(value)); },
-                    []() { SetMutedSaturation(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+                    []() { SetMutedSaturation(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}}}
+                );
+            }
+            if(deviceInfo.hasExposure()) {
+                muteItems.push_back(
                     new MenuItem{ListItemType::Generic, "Exposure when toggled", "Exposure enhancement (-4 to 5)", 
                     {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
                     {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
                     []() -> std::any  { return GetMutedExposure(); }, [](const std::any &value)
                     { SetMutedExposure(std::any_cast<int>(value)); },
-                    []() { SetMutedExposure(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}}});
+                    []() { SetMutedExposure(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}}
+                );
+            }
+            
             muteItems.insert(muteItems.end(), {
                 new MenuItem{ListItemType::Generic, "Turbo fire A", "Enable turbo fire A", {0, 1}, on_off, []() -> std::any
                 { return GetMuteTurboA(); },
