@@ -424,8 +424,7 @@ char* PLAT_getModel(void) {
 
 void PLAT_getOsVersionInfo(char* output_str, size_t max_len)
 {
-	// TODO
-	return;
+	return getFile("/usr/miyoo/version", output_str,max_len);
 }
 
 bool PLAT_btIsConnected(void)
@@ -492,9 +491,11 @@ int PLAT_setDateTime(int y, int m, int d, int h, int i, int s) {
 	return 0; // why does this return an int?
 }
 
+
 #define MAX_LINE_LENGTH 200
 #define ZONE_PATH "/usr/share/zoneinfo"
 #define ZONE_TAB_PATH ZONE_PATH "/zone.tab"
+#define CUR_ZONE_PATH "/userdata/localtime"
 
 static char cached_timezones[MAX_TIMEZONES][MAX_TZ_LENGTH];
 static int cached_tz_count = -1;
@@ -617,13 +618,10 @@ void PLAT_setCurrentTimezone(const char* tz) {
 		return;
 	}
 	snprintf(tz_path, 256, ZONE_PATH "/%s", tz);
-	// replace existing symlink
-	if (unlink("/tmp/localtime") == -1) {
-		LOG_debug("Failed to remove existing symlink: %s\n", strerror(errno));
-	}
-	if (symlink(tz_path, "/tmp/localtime") == -1) {
-		LOG_error("Failed to set timezone: %s\n", strerror(errno));
-	}
+	// replace existing
+	char cmd[512];
+	snprintf(cmd, 512, "cp %s %s", tz_path, CUR_ZONE_PATH);
+	system(cmd);
 	free(tz_path);
 
 	// apply timezone to RTC and kernel
@@ -651,6 +649,8 @@ void PLAT_setNetworkTimeSync(bool on) {
 /////////////////////////
 
 // We use the generic wifi implementation here
+
+#define WIFI_SOCK_DIR "/var/run/wpa_supplicant"
 #include "generic_wifi.c"
 
 /////////////////////////

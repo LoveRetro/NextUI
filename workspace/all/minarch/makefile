@@ -89,6 +89,7 @@ all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 ifeq ($(PLATFORM), my355)
 	cp $(PREFIX)/lib/libcrypto.so* build/$(PLATFORM)
 	cp $(PREFIX)/lib/libsqlite3.so* build/$(PLATFORM)
+	cp $(PREFIX)/lib/libffi.so* build/$(PLATFORM)
 	cp $(PREFIX)/lib/libtinyalsa.so* build/$(PLATFORM)
 endif
 	cp $(PREFIX)/lib/libsamplerate.so* build/$(PLATFORM)

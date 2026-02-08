@@ -102,25 +102,103 @@ namespace {
     }
 
     std::string extractBusyBoxVersion(const std::string& output) {
-        std::regex versionRegex(R"(BusyBox\s+v[\d.]+.*)");
+        std::regex versionRegex(R"(BusyBox\s+(v[\d.]+))");
         std::smatch match;
         if (std::regex_search(output, match, versionRegex)) {
-            return match.str(0);
+            return match.str(1);
         }
         return "";
     }
+
+    class DeviceInfo {
+    public:
+        enum Vendor {
+            Unknown,
+            Trimui,
+            Miyoo
+        };
+
+        enum Model {
+            UnknownModel,
+            Brick,
+            SmartPro,
+            SmartProS,
+            Flip
+        };
+
+        enum Platform {
+            UnknownPlatform,
+            tg5040,
+            tg5050,
+            my355
+        };
+
+        DeviceInfo() {
+            char* device = getenv("DEVICE");
+            if (device) {
+                if(exactMatch("brick", device)) {
+                    m_vendor = Trimui;
+                    m_model = Brick;
+                    m_platform = tg5040;
+                } else if(exactMatch("smartpro", device)) {
+                    m_vendor = Trimui;
+                    m_model = SmartPro;
+                    m_platform = tg5040;
+                } else if(exactMatch("smartpros", device)) {
+                    m_vendor = Trimui;
+                    m_model = SmartProS;
+                    m_platform = tg5050;
+                } else if(exactMatch("my355", device)) {
+                    m_vendor = Trimui;
+                    m_model = Flip;
+                    m_platform = my355;
+                }
+            }
+        }
+
+        Vendor getVendor() const { return m_vendor; }
+        Model getModel() const { return m_model; }
+        Platform getPlatform() const { return m_platform; }
+
+        bool hasDisplayEngine() const {
+            return m_platform == tg5040;
+        }
+
+        bool hasActiveCooling() const {
+            return m_platform == tg5050;
+        }
+
+        bool hasMuteToggle() const {
+            return m_platform == tg5050 || m_platform == tg5040;
+        }
+
+        bool hasAnalogSticks() const {
+            return m_model == SmartPro || m_model == SmartProS;
+        }
+
+        bool hasWifi() const {
+            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355;
+        }
+        
+        bool hasBluetooth() const {
+            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355;
+        }
+    
+    private:
+        Vendor m_vendor = Unknown;
+        Model m_model = UnknownModel;
+        Platform m_platform = UnknownPlatform;
+    };
 }
 int main(int argc, char *argv[])
 {
     try
     {
-        char* device = getenv("DEVICE");
-        bool is_brick = exactMatch("brick", device);
-        bool is_smartpro_s = exactMatch("smartpros", device);
+        DeviceInfo deviceInfo;
 
         char version[128];
         PLAT_getOsVersionInfo(version, 128);
-        LOG_info("This is TrimUI stock OS version %s\n", version);
+        LOG_info("This is stock OS version %s\n", version);
         InitSettings();
 
         PWR_setCPUSpeed(CPU_SPEED_MENU);
@@ -250,8 +328,7 @@ int main(int argc, char *argv[])
 
         };
 
-        // tg5050 does not have display engine, no contrast/saturation/exposure/colortemp for now
-        if(exactMatch("smartpro", device) || exactMatch("brick", device))
+        if(deviceInfo.hasDisplayEngine())
         {
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "Color temperature", "Color temperature (0 to 40)", 0, 40, "",[]() -> std::any
@@ -340,7 +417,7 @@ int main(int argc, char *argv[])
             []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}}
         };
 
-        if(exactMatch("smartpro", device) || exactMatch("brick", device))
+        if(deviceInfo.getPlatform() == DeviceInfo::tg5040)
         {
             systemItems.push_back(
                 new MenuItem{ListItemType::Generic, "Safe poweroff", "Bypasses the stock shutdown procedure to avoid the \"limbo bug\".\nInstructs the PMIC directly to soft disconnect the battery.", {false, true}, on_off, 
@@ -350,7 +427,7 @@ int main(int argc, char *argv[])
             );
         }
 
-        if(is_smartpro_s)
+        if(deviceInfo.hasActiveCooling())
         {
             systemItems.push_back(
                 new MenuItem{ListItemType::Generic, "Fan Speed", "Select the fan speed percentage (Quiet/Normal/Performance or 0-100%)", 
@@ -386,71 +463,71 @@ int main(int argc, char *argv[])
             []() { SetMutedBrightness(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
         };
         
-        if(exactMatch("smartpro", device) || exactMatch("brick", device))
+        if(deviceInfo.hasMuteToggle())
         {
+            if(deviceInfo.hasDisplayEngine())
+                muteItems.insert(muteItems.end(), {
+                    new MenuItem{ListItemType::Generic, "Color temperature when toggled", "Color temperature (0 to 40)", 
+                    {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40}, 
+                    {"Unchanged","0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40"},
+                    []() -> std::any{ return GetMutedColortemp(); }, [](const std::any &value)
+                    { SetMutedColortemp(std::any_cast<int>(value)); },
+                    []() { SetMutedColortemp(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+                    new MenuItem{ListItemType::Generic, "Contrast when toggled", "Contrast enhancement (-4 to 5)", 
+                    {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
+                    {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+                    []() -> std::any  { return GetMutedContrast(); }, [](const std::any &value)
+                    { SetMutedContrast(std::any_cast<int>(value)); },
+                    []() { SetMutedContrast(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+                    new MenuItem{ListItemType::Generic, "Saturation when toggled", "Saturation enhancement (-5 to 5)", 
+                    {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -5,-4,-3,-2,-1,0,1,2,3,4,5}, 
+                    {"Unchanged","-5","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+                    []() -> std::any{ return GetMutedSaturation(); }, [](const std::any &value)
+                    { SetMutedSaturation(std::any_cast<int>(value)); },
+                    []() { SetMutedSaturation(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+                    new MenuItem{ListItemType::Generic, "Exposure when toggled", "Exposure enhancement (-4 to 5)", 
+                    {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
+                    {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+                    []() -> std::any  { return GetMutedExposure(); }, [](const std::any &value)
+                    { SetMutedExposure(std::any_cast<int>(value)); },
+                    []() { SetMutedExposure(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}}});
             muteItems.insert(muteItems.end(), {
-                new MenuItem{ListItemType::Generic, "Color temperature when toggled", "Color temperature (0 to 40)", 
-                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40}, 
-                {"Unchanged","0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40"},
-                []() -> std::any{ return GetMutedColortemp(); }, [](const std::any &value)
-                { SetMutedColortemp(std::any_cast<int>(value)); },
-                []() { SetMutedColortemp(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
-                new MenuItem{ListItemType::Generic, "Contrast when toggled", "Contrast enhancement (-4 to 5)", 
-                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
-                {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
-                []() -> std::any  { return GetMutedContrast(); }, [](const std::any &value)
-                { SetMutedContrast(std::any_cast<int>(value)); },
-                []() { SetMutedContrast(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
-                new MenuItem{ListItemType::Generic, "Saturation when toggled", "Saturation enhancement (-5 to 5)", 
-                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -5,-4,-3,-2,-1,0,1,2,3,4,5}, 
-                {"Unchanged","-5","-4","-3","-2","-1","0","1","2","3","4","5"}, 
-                []() -> std::any{ return GetMutedSaturation(); }, [](const std::any &value)
-                { SetMutedSaturation(std::any_cast<int>(value)); },
-                []() { SetMutedSaturation(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
-                new MenuItem{ListItemType::Generic, "Exposure when toggled", "Exposure enhancement (-4 to 5)", 
-                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
-                {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
-                []() -> std::any  { return GetMutedExposure(); }, [](const std::any &value)
-                { SetMutedExposure(std::any_cast<int>(value)); },
-                []() { SetMutedExposure(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}}});
+                new MenuItem{ListItemType::Generic, "Turbo fire A", "Enable turbo fire A", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboA(); },
+                [](const std::any &value) { SetMuteTurboA(std::any_cast<int>(value));},
+                []() { SetMuteTurboA(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire B", "Enable turbo fire B", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboB(); },
+                [](const std::any &value) { SetMuteTurboB(std::any_cast<int>(value));},
+                []() { SetMuteTurboB(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire X", "Enable turbo fire X", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboX(); },
+                [](const std::any &value) { SetMuteTurboX(std::any_cast<int>(value));},
+                []() { SetMuteTurboX(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire Y", "Enable turbo fire Y", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboY(); },
+                [](const std::any &value) { SetMuteTurboY(std::any_cast<int>(value));},
+                []() { SetMuteTurboY(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire L1", "Enable turbo fire L1", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboL1(); },
+                [](const std::any &value) { SetMuteTurboL1(std::any_cast<int>(value));},
+                []() { SetMuteTurboL1(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire L2", "Enable turbo fire L2", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboL2(); },
+                [](const std::any &value) { SetMuteTurboL2(std::any_cast<int>(value));},
+                []() { SetMuteTurboL2(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire R1", "Enable turbo fire R1", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboR1(); },
+                [](const std::any &value) { SetMuteTurboR1(std::any_cast<int>(value));},
+                []() { SetMuteTurboR1(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire R2", "Enable turbo fire R2", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboR2(); },
+                [](const std::any &value) { SetMuteTurboR2(std::any_cast<int>(value));},
+                []() { SetMuteTurboR2(0);}}
+            });
         }
 
-        muteItems.insert(muteItems.end(), {
-            new MenuItem{ListItemType::Generic, "Turbo fire A", "Enable turbo fire A", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboA(); },
-            [](const std::any &value) { SetMuteTurboA(std::any_cast<int>(value));},
-            []() { SetMuteTurboA(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire B", "Enable turbo fire B", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboB(); },
-            [](const std::any &value) { SetMuteTurboB(std::any_cast<int>(value));},
-            []() { SetMuteTurboB(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire X", "Enable turbo fire X", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboX(); },
-            [](const std::any &value) { SetMuteTurboX(std::any_cast<int>(value));},
-            []() { SetMuteTurboX(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire Y", "Enable turbo fire Y", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboY(); },
-            [](const std::any &value) { SetMuteTurboY(std::any_cast<int>(value));},
-            []() { SetMuteTurboY(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire L1", "Enable turbo fire L1", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboL1(); },
-            [](const std::any &value) { SetMuteTurboL1(std::any_cast<int>(value));},
-            []() { SetMuteTurboL1(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire L2", "Enable turbo fire L2", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboL2(); },
-            [](const std::any &value) { SetMuteTurboL2(std::any_cast<int>(value));},
-            []() { SetMuteTurboL2(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire R1", "Enable turbo fire R1", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboR1(); },
-            [](const std::any &value) { SetMuteTurboR1(std::any_cast<int>(value));},
-            []() { SetMuteTurboR1(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire R2", "Enable turbo fire R2", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboR2(); },
-            [](const std::any &value) { SetMuteTurboR2(std::any_cast<int>(value));},
-            []() { SetMuteTurboR2(0);}}
-        });
-
-        if(is_brick) {
+        if(deviceInfo.hasMuteToggle() && deviceInfo.hasAnalogSticks()){
             muteItems.push_back(
                 new MenuItem{ListItemType::Generic, "Dpad mode when toggled", "Dpad: default. Joystick: Dpad exclusively acts as analog stick.\nBoth: Dpad and Joystick inputs at the same time.", {0, 1, 2}, {"Dpad", "Joystick", "Both"}, []() -> std::any
                 {
@@ -472,20 +549,12 @@ int main(int argc, char *argv[])
         }
         muteItems.push_back(new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu});
 
-        auto muteMenu = new MenuList(MenuItemType::Fixed, "FN Switch", muteItems);
-
-        // TODO: check WIFI_supported(), hide menu otherwise
-        auto networkMenu = new Wifi::Menu(appQuit, ctx.dirty);
-
-        // TODO: check BT_supported(), hide menu otherwise
-        auto btMenu = new Bluetooth::Menu(appQuit, ctx.dirty);
-
         // We need to alert the user about potential issues if the 
         // stock OS was modified in way that are known to cause issues
         std::string bbver = extractBusyBoxVersion(execCommand("cat --help"));
         if (bbver.empty())
             bbver = "BusyBox version not found.";
-        else if(bbver.find(BUSYBOX_STOCK_VERSION) == std::string::npos)
+        else if(deviceInfo.getPlatform() == DeviceInfo::tg5040 && bbver.find(BUSYBOX_STOCK_VERSION) == std::string::npos)
             ctx.menu->showOverlay(
                 "Stock OS changes detected.\n"
                 "This may cause instability or issues.\n"
@@ -517,16 +586,25 @@ int main(int argc, char *argv[])
             },
         });
 
-        ctx.menu = new MenuList(MenuItemType::List, "Main",
-        {
+        std::vector<AbstractMenuItem*> mainItems = {
             new MenuItem{ListItemType::Generic, "Appearance", "UI customization", {}, {}, nullptr, nullptr, DeferToSubmenu, appearanceMenu},
             new MenuItem{ListItemType::Generic, "Display", "", {}, {}, nullptr, nullptr, DeferToSubmenu, displayMenu},
             new MenuItem{ListItemType::Generic, "System", "", {}, {}, nullptr, nullptr, DeferToSubmenu, systemMenu},
-            new MenuItem{ListItemType::Generic, "FN switch", "FN switch settings", {}, {}, nullptr, nullptr, DeferToSubmenu, muteMenu},
-            new MenuItem{ListItemType::Generic, "Network", "", {}, {}, nullptr, nullptr, DeferToSubmenu, networkMenu},
-            new MenuItem{ListItemType::Generic, "Bluetooth", "", {}, {}, nullptr, nullptr, DeferToSubmenu, btMenu},
-            new MenuItem{ListItemType::Generic, "About", "", {}, {}, nullptr, nullptr, DeferToSubmenu, aboutMenu},
-        });
+        };
+        
+        if(deviceInfo.hasMuteToggle())
+            mainItems.push_back(new MenuItem{ListItemType::Generic, "FN switch", "FN switch settings", {}, {}, nullptr, nullptr, DeferToSubmenu, 
+                new MenuList(MenuItemType::Fixed, "FN Switch", muteItems)});
+        
+        if(deviceInfo.hasWifi())
+            mainItems.push_back(new MenuItem{ListItemType::Generic, "Network", "", {}, {}, nullptr, nullptr, DeferToSubmenu, new Wifi::Menu(appQuit, ctx.dirty)});
+        
+        if(deviceInfo.hasBluetooth())
+            mainItems.push_back(new MenuItem{ListItemType::Generic, "Bluetooth", "", {}, {}, nullptr, nullptr, DeferToSubmenu, new Bluetooth::Menu(appQuit, ctx.dirty)});
+
+        mainItems.push_back(new MenuItem{ListItemType::Generic, "About", "", {}, {}, nullptr, nullptr, DeferToSubmenu, aboutMenu});
+
+        ctx.menu = new MenuList(MenuItemType::List, "Main", mainItems);
 
         const bool showTitle = false;
         const bool showIndicator = true;

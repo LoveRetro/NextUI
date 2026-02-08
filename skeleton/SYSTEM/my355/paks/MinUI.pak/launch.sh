@@ -28,12 +28,6 @@ export IS_NEXT="yes"
 
 #######################################
 
-export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/miyoo/lib:$LD_LIBRARY_PATH
-export PATH=$SYSTEM_PATH/bin:/usr/miyoo/bin:/usr/miyoo/sbin:$PATH
-
-echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" > /mnt/SDCARD/librarypath.txt
-#######################################
-
 #headphone jack
 echo 150 > /sys/class/gpio/export
 echo -n in > /sys/class/gpio/gpio150/direction
@@ -50,12 +44,18 @@ echo 0 > /sys/class/miyooio_chr_dev/joy_type
 modetest -M rockchip -w 179:hue:60
 modetest -M rockchip -w 179:saturation:60
 
-#led
-echo 100 > /sys/class/leds/work/brightness
-
 # disable system-level lid handling
 mv /dev/input/event1 /dev/input/event1.disabled
 
+#######################################
+
+export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/miyoo/lib:$LD_LIBRARY_PATH
+export PATH=$SYSTEM_PATH/bin:/usr/miyoo/bin:/usr/miyoo/sbin:$PATH
+
+#led
+echo 100 > /sys/class/leds/work/brightness
+
+# start stock gpio input daemon
 mkdir -p /tmp/miyoo_inputd
 miyoo_inputd &
 
@@ -72,12 +72,20 @@ rm -f $USERDATA_PATH/.asoundrc
 audiomon.elf & # &> $SDCARD_PATH/audiomon.txt &
 
 # wifi handling
-/etc/init.d/S36load_wifi_modules start
-/etc/init.d/S40network start
-/etc/init.d/S41dhcpcd start
+wifion=$(nextval.elf wifi | sed -n 's/.*"wifi": \([0-9]*\).*/\1/p')
+if [ "$wifion" -eq 0 ]; then
+	$SYSTEM_PATH/etc/wifi/wifi_init.sh stop > /dev/null 2>&1 &
+else
+	$SYSTEM_PATH/etc/wifi/wifi_init.sh start > /dev/null 2>&1 &
+fi
 
-wpa_supplicant -B -i wlan0 -c /userdata/cfg/wpa_supplicant.conf
-dhcpcd wlan0
+# BT handling
+bluetoothon=$(nextval.elf bluetooth | sed -n 's/.*"bluetooth": \([0-9]*\).*/\1/p')
+if [ "$bluetoothon" -eq 0 ]; then
+	$SYSTEM_PATH/etc/bluetooth/bt_init.sh stop > /dev/null 2>&1 &
+else
+	$SYSTEM_PATH/etc/bluetooth/bt_init.sh start > /dev/null 2>&1 &
+fi
 
 #######################################
 

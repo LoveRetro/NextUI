@@ -3,9 +3,14 @@
 
 set -x
 
-if [ -f /usr/miyoo/bin/runmiyoo-original.sh ]; then
+TAKE_BACKUP=1
+if [ -f /usr/miyoo/bin/runmiyoo-original.sh ] && [ ! -f /mnt/SDCARD/force_hook_reinstall ]; then
 	echo "already installed"
 	exit 0
+elif [ -f /mnt/SDCARD/force_hook_reinstall ]; then
+	echo "force reinstall requested, proceeding with installation"
+	rm -f /mnt/SDCARD/force_hook_reinstall
+	TAKE_BACKUP=0
 fi
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,7 +20,9 @@ export LD_LIBRARY_PATH=/tmp/lib:$DIR/payload/lib:$LD_LIBRARY_PATH
 
 # For the "Loading" screen
 touch /tmp/fbdisplay_exit
-./show2.elf --mode=daemon --image="$DIR/res/logo.png" --text="Preparing environment..." --logoheight=128 --progress=-1 &
+cat /dev/zero > /dev/fb0
+
+show2.elf --mode=daemon --image="$DIR/res/logo.png" --text="Preparing environment..." --logoheight=80 --progress=-1 &
 echo "preparing environment"
 cd "$DIR"
 cp -r payload/* /tmp
@@ -34,7 +41,9 @@ unsquashfs old_rootfs.squashfs
 echo "TEXT:Injecting hook" > /tmp/show2.fifo
 echo "PROGRESS:60" > /tmp/show2.fifo
 echo "swapping runmiyoo.sh"
-mv squashfs-root/usr/miyoo/bin/runmiyoo.sh squashfs-root/usr/miyoo/bin/runmiyoo-original.sh
+if [ $TAKE_BACKUP -eq 1 ]; then
+	mv squashfs-root/usr/miyoo/bin/runmiyoo.sh squashfs-root/usr/miyoo/bin/runmiyoo-original.sh
+fi
 mv runmiyoo.sh squashfs-root/usr/miyoo/bin/
 
 echo "TEXT:Packing rootfs" > /tmp/show2.fifo
@@ -42,14 +51,13 @@ echo "PROGRESS:80" > /tmp/show2.fifo
 echo "packing updated rootfs"
 mksquashfs squashfs-root new_rootfs.squashfs -comp gzip -b 131072 -noappend -exports -all-root -force-uid 0 -force-gid 0
 
+echo "TEXT:Flashing rootfs" > /tmp/show2.fifo
+echo "flashing updated rootfs"
 # mount so reboot remains available
 mkdir -p /tmp/rootfs
 mount /tmp/new_rootfs.squashfs /tmp/rootfs
 export PATH=/tmp/rootfs/bin:/tmp/rootfs/usr/bin:/tmp/rootfs/sbin:$PATH
 export LD_LIBRARY_PATH=/tmp/rootfs/lib:/tmp/rootfs/usr/lib:$LD_LIBRARY_PATH
-
-echo "TEXT:Flashing rootfs" > /tmp/show2.fifo
-echo "flashing updated rootfs"
 flashcp new_rootfs.squashfs /dev/mtd3 && sync
 
 echo "TEXT:Rebooting" > /tmp/show2.fifo

@@ -1960,7 +1960,7 @@ void GFX_blitHardwareHints(SDL_Surface *dst, int show_setting)
 	else if (show_setting == 3)
 		GFX_blitButtonGroup((char *[]){BRIGHTNESS_BUTTON_LABEL, "COLOR TEMP", NULL}, 0, dst, 0);
 	else
-		GFX_blitButtonGroup((char *[]){"MNU", "BRGHT", "SEL", "CLTMP", NULL}, 0, dst, 0);
+		GFX_blitButtonGroup((char *[]){"MNU", "BRGHT", "SEL", "TEMP", NULL}, 0, dst, 0);
 }
 
 int GFX_blitButtonGroup(char **pairs, int primary, SDL_Surface *dst, int align_right)

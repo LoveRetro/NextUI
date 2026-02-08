@@ -22,7 +22,7 @@
 bool PLAT_hasWifi() { return true; }
 
 #define WIFI_INTERFACE "wlan0"
-#define WPA_CLI_CMD "wpa_cli -p /etc/wifi/sockets -i " WIFI_INTERFACE
+#define WPA_CLI_CMD "wpa_cli -p " WIFI_SOCK_DIR " -i " WIFI_INTERFACE
 
 #define wifilog(fmt, ...) \
     LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, fmt, ##__VA_ARGS__)

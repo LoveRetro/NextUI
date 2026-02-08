@@ -595,11 +595,11 @@ int scaleExposure(int value) {
 
 ///////// Platform specific, unscaled accessors
 
-#define DISP_LCD_SET_BRIGHTNESS  0x102
 void SetRawBrightness(int val) { // 0 - 255
 	printf("SetRawBrightness(%i)\n", val); fflush(stdout);
 	putInt("/sys/class/backlight/backlight/brightness", val);
 }
+
 void SetRawColortemp(int val) { // 0 - 255
 	printf("SetRawColortemp(%i)\n", val); fflush(stdout);
 
