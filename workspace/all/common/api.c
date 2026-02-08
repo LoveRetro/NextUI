@@ -3596,7 +3596,7 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 	if (
 		pwr.requested_sleep ||											   // hardware requested sleep
 		(screenOffDelay > 0 && now - last_input_at >= screenOffDelay) ||   // autosleep
-		(pwr.can_sleep && PAD_justReleased(BTN_SLEEP) && power_pressed_at) // manual sleep
+		(pwr.can_sleep && PAD_justReleased(BTN_SLEEP) && (power_pressed_at || !lid.is_open)) // manual sleep
 	)
 	{
 		pwr.requested_sleep = 0;
