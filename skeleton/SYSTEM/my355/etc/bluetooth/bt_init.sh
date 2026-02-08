@@ -42,6 +42,8 @@ start_bt() {
 		insmod /lib/modules/rtk_btusb.ko 2>/dev/null
 		sleep 0.5
 	fi
+	
+	rfkill.elf unblock bluetooth
 
 	if [ -d "/sys/class/bluetooth/hci0" ];then
 		echo "Bluetooth init has been completed!!"

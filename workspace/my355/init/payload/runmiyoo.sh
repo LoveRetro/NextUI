@@ -63,6 +63,11 @@ EOF
    fi
 
    mount --bind $USERDATA_DIR /userdata
+
+   # also fix bluetooth - we cant let it write to sdcard, it creates
+   # files by mac address, which arent legal file names on fat32
+   mkdir -p /run/bluetooth_fix
+   mount --bind /run/bluetooth_fix /userdata/bluetooth
 fi
 
 UPDATER_PATH=/mnt/SDCARD/.tmp_update/updater
