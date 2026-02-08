@@ -331,6 +331,10 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 			connection_info->link_speed = (int)atof(bitrate + 11);
 		}
 	}
+    else {
+        wifilog("iw command is not supported.");
+        connection_info->rssi = -60;
+    }
 
 	wifilog("Connected AP: %s\n", connection_info->ssid);
 	wifilog("IP address: %s\n", connection_info->ip);
