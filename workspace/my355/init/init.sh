@@ -22,7 +22,7 @@ export LD_LIBRARY_PATH=/tmp/lib:$DIR/payload/lib:$LD_LIBRARY_PATH
 touch /tmp/fbdisplay_exit
 cat /dev/zero > /dev/fb0
 
-show2.elf --mode=daemon --image="$DIR/res/logo.png" --text="Preparing environment..." --logoheight=80 --progress=-1 &
+show2.elf --mode=daemon --image="$DIR/res/logo.png" --text="Preparing environment..." --logoheight=80 &
 echo "preparing environment"
 cd "$DIR"
 cp -r payload/* /tmp

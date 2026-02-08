@@ -11,3 +11,8 @@ $(PLATFORM):
 	# extras
 	cp ./workspace/$@/other/NextCommander/output/NextCommander ./build/EXTRAS/Tools/$@/Files.pak/
 	cp -r ./workspace/$@/other/NextCommander/res ./build/EXTRAS/Tools/$@/Files.pak/
+	
+	mkdir -p ./build/EXTRAS/Tools/$@/Bootlogo.pak/payload/bin/
+	cp ./workspace/$@/other/mkbootimg/mkbootimg ./build/EXTRAS/Tools/$@/Bootlogo.pak/payload/bin/
+	cp ./workspace/$@/other/mkbootimg/unpackbootimg ./build/EXTRAS/Tools/$@/Bootlogo.pak/payload/bin/
+	cp ./workspace/$@/other/rsce-go/rsce_tool ./build/EXTRAS/Tools/$@/Bootlogo.pak/payload/bin/
