@@ -2747,7 +2747,7 @@ static struct Config {
 			},
 			[SH_SHADERS_PRESET] = {
 				.key	= "minarch_shaders_preset", 
-				.name	= "Shader / Emulator Settings Preset",
+				.name	= "Shader Preset",
 				.desc	= "Load a premade shaders/emulators config.\nTo try out a preset, exit the game without saving settings!",
 				.default_value = 1,
 				.value = 1,
