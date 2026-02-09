@@ -18,7 +18,7 @@ REQUIRES_FILEMGR=other/NextCommander
 all: readmes
 	cd other/squashfs && make
 
-early: $(REQUIRES_EVTEST) $(REQUIRES_MKBOOTIMG) $(REQUIRES_RSCEGO) $(REQUIRES_COMMANDER)
+early: $(REQUIRES_EVTEST) $(REQUIRES_MKBOOTIMG) $(REQUIRES_RSCEGO) $(REQUIRES_FILEMGR)
 	mkdir -p other
 	cd $(REQUIRES_FILEMGR) && make -j
 	cd $(REQUIRES_EVTEST) && $(CROSS_COMPILE)gcc -o evtest evtest.c
