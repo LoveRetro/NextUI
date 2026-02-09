@@ -465,9 +465,9 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 	uint64_t total_bc = 0;
 	uint32_t colorful_pixel_count = 0;
 
-	for (unsigned y = 0; y < height; y++)
+	for (unsigned y = 0; y < height; y+=8)
 	{
-		for (unsigned x = 0; x < width; x++)
+		for (unsigned x = 0; x < width; x+=8)
 		{
 			uint16_t pixel = pixels[y * (pitch / 2) + x];
 
@@ -511,11 +511,26 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 	  pixel_count = colorful_pixel_count;
 	}
 
-	uint8_t avg_r = total_r / pixel_count;
-	uint8_t avg_g = total_g / pixel_count;
-	uint8_t avg_b = total_b / pixel_count;
+	uint8_t ambient_r = total_r / pixel_count;
+	uint8_t ambient_g = total_g / pixel_count;
+	uint8_t ambient_b = total_b / pixel_count;
 
-	return (avg_r << 16) | (avg_g << 8) | avg_b;
+	// keep track of last invocation's values
+	// in order to blend them
+	static uint16_t amb_prev_r = 0;
+	static uint16_t amb_prev_g = 0;
+	static uint16_t amb_prev_b = 0;
+	
+	uint32_t average_color = (((amb_prev_r + ambient_r) / 2) << 16) |
+	  (((amb_prev_g + ambient_g) / 2) << 8) |
+	  ((amb_prev_b + ambient_b) / 2);
+
+	amb_prev_r = ambient_r;
+	amb_prev_g = ambient_g;
+	amb_prev_b = ambient_b;
+
+	//uint32_t retval = 
+	return average_color;
 }
 
 void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch, int mode)
