@@ -479,8 +479,14 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 			g |= g >> 6;
 			b |= b >> 5;
 
-			uint8_t max_c = fmaxf(fmaxf(r, g), b);
-			uint8_t min_c = fminf(fminf(r, g), b);
+			// max_c = max(max(r, g), b)
+			uint8_t max_c = r > g ? r : g;
+			max_c = max_c > b ? max_c : b;
+
+			// min_c = min(min(r, g), b)
+			uint8_t min_c = r < g ? r : g;
+			min_c = min_c < b ? min_c : b;
+			
 			uint8_t saturation = max_c == 0 ? 0 : (max_c - min_c) * 255 / max_c;
 
 			total_r += r;
