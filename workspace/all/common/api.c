@@ -2951,6 +2951,13 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 				btn = BTN_POWEROFF;
 				id = BTN_ID_POWEROFF;
 			} // nano-only
+
+			// Filter: ignore spurious +/- events that arrive immediately after resume. (mainly a miyoo flip issue)
+			#define RESUME_IGNORE_MS 250
+			if ((id == BTN_ID_PLUS || id == BTN_ID_MINUS) && pwr.resume_tick && (tick - pwr.resume_tick < RESUME_IGNORE_MS)) {
+				//OG_info("ignoring spurious +/- press after resume (id=%d delta=%u)", id, tick - pwr.resume_tick);
+				btn = BTN_NONE; // drop this event
+			}
 		}
 		else if (event.type == SDL_JOYBUTTONDOWN || event.type == SDL_JOYBUTTONUP)
 		{
