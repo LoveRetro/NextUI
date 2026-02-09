@@ -3788,7 +3788,7 @@ static void PWR_exitSleep(void)
 	LOG_info("Reinitialize audio after sleep\n");
 	SND_resetAudio(snd.sample_rate_in, snd.frame_rate);
 
-	sync();
+	sync(); // why?
 }
 
 static void PWR_waitForWake(void)

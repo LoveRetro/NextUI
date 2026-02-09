@@ -144,18 +144,17 @@ int main (int argc, char *argv[]) {
 			switch (ev.code) {
 				case CODE_MENU:
 					menu_pressed = val;
-				break;
-				break;
+					break;
 				case CODE_PLUS:
 					up_pressed = up_just_pressed = val;
 					if (val) up_repeat_at = now + 300;
-				break;
+					break;
 				case CODE_MINUS:
 					down_pressed = down_just_pressed = val;
 					if (val) down_repeat_at = now + 300;
-				break;
+					break;
 				default:
-				break;
+					break;
 			}
 		}
 		

@@ -381,7 +381,7 @@ void *PLAT_cpu_monitor(void *arg) {
 }
 
 
-#define GOVERNOR_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
+#define GOVERNOR_PATH "/sys/devices/system/cpu/cpufreq/policy0/scaling_setspeed"
 void PLAT_setCustomCPUSpeed(int speed) {
     FILE *fp = fopen(GOVERNOR_PATH, "w");
     if (fp == NULL) {
@@ -445,43 +445,6 @@ ConnectionStrength PLAT_connectionStrength(void) {
 		return SIGNAL_STRENGTH_LOW;
 }
 
-void PLAT_initDefaultLeds() {
-
-}
-void PLAT_initLeds(LightSettings *lights) {
-
-}
-
-#define LED_PATH1 "/sys/class/led_anim/max_scale"
-#define LED_PATH2 "/sys/class/led_anim/max_scale_lr"
-#define LED_PATH3 "/sys/class/led_anim/max_scale_f1f2"
-
-void PLAT_setLedInbrightness(LightSettings *led)
-{
-
-}
-void PLAT_setLedBrightness(LightSettings *led)
-{
-
-}
-void PLAT_setLedEffect(LightSettings *led)
-{
-
-}
-void PLAT_setLedEffectCycles(LightSettings *led)
-{
-
-
-}
-void PLAT_setLedEffectSpeed(LightSettings *led)
-{
-
-}
-void PLAT_setLedColor(LightSettings *led)
-{
-
-}
-
 //////////////////////////////////////////////
 
 int PLAT_setDateTime(int y, int m, int d, int h, int i, int s) {
@@ -490,7 +453,6 @@ int PLAT_setDateTime(int y, int m, int d, int h, int i, int s) {
 	system(cmd);
 	return 0; // why does this return an int?
 }
-
 
 #define MAX_LINE_LENGTH 200
 #define ZONE_PATH "/usr/share/zoneinfo"

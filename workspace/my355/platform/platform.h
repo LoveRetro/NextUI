@@ -5,7 +5,9 @@
 
 ///////////////////////////////
 
-#include "sdl.h"
+#ifdef SDL
+#	include "sdl.h"
+#endif
 
 ///////////////////////////////
 #define	BUTTON_UP		BUTTON_NA
