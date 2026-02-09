@@ -20,7 +20,6 @@
 #include "utils.h"
 #include <stdlib.h>
 #include <pthread.h>
-#include <dirent.h>
 #include <stdint.h>
 
 #if defined(__has_feature)
