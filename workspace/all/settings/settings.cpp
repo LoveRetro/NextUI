@@ -649,7 +649,7 @@ int main(int argc, char *argv[])
         std::string bbver = extractBusyBoxVersion(execCommand("cat --help"));
         if (bbver.empty())
             bbver = "BusyBox version not found.";
-        else if(bbver.find(BUSYBOX_STOCK_VERSION) == std::string::npos)
+        else if(bbver.find(BUSYBOX_STOCK_VERSION) == std::string::npos && (exactMatch("smartpro", device) || exactMatch("brick", device)))
             ctx.menu->showOverlay(
                 "Stock OS changes detected.\n"
                 "This may cause instability or issues.\n"
