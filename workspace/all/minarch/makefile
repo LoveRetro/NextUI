@@ -22,7 +22,7 @@ SDL?=SDL
 TARGET = minarch
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 INCDIR = -I. -I./libretro-common/include/ -I../common/ -I../../$(PLATFORM)/platform/
-SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../common/notification.c http.c ../../$(PLATFORM)/platform/platform.c
+SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../common/notification.c ../common/http.c ../../$(PLATFORM)/platform/platform.c
 
 # RA support for tg5040, tg5050, and desktop
 ifneq (,$(filter $(PLATFORM),tg5040 tg5050 desktop))

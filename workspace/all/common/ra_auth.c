@@ -1,5 +1,5 @@
 #include "ra_auth.h"
-#include "../minarch/http.h"
+#include "http.h"
 #include "defines.h"
 
 #include <stdio.h>
