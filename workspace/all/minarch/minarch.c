@@ -6147,12 +6147,14 @@ static struct {
 	int slot;
 	int save_exists;
 	int preview_exists;
+	time_t save_mtime;
 } menu = {
 	.bitmap = NULL,
 	.disc = -1,
 	.total_discs = 0,
 	.save_exists = 0,
 	.preview_exists = 0,
+	.save_mtime = 0,
 	
 	.items = {
 		[ITEM_CONT] = "Continue",
@@ -7628,6 +7630,7 @@ static void Menu_initState(void) {
 	
 	menu.save_exists = 0;
 	menu.preview_exists = 0;
+	menu.save_mtime = 0;
 }
 static void Menu_updateState(void) {
 	// LOG_info("Menu_updateState\n");
@@ -7646,9 +7649,24 @@ static void Menu_updateState(void) {
 	
 	menu.save_exists = exists(save_path);
 	menu.preview_exists = menu.save_exists && exists(menu.bmp_path);
+	menu.save_mtime = 0;
+	if (menu.save_exists) {
+		time_t mtime = 0;
+		if (getFileMTime(save_path, &mtime)) {
+			menu.save_mtime = mtime;
+		}
+	}
 
 	// LOG_info("save_path: %s (%i)\n", save_path, menu.save_exists);
 	// LOG_info("bmp_path: %s txt_path: %s (%i)\n", menu.bmp_path, menu.txt_path, menu.preview_exists);
+}
+
+static int Menu_formatSaveTime(char *out, size_t out_size, time_t when) {
+	if (!out || out_size == 0 || when == 0) return 0;
+	struct tm tm = *localtime(&when);
+	if (CFG_getClock24H())
+		return strftime(out, out_size, "%Y-%m-%d %H:%M", &tm) > 0;
+	return strftime(out, out_size, "%Y-%m-%d %-I:%M %p", &tm) > 0;
 }
 
 typedef struct {
@@ -8070,6 +8088,31 @@ static void Menu_loop(void) {
 					else GFX_blitMessage(font.large, "Empty Slot", screen, &preview_rect);
 				}
 				
+				// save time overlay
+				if (menu.save_exists && menu.save_mtime) {
+					char save_time[32];
+					if (Menu_formatSaveTime(save_time, sizeof(save_time), menu.save_mtime)) {
+						int tw = 0;
+						int th = 0;
+						TTF_SizeUTF8(font.tiny, save_time, &tw, &th);
+						int pad_x = SCALE1(6);
+						int pad_y = SCALE1(4);
+						int pill_h = SCALE1(PILL_SIZE);
+						int pill_w = tw + pad_x * 2;
+						if (pill_w < pill_h) pill_w = pill_h;
+						int tx = ox + SCALE1(6);
+						int ty = oy + hh - pill_h - SCALE1(6);
+						GFX_blitPillLight(ASSET_WHITE_PILL, screen, &(SDL_Rect){tx, ty, pill_w, pill_h});
+						SDL_Surface* time_text = TTF_RenderUTF8_Blended(font.tiny, save_time, uintToColour(THEME_COLOR1_255));
+						if (time_text) {
+							SDL_BlitSurface(time_text, NULL, screen, &(SDL_Rect){
+								tx + (pill_w - time_text->w) / 2,
+								ty + (pill_h - time_text->h) / 2
+							});
+							SDL_FreeSurface(time_text);
+						}
+					}
+				}
 				// pagination
 				ox += (pw-SCALE1(15*MENU_SLOT_COUNT))/2;
 				oy += hh+SCALE1(WINDOW_RADIUS);
