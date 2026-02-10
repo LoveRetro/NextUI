@@ -201,7 +201,7 @@ void PLAT_getNetworkStatus(int* is_online)
 void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
 {
 	if(is_charging) {
-		int time_to_full = getInt("/sys/class/power_supply/axp2202-battery/time_to_full_now");
+		int time_to_full = getInt("/sys/class/power_supply/battery/time_to_full_now");
 		int charger_present = getInt("/sys/class/power_supply/ac/online"); 
 		*is_charging = (charger_present == 1) && (time_to_full > 0);
 	}
