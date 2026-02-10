@@ -5928,11 +5928,6 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 		}
 	}
 
-	// Set ambient lighting color (if enabled)
-	if (ambient_mode && !fast_forward && data) {
-		GFX_setAmbientColor(data, width, height, pitch, ambient_mode);
-	}
-
 	// Handle NULL data by reusing last frame
 	if (!data) {
 		data = lastframe;
@@ -5949,6 +5944,12 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 		lastframe = data;
 	}
 	pitch = width * sizeof(Uint32);
+
+	// Set ambient lighting color (if enabled)
+	if (ambient_mode && !fast_forward && data) {
+		GFX_setAmbientColor(data, width, height, pitch, ambient_mode);
+	}
+
 
 	// Render the frame
 	video_refresh_callback_main(data, width, height, pitch);

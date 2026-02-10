@@ -454,7 +454,7 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 		return 0;
 	}
 
-	const uint16_t *pixels = (const uint16_t *)data;
+	const uint32_t *pixels = (const uint32_t *)data;
 	int pixel_count = 0;
 
 	uint64_t total_r = 0;
@@ -469,15 +469,11 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 	{
 		for (unsigned x = 0; x < width; x+=8)
 		{
-			uint16_t pixel = pixels[y * (pitch / 2) + x];
+			uint32_t pixel = pixels[y * (pitch / 4) + x];
 
-			uint8_t r = ((pixel & 0xF800) >> 11) << 3;
-			uint8_t g = ((pixel & 0x07E0) >> 5) << 2;
-			uint8_t b = (pixel & 0x001F) << 3;
-
-			r |= r >> 5;
-			g |= g >> 6;
-			b |= b >> 5;
+			uint8_t r =  pixel        & 0xFF;
+			uint8_t g = (pixel >> 8)  & 0xFF;
+			uint8_t b = (pixel >> 16) & 0xFF;
 
 			// max_c = max(max(r, g), b)
 			uint8_t max_c = r > g ? r : g;
