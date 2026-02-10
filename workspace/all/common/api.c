@@ -465,9 +465,11 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 	uint64_t total_bc = 0;
 	uint32_t colorful_pixel_count = 0;
 
-	for (unsigned y = 0; y < height; y+=8)
+	// Downsample 7x7 instead of 8x8 to de-emphasize effect of
+	// repeated scrolling tiles (intentionally interfere with patterns)
+	for (unsigned y = 0; y < height; y+=7)
 	{
-		for (unsigned x = 0; x < width; x+=8)
+		for (unsigned x = 0; x < width; x+=7)
 		{
 			uint32_t pixel = pixels[y * (pitch / 4) + x];
 
