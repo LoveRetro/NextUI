@@ -117,11 +117,10 @@ while [ -f "$EXEC_PATH" ]; do
 
 	if [ -f "/tmp/poweroff" ]; then
 		shutdown
-		exit 0
 	fi
 	if [ -f "/tmp/reboot" ]; then
 		reboot
-		exit 0
+		sleep 60
 	fi
 done
 

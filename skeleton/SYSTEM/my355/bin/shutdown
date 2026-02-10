@@ -6,7 +6,3 @@ poweroff
 while :; do
 	sleep 5
 done
-
-# echo s > /proc/sysrq-trigger
-# echo u > /proc/sysrq-trigger
-# echo o > /proc/sysrq-trigger
