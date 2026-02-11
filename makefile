@@ -201,6 +201,9 @@ setup: name
 	cd ./build && find . -type f -name '*.meta' -delete
 	echo $(BUILD_HASH) > ./workspace/hash.txt
 
+	# dont ship desktop as a platform in the release, it's just for testing
+	cd ./build && find . -type d -name 'desktop' -exec rm -rf {} +
+
 	# copy readmes to workspace so we can use Linux fmt instead of host's
 	mkdir -p ./workspace/readmes
 	cp ./skeleton/BASE/README.txt ./workspace/readmes/BASE-in.txt
