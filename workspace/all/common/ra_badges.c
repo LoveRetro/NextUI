@@ -27,6 +27,7 @@
 #define MAX_CACHED_BADGES 256
 #define MAX_CONCURRENT_DOWNLOADS 8
 #define MAX_QUEUED_DOWNLOADS 512
+#define NOTIFICATION_TIMEOUT_MS 15000
 
 /*****************************************************************************
  * Badge cache entry
@@ -58,6 +59,7 @@ static int badge_cache_count = 0;
 static SDL_mutex* badge_mutex = NULL;
 static int pending_downloads = 0;
 static bool initialized = false;
+static uint32_t notification_start_time = 0;
 
 // Download queue for rate limiting
 typedef struct {
@@ -302,8 +304,13 @@ static void badge_download_callback(HTTP_Response* response, void* userdata) {
 	// Start next queued download(s)
 	process_download_queue();
 	
-	// Hide progress indicator when all downloads complete
+	// Check if we should hide the notification
+	// Hide when all downloads complete, or when notification timeout is reached
+	uint32_t elapsed = SDL_GetTicks() - notification_start_time;
 	if (pending_downloads == 0 && download_queue.count == 0) {
+		Notification_hideProgressIndicator();
+	} else if (elapsed >= NOTIFICATION_TIMEOUT_MS) {
+		// Force hide after notification timeout elapses, even if downloads aren't complete
 		Notification_hideProgressIndicator();
 	}
 	
@@ -411,6 +418,7 @@ void RA_Badges_prefetch(const char** badge_names, size_t count) {
 	if (download_queue.count > 0) {
 		Notification_setProgressIndicatorPersistent(true);
 		Notification_showProgressIndicator("Loading achievement badges...", "", NULL);
+		notification_start_time = SDL_GetTicks();
 		
 		// Start processing the queue (up to MAX_CONCURRENT_DOWNLOADS)
 		process_download_queue();
