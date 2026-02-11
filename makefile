@@ -127,7 +127,7 @@ ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))
 
 ifneq (,$(filter $(PLATFORM), my355))
 	# liblz4 for Rewind support
-	cp -L ./workspace/all/minarch/build/$(PLATFORM)/liblz4.so ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/liblz4.so ./build/SYSTEM/$(PLATFORM)/lib/
 endif
 
 ifeq ($(PLATFORM), my355)
@@ -198,6 +198,7 @@ setup: name
 
 	# remove authoring detritus
 	cd ./build && find . -type f -name '.keep' -delete
+	cd ./build && find . -type f -name '.gitkeep' -delete
 	cd ./build && find . -type f -name '*.meta' -delete
 	echo $(BUILD_HASH) > ./workspace/hash.txt
 
@@ -215,7 +216,9 @@ special:
 	mv ./build/BOOT/miyoo ./build/BASE/
 	mv ./build/BOOT/trimui ./build/BASE/
 	cp -R ./build/BOOT/.tmp_update ./build/BASE/miyoo/app/
+	rm -rf ./build/BASE/miyoo/app/.tmp_update/tg*
 	cp -R ./build/BOOT/.tmp_update ./build/BASE/trimui/app/
+	rm -rf ./build/BASE/trimui/app/.tmp_update/my355*
 	cp -R ./build/BASE/miyoo ./build/BASE/miyoo355
 ifneq (,$(findstring my355, $(PLATFORMS)))
 	cp -R ./workspace/my355/init ./build/BASE/miyoo355/app/my355
