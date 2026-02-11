@@ -12,7 +12,9 @@ log() {
 fix_sleep_sound_bug() {
     # turn it off and on againt
     val=$(amixer cget numid=2 | awk -F'values=' '/: values/{print $2}')
+    # This equals amixer sset 'Playback Path' 'OFF' 
     amixer cset numid=2 0
+    # This equals amixer sset 'Playback Path' 'HP'/'SPK'
     amixer cset numid=2 $val
 }
 
@@ -38,7 +40,7 @@ after() {
     echo 100 > /sys/class/leds/work/brightness
 
     log "Restoring sound"
-    fix_sleep_sound_bug
+    # fix_sleep_sound_bug
 
     # TODO bluetooth
     # TODO wifi

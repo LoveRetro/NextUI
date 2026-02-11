@@ -24,14 +24,6 @@ ALL
 
 Preload the "Bios" and "Roms" folders then copy both to the root of your primary card.
 
-MAGICX MINI ZERO 28
-
-NextUI is meant to be used with Moss installed on the SD card that goes into the left slot (labeled TF1/INT). Download and flash the latest version:
-
-	https://github.com/shauninman/Moss-zero28/releases
-
-Copy the "magicx" folder and "MinUI.zip" (without unzipping) to the root of the SD card that goes into the right slot (labeled TF2/EXT).
-
 TRIMUI SMART PRO / TRIMUI BRICK
 
 Copy the "trimui" folder and "MinUI.zip" (without unzipping) to the root of the SD card.
