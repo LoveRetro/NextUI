@@ -117,24 +117,24 @@ ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))
 	cp ./workspace/all/bootlogo/build/$(PLATFORM)/bootlogo.elf ./build/EXTRAS/Tools/$(PLATFORM)/Bootlogo.pak/
 
 	# Audio resampling
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libsamplerate.so ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libsamplerate.* ./build/SYSTEM/$(PLATFORM)/lib/
 
 	# ROM decompression and SRM support
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libzip.so ./build/SYSTEM/$(PLATFORM)/lib/
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libbz2.so ./build/SYSTEM/$(PLATFORM)/lib/
-	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.so ./build/SYSTEM/$(PLATFORM)/lib/
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.so ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libzip.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libbz2.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.so.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 
 ifneq (,$(filter $(PLATFORM), my355))
 	# liblz4 for Rewind support
-	cp ./workspace/all/minarch/build/$(PLATFORM)/liblz4.so ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/liblz4.* ./build/SYSTEM/$(PLATFORM)/lib/
 endif
 
 ifeq ($(PLATFORM), my355)
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libcrypto.so ./build/SYSTEM/$(PLATFORM)/lib/
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libtinyalsa.so ./build/SYSTEM/$(PLATFORM)/lib/
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libsqlite3.so ./build/SYSTEM/$(PLATFORM)/lib/
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libffi.so ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libcrypto.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libtinyalsa.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libsqlite3.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libffi.* ./build/SYSTEM/$(PLATFORM)/lib/
 endif
 endif
 

@@ -87,17 +87,17 @@ all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
 ifeq ($(PLATFORM), my355)
-	cp $(PREFIX)/lib/libcrypto.so build/$(PLATFORM)
-	cp $(PREFIX)/lib/libsqlite3.so build/$(PLATFORM)
-	cp $(PREFIX)/lib/libffi.so build/$(PLATFORM)
-	cp $(PREFIX)/lib/libtinyalsa.so build/$(PLATFORM)
+	cp $(PREFIX)/lib/libcrypto.so.3 build/$(PLATFORM)
+	cp $(PREFIX)/lib/libsqlite3.so.0 build/$(PLATFORM)
+	cp $(PREFIX)/lib/libffi.so.7 build/$(PLATFORM)
+	cp $(PREFIX)/lib/libtinyalsa.so.2 build/$(PLATFORM)
 endif
-	cp $(PREFIX)/lib/libsamplerate.so build/$(PLATFORM)
-	cp $(PREFIX)/lib/libzip.so build/$(PLATFORM)
-	cp $(PREFIX)/lib/libbz2.so build/$(PLATFORM)
-	cp $(PREFIX)/lib/liblzma.so build/$(PLATFORM)
-	cp $(PREFIX)/lib/libzstd.so build/$(PLATFORM)
-	cp $(PREFIX)/lib/liblz4.so build/$(PLATFORM)
+	cp $(PREFIX)/lib/libsamplerate.so.0 build/$(PLATFORM)
+	cp $(PREFIX)/lib/libzip.so.5 build/$(PLATFORM)
+	cp $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
+	cp $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
+	cp $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
+	cp $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
 
