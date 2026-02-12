@@ -18,7 +18,7 @@ endif
 ###########################################################
 
 BUILD_HASH:=$(shell git rev-parse --short HEAD)
-BUILD_BRANCH:=$(shell git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD)
+BUILD_BRANCH:=$(shell (git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD) | sed 's/\//-/g')
 RELEASE_TIME:=$(shell TZ=GMT date +%Y%m%d)
 ifeq ($(BUILD_BRANCH),main)
   RELEASE_BETA :=
@@ -103,7 +103,6 @@ endif
 	cp ./workspace/all/clock/build/$(PLATFORM)/clock.elf ./build/EXTRAS/Tools/$(PLATFORM)/Clock.pak/
 	cp ./workspace/all/minput/build/$(PLATFORM)/minput.elf ./build/EXTRAS/Tools/$(PLATFORM)/Input.pak/
 	cp ./workspace/all/settings/build/$(PLATFORM)/settings.elf ./build/EXTRAS/Tools/$(PLATFORM)/Settings.pak/
-
 ifneq (,$(filter $(PLATFORM),tg5040 tg5050))
 	cp ./workspace/all/ledcontrol/build/$(PLATFORM)/ledcontrol.elf ./build/EXTRAS/Tools/$(PLATFORM)/LedControl.pak/
 	cp ./workspace/all/bootlogo/build/$(PLATFORM)/bootlogo.elf ./build/EXTRAS/Tools/$(PLATFORM)/Bootlogo.pak/
@@ -119,6 +118,9 @@ endif
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libbz2.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.* ./build/SYSTEM/$(PLATFORM)/lib/
+
+	# libchdr for RetroAchievements CHD hashing (use -L to dereference symlinks)
+	cp -L ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.0 ./build/SYSTEM/$(PLATFORM)/lib/
 
 ifeq ($(PLATFORM), tg5040)
 	# liblz4 for Rewind support
