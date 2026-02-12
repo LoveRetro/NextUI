@@ -524,7 +524,7 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 
 void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch, int mode)
 {
-	if (mode == 0)
+	if (MAX_LIGHTS <= 0 || mode == 0)
 		return;
 
 	uint32_t dominant_color = GFX_extract_average_color(data, width, height, pitch);
