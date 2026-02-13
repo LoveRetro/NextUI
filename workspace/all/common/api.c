@@ -460,9 +460,9 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 	uint64_t total_r = 0;
 	uint64_t total_g = 0;
 	uint64_t total_b = 0;
-	uint64_t total_rc = 0;
-	uint64_t total_gc = 0;
-	uint64_t total_bc = 0;
+	uint64_t total_rcolor = 0;
+	uint64_t total_gcolor = 0;
+	uint64_t total_bcolor = 0;
 	uint32_t colorful_pixel_count = 0;
 
 	// Downsample 7x7 instead of 8x8 to de-emphasize effect of
@@ -473,6 +473,7 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 		{
 			uint32_t pixel = pixels[y * (pitch / 4) + x];
 
+			// input pixel format: AABBGGRR
 			uint8_t r =  pixel        & 0xFF;
 			uint8_t g = (pixel >> 8)  & 0xFF;
 			uint8_t b = (pixel >> 16) & 0xFF;
@@ -484,7 +485,7 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 			// min_c = min(min(r, g), b)
 			uint8_t min_c = r < g ? r : g;
 			min_c = min_c < b ? min_c : b;
-			
+
 			uint8_t saturation = max_c == 0 ? 0 : (max_c - min_c) * 255 / max_c;
 
 			total_r += r;
@@ -493,9 +494,9 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 			pixel_count++;
 			if (saturation > 50 && max_c > 50)
 			{
-				total_rc += r;
-				total_gc += g;
-				total_bc += b;
+				total_rcolor += r;
+				total_gcolor += g;
+				total_bcolor += b;
 				colorful_pixel_count++;
 			}
 		}
@@ -503,10 +504,10 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 
 	if (colorful_pixel_count > 0)
 	{
-	  total_r = total_rc;
-	  total_g = total_gc;
-	  total_b = total_bc;
-	  pixel_count = colorful_pixel_count;
+		total_r = total_rcolor;
+		total_g = total_gcolor;
+		total_b = total_bcolor;
+		pixel_count = colorful_pixel_count;
 	}
 
 	uint8_t ambient_r = total_r / pixel_count;
@@ -518,16 +519,15 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 	static uint16_t amb_prev_r = 0;
 	static uint16_t amb_prev_g = 0;
 	static uint16_t amb_prev_b = 0;
-	
+
 	uint32_t average_color = (((amb_prev_r + ambient_r) / 2) << 16) |
-	  (((amb_prev_g + ambient_g) / 2) << 8) |
-	  ((amb_prev_b + ambient_b) / 2);
+		(((amb_prev_g + ambient_g) / 2) << 8) |
+		((amb_prev_b + ambient_b) / 2);
 
 	amb_prev_r = ambient_r;
 	amb_prev_g = ambient_g;
 	amb_prev_b = ambient_b;
 
-	//uint32_t retval = 
 	return average_color;
 }
 
