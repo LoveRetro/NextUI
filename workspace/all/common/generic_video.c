@@ -20,6 +20,7 @@
 #include "utils.h"
 #include <stdlib.h>
 #include <pthread.h>
+#include <stdint.h>
 
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)
@@ -106,6 +107,32 @@ static uint32_t SDL_transparentBlack = 0;
 #define OVERLAYS_FOLDER SDCARD_PATH "/Overlays"
 
 static char* overlay_path = NULL;
+
+// Notification overlay state for RA achievements
+typedef struct {
+    SDL_Surface* surface;
+    int x;
+    int y;
+    int dirty;
+    GLuint tex;
+    int tex_w, tex_h;
+    int clear_frames;  // Frames to clear framebuffer after notification ends
+} NotificationOverlay;
+
+static NotificationOverlay notif = {0};
+
+void PLAT_setNotificationSurface(SDL_Surface* surface, int x, int y) {
+    notif.surface = surface;
+    notif.x = x;
+    notif.y = y;
+    notif.dirty = 1;
+}
+
+void PLAT_clearNotificationSurface(void) {
+    notif.surface = NULL;
+    notif.dirty = 0;  // Nothing to update since surface is NULL
+    notif.clear_frames = 3;  // Clear for 3 frames (triple buffering safety)
+}
 
 
 #define MAX_SHADERLINE_LENGTH 512
@@ -427,6 +454,20 @@ void PLAT_initShaders() {
 	g_noshader = link_program(vertex, fragment,"noshader.glsl");
 	
 	LOG_info("default shaders loaded, %i\n\n",g_shader_default);
+}
+
+void PLAT_initNotificationTexture(void) {
+	// Pre-allocate notification texture to avoid frame skip on first notification
+	glGenTextures(1, &notif.tex);
+	glBindTexture(GL_TEXTURE_2D, notif.tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	// Allocate full-screen texture with transparent pixels
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, device_width, device_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	notif.tex_w = device_width;
+	notif.tex_h = device_height;
 }
 
 static void sdl_log_stdout(
@@ -1852,8 +1893,10 @@ void PLAT_GL_Swap() {
 
     static int lastframecount = 0;
     if (reloadShaderTextures) lastframecount = frame_count;
-    if (frame_count < lastframecount + 3)
+    if (frame_count < lastframecount + 3 || notif.clear_frames > 0) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (notif.clear_frames > 0) notif.clear_frames--;
+    }
 
     SDL_Rect dst_rect = {0, 0, device_width, device_height};
     setRectToAspectRatio(&dst_rect);
@@ -2094,6 +2137,24 @@ void PLAT_GL_Swap() {
             NULL,
             0, 0, device_width, device_height,
             &(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_h, .texw = overlay_w, .texh = overlay_h},
+            1, GL_NONE
+        );
+    }
+
+    // Render notification overlay if present (texture pre-allocated in PLAT_initShaders)
+    if (notif.dirty && notif.surface) {
+        glBindTexture(GL_TEXTURE_2D, notif.tex);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, notif.surface->w, notif.surface->h, GL_RGBA, GL_UNSIGNED_BYTE, notif.surface->pixels);
+        notif.dirty = 0;
+    }
+    
+    if (notif.tex && notif.surface) {
+        runShaderPass(
+            notif.tex,
+            g_shader_overlay,
+            NULL,
+            notif.x, notif.y, notif.tex_w, notif.tex_h,
+            &(Shader){.srcw = notif.tex_w, .srch = notif.tex_h, .texw = notif.tex_w, .texh = notif.tex_h},
             1, GL_NONE
         );
     }

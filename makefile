@@ -18,7 +18,7 @@ endif
 ###########################################################
 
 BUILD_HASH:=$(shell git rev-parse --short HEAD)
-BUILD_BRANCH:=$(shell git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD)
+BUILD_BRANCH:=$(shell (git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD) | sed 's/\//-/g')
 RELEASE_TIME:=$(shell TZ=GMT date +%Y%m%d)
 ifeq ($(BUILD_BRANCH),main)
   RELEASE_BETA :=
@@ -125,7 +125,10 @@ ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))
 	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 
-ifneq (,$(filter $(PLATFORM), my355))
+	# libchdr for RetroAchievements CHD hashing (use -L to dereference symlinks)
+	cp -L ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.0 ./build/SYSTEM/$(PLATFORM)/lib/
+
+ifeq ($(PLATFORM), tg5040)
 	# liblz4 for Rewind support
 	cp ./workspace/all/minarch/build/$(PLATFORM)/liblz4.* ./build/SYSTEM/$(PLATFORM)/lib/
 endif

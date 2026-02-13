@@ -262,6 +262,37 @@ public:
     const std::vector<std::string> getLabels() const override { return labels; }
 };
 
+// A menu item for text input that shows the current value and opens a keyboard when pressed.
+// The label getter is called each time to get the current display value.
+class TextInputMenuItem : public AbstractMenuItem
+{
+    MenuList* keyboardSubmenu;
+
+public:
+    TextInputMenuItem(const std::string &name, const std::string &desc,
+                     ValueGetCallback labelGetter, MenuListCallback on_confirm,
+                     MenuList *submenu)
+        : AbstractMenuItem(ListItemType::Generic, name, desc, labelGetter, nullptr, nullptr, on_confirm, submenu),
+          keyboardSubmenu(submenu) {}
+
+    const std::any getValue() const override {
+        // Return a dummy value so the rendering system shows the label
+        return std::string("");
+    }
+    
+    const std::string getLabel() const override {
+        if (on_get) {
+            auto val = on_get();
+            if (val.has_value()) {
+                return std::any_cast<std::string>(val);
+            }
+        }
+        return "";
+    }
+
+    InputReactionHint handleInput(int &dirty) override;
+};
+
 class MenuList
 {
 protected:

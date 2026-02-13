@@ -312,6 +312,7 @@ void GFX_scrollTextSurface(TTF_Font* font, const char* in_name, SDL_Surface** ou
 int GFX_getTextWidth(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
 int GFX_getTextHeight(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
 int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
+int GFX_blitWrappedText(TTF_Font* font, const char* text, int max_width, int max_lines, SDL_Color color, SDL_Surface* surface, int y); // returns new y position
 
 #define GFX_getScaler PLAT_getScaler		// scaler_t:(GFX_Renderer* renderer)
 #define GFX_blitRenderer PLAT_blitRenderer	// void:(GFX_Renderer* renderer)
@@ -352,6 +353,34 @@ void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_
 
 int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
 void GFX_blitHardwareHints(SDL_Surface* dst, int show_setting);
+
+typedef enum {
+	INDICATOR_BRIGHTNESS = 1,
+	INDICATOR_VOLUME = 2,
+	INDICATOR_COLORTEMP = 3,
+} IndicatorType;
+
+/**
+ * Render a hardware indicator (volume/brightness/colortemp) at a specific position.
+ * This is the reusable helper extracted from GFX_blitHardwareGroup for in-game use.
+ * @param dst The destination surface
+ * @param x X position for the indicator
+ * @param y Y position for the indicator  
+ * @param indicator_type Which indicator to display
+ * @return The width of the rendered indicator
+ */
+int GFX_blitHardwareIndicator(SDL_Surface* dst, int x, int y, IndicatorType indicator_type);
+
+/**
+ * Create a surface with the same pixel format as gfx.screen.
+ * This is needed when rendering theme-colored content that will later be
+ * converted to another format (e.g., RGBA for GL overlays).
+ * @param width Surface width
+ * @param height Surface height
+ * @return A new SDL_Surface, or NULL on failure. Caller must free with SDL_FreeSurface.
+ */
+SDL_Surface* GFX_createScreenFormatSurface(int width, int height);
+
 int GFX_blitButtonGroup(char** hints, int primary, SDL_Surface* dst, int align_right);
 
 void GFX_assetRect(int asset, SDL_Rect* dst_rect);
@@ -566,7 +595,6 @@ void PLAT_initPlatform(void); // *actual* platform-specific init
 
 FILE *PLAT_OpenSettings(const char *filename);
 FILE *PLAT_WriteSettings(const char *filename);
-char* PLAT_findFileInDir(const char *directory, const char *filename);
 void PLAT_initInput(void);
 void PLAT_updateInput(const SDL_Event *event);
 void PLAT_quitInput(void);
@@ -589,6 +617,11 @@ void PLAT_setOffsetY(int y);
 void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, float brightness, bool maintainAspectRatio,int layer);
 void PLAT_clearLayers(int layer);
 SDL_Surface* PLAT_captureRendererToSurface();
+
+// Notification overlay for GL rendering (rendered on top of game during PLAT_GL_Swap)
+void PLAT_setNotificationSurface(SDL_Surface* surface, int x, int y);
+void PLAT_clearNotificationSurface(void);
+
 void PLAT_animateSurface(
 	SDL_Surface *inputSurface,
 	int x, int y,
@@ -632,6 +665,7 @@ void PLAT_resetShaders();
 void PLAT_clearShaders();
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *inputtype);
 void PLAT_initShaders();
+void PLAT_initNotificationTexture(void);
 ShaderParam* PLAT_getShaderPragmas(int i);
 int PLAT_supportsOverscan(void);
 

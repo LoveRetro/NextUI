@@ -22,7 +22,17 @@ SDL?=SDL
 TARGET = minarch
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 INCDIR = -I. -I./libretro-common/include/ -I../common/ -I../../$(PLATFORM)/platform/
-SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
+SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../common/notification.c ../common/http.c ../../$(PLATFORM)/platform/platform.c
+
+# RA support
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355 desktop))
+# rcheevos include paths
+INCDIR += -I../rcheevos/src/include -I../rcheevos/src/src
+# libchdr include path (for CHD disc image support)
+INCDIR += -I../libchdr/include
+# RA source files
+SOURCE += ../common/ra_badges.c ra_integration.c chd_reader.c
+endif
 
 CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(OPT)
@@ -58,6 +68,17 @@ LDFLAGS +=  -lasound
 endif
 endif
 
+# RA support: rcheevos and libchdr linking
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355 desktop))
+LDFLAGS += -L../rcheevos/build/$(PLATFORM) -lrcheevos
+LDFLAGS += -L../libchdr/build/$(PLATFORM) -lchdr
+CFLAGS += -DRC_CLIENT_SUPPORTS_HASH
+ifeq ($(PLATFORM), desktop)
+# Desktop needs rpath for local shared library lookup
+LDFLAGS += -Wl,-rpath,'$$ORIGIN'
+endif
+endif
+
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 
 ifeq ($(PLATFORM), desktop)
@@ -79,7 +100,7 @@ BUILD_HASH!=cat ../../hash.txt
 CFLAGS += -DBUILD_DATE=\"${BUILD_DATE}\" -DBUILD_HASH=\"${BUILD_HASH}\"
 
 ifeq ($(PLATFORM), desktop)
-all: clean libretro-common $(PREFIX_LOCAL)/include/msettings.h
+all: clean libretro-common rcheevos-desktop libchdr-desktop $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 else
@@ -98,12 +119,32 @@ endif
 	cp $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
 	cp $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
 	cp $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
+  cp ../libchdr/build/$(PLATFORM)/libchdr.so.0.2 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
 
 libretro-common:
 	git clone https://github.com/libretro/libretro-common
 
+rcheevos:
+	cd ../rcheevos && make build PLATFORM=$(PLATFORM)
+
+# Desktop rcheevos build - uses native gcc instead of cross-compiler
+rcheevos-desktop:
+	cd ../rcheevos && make build PLATFORM=desktop
+
+../libchdr/CMakeLists.txt:
+	rm -rf ../libchdr
+	git clone https://github.com/rtissera/libchdr ../libchdr
+	cp libchdr.makefile ../libchdr/makefile
+
+libchdr: ../libchdr/CMakeLists.txt
+	cd ../libchdr && make build PLATFORM=$(PLATFORM)
+
+# Desktop libchdr - build from source
+libchdr-desktop: ../libchdr/CMakeLists.txt
+	cd ../libchdr && make build PLATFORM=desktop
+  
 $(PREFIX_LOCAL)/include/msettings.h:
 	cd ../../$(PLATFORM)/libmsettings && make
 

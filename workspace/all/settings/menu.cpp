@@ -272,6 +272,32 @@ bool MenuItem::prev(int n)
 
 ///////////////////////////////////////////////////////////
 
+InputReactionHint TextInputMenuItem::handleInput(int &dirty) {
+    // Handle deferred state - route input to keyboard submenu
+    if (deferred) {
+        assert(submenu);
+        int subMenuJustClosed = 0;
+        auto hint = submenu->handleInput(dirty, subMenuJustClosed);
+        if (subMenuJustClosed) {
+            defer(false);
+            dirty = 1;
+            // Don't propagate Exit up - just stay on current menu
+            return NoOp;
+        }
+        return hint;
+    }
+
+    // Open keyboard when A is pressed
+    if (PAD_justPressed(BTN_A)) {
+        if (on_confirm) {
+            return on_confirm(*this);
+        }
+    }
+    return Unhandled;
+}
+
+///////////////////////////////////////////////////////////
+
 MenuList::MenuList(MenuItemType type, const std::string &descp, std::vector<AbstractMenuItem*> items, MenuListCallback on_change, MenuListCallback on_confirm)
     : type(type), desc(descp), items(items), on_change(on_change), on_confirm(on_confirm)
 {
