@@ -128,7 +128,7 @@ ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))
 	# libchdr for RetroAchievements CHD hashing (use -L to dereference symlinks)
 	cp -L ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.0 ./build/SYSTEM/$(PLATFORM)/lib/
 
-ifeq ($(PLATFORM), tg5040)
+ifneq (,$(filter $(PLATFORM),tg5040 my355))
 	# liblz4 for Rewind support
 	cp ./workspace/all/minarch/build/$(PLATFORM)/liblz4.* ./build/SYSTEM/$(PLATFORM)/lib/
 endif
