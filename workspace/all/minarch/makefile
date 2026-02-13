@@ -104,7 +104,7 @@ all: clean libretro-common rcheevos-desktop libchdr-desktop $(PREFIX_LOCAL)/incl
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 else
-all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
+all: clean libretro-common libsrm.a rcheevos libchdr $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
 ifeq ($(PLATFORM), my355)
@@ -119,7 +119,7 @@ endif
 	cp $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
 	cp $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
 	cp $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
-  cp ../libchdr/build/$(PLATFORM)/libchdr.so.0.2 build/$(PLATFORM)
+	cp ../libchdr/build/$(PLATFORM)/libchdr.so.0 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
 
