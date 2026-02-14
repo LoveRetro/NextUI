@@ -109,6 +109,18 @@ static int shader_reset_suppressed = 0;
 
 GFX_Renderer renderer;
 
+static struct retro_hw_render_callback hw_render = {0};
+static int hw_render_active = 0;
+static int hw_render_context_reset_pending = 0;
+
+static uintptr_t hw_get_current_framebuffer(void) {
+	return 0;
+}
+
+static void *hw_get_proc_address(const char *sym) {
+	return SDL_GL_GetProcAddress(sym);
+}
+
 ///////////////////////////////////////
 
 static struct Core {
@@ -4846,18 +4858,36 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	case RETRO_ENVIRONMENT_SET_HW_RENDER:
 	{
 		struct retro_hw_render_callback *cb = (struct retro_hw_render_callback*)data;
+		if (!cb) {
+			return false;
+		}
 		
 		// Log the requested context
 		LOG_info("Core requested GL context type: %d, version %d.%d\n", 
 			cb->context_type, cb->version_major, cb->version_minor);
 
-		// Fallback if version is 0.0 or other unexpected values
-		if (cb->context_type == 4 && cb->version_major == 0 && cb->version_minor == 0) {
-			LOG_info("Core requested invalid GL context type or version, defaulting to GLES 2.0\n");
-			cb->context_type = RETRO_HW_CONTEXT_OPENGLES3;
-			cb->version_major = 3;
-			cb->version_minor = 0;
+		if (cb->context_type != RETRO_HW_CONTEXT_OPENGLES2 &&
+			cb->context_type != RETRO_HW_CONTEXT_OPENGLES3) {
+			LOG_warn("Unsupported GL context type %d (only GLES2/3 supported)\n", cb->context_type);
+			return false;
 		}
+
+		// Fallback if version is 0.0 or other unexpected values
+		if (cb->version_major == 0 && cb->version_minor == 0) {
+			if (cb->context_type == RETRO_HW_CONTEXT_OPENGLES2) {
+				cb->version_major = 2;
+				cb->version_minor = 0;
+			} else {
+				cb->version_major = 3;
+				cb->version_minor = 0;
+			}
+		}
+
+		cb->get_current_framebuffer = hw_get_current_framebuffer;
+		cb->get_proc_address = hw_get_proc_address;
+		hw_render = *cb;
+		hw_render_active = 1;
+		hw_render_context_reset_pending = 1;
 
 		return true;
 	}
@@ -5914,6 +5944,13 @@ static void video_refresh_callback(const void* data, unsigned width, unsigned he
 #endif
 	}
 
+	if (hw_render_active) {
+		if (data == RETRO_HW_FRAME_BUFFER_VALID || data == NULL) {
+			GFX_GL_SwapWindow();
+			return;
+		}
+	}
+
 	// Early exit if quitting to avoid rendering stale frames
 	if (quit) return;
 
@@ -6062,6 +6099,12 @@ void Core_init(void) {
 	LOG_info("Core_init\n");
 	core.init();
 	core.initialized = 1;
+	if (hw_render_active && hw_render_context_reset_pending) {
+		if (hw_render.context_reset) {
+			hw_render.context_reset();
+		}
+		hw_render_context_reset_pending = 0;
+	}
 }
 
 void Core_applyCheats(struct Cheats *cheats)
@@ -6132,6 +6175,9 @@ void Core_quit(void) {
 		Cheats_free();
 		RTC_write();
 		core.unload_game();
+		if (hw_render_active && hw_render.context_destroy) {
+			hw_render.context_destroy();
+		}
 		core.deinit();
 		core.initialized = 0;
 	}

@@ -814,6 +814,7 @@ void GFX_delay(void)
 
 FALLBACK_IMPLEMENTATION int PLAT_supportsOverscan(void) { return 0; }
 FALLBACK_IMPLEMENTATION void PLAT_setEffectColor(int next_color) {}
+FALLBACK_IMPLEMENTATION void PLAT_GL_SwapWindow(void) {}
 
 int GFX_truncateText(TTF_Font *font, const char *in_name, char *out_name, int max_width, int padding)
 {

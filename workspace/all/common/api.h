@@ -279,6 +279,8 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_scrollTextTexture PLAT_scrollTextTexture // (TTF_Font* font, const char* in_name,int x, int y, int w, int h, SDL_Color color, float transparency, SDL_mutex* fontMutex);
 #define GFX_flipHidden PLAT_flipHidden //(void)
 #define GFX_GL_screenCapture PLAT_GL_screenCapture //(void)
+// Swap the GL window without touching any source textures.
+#define GFX_GL_SwapWindow PLAT_GL_SwapWindow //(void)
 
 void GFX_setMode(int mode);
 int GFX_hdmiChanged(void);
@@ -295,6 +297,7 @@ void GFX_flip_fixed_rate(SDL_Surface* screen, double target_fps); // if target_f
 void GFX_sync(void); // call this to maintain 60fps when not calling GFX_flip() this frame
 void GFX_delay(void); // gfx_sync() is only for everywhere where there is no audio buffer to rely on for delaying, stupid so doing gfx_delay() for like waiting for input loop in binding menu. Need to remove gfx_sync() everwhere eventually
 void GFX_quit(void);
+void PLAT_GL_SwapWindow(void);
 
 enum {
 	VSYNC_OFF = 0,

@@ -2175,6 +2175,14 @@ void PLAT_GL_Swap() {
 	//}
 }
 
+void PLAT_GL_SwapWindow(void) {
+	if (!vid.window || !vid.gl_context) {
+		return;
+	}
+	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+	SDL_GL_SwapWindow(vid.window);
+}
+
 // flipping image upside down
 void PLAT_pixelFlipper(uint8_t* pixels, int width, int height) {
     const int rowBytes = width * 4;

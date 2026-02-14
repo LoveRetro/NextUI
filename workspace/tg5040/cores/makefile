@@ -15,6 +15,7 @@ CORES+= mednafen_pce_fast
 CORES+= mednafen_supafaust
 CORES+= mednafen_vb
 CORES+= mgba
+CORES+= mupen64plus_next
 CORES+= pcsx_rearmed
 CORES+= pet
 CORES+= picodrive
@@ -125,6 +126,10 @@ bluemsx_MAKEFILE = Makefile.libretro
 gearcoleco_REPO = https://github.com/drhelius/Gearcoleco.git
 gearcoleco_CORE = gearcoleco_libretro.so
 gearcoleco_BUILD_PATH = gearcoleco/platforms/libretro
+
+mupen64plus_next_REPO = https://github.com/libretro/mupen64plus-libretro-nx
+mupen64plus_next_CORE = mupen64plus_next_libretro.so
+mupen64plus_next_MAKE = sh -c 'mkdir -p custom/dependencies/libzlib custom/dependencies/libpng && make platform=unix ARCH=aarch64 FORCE_GLES=1'
 
 ###############################
 
