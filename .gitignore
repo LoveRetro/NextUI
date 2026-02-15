@@ -9,6 +9,10 @@ build
 releases
 toolchains
 libretro-common
+libchdr
+
+# rcheevos source (cloned at build time)
+**/rcheevos/src
 
 **/cores/src
 **/cores/output
