@@ -73,6 +73,12 @@ public:
 
     InputReactionHint handleInput(int &dirty, int &quit) override;
 
+    // Set the initial text to display in the keyboard input field
+    void setInitialText(const std::string &text) {
+        state.keyboard.initial_text = text;
+        state.keyboard.current_text = text;
+    }
+
 private:
     // handle_keyboard_input interprets keyboard input events and mutates app state
     void handleKeyboardInput(AppState &state);

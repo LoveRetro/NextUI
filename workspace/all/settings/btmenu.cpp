@@ -79,7 +79,9 @@ std::any Menu::getBtToggleState() const
 
 void Menu::setBtToggleState(const std::any &on)
 {
-    BT_enable(std::any_cast<bool>(on));
+    auto state = std::any_cast<bool>(on);
+    ScopedOverlay overlay(state ? "Enabling Bluetooth..." : "Disabling Bluetooth...");
+    BT_enable(state);
 }
 
 void Menu::resetBtToggleState()
@@ -246,6 +248,7 @@ void Menu::updater()
 PairNewItem::PairNewItem(BT_device d, bool& dirty)
     : MenuItem(ListItemType::Button, "Pair", "Pair this device.", 
         [&](AbstractMenuItem &item) -> InputReactionHint {
+            ScopedOverlay overlay("Pairing...");
             BT_pair(dev.addr); 
             dirty = true;
             return Exit; 
@@ -264,6 +267,7 @@ UnpairItem::UnpairItem(BT_devicePaired d, bool& dirty)
 ConnectKnownItem::ConnectKnownItem(BT_devicePaired d, bool& dirty)
     : MenuItem(ListItemType::Button, "Connect", "Connect this device.",
         [&](AbstractMenuItem &item) -> InputReactionHint {
+            ScopedOverlay overlay("Connecting...");
             BT_connect(dev.remote_addr); 
             dirty = true;
             return Exit; 

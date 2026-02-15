@@ -548,16 +548,11 @@ void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pa
 			snprintf(cmd, sizeof(cmd), "%s set_network %d key_mgmt NONE 2>/dev/null", WPA_CLI_CMD, network_id);
 			system(cmd);
 		}
-		
-		// Save configuration
-		wifilog("Saving network configuration...\n");
-		system(WPA_CLI_CMD " save_config 2>/dev/null");
 	} else if (pass && pass[0] != '\0') {
 		// Update password for existing network
 		wifilog("Updating password for existing network...\n");
 		snprintf(cmd, sizeof(cmd), "%s set_network %d psk '\"%s\"' 2>/dev/null", WPA_CLI_CMD, network_id, escaped_pass);
 		system(cmd);
-		system(WPA_CLI_CMD " save_config 2>/dev/null");
 	} else {
 		wifilog("Using existing network configuration...\n");
 	}
@@ -568,6 +563,10 @@ void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pa
 	system(cmd);
 	snprintf(cmd, sizeof(cmd), "%s select_network %d 2>/dev/null", WPA_CLI_CMD, network_id);
 	system(cmd);
+	
+	// Save configuration
+	wifilog("Saving network configuration...\n");
+	system(WPA_CLI_CMD " save_config 2>/dev/null");
 	
 	// Wait for connection
 	wifilog("Waiting for connection (up to 5 seconds)...\n");
