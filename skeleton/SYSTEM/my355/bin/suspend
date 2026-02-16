@@ -40,12 +40,15 @@ after() {
     echo 100 > /sys/class/leds/work/brightness
 
     log "Restoring sound"
-    # fix_sleep_sound_bug
 
     # TODO bluetooth
     # TODO wifi
 
     rm /tmp/system_suspend
+    # fix_sleep_sound_bug
+
+    # adb is sometimrs not coming up properly after resume, just restart USB device
+    /etc/init.d/S50usbdevice restart
 
     log "Resumed from suspend."
 }
