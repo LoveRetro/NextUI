@@ -2,19 +2,21 @@
 
 # becomes /usr/miyoo/bin/runmiyoo.sh on my355
 
-#wait for sdcard mounted
-mounted=`cat /proc/mounts | grep sdcard`
+#wait for sdcard mounted - we need the primary one at /mnt/sdcard.
+#At least on the 2025 firmware, only the right slot will ever be
+#bound to /mnt/sdcard, even if you have something in the left slot.
+mounted=`cat /proc/mounts | grep mnt/sdcard`
 cnt=0
 while [ "$mounted" == "" ] && [ $cnt -lt 6 ] ; do
    sleep 0.5
    cnt=`expr $cnt + 1`
-   mounted=`cat /proc/mounts | grep sdcard`
+   mounted=`cat /proc/mounts | grep mnt/sdcard`
 done
 
-#apparently Miyoo Flip cant kepp its /userdata from corrupting,
-# which breaks all kinds of things (Wifi, BT, NTP) - fun!
-# if we mounted sd correctly, bind mount our own folder over it
 if [ "$mounted" != "" ]; then
+   #apparently Miyoo Flip cant kepp its /userdata from corrupting,
+   # which breaks all kinds of things (Wifi, BT, NTP) - fun!
+   # if we mounted sd correctly, bind mount our own folder over it
    USERDATA_DIR="/mnt/SDCARD/.userdata/my355/userdata"
    if [ ! -d "$USERDATA_DIR" ]; then
       mkdir $USERDATA_DIR
