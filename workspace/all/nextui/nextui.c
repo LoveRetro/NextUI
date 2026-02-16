@@ -3047,63 +3047,61 @@ int main (int argc, char *argv[]) {
 						if (entry_unique) // Only render if a unique name exists
 							trimSortingMeta(&entry_unique);
 						
-						char display_name[256];
-						int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width, SCALE1(BUTTON_PADDING * 2));
-						int max_width = MIN(available_width, text_width);
-
-						// This spaghetti is preventing white text on white pill when volume/color temp is shown,
-						// dont ask me why. This all needs to get tossed out and redone properly later.
-						SDL_Color text_color = uintToColour(THEME_COLOR4_255);
-						int notext = 0;
-						if(!row_has_moved && row_is_selected) {
-							text_color = uintToColour(THEME_COLOR5_255);
-							notext = 1;
-						}
-					
-						SDL_LockMutex(fontMutex);
-						SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
-						SDL_Surface* text_unique = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_DARK_TEXT);
-						SDL_UnlockMutex(fontMutex);
-						// TODO: Use actual font metrics to center, this only works in simple cases
-						const int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
-						if (row_is_selected) {
-							is_scrolling = GFX_textShouldScroll(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2), fontMutex);
-							GFX_resetScrollText();
-							bool is_scrolling = previous_depth == stack->count;
-							SDL_LockMutex(animMutex);
-							if(globalpill) { 
-								SDL_FreeSurface(globalpill); 
-								globalpill=NULL; 
-							}
-							globalpill = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, screen->format->format);
-							GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){0,0, max_width, SCALE1(PILL_SIZE)});
-							globallpillW =  max_width;
-							SDL_UnlockMutex(animMutex);
-							updatePillTextSurface(entry_name, max_width, uintToColour(THEME_COLOR5_255));
-							AnimTask* task = malloc(sizeof(AnimTask));
-							task->startX = SCALE1(BUTTON_MARGIN);
-							task->startY = SCALE1(previousY+PADDING);
-							task->targetX = SCALE1(BUTTON_MARGIN);
-							task->targetY = SCALE1(targetY+PADDING);
-							task->targetTextY = SCALE1(PADDING + targetY) + text_offset_y;
-							pilltargetTextY = +screen->w;
-							task->move_w = max_width;
-							task->move_h = SCALE1(PILL_SIZE);
-							task->frames = is_scrolling && CFG_getMenuAnimations() ? 3:0;
-							task->entry_name = strdup(notext ? " " : entry_name);
-							animPill(task);
-						}
-						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
-						SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)) + text_offset_y };
-
-						if(list_show_entry_names) {
-							SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
-							SDL_BlitSurface(text, &text_rect, screen, &dest_rect);
-						}
-						SDL_FreeSurface(text_unique); // Free after use
-						SDL_FreeSurface(text); // Free after use
-					}
-					if(lastScreen==SCREEN_GAMESWITCHER) {
+												char display_name[256];
+												int text_width = GFX_getTextWidth(font.large, entry_unique ? entry_unique : entry_name, display_name, available_width, SCALE1(BUTTON_PADDING * 2));
+												int max_width = MIN(available_width, text_width);
+						
+												// This spaghetti is preventing white text on white pill when volume/color temp is shown,
+												// dont ask me why. This all needs to get tossed out and redone properly later.
+												SDL_Color text_color = uintToColour(THEME_COLOR4_255);
+												int notext = 0;
+												if(!row_has_moved && row_is_selected) {
+													text_color = uintToColour(THEME_COLOR5_255);
+													notext = 1;
+												}
+											
+												SDL_LockMutex(fontMutex);
+												SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, entry_name, text_color);
+												SDL_Surface* text_unique = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_DARK_TEXT);
+												SDL_UnlockMutex(fontMutex);
+												// TODO: Use actual font metrics to center, this only works in simple cases
+												const int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
+												if (row_is_selected) {
+													is_scrolling = list_show_entry_names && GFX_textShouldScroll(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2), fontMutex);
+													GFX_resetScrollText();
+													SDL_LockMutex(animMutex);
+													if(globalpill) { 
+														SDL_FreeSurface(globalpill); 
+														globalpill=NULL; 
+													}
+													globalpill = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, max_width, SCALE1(PILL_SIZE), FIXED_DEPTH, screen->format->format);
+													GFX_blitPillDark(ASSET_WHITE_PILL, globalpill, &(SDL_Rect){0,0, max_width, SCALE1(PILL_SIZE)});
+													globallpillW =  max_width;
+													SDL_UnlockMutex(animMutex);
+													updatePillTextSurface(entry_name, max_width, uintToColour(THEME_COLOR5_255));
+													AnimTask* task = malloc(sizeof(AnimTask));
+													task->startX = SCALE1(BUTTON_MARGIN);
+													task->startY = SCALE1(previousY+PADDING);
+													task->targetX = SCALE1(BUTTON_MARGIN);
+													task->targetY = SCALE1(targetY+PADDING);
+													task->targetTextY = SCALE1(PADDING + targetY) + text_offset_y;
+													pilltargetTextY = +screen->w;
+													task->move_w = max_width;
+													task->move_h = SCALE1(PILL_SIZE);
+													task->frames = is_scrolling && CFG_getMenuAnimations() ? 3:0;
+													task->entry_name = strdup(notext ? " " : entry_name);
+													animPill(task);
+												}
+												SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
+												SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)) + text_offset_y };
+						
+												if(list_show_entry_names) {
+													SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
+													SDL_BlitSurface(text, &text_rect, screen, &dest_rect);
+												}
+												SDL_FreeSurface(text_unique); // Free after use
+												SDL_FreeSurface(text); // Free after use
+											}					if(lastScreen==SCREEN_GAMESWITCHER) {
 						if(switcherSur) {
 							// update cpu surface here first
 							GFX_clearLayers(LAYER_ALL);
