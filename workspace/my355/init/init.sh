@@ -22,6 +22,17 @@ export LD_LIBRARY_PATH=/tmp/lib:$DIR/payload/lib:$LD_LIBRARY_PATH
 touch /tmp/fbdisplay_exit
 cat /dev/zero > /dev/fb0
 
+# If we are not on firmware 2025+, prompt the user to update.
+VERSION=$(cat /usr/miyoo/version)
+YEAR=${VERSION:0:4}
+if [ "$YEAR" -lt "2025" ]; then
+	show2.elf --mode=simple --image="$DIR/res/logo.png" --text="NextUI requires firmware version 2025 or higher." --logoheight=80 --timeout=60
+	poweroff
+	while :; do
+		sleep 1
+	done
+fi
+
 show2.elf --mode=daemon --image="$DIR/res/logo.png" --text="Preparing environment..." --logoheight=80 &
 echo "preparing environment"
 cd "$DIR"
