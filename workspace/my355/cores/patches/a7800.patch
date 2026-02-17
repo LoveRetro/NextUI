@@ -1,0 +1,23 @@
+diff --git a/Makefile b/Makefile
+index dc2a31c..2a8bca2 100644
+--- a/Makefile
++++ b/Makefile
+@@ -328,6 +328,18 @@ else ifeq ($(platform), miyoo)
+ 	FLAGS += -fomit-frame-pointer -ffast-math -march=armv5te -mtune=arm926ej-s 
+ 	fpic := -fPIC
+ 
++# target platform my355 trimUI brick
++else ifeq ($(platform), my355)
++	TARGET := $(TARGET_NAME)_libretro.so
++	CC = $(CROSS_COMPILE)gcc
++	CXX = $(CROSS_COMPILE)g++
++	AR = $(CROSS_COMPILE)ar
++	SHARED := -shared -Wl,--no-undefined
++	LDFLAGS += -shared -Wl,--version-script=link.T
++	FLAGS += -fomit-frame-pointer -ffast-math -mtune=cortex-a55 -mcpu=cortex-a55 -march=armv8.2-a
++	fpic := -fPIC
++	HAVE_NEON = 1
++
+ # Raspberry Pi 1
+ else ifeq ($(platform), rpi1)
+ 	TARGET := $(TARGET_NAME)_libretro.so

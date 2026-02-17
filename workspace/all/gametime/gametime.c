@@ -273,7 +273,7 @@ void renderList(int count, int start, int end, int selected)
         serializeTime(average, entry->play_time_average);
         snprintf(plays, 24, "%d", entry->play_count);
 
-        const char *details[] = {"TOTAL ", total, "  AVERAGE ", average, "  # PLAYS ", plays};
+        const char *details[] = {"TOTAL ", total, "  AVG ", average, "  # PLAYS ", plays};
         SDL_Rect detailsRect = {
             layout.list_display_start_x + num_width + thumbMargin + SCALE1(IMG_MAX_WIDTH), 
             layout.list_display_start_y + thumbMargin + textHeight + elemHeight * row, 
