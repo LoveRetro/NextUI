@@ -290,7 +290,9 @@ InputReactionHint TextInputMenuItem::handleInput(int &dirty) {
     // Open keyboard when A is pressed
     if (PAD_justPressed(BTN_A)) {
         if (on_confirm) {
-            return on_confirm(*this);
+            auto hint = on_confirm(*this);
+            dirty = 1;
+            return hint;
         }
     }
     return Unhandled;
