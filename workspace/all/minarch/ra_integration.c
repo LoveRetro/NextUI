@@ -1,8 +1,5 @@
 #include "ra_integration.h"
 #include "ra_consoles.h"
-#include "rc_client.h"
-#include "rc_libretro.h"
-#include "rc_hash.h"
 #include "chd_reader.h"
 #include "config.h"
 #include "http.h"
@@ -18,6 +15,10 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <SDL2/SDL.h>
+
+#include <rcheevos/rc_client.h>
+#include <rcheevos/rc_libretro.h>
+#include <rcheevos/rc_hash.h>
 
 // Logging macros - use NextUI log levels
 #define RA_LOG_DEBUG(fmt, ...) LOG_debug("[RA] " fmt, ##__VA_ARGS__)

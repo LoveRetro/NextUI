@@ -1,7 +1,9 @@
 # Makefile wrapper for libchdr (CMake-based project)
 # Builds libchdr as a shared library for the target platform
 
-PLATFORM ?= tg5040
+ifeq (,$(PLATFORM))
+	$(error please specify PLATFORM, eg. PLATFORM=tg5040 make)
+endif
 
 BUILD_DIR = build/$(PLATFORM)
 
@@ -13,7 +15,7 @@ endif
 
 .PHONY: all build clean
 
-all: build
+all: build install
 
 build: $(BUILD_DIR)/libchdr.so
 
@@ -23,6 +25,7 @@ $(BUILD_DIR)/libchdr.so: | $(BUILD_DIR)
 		-DINSTALL_STATIC_LIBS=OFF \
 		-DCMAKE_BUILD_TYPE=Release \
 		-DWITH_SYSTEM_ZLIB=OFF \
+		-DCMAKE_SHARED_LIBRARY_SUFFIX_C=".so" \
 		$(CMAKE_EXTRA)
 	cd $(BUILD_DIR) && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 	@# Copy the .so to expected location (cmake may put it in a subdir)
@@ -34,6 +37,12 @@ $(BUILD_DIR)/libchdr.so: | $(BUILD_DIR)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
+
+install: $(BUILD_DIR)/libchdr.so
+	mkdir -p "$(PREFIX_LOCAL)/lib"
+	cp $(BUILD_DIR)/libchdr.so "$(PREFIX_LOCAL)/lib/"
+	mkdir -p "$(PREFIX_LOCAL)/include/libchdr"
+	cp -r include/libchdr/* "$(PREFIX_LOCAL)/include/libchdr/"
 
 clean:
 	rm -rf $(BUILD_DIR)
