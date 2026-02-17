@@ -860,7 +860,7 @@ static Array* getRoot(void) {
 	Array *entries = getRoms();
 
 	// Handle collections
-    if (hasCollections()) {
+	if (hasCollections() && CFG_getShowCollections()) {
         if (entries->count) {
             Array_push(root, Entry_new(COLLECTIONS_PATH, ENTRY_DIR));
         } else { // No visible systems, promote collections to root
