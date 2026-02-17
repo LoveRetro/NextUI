@@ -2035,16 +2035,7 @@ int animWorker(void* unused) {
 
         AnimTask* task = node->task;
 		finishedTask* finaltask = (finishedTask*)malloc(sizeof(finishedTask));
-		int total_frames = task->frames;
-		// This somehow leads to the pill not rendering correctly when wrapping the list (last element to first, or reverse).
-		// TODO: Figure out why this is here. Ideally we shouldnt refer to specific platforms in here, but the commit message doesnt
-		// help all that much and comparing magic numbers also isnt that descriptive on its own.
-		if(strcmp("Desktop", PLAT_getModel()) != 0) {
-			if(task->targetY > task->startY + SCALE1(PILL_SIZE) || task->targetY < task->startY - SCALE1(PILL_SIZE)) {
-				total_frames = 0;
-			}
-		}
-			
+		int total_frames = task->frames;		
 		for (int frame = 0; frame <= total_frames; frame++) {
 			// Check for shutdown at start of each frame
 			if (SDL_AtomicGet(&workerThreadsShutdown)) break;
@@ -3089,7 +3080,7 @@ int main (int argc, char *argv[]) {
 							pilltargetTextY = +screen->w;
 							task->move_w = max_width;
 							task->move_h = SCALE1(PILL_SIZE);
-							task->frames = should_animate && CFG_getMenuAnimations() ? 3:0;
+							task->frames = should_animate && CFG_getMenuAnimations() ? 3:1;
 							task->entry_name = strdup(notext ? " " : entry_name);
 							animPill(task);
 						}
