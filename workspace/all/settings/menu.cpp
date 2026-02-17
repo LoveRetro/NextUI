@@ -581,18 +581,18 @@ void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
         if (type != MenuItemType::Main && items.size() > scope.max_visible_options)
         {
             const int SCROLL_WIDTH = 24;
-            const int SCROLL_HEIGHT = 4;
+            const int SCROLL_HEIGHT = 6;
             SDL_Rect rect = dst;
             rect = dx(rect, (rect.w - SCALE1(SCROLL_WIDTH)) / 2);
             rect = dy(rect, SCALE1((-SCROLL_HEIGHT) / 2));
+            rect.w = SCALE1(SCROLL_WIDTH);
+            rect.h -= SCALE1(PILL_SIZE); // account for description space at the bottom
 
             if (scope.start > 0)
                 // assumes there is some padding above we can yoink
                 GFX_blitAssetCPP(ASSET_SCROLL_UP, {}, surface, {rect.x, rect.y - SCALE1(PADDING)});
             if (scope.end < scope.count)
-                // this is with 2 * pill_size bottom margin
-                // GFX_blitAssetCPP(ASSET_SCROLL_DOWN, {}, surface, {rect.x, rect.h - SCALE1(PADDING + PILL_SIZE + BUTTON_SIZE) + rect.y});
-                GFX_blitAssetCPP(ASSET_SCROLL_DOWN, {}, surface, {rect.x, rect.h - SCALE1(PADDING + PILL_SIZE) + rect.y});
+                GFX_blitAssetCPP(ASSET_SCROLL_DOWN, {}, surface, {rect.x, rect.y + rect.h + (SCALE1(SCROLL_HEIGHT) / 2)});
         }
 
         if (cur && cur->getDesc().length() > 0)

@@ -119,8 +119,8 @@ endif
 	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.* ./build/SYSTEM/$(PLATFORM)/lib/
 
-	# libchdr for RetroAchievements CHD hashing (use -L to dereference symlinks)
-	cp -L ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.0 ./build/SYSTEM/$(PLATFORM)/lib/
+	# libchdr for RetroAchievements CHD hashing
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 
 ifeq ($(PLATFORM), tg5040)
 	# liblz4 for Rewind support

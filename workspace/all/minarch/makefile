@@ -22,23 +22,18 @@ SDL?=SDL
 TARGET = minarch
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 INCDIR = -I. -I./libretro-common/include/ -I../common/ -I../../$(PLATFORM)/platform/
-SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../common/notification.c ../common/http.c ../../$(PLATFORM)/platform/platform.c
+SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../common/notification.c ../../$(PLATFORM)/platform/platform.c
 
-# RA support for tg5040, tg5050, and desktop
-ifneq (,$(filter $(PLATFORM),tg5040 tg5050 desktop))
-# rcheevos include paths
-INCDIR += -I../rcheevos/src/include -I../rcheevos/src/src
-# libchdr include path (for CHD disc image support)
-INCDIR += -I../libchdr/include
+# RA support
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355 desktop))
 # RA source files
-SOURCE += ../common/ra_badges.c ra_integration.c chd_reader.c
+SOURCE += ../common/http.c ../common/ra_badges.c ra_integration.c chd_reader.c
 endif
 
 CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(OPT)
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
 LDFLAGS	 += -lmsettings -lsamplerate
-LDFLAGS  += -llz4
 
 ifeq ($(PROFILE), 1)
 CFLAGS  += -pg
@@ -50,6 +45,10 @@ CFLAGS  += -g
 LDFLAGS += -lprofiler
 endif
 
+# Rewind support
+LDFLAGS  += -llz4
+
+# SaveRAM support
 ifeq ($(PLATFORM), desktop)
 ifeq ($(UNAME_S),Linux)
 CFLAGS += `pkg-config --cflags libzip`
@@ -63,18 +62,17 @@ CFLAGS   += -DHAS_SRM
 LDFLAGS +=  -lasound
 endif
 
-# RA support: rcheevos and libchdr linking for tg5040, tg5050, and desktop
-ifneq (,$(filter $(PLATFORM),tg5040 tg5050 desktop))
-LDFLAGS += -L../rcheevos/build/$(PLATFORM) -lrcheevos
-LDFLAGS += -L../libchdr/build/$(PLATFORM) -lchdr
-CFLAGS += -DRC_CLIENT_SUPPORTS_HASH
+# RA support: rcheevos and libchdr linking
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355 desktop))
+LDFLAGS += -lrcheevos -lchdr
+CFLAGS += -DRC_CLIENT_SUPPORTS_HASH -DHAS_CHEEVOS -DHAS_CHDR
 ifeq ($(PLATFORM), desktop)
 # Desktop needs rpath for local shared library lookup
 LDFLAGS += -Wl,-rpath,'$$ORIGIN'
 endif
 endif
-# CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 
+# Sanitizers
 ifeq ($(PLATFORM), desktop)
 ifeq ($(TSAN), 1)
 CFLAGS  += -fsanitize=thread
@@ -94,7 +92,7 @@ BUILD_HASH!=cat ../../hash.txt
 CFLAGS += -DBUILD_DATE=\"${BUILD_DATE}\" -DBUILD_HASH=\"${BUILD_HASH}\"
 
 ifeq ($(PLATFORM), desktop)
-all: clean libretro-common rcheevos-desktop libchdr-desktop $(PREFIX_LOCAL)/include/msettings.h
+all: clean libretro-common rcheevos libchdr $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 else ifneq (,$(filter $(PLATFORM),tg5040 tg5050))
@@ -103,48 +101,45 @@ all: clean libretro-common libsrm.a rcheevos libchdr $(PREFIX_LOCAL)/include/mse
 	mkdir -p build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libsamplerate.so.* build/$(PLATFORM)
 	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
-	cp -L $(PREFIX)/lib/libzip.so.* build/$(PLATFORM)
+ifeq ($(PLATFORM), my355)
+	cp -L $(PREFIX)/lib/libcrypto.so.3 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libsqlite3.so build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libffi.so.7 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libtinyalsa.so.2 build/$(PLATFORM)
+endif
+	cp -L $(PREFIX)/lib/libsamplerate.so.0 build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libzip.so.5 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
-	cp -L ../libchdr/build/$(PLATFORM)/libchdr.so.0.2 build/$(PLATFORM)/libchdr.so.0
-	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
-else
-# Other platforms - no RA support
-all: clean libretro-common libsrm.a $(PREFIX_LOCAL)/include/msettings.h
-	mkdir -p build/$(PLATFORM)
-	cp -L $(PREFIX)/lib/libsamplerate.so.* build/$(PLATFORM)
-	cp -L $(PREFIX)/lib/libzip.so.* build/$(PLATFORM)
-	cp -L $(PREFIX)/lib/libbz2.so.1.0 build/$(PLATFORM)
-	cp -L $(PREFIX)/lib/liblzma.so.5 build/$(PLATFORM)
-	cp -L $(PREFIX)/lib/libzstd.so.1 build/$(PLATFORM)
-	cp -L $(PREFIX)/lib/liblz4.so.1 build/$(PLATFORM)
+	cp -L libchdr/build/$(PLATFORM)/libchdr.so.0 build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 endif
 
 libretro-common:
 	git clone https://github.com/libretro/libretro-common
 
-rcheevos:
-	cd ../rcheevos && make build PLATFORM=$(PLATFORM)
+rcheevos: rcheevos/makefile $(PREFIX_LOCAL)/lib/librcheevos.a
 
-# Desktop rcheevos build - uses native gcc instead of cross-compiler
-rcheevos-desktop:
-	cd ../rcheevos && make build PLATFORM=desktop
+libchdr: libchdr/CMakeLists.txt $(PREFIX_LOCAL)/lib/libchdr.so
 
-../libchdr/CMakeLists.txt:
-	rm -rf ../libchdr
-	git clone https://github.com/rtissera/libchdr ../libchdr
-	cp libchdr.makefile ../libchdr/makefile
+rcheevos/makefile:
+	rm -rf rcheevos
+	mkdir -p rcheevos
+	cp rcheevos.makefile rcheevos/makefile
 
-libchdr: ../libchdr/CMakeLists.txt
-	cd ../libchdr && make build PLATFORM=$(PLATFORM)
+$(PREFIX_LOCAL)/lib/librcheevos.a:
+	cd rcheevos && make build install PLATFORM=$(PLATFORM)
 
-# Desktop libchdr - build from source
-libchdr-desktop: ../libchdr/CMakeLists.txt
-	cd ../libchdr && make build PLATFORM=desktop
-	
+libchdr/CMakeLists.txt:
+	rm -rf libchdr
+	git clone https://github.com/rtissera/libchdr
+	cp libchdr.makefile libchdr/makefile
+
+$(PREFIX_LOCAL)/lib/libchdr.so:
+	cd libchdr && make build install PLATFORM=$(PLATFORM)
+  
 $(PREFIX_LOCAL)/include/msettings.h:
 	cd ../../$(PLATFORM)/libmsettings && make
 
