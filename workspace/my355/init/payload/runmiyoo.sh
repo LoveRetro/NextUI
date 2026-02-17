@@ -5,15 +5,16 @@
 #wait for sdcard mounted - we need the primary one at /mnt/sdcard.
 #At least on the 2025 firmware, only the right slot will ever be
 #bound to /mnt/sdcard, even if you have something in the left slot.
-mounted=`cat /proc/mounts | grep mnt/sdcard`
+tf1_mounted=`cat /proc/mounts | grep mnt/sdcard`
 cnt=0
-while [ "$mounted" == "" ] && [ $cnt -lt 6 ] ; do
+while [ "$tf1_mounted" == "" ] && [ $cnt -lt 6 ] ; do
    sleep 0.5
    cnt=`expr $cnt + 1`
-   mounted=`cat /proc/mounts | grep mnt/sdcard`
+   tf1_mounted=`cat /proc/mounts | grep mnt/sdcard`
 done
+tf2_mounted=`cat /proc/mounts | grep media/sdcard1`
 
-if [ "$mounted" != "" ]; then
+if [ "$tf1_mounted" != "" ]; then
    #apparently Miyoo Flip cant kepp its /userdata from corrupting,
    # which breaks all kinds of things (Wifi, BT, NTP) - fun!
    # if we mounted sd correctly, bind mount our own folder over it
@@ -70,6 +71,20 @@ EOF
    # files by mac address, which arent legal file names on fat32
    mkdir -p /run/bluetooth_fix
    mount --bind /run/bluetooth_fix /userdata/bluetooth
+elif [ "$tf2_mounted" != "" ]; then
+   # if mounted is empty and wrong_slot is not, the user probably has his
+   # nextui card in the left slot.
+
+   # make sure media/sdcard1 is actually a nextui card, we want to use show2.elf
+   SYSTEM_PATH="/media/sdcard1/.system/"
+   SHOW_PATH="$SYSTEM_PATH/my355/bin/show2.elf"
+   if [ -f "$SHOW_PATH" ]; then
+      $SHOW_PATH --mode=simple --image="$SYSTEM_PATH/res/logo.png" --text="Please use the right SD slot for NextUI." --logoheight=80 --timeout=60
+      poweroff
+      while :; do
+         sleep 1
+      done
+   fi
 fi
 
 UPDATER_PATH=/mnt/SDCARD/.tmp_update/updater

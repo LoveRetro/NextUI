@@ -33,6 +33,16 @@ if [ "$YEAR" -lt "2025" ]; then
 	done
 fi
 
+# If we are on the left SD card slot, alert the user to move to the right slot (which mounts to /mnt/SDCARD)
+tf1_mounted=`cat /proc/mounts | grep mnt/sdcard`
+if [ "$tf1_mounted" == "" ]; then
+	show2.elf --mode=simple --image="$DIR/res/logo.png" --text="Please use the right SD slot for NextUI." --logoheight=80 --timeout=60
+	poweroff
+	while :; do
+		sleep 1
+	done
+fi
+
 show2.elf --mode=daemon --image="$DIR/res/logo.png" --text="Preparing environment..." --logoheight=80 &
 echo "preparing environment"
 cd "$DIR"
