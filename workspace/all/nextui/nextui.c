@@ -3067,9 +3067,9 @@ int main (int argc, char *argv[]) {
 						// TODO: Use actual font metrics to center, this only works in simple cases
 						const int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
 						if (row_is_selected) {
-							is_scrolling = GFX_textShouldScroll(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2), fontMutex);
+							is_scrolling = list_show_entry_names && GFX_textShouldScroll(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2), fontMutex);
 							GFX_resetScrollText();
-							bool is_scrolling = previous_depth == stack->count;
+							bool should_animate = previous_depth == stack->count;
 							SDL_LockMutex(animMutex);
 							if(globalpill) { 
 								SDL_FreeSurface(globalpill); 
@@ -3089,7 +3089,7 @@ int main (int argc, char *argv[]) {
 							pilltargetTextY = +screen->w;
 							task->move_w = max_width;
 							task->move_h = SCALE1(PILL_SIZE);
-							task->frames = is_scrolling && CFG_getMenuAnimations() ? 3:0;
+							task->frames = should_animate && CFG_getMenuAnimations() ? 3:0;
 							task->entry_name = strdup(notext ? " " : entry_name);
 							animPill(task);
 						}
