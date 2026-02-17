@@ -454,72 +454,81 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 		return 0;
 	}
 
-	const uint16_t *pixels = (const uint16_t *)data;
-	int pixel_count = width * height;
+	const uint32_t *pixels = (const uint32_t *)data;
+	int pixel_count = 0;
 
 	uint64_t total_r = 0;
 	uint64_t total_g = 0;
 	uint64_t total_b = 0;
+	uint64_t total_rcolor = 0;
+	uint64_t total_gcolor = 0;
+	uint64_t total_bcolor = 0;
 	uint32_t colorful_pixel_count = 0;
 
-	for (unsigned y = 0; y < height; y++)
+	// Downsample 7x7 instead of 8x8 to de-emphasize effect of
+	// repeated scrolling tiles (intentionally interfere with patterns)
+	for (unsigned y = 0; y < height; y+=7)
 	{
-		for (unsigned x = 0; x < width; x++)
+		for (unsigned x = 0; x < width; x+=7)
 		{
-			uint16_t pixel = pixels[y * (pitch / 2) + x];
+			uint32_t pixel = pixels[y * (pitch / 4) + x];
 
-			uint8_t r = ((pixel & 0xF800) >> 11) << 3;
-			uint8_t g = ((pixel & 0x07E0) >> 5) << 2;
-			uint8_t b = (pixel & 0x001F) << 3;
+			// input pixel format: AABBGGRR
+			uint8_t r =  pixel        & 0xFF;
+			uint8_t g = (pixel >> 8)  & 0xFF;
+			uint8_t b = (pixel >> 16) & 0xFF;
 
-			r |= r >> 5;
-			g |= g >> 6;
-			b |= b >> 5;
+			// max_c = max(max(r, g), b)
+			uint8_t max_c = r > g ? r : g;
+			max_c = max_c > b ? max_c : b;
 
-			uint8_t max_c = fmaxf(fmaxf(r, g), b);
-			uint8_t min_c = fminf(fminf(r, g), b);
+			// min_c = min(min(r, g), b)
+			uint8_t min_c = r < g ? r : g;
+			min_c = min_c < b ? min_c : b;
+
 			uint8_t saturation = max_c == 0 ? 0 : (max_c - min_c) * 255 / max_c;
 
+			total_r += r;
+			total_g += g;
+			total_b += b;
+			pixel_count++;
 			if (saturation > 50 && max_c > 50)
 			{
-				total_r += r;
-				total_g += g;
-				total_b += b;
+				total_rcolor += r;
+				total_gcolor += g;
+				total_bcolor += b;
 				colorful_pixel_count++;
 			}
 		}
 	}
 
-	if (colorful_pixel_count == 0)
+	if (colorful_pixel_count > 0)
 	{
-
-		colorful_pixel_count = pixel_count;
-		total_r = total_g = total_b = 0;
-		for (unsigned y = 0; y < height; y++)
-		{
-			for (unsigned x = 0; x < width; x++)
-			{
-				uint16_t pixel = pixels[y * (pitch / 2) + x];
-				uint8_t r = ((pixel & 0xF800) >> 11) << 3;
-				uint8_t g = ((pixel & 0x07E0) >> 5) << 2;
-				uint8_t b = (pixel & 0x001F) << 3;
-
-				r |= r >> 5;
-				g |= g >> 6;
-				b |= b >> 5;
-
-				total_r += r;
-				total_g += g;
-				total_b += b;
-			}
-		}
+		total_r = total_rcolor;
+		total_g = total_gcolor;
+		total_b = total_bcolor;
+		pixel_count = colorful_pixel_count;
 	}
 
-	uint8_t avg_r = total_r / colorful_pixel_count;
-	uint8_t avg_g = total_g / colorful_pixel_count;
-	uint8_t avg_b = total_b / colorful_pixel_count;
+	uint8_t ambient_r = total_r / pixel_count;
+	uint8_t ambient_g = total_g / pixel_count;
+	uint8_t ambient_b = total_b / pixel_count;
 
-	return (avg_r << 16) | (avg_g << 8) | avg_b;
+	// keep track of last invocation's values
+	// in order to blend them
+	static uint16_t amb_prev_r = 0;
+	static uint16_t amb_prev_g = 0;
+	static uint16_t amb_prev_b = 0;
+
+	uint32_t average_color = (((amb_prev_r + ambient_r) / 2) << 16) |
+		(((amb_prev_g + ambient_g) / 2) << 8) |
+		((amb_prev_b + ambient_b) / 2);
+
+	amb_prev_r = ambient_r;
+	amb_prev_g = ambient_g;
+	amb_prev_b = ambient_b;
+
+	return average_color;
 }
 
 void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch, int mode)
@@ -533,22 +542,18 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 	{
 		(lightsAmbient)[2].color1 = dominant_color;
 		(lightsAmbient)[2].effect = 4;
-		(lightsAmbient)[2].brightness = 100;
 	}
 	if (mode == 1 || mode == 3)
 	{
 		(lightsAmbient)[0].color1 = dominant_color;
 		(lightsAmbient)[0].effect = 4;
-		(lightsAmbient)[0].brightness = 100;
 		(lightsAmbient)[1].color1 = dominant_color;
 		(lightsAmbient)[1].effect = 4;
-		(lightsAmbient)[1].brightness = 100;
 	}
 	if (mode == 1 || mode == 4 || mode == 5)
 	{
 		(lightsAmbient)[3].color1 = dominant_color;
 		(lightsAmbient)[3].effect = 4;
-		(lightsAmbient)[3].brightness = 100;
 	}
 }
 
