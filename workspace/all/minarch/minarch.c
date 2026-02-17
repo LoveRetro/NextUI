@@ -30,10 +30,10 @@
 #include "config.h"
 #include "ra_integration.h"
 #include "ra_badges.h"
-#include "rc_client.h"
 #include <dirent.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL.h>
+#include <rcheevos/rc_client.h>
 
 ///////////////////////////////////////
 

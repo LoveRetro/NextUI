@@ -11,19 +11,13 @@ ifeq (,$(PLATFORM))
 endif
 
 # Desktop builds use native compiler
-ifneq ($(PLATFORM), desktop)
 ifeq (,$(CROSS_COMPILE))
 	$(error missing CROSS_COMPILE for this toolchain)
 endif
 
-ifeq (,$(PREFIX))
-	$(error missing PREFIX for this toolchain)
-endif
-endif
-
 ###########################################################
 
-include ../../$(PLATFORM)/platform/makefile.env
+include ../../../$(PLATFORM)/platform/makefile.env
 
 ###########################################################
 
@@ -31,14 +25,6 @@ TARGET = rcheevos
 SRCDIR = src/src
 INCDIR = src/include
 OBJDIR = build/$(PLATFORM)/obj
-
-ifeq ($(PLATFORM), desktop)
-CC = gcc
-AR = ar
-else
-CC = $(CROSS_COMPILE)gcc
-AR = $(CROSS_COMPILE)ar
-endif
 
 # rcheevos source files
 SOURCES = \
@@ -78,10 +64,10 @@ SOURCES = \
 # Object files go in platform-specific directory
 OBJECTS = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SOURCES))
 
-CFLAGS += $(OPT) -fomit-frame-pointer
+CFLAGS += $(OPT)
 CFLAGS += -I$(INCDIR) -I$(SRCDIR) -std=gnu99
 # libretro.h is in minarch/libretro-common/include
-CFLAGS += -I../minarch/libretro-common/include
+CFLAGS += -I../libretro-common/include
 CFLAGS += -DRC_DISABLE_LUA
 CFLAGS += -DRC_CLIENT_SUPPORTS_HASH
 CFLAGS += -fPIC
@@ -118,6 +104,7 @@ install: $(PRODUCT)
 	mkdir -p "$(PREFIX_LOCAL)/include/rcheevos"
 	mkdir -p "$(PREFIX_LOCAL)/lib"
 	cp $(INCDIR)/*.h "$(PREFIX_LOCAL)/include/rcheevos/"
+	cp $(SRCDIR)/rc_libretro.h "$(PREFIX_LOCAL)/include/rcheevos/"
 	cp $(PRODUCT) "$(PREFIX_LOCAL)/lib/"
 
 clean:

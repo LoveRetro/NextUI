@@ -8,8 +8,8 @@
  * This is used to identify games when loading them for achievement tracking.
  */
 
-#include "rc_consoles.h"
 #include <string.h>
+#include <rcheevos/rc_consoles.h>
 
 /**
  * Mapping entry from EMU tag to RetroAchievements console ID
