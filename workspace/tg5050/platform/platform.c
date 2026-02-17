@@ -931,7 +931,6 @@ void PLAT_setNetworkTimeSync(bool on) {
 /////////////////////////
 
 // We use the generic wifi implementation here
-
 #define WIFI_SOCK_DIR "/etc/wifi/sockets"
 #include "generic_wifi.c"
 

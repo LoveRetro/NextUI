@@ -860,7 +860,7 @@ static Array* getRoot(void) {
 	Array *entries = getRoms();
 
 	// Handle collections
-    if (hasCollections()) {
+	if (hasCollections() && CFG_getShowCollections()) {
         if (entries->count) {
             Array_push(root, Entry_new(COLLECTIONS_PATH, ENTRY_DIR));
         } else { // No visible systems, promote collections to root
@@ -2035,7 +2035,7 @@ int animWorker(void* unused) {
 
         AnimTask* task = node->task;
 		finishedTask* finaltask = (finishedTask*)malloc(sizeof(finishedTask));
-		int total_frames = task->frames;
+		int total_frames = task->frames;		
 		for (int frame = 0; frame <= total_frames; frame++) {
 			// Check for shutdown at start of each frame
 			if (SDL_AtomicGet(&workerThreadsShutdown)) break;
@@ -3058,9 +3058,9 @@ int main (int argc, char *argv[]) {
 						// TODO: Use actual font metrics to center, this only works in simple cases
 						const int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
 						if (row_is_selected) {
-							is_scrolling = GFX_textShouldScroll(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2), fontMutex);
+							is_scrolling = list_show_entry_names && GFX_textShouldScroll(font.large,display_name, max_width - SCALE1(BUTTON_PADDING*2), fontMutex);
 							GFX_resetScrollText();
-							bool is_scrolling = previous_depth == stack->count;
+							bool should_animate = previous_depth == stack->count;
 							SDL_LockMutex(animMutex);
 							if(globalpill) { 
 								SDL_FreeSurface(globalpill); 
@@ -3080,7 +3080,7 @@ int main (int argc, char *argv[]) {
 							pilltargetTextY = +screen->w;
 							task->move_w = max_width;
 							task->move_h = SCALE1(PILL_SIZE);
-							task->frames = is_scrolling && CFG_getMenuAnimations() ? 3:1;
+							task->frames = should_animate && CFG_getMenuAnimations() ? 3:1;
 							task->entry_name = strdup(notext ? " " : entry_name);
 							animPill(task);
 						}
