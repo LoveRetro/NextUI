@@ -500,9 +500,13 @@ static inline void SaveSettings(void) {
 ///////// Getters exposed in public API
 
 int GetBrightness(void) { // 0-10
+	if (settings->mute && GetMutedBrightness() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		return GetMutedBrightness();
 	return settings->brightness;
 }
 int GetColortemp(void) { // 0-10
+	if (settings->mute && GetMutedColortemp() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		return GetMutedColortemp();
 	return settings->colortemperature;
 }
 int GetVolume(void) { // 0-20
@@ -532,14 +536,20 @@ int GetMute(void) {
 }
 int GetContrast(void)
 {
+	if (settings->mute && GetMutedContrast() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		return GetMutedContrast();
 	return settings->contrast;
 }
 int GetSaturation(void)
 {
+	if (settings->mute && GetMutedSaturation() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		return GetMutedSaturation();
 	return settings->saturation;
 }
 int GetExposure(void)
 {
+	if (settings->mute && GetMutedExposure() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		return GetMutedExposure();
 	return settings->exposure;
 }
 int GetMutedBrightness(void)
@@ -610,17 +620,21 @@ int GetMuteTurboR2(void)
 ///////// Setters exposed in public API
 
 void SetBrightness(int value) {
+	if (settings->mute && GetMutedBrightness() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		return SetRawBrightness(scaleBrightness(GetMutedBrightness()));
 	SetRawBrightness(scaleBrightness(value));
 	settings->brightness = value;
 	SaveSettings();
 }
 void SetColortemp(int value) {
+	if (settings->mute && GetMutedColortemp() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		return SetRawColortemp(scaleColortemp(GetMutedColortemp()));
 	SetRawColortemp(scaleColortemp(value));
 	settings->colortemperature = value;
 	SaveSettings();
 }
 void SetVolume(int value) { // 0-20
-	if (settings->mute) 
+	if (settings->mute && GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 		return SetRawVolume(scaleVolume(GetMutedVolume()));
 	
 	if (settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
@@ -718,18 +732,24 @@ void SetMute(int value) {
 }
 void SetContrast(int value)
 {
+	if (settings->mute && GetMutedContrast() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		return SetRawContrast(scaleContrast(GetMutedContrast()));
 	SetRawContrast(scaleContrast(value));
 	settings->contrast = value;
 	SaveSettings();
 }
 void SetSaturation(int value)
 {
+	if (settings->mute && GetMutedSaturation() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		return SetRawSaturation(scaleSaturation(GetMutedSaturation()));
 	SetRawSaturation(scaleSaturation(value));
 	settings->saturation = value;
 	SaveSettings();
 }
 void SetExposure(int value)
 {
+	if (settings->mute && GetMutedExposure() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
+		return SetRawExposure(scaleExposure(GetMutedExposure()));
 	SetRawExposure(scaleExposure(value));
 	settings->exposure = value;
 	SaveSettings();
