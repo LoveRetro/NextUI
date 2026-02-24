@@ -3131,7 +3131,17 @@ int main (int argc, char *argv[]) {
 
 			if(animationdirection != ANIM_NONE) {
 				if(CFG_getMenuTransitions()) {
-					GFX_clearLayers(LAYER_BACKGROUND);
+					SDL_LockMutex(bgMutex);
+					if(folderbgbmp) {
+						GFX_drawOnLayer(folderbgbmp, 0, 0, screen->w, screen->h, 1.0f, 0, LAYER_BACKGROUND);
+					} else {
+						SDL_Surface *bgfill = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, screen->format->BitsPerPixel, screen->format->format);
+						uint32_t bgc = CFG_getColor(7);
+						SDL_FillRect(bgfill, NULL, SDL_MapRGB(screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
+						GFX_drawOnLayer(bgfill, 0, 0, screen->w, screen->h, 1.0f, 0, LAYER_BACKGROUND);
+						SDL_FreeSurface(bgfill);
+					}
+					SDL_UnlockMutex(bgMutex);
 					folderbgchanged = 1;
 					GFX_clearLayers(LAYER_TRANSITION);
 					GFX_flipHidden();
@@ -3152,8 +3162,13 @@ int main (int argc, char *argv[]) {
 				if(folderbgchanged) {
 					if(folderbgbmp)
 						GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,LAYER_BACKGROUND);
-					else
-						GFX_clearLayers(LAYER_BACKGROUND);
+					else {
+						SDL_Surface *bgfill = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, screen->format->BitsPerPixel, screen->format->format);
+						uint32_t bgc = CFG_getColor(7);
+						SDL_FillRect(bgfill, NULL, SDL_MapRGB(screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
+						GFX_drawOnLayer(bgfill, 0, 0, screen->w, screen->h, 1.0f, 0, LAYER_BACKGROUND);
+						SDL_FreeSurface(bgfill);
+					}
 					folderbgchanged = 0;
 				}
 				SDL_UnlockMutex(bgMutex);
@@ -3163,8 +3178,13 @@ int main (int argc, char *argv[]) {
 				if(folderbgchanged) {
 					if(folderbgbmp)
 						GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,LAYER_BACKGROUND);
-					else
-						GFX_clearLayers(LAYER_BACKGROUND);
+					else {
+						SDL_Surface *bgfill = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, screen->format->BitsPerPixel, screen->format->format);
+						uint32_t bgc = CFG_getColor(7);
+						SDL_FillRect(bgfill, NULL, SDL_MapRGB(screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
+						GFX_drawOnLayer(bgfill, 0, 0, screen->w, screen->h, 1.0f, 0, LAYER_BACKGROUND);
+						SDL_FreeSurface(bgfill);
+					}
 					folderbgchanged = 0;
 				}
 				SDL_UnlockMutex(bgMutex);
@@ -3216,8 +3236,13 @@ int main (int argc, char *argv[]) {
 			if(folderbgchanged) {
 				if(folderbgbmp)
 					GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,LAYER_BACKGROUND);
-				else 
-					GFX_clearLayers(LAYER_BACKGROUND);
+				else {
+					SDL_Surface *bgfill = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, screen->format->BitsPerPixel, screen->format->format);
+					uint32_t bgc = CFG_getColor(7);
+					SDL_FillRect(bgfill, NULL, SDL_MapRGB(screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
+					GFX_drawOnLayer(bgfill, 0, 0, screen->w, screen->h, 1.0f, 0, LAYER_BACKGROUND);
+					SDL_FreeSurface(bgfill);
+				}
 				folderbgchanged = 0;
 			}
 			SDL_UnlockMutex(bgMutex);

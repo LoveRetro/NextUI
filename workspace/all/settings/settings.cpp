@@ -178,10 +178,10 @@ int main(int argc, char *argv[])
                 []() -> std::any { return CFG_getColor(5); }, 
                 [](const std::any &value) { CFG_setColor(5, std::any_cast<uint32_t>(value)); },
                 []() { CFG_setColor(5, CFG_DEFAULT_COLOR5);}},
-                //new MenuItem{ListItemType::Color, "Background color", "Main UI background color", colors, color_strings, 
-                //[]() -> std::any { return CFG_getColor(7); }, 
-                //[](const std::any &value) { CFG_setColor(7, std::any_cast<uint32_t>(value)); },
-                //[]() { CFG_setColor(7, CFG_DEFAULT_COLOR7);}},
+                new MenuItem{ListItemType::Color, "Background Color", "Background color used when no background image is set.", colors, color_strings,
+                []() -> std::any { return CFG_getColor(7); },
+                [](const std::any &value) { CFG_setColor(7, std::any_cast<uint32_t>(value)); },
+                []() { CFG_setColor(7, CFG_DEFAULT_COLOR7);}},
                 new MenuItem{ListItemType::Generic, "Show battery percentage", "Show battery level as percent in the status pill", {false, true}, on_off, 
                 []() -> std::any { return CFG_getShowBatteryPercent(); },
                 [](const std::any &value) { CFG_setShowBatteryPercent(std::any_cast<bool>(value)); },
@@ -574,6 +574,9 @@ int main(int argc, char *argv[])
                 if(bgbmp) {
                     SDL_Rect image_rect = {0, 0, ctx.screen->w, ctx.screen->h};
                     SDL_BlitSurface(bgbmp, NULL, ctx.screen, &image_rect);
+                } else {
+                    uint32_t bgc = CFG_getColor(7);
+                    SDL_FillRect(ctx.screen, NULL, SDL_MapRGB(ctx.screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
                 }
 
                 int ow = 0;
