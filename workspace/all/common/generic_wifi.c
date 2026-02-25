@@ -22,7 +22,7 @@
 bool PLAT_hasWifi() { return true; }
 
 #define WIFI_INTERFACE "wlan0"
-#define WPA_CLI_CMD "wpa_cli -p /etc/wifi/sockets -i " WIFI_INTERFACE
+#define WPA_CLI_CMD "wpa_cli -p " WIFI_SOCK_DIR " -i " WIFI_INTERFACE
 
 #define wifilog(fmt, ...) \
     LOG_note(PLAT_wifiDiagnosticsEnabled() ? LOG_INFO : LOG_DEBUG, fmt, ##__VA_ARGS__)
@@ -331,6 +331,10 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info)
 			connection_info->link_speed = (int)atof(bitrate + 11);
 		}
 	}
+    else {
+        wifilog("iw command is not supported.");
+        connection_info->rssi = -60;
+    }
 
 	wifilog("Connected AP: %s\n", connection_info->ssid);
 	wifilog("IP address: %s\n", connection_info->ip);

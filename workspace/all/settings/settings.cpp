@@ -5,6 +5,7 @@ extern "C"
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+#include "ra_auth.h"
 }
 
 #include <csignal>
@@ -73,13 +74,52 @@ static const std::vector<std::string> color_strings = {
 
 static const std::vector<std::string> font_names = {"OG", "Next"};
 
-static const std::vector<std::any> timeout_secs = {0U, 5U, 10U, 15U, 30U, 45U, 60U, 90U, 120U, 240U, 360U, 600U};
-static const std::vector<std::string> timeout_labels = {"Never", "5s", "10s", "15s", "30s", "45s", "60s", "90s", "2m", "4m", "6m", "10m"};
+static const std::vector<std::any>    screen_timeout_secs = {0U, 5U, 10U, 15U, 30U, 45U, 60U, 90U, 120U, 240U, 360U, 600U};
+static const std::vector<std::string> screen_timeout_labels = {"Never", "5s", "10s", "15s", "30s", "45s", "60s", "90s", "2m", "4m", "6m", "10m"};
+
+static const std::vector<std::any>    sleep_timeout_secs = {5U, 10U, 15U, 30U, 45U, 60U, 90U, 120U, 240U, 360U, 600U};
+static const std::vector<std::string> sleep_timeout_labels = {"5s", "10s", "15s", "30s", "45s", "60s", "90s", "2m", "4m", "6m", "10m"};
 
 static const std::vector<std::string> on_off = {"Off", "On"};
 
 static const std::vector<std::string> scaling_strings = {"Fullscreen", "Fit", "Fill"};
 static const std::vector<std::any> scaling = {(int)GFX_SCALE_FULLSCREEN, (int)GFX_SCALE_FIT, (int)GFX_SCALE_FILL};
+
+// Notification duration options (in seconds)
+static const std::vector<std::any> notify_duration_values = {1, 2, 3, 4, 5};
+static const std::vector<std::string> notify_duration_labels = {"1s", "2s", "3s", "4s", "5s"};
+
+// Progress notification duration options (in seconds, 0 = disabled)
+static const std::vector<std::any> progress_duration_values = {0, 1, 2, 3, 4, 5};
+static const std::vector<std::string> progress_duration_labels = {"Off", "1s", "2s", "3s", "4s", "5s"};
+
+// RetroAchievements sort order options
+static const std::vector<std::any> ra_sort_values = {
+    (int)RA_SORT_UNLOCKED_FIRST,
+    (int)RA_SORT_DISPLAY_ORDER_FIRST,
+    (int)RA_SORT_DISPLAY_ORDER_LAST,
+    (int)RA_SORT_WON_BY_MOST,
+    (int)RA_SORT_WON_BY_LEAST,
+    (int)RA_SORT_POINTS_MOST,
+    (int)RA_SORT_POINTS_LEAST,
+    (int)RA_SORT_TITLE_AZ,
+    (int)RA_SORT_TITLE_ZA,
+    (int)RA_SORT_TYPE_ASC,
+    (int)RA_SORT_TYPE_DESC
+};
+static const std::vector<std::string> ra_sort_labels = {
+    "Unlocked First",
+    "Display Order (First)",
+    "Display Order (Last)",
+    "Won By (Most)",
+    "Won By (Least)",
+    "Points (Most)",
+    "Points (Least)",
+    "Title (A-Z)",
+    "Title (Z-A)",
+    "Type (Asc)",
+    "Type (Desc)"
+};
 
 namespace {
     std::string execCommand(const char* cmd) {
@@ -99,25 +139,111 @@ namespace {
     }
 
     std::string extractBusyBoxVersion(const std::string& output) {
-        std::regex versionRegex(R"(BusyBox\s+v[\d.]+.*)");
+        std::regex versionRegex(R"(BusyBox\s+(v[\d.]+))");
         std::smatch match;
         if (std::regex_search(output, match, versionRegex)) {
-            return match.str(0);
+            return match.str(1);
         }
         return "";
     }
+
+    class DeviceInfo {
+    public:
+        enum Vendor {
+            Unknown,
+            Trimui,
+            Miyoo
+        };
+
+        enum Model {
+            UnknownModel,
+            Brick,
+            SmartPro,
+            SmartProS,
+            Flip
+        };
+
+        enum Platform {
+            UnknownPlatform,
+            tg5040,
+            tg5050,
+            my355
+        };
+
+        DeviceInfo() {
+            char* device = getenv("DEVICE");
+            if (device) {
+                if(exactMatch("brick", device)) {
+                    m_vendor = Trimui;
+                    m_model = Brick;
+                    m_platform = tg5040;
+                } else if(exactMatch("smartpro", device)) {
+                    m_vendor = Trimui;
+                    m_model = SmartPro;
+                    m_platform = tg5040;
+                } else if(exactMatch("smartpros", device)) {
+                    m_vendor = Trimui;
+                    m_model = SmartProS;
+                    m_platform = tg5050;
+                } else if(exactMatch("my355", device)) {
+                    m_vendor = Trimui;
+                    m_model = Flip;
+                    m_platform = my355;
+                }
+            }
+        }
+
+        Vendor getVendor() const { return m_vendor; }
+        Model getModel() const { return m_model; }
+        Platform getPlatform() const { return m_platform; }
+
+        bool hasColorTemperature() const {
+            return m_platform == tg5040;
+        }
+
+        bool hasContrastSaturation() const {
+            return m_platform == my355 || m_platform == tg5040;
+        }
+
+        bool hasExposure() const {
+            return m_platform == tg5040;
+        }
+
+        bool hasActiveCooling() const {
+            return m_platform == tg5050;
+        }
+
+        bool hasMuteToggle() const {
+            return m_platform == tg5050 || m_platform == tg5040;
+        }
+
+        bool hasAnalogSticks() const {
+            return m_model == SmartPro || m_model == SmartProS;
+        }
+
+        bool hasWifi() const {
+            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355;
+        }
+        
+        bool hasBluetooth() const {
+            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355;
+        }
+    
+    private:
+        Vendor m_vendor = Unknown;
+        Model m_model = UnknownModel;
+        Platform m_platform = UnknownPlatform;
+    };
 }
 int main(int argc, char *argv[])
 {
     try
     {
-        char* device = getenv("DEVICE");
-        bool is_brick = exactMatch("brick", device);
-        bool is_smartpro_s = exactMatch("smartpros", device);
+        DeviceInfo deviceInfo;
 
         char version[128];
         PLAT_getOsVersionInfo(version, 128);
-        LOG_info("This is TrimUI stock OS version %s\n", version);
+        LOG_info("This is stock OS version %s\n", version);
         InitSettings();
 
         PWR_setCPUSpeed(CPU_SPEED_MENU);
@@ -247,14 +373,17 @@ int main(int argc, char *argv[])
 
         };
 
-        // tg5050 does not have display engine, no contrast/saturation/exposure/colortemp for now
-        if(exactMatch("smartpro", device) || exactMatch("brick", device))
+        if(deviceInfo.hasColorTemperature())
         {
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "Color temperature", "Color temperature (0 to 40)", 0, 40, "",[]() -> std::any
                 { return GetColortemp(); }, [](const std::any &value)
                 { SetColortemp(std::any_cast<int>(value)); },
                 []() { SetColortemp(SETTINGS_DEFAULT_COLORTEMP);}});
+        }
+
+        if(deviceInfo.hasContrastSaturation())
+        {
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "Contrast", "Contrast enhancement (-4 to 5)", -4, 5, "",[]() -> std::any
                 { return GetContrast(); }, [](const std::any &value)
@@ -265,6 +394,10 @@ int main(int argc, char *argv[])
                 { return GetSaturation(); }, [](const std::any &value)
                 { SetSaturation(std::any_cast<int>(value)); },
                 []() { SetSaturation(SETTINGS_DEFAULT_SATURATION);}});
+        }
+
+        if(deviceInfo.hasExposure())
+        {
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "Exposure", "Exposure enhancement (-4 to 5)", -4, 5, "",[]() -> std::any
                 { return GetExposure(); }, [](const std::any &value)
@@ -283,11 +416,11 @@ int main(int argc, char *argv[])
             []() -> std::any{ return GetVolume(); }, [](const std::any &value)
             { SetVolume(std::any_cast<int>(value)); },
             []() { SetVolume(SETTINGS_DEFAULT_VOLUME);}},
-            new MenuItem{ListItemType::Generic, "Screen timeout", "Time before screen turns off (0-600s)", timeout_secs, timeout_labels, []() -> std::any
+            new MenuItem{ListItemType::Generic, "Screen timeout", "Period of inactivity before screen turns off (0-600s)", screen_timeout_secs, screen_timeout_labels, []() -> std::any
             { return CFG_getScreenTimeoutSecs(); }, [](const std::any &value)
             { CFG_setScreenTimeoutSecs(std::any_cast<uint32_t>(value)); },
             []() { CFG_setScreenTimeoutSecs(CFG_DEFAULT_SCREENTIMEOUTSECS);}},
-            new MenuItem{ListItemType::Generic, "Suspend timeout", "Time before device goes to sleep (0-600s)", timeout_secs, timeout_labels, []() -> std::any
+            new MenuItem{ListItemType::Generic, "Suspend timeout", "Time before device goes to sleep after screen is off (5-600s)", sleep_timeout_secs, sleep_timeout_labels, []() -> std::any
             { return CFG_getSuspendTimeoutSecs(); }, [](const std::any &value)
             { CFG_setSuspendTimeoutSecs(std::any_cast<uint32_t>(value)); },
             []() { CFG_setSuspendTimeoutSecs(CFG_DEFAULT_SUSPENDTIMEOUTSECS);}},
@@ -337,7 +470,7 @@ int main(int argc, char *argv[])
             []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}}
         };
 
-        if(exactMatch("smartpro", device) || exactMatch("brick", device))
+        if(deviceInfo.getPlatform() == DeviceInfo::tg5040)
         {
             systemItems.push_back(
                 new MenuItem{ListItemType::Generic, "Safe poweroff", "Bypasses the stock shutdown procedure to avoid the \"limbo bug\".\nInstructs the PMIC directly to soft disconnect the battery.", {false, true}, on_off, 
@@ -347,7 +480,7 @@ int main(int argc, char *argv[])
             );
         }
 
-        if(is_smartpro_s)
+        if(deviceInfo.hasActiveCooling())
         {
             systemItems.push_back(
                 new MenuItem{ListItemType::Generic, "Fan Speed", "Select the fan speed percentage (Quiet/Normal/Performance or 0-100%)", 
@@ -383,71 +516,82 @@ int main(int argc, char *argv[])
             []() { SetMutedBrightness(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
         };
         
-        if(exactMatch("smartpro", device) || exactMatch("brick", device))
+        if(deviceInfo.hasMuteToggle())
         {
+            if(deviceInfo.hasColorTemperature()) {
+                muteItems.push_back(
+                    new MenuItem{ListItemType::Generic, "Color temperature when toggled", "Color temperature (0 to 40)", 
+                    {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40}, 
+                    {"Unchanged","0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40"},
+                    []() -> std::any{ return GetMutedColortemp(); }, [](const std::any &value)
+                    { SetMutedColortemp(std::any_cast<int>(value)); },
+                    []() { SetMutedColortemp(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}}
+                );
+            }
+            if(deviceInfo.hasContrastSaturation()) {
+                muteItems.insert(muteItems.end(), {
+                    new MenuItem{ListItemType::Generic, "Contrast when toggled", "Contrast enhancement (-4 to 5)", 
+                    {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
+                    {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+                    []() -> std::any  { return GetMutedContrast(); }, [](const std::any &value)
+                    { SetMutedContrast(std::any_cast<int>(value)); },
+                    []() { SetMutedContrast(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
+                    new MenuItem{ListItemType::Generic, "Saturation when toggled", "Saturation enhancement (-5 to 5)", 
+                    {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -5,-4,-3,-2,-1,0,1,2,3,4,5}, 
+                    {"Unchanged","-5","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+                    []() -> std::any{ return GetMutedSaturation(); }, [](const std::any &value)
+                    { SetMutedSaturation(std::any_cast<int>(value)); },
+                    []() { SetMutedSaturation(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}}}
+                );
+            }
+            if(deviceInfo.hasExposure()) {
+                muteItems.push_back(
+                    new MenuItem{ListItemType::Generic, "Exposure when toggled", "Exposure enhancement (-4 to 5)", 
+                    {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
+                    {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
+                    []() -> std::any  { return GetMutedExposure(); }, [](const std::any &value)
+                    { SetMutedExposure(std::any_cast<int>(value)); },
+                    []() { SetMutedExposure(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}}
+                );
+            }
+            
             muteItems.insert(muteItems.end(), {
-                new MenuItem{ListItemType::Generic, "Color temperature when toggled", "Color temperature (0 to 40)", 
-                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40}, 
-                {"Unchanged","0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40"},
-                []() -> std::any{ return GetMutedColortemp(); }, [](const std::any &value)
-                { SetMutedColortemp(std::any_cast<int>(value)); },
-                []() { SetMutedColortemp(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
-                new MenuItem{ListItemType::Generic, "Contrast when toggled", "Contrast enhancement (-4 to 5)", 
-                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
-                {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
-                []() -> std::any  { return GetMutedContrast(); }, [](const std::any &value)
-                { SetMutedContrast(std::any_cast<int>(value)); },
-                []() { SetMutedContrast(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
-                new MenuItem{ListItemType::Generic, "Saturation when toggled", "Saturation enhancement (-5 to 5)", 
-                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -5,-4,-3,-2,-1,0,1,2,3,4,5}, 
-                {"Unchanged","-5","-4","-3","-2","-1","0","1","2","3","4","5"}, 
-                []() -> std::any{ return GetMutedSaturation(); }, [](const std::any &value)
-                { SetMutedSaturation(std::any_cast<int>(value)); },
-                []() { SetMutedSaturation(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},
-                new MenuItem{ListItemType::Generic, "Exposure when toggled", "Exposure enhancement (-4 to 5)", 
-                {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -4,-3,-2,-1,0,1,2,3,4,5}, 
-                {"Unchanged","-4","-3","-2","-1","0","1","2","3","4","5"}, 
-                []() -> std::any  { return GetMutedExposure(); }, [](const std::any &value)
-                { SetMutedExposure(std::any_cast<int>(value)); },
-                []() { SetMutedExposure(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}}});
+                new MenuItem{ListItemType::Generic, "Turbo fire A", "Enable turbo fire A", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboA(); },
+                [](const std::any &value) { SetMuteTurboA(std::any_cast<int>(value));},
+                []() { SetMuteTurboA(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire B", "Enable turbo fire B", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboB(); },
+                [](const std::any &value) { SetMuteTurboB(std::any_cast<int>(value));},
+                []() { SetMuteTurboB(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire X", "Enable turbo fire X", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboX(); },
+                [](const std::any &value) { SetMuteTurboX(std::any_cast<int>(value));},
+                []() { SetMuteTurboX(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire Y", "Enable turbo fire Y", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboY(); },
+                [](const std::any &value) { SetMuteTurboY(std::any_cast<int>(value));},
+                []() { SetMuteTurboY(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire L1", "Enable turbo fire L1", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboL1(); },
+                [](const std::any &value) { SetMuteTurboL1(std::any_cast<int>(value));},
+                []() { SetMuteTurboL1(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire L2", "Enable turbo fire L2", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboL2(); },
+                [](const std::any &value) { SetMuteTurboL2(std::any_cast<int>(value));},
+                []() { SetMuteTurboL2(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire R1", "Enable turbo fire R1", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboR1(); },
+                [](const std::any &value) { SetMuteTurboR1(std::any_cast<int>(value));},
+                []() { SetMuteTurboR1(0);}},
+                new MenuItem{ListItemType::Generic, "Turbo fire R2", "Enable turbo fire R2", {0, 1}, on_off, []() -> std::any
+                { return GetMuteTurboR2(); },
+                [](const std::any &value) { SetMuteTurboR2(std::any_cast<int>(value));},
+                []() { SetMuteTurboR2(0);}}
+            });
         }
 
-        muteItems.insert(muteItems.end(), {
-            new MenuItem{ListItemType::Generic, "Turbo fire A", "Enable turbo fire A", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboA(); },
-            [](const std::any &value) { SetMuteTurboA(std::any_cast<int>(value));},
-            []() { SetMuteTurboA(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire B", "Enable turbo fire B", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboB(); },
-            [](const std::any &value) { SetMuteTurboB(std::any_cast<int>(value));},
-            []() { SetMuteTurboB(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire X", "Enable turbo fire X", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboX(); },
-            [](const std::any &value) { SetMuteTurboX(std::any_cast<int>(value));},
-            []() { SetMuteTurboX(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire Y", "Enable turbo fire Y", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboY(); },
-            [](const std::any &value) { SetMuteTurboY(std::any_cast<int>(value));},
-            []() { SetMuteTurboY(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire L1", "Enable turbo fire L1", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboL1(); },
-            [](const std::any &value) { SetMuteTurboL1(std::any_cast<int>(value));},
-            []() { SetMuteTurboL1(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire L2", "Enable turbo fire L2", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboL2(); },
-            [](const std::any &value) { SetMuteTurboL2(std::any_cast<int>(value));},
-            []() { SetMuteTurboL2(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire R1", "Enable turbo fire R1", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboR1(); },
-            [](const std::any &value) { SetMuteTurboR1(std::any_cast<int>(value));},
-            []() { SetMuteTurboR1(0);}},
-            new MenuItem{ListItemType::Generic, "Turbo fire R2", "Enable turbo fire R2", {0, 1}, on_off, []() -> std::any
-            { return GetMuteTurboR2(); },
-            [](const std::any &value) { SetMuteTurboR2(std::any_cast<int>(value));},
-            []() { SetMuteTurboR2(0);}}
-        });
-
-        if(is_brick) {
+        if(deviceInfo.hasMuteToggle() && deviceInfo.hasAnalogSticks()){
             muteItems.push_back(
                 new MenuItem{ListItemType::Generic, "Dpad mode when toggled", "Dpad: default. Joystick: Dpad exclusively acts as analog stick.\nBoth: Dpad and Joystick inputs at the same time.", {0, 1, 2}, {"Dpad", "Joystick", "Both"}, []() -> std::any
                 {
@@ -469,20 +613,139 @@ int main(int argc, char *argv[])
         }
         muteItems.push_back(new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu});
 
-        auto muteMenu = new MenuList(MenuItemType::Fixed, "FN Switch", muteItems);
+        auto notificationsMenu = new MenuList(MenuItemType::Fixed, "Notifications",
+        {
+            new MenuItem{ListItemType::Generic, "Save states", "Show notification when saving game state", {false, true}, on_off, 
+            []() -> std::any { return CFG_getNotifyManualSave(); },
+            [](const std::any &value) { CFG_setNotifyManualSave(std::any_cast<bool>(value)); },
+            []() { CFG_setNotifyManualSave(CFG_DEFAULT_NOTIFY_MANUAL_SAVE);}},
+            new MenuItem{ListItemType::Generic, "Load states", "Show notification when loading game state", {false, true}, on_off, 
+            []() -> std::any { return CFG_getNotifyLoad(); },
+            [](const std::any &value) { CFG_setNotifyLoad(std::any_cast<bool>(value)); },
+            []() { CFG_setNotifyLoad(CFG_DEFAULT_NOTIFY_LOAD);}},
+            new MenuItem{ListItemType::Generic, "Screenshots", "Show notification when taking a screenshot", {false, true}, on_off, 
+            []() -> std::any { return CFG_getNotifyScreenshot(); },
+            [](const std::any &value) { CFG_setNotifyScreenshot(std::any_cast<bool>(value)); },
+            []() { CFG_setNotifyScreenshot(CFG_DEFAULT_NOTIFY_SCREENSHOT);}},
+            new MenuItem{ListItemType::Generic, "Vol / Display Adjustments", "Show overlay for volume, brightness,\nand color temp adjustments", {false, true}, on_off, 
+            []() -> std::any { return CFG_getNotifyAdjustments(); },
+            [](const std::any &value) { CFG_setNotifyAdjustments(std::any_cast<bool>(value)); },
+            []() { CFG_setNotifyAdjustments(CFG_DEFAULT_NOTIFY_ADJUSTMENTS);}},
+            new MenuItem{ListItemType::Generic, "Duration", "How long notifications stay on screen", notify_duration_values, notify_duration_labels, 
+            []() -> std::any { return CFG_getNotifyDuration(); },
+            [](const std::any &value) { CFG_setNotifyDuration(std::any_cast<int>(value)); },
+            []() { CFG_setNotifyDuration(CFG_DEFAULT_NOTIFY_DURATION);}},
+            new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
+        });
 
-        // TODO: check WIFI_supported(), hide menu otherwise
-        auto networkMenu = new Wifi::Menu(appQuit, ctx.dirty);
+        // RetroAchievements keyboard prompts
+        auto raUsernamePrompt = new KeyboardPrompt("Enter Username", [](AbstractMenuItem &item) -> InputReactionHint {
+            CFG_setRAUsername(item.getName().c_str());
+            return Exit;
+        });
+        
+        auto raPasswordPrompt = new KeyboardPrompt("Enter Password", [](AbstractMenuItem &item) -> InputReactionHint {
+            CFG_setRAPassword(item.getName().c_str());
+            return Exit;
+        });
 
-        // TODO: check BT_supported(), hide menu otherwise
-        auto btMenu = new Bluetooth::Menu(appQuit, ctx.dirty);
+        auto retroAchievementsMenu = new MenuList(MenuItemType::Fixed, "RetroAchievements",
+        {
+            new MenuItem{ListItemType::Generic, "Enable Achievements", "Enable RetroAchievements integration", {false, true}, on_off, 
+            []() -> std::any { return CFG_getRAEnable(); },
+            [](const std::any &value) { CFG_setRAEnable(std::any_cast<bool>(value)); },
+            []() { CFG_setRAEnable(CFG_DEFAULT_RA_ENABLE);}},
+            new TextInputMenuItem{"Username", "RetroAchievements username",
+            []() -> std::any { 
+                std::string username = CFG_getRAUsername();
+                return username.empty() ? std::string("(not set)") : username;
+            },
+            [raUsernamePrompt](AbstractMenuItem &item) -> InputReactionHint {
+                raUsernamePrompt->setInitialText(CFG_getRAUsername());
+                item.defer(true);
+                return NoOp;
+            }, raUsernamePrompt},
+            new TextInputMenuItem{"Password", "RetroAchievements password",
+            []() -> std::any { 
+                std::string password = CFG_getRAPassword();
+                return password.empty() ? std::string("(not set)") : std::string("********");
+            },
+            [raPasswordPrompt](AbstractMenuItem &item) -> InputReactionHint {
+                raPasswordPrompt->setInitialText(CFG_getRAPassword());
+                item.defer(true);
+                return NoOp;
+            }, raPasswordPrompt},
+            new MenuItem{ListItemType::Button, "Authenticate", "Test credentials and retrieve API token",
+            [](AbstractMenuItem &item) -> InputReactionHint {
+                const char* username = CFG_getRAUsername();
+                const char* password = CFG_getRAPassword();
+                
+                if (!username || strlen(username) == 0 || !password || strlen(password) == 0) {
+                    item.setDesc("Error: Username and password required");
+                    return NoOp;
+                }
+                
+                item.setDesc("Authenticating...");
+                
+                RA_AuthResponse response;
+                RA_AuthResult result = RA_authenticateSync(username, password, &response);
+                
+                if (result == RA_AUTH_SUCCESS) {
+                    CFG_setRAToken(response.token);
+                    CFG_setRAAuthenticated(true);
+                    std::string desc = "Authenticated as " + std::string(response.display_name);
+                    item.setDesc(desc);
+                } else {
+                    CFG_setRAToken("");
+                    CFG_setRAAuthenticated(false);
+                    std::string desc = "Error: " + std::string(response.error_message);
+                    item.setDesc(desc);
+                }
+                return NoOp;
+            }},
+            new StaticMenuItem{ListItemType::Generic, "Status", "Authentication status",
+            []() -> std::any {
+                if (CFG_getRAAuthenticated() && strlen(CFG_getRAToken()) > 0) {
+                    return std::string("Authenticated");
+                }
+                return std::string("Not authenticated");
+            }},
+            // TODO: Hardcore mode hidden until feature is fully implemented and ready for the emulator approval process done by the RetroAchievements team
+            // new MenuItem{ListItemType::Generic, "Hardcore Mode", "Disable save states and cheats for achievements", {false, true}, on_off, 
+            // []() -> std::any { return CFG_getRAHardcoreMode(); },
+            // [](const std::any &value) { CFG_setRAHardcoreMode(std::any_cast<bool>(value)); },
+            // []() { CFG_setRAHardcoreMode(CFG_DEFAULT_RA_HARDCOREMODE);}},
+            new MenuItem{ListItemType::Generic, "Show Notifications", "Show achievement unlock notifications", {false, true}, on_off, 
+            []() -> std::any { return CFG_getRAShowNotifications(); },
+            [](const std::any &value) { CFG_setRAShowNotifications(std::any_cast<bool>(value)); },
+            []() { CFG_setRAShowNotifications(CFG_DEFAULT_RA_SHOW_NOTIFICATIONS);}},
+            new MenuItem{ListItemType::Generic, "Notification Duration", "How long achievement notifications stay on screen", notify_duration_values, notify_duration_labels, 
+            []() -> std::any { return CFG_getRANotificationDuration(); },
+            [](const std::any &value) { CFG_setRANotificationDuration(std::any_cast<int>(value)); },
+            []() { CFG_setRANotificationDuration(CFG_DEFAULT_RA_NOTIFICATION_DURATION);}},
+            new MenuItem{ListItemType::Generic, "Progress Duration", "Duration for progress updates (top-left). Off to disable.", progress_duration_values, progress_duration_labels, 
+            []() -> std::any { return CFG_getRAProgressNotificationDuration(); },
+            [](const std::any &value) { CFG_setRAProgressNotificationDuration(std::any_cast<int>(value)); },
+            []() { CFG_setRAProgressNotificationDuration(CFG_DEFAULT_RA_PROGRESS_NOTIFICATION_DURATION);}},
+            new MenuItem{ListItemType::Generic, "Achievement Sort Order", "How achievements are sorted in the in-game menu", ra_sort_values, ra_sort_labels, 
+            []() -> std::any { return CFG_getRAAchievementSortOrder(); },
+            [](const std::any &value) { CFG_setRAAchievementSortOrder(std::any_cast<int>(value)); },
+            []() { CFG_setRAAchievementSortOrder(CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER);}},
+            new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
+        });
 
+        auto minarchMenu = new MenuList(MenuItemType::List, "In-Game",
+        {
+            new MenuItem{ListItemType::Generic, "Notifications", "Save state notifications", {}, {}, nullptr, nullptr, DeferToSubmenu, notificationsMenu},
+            new MenuItem{ListItemType::Generic, "RetroAchievements", "Achievement tracking settings", {}, {}, nullptr, nullptr, DeferToSubmenu, retroAchievementsMenu},
+        });
+      
         // We need to alert the user about potential issues if the 
         // stock OS was modified in way that are known to cause issues
         std::string bbver = extractBusyBoxVersion(execCommand("cat --help"));
         if (bbver.empty())
             bbver = "BusyBox version not found.";
-        else if(bbver.find(BUSYBOX_STOCK_VERSION) == std::string::npos)
+        else if(deviceInfo.getPlatform() == DeviceInfo::tg5040 && bbver.find(BUSYBOX_STOCK_VERSION) == std::string::npos)
             ctx.menu->showOverlay(
                 "Stock OS changes detected.\n"
                 "This may cause instability or issues.\n"
@@ -514,16 +777,27 @@ int main(int argc, char *argv[])
             },
         });
 
-        ctx.menu = new MenuList(MenuItemType::List, "Main",
-        {
+        std::vector<AbstractMenuItem*> mainItems = {
             new MenuItem{ListItemType::Generic, "Appearance", "UI customization", {}, {}, nullptr, nullptr, DeferToSubmenu, appearanceMenu},
             new MenuItem{ListItemType::Generic, "Display", "", {}, {}, nullptr, nullptr, DeferToSubmenu, displayMenu},
             new MenuItem{ListItemType::Generic, "System", "", {}, {}, nullptr, nullptr, DeferToSubmenu, systemMenu},
-            new MenuItem{ListItemType::Generic, "FN switch", "FN switch settings", {}, {}, nullptr, nullptr, DeferToSubmenu, muteMenu},
-            new MenuItem{ListItemType::Generic, "Network", "", {}, {}, nullptr, nullptr, DeferToSubmenu, networkMenu},
-            new MenuItem{ListItemType::Generic, "Bluetooth", "", {}, {}, nullptr, nullptr, DeferToSubmenu, btMenu},
-            new MenuItem{ListItemType::Generic, "About", "", {}, {}, nullptr, nullptr, DeferToSubmenu, aboutMenu},
-        });
+        };
+        
+        if(deviceInfo.hasMuteToggle())
+            mainItems.push_back(new MenuItem{ListItemType::Generic, "FN switch", "FN switch settings", {}, {}, nullptr, nullptr, DeferToSubmenu, 
+                new MenuList(MenuItemType::Fixed, "FN Switch", muteItems)});
+      
+        mainItems.push_back(new MenuItem{ListItemType::Generic, "In-Game", "In-game settings for MinArch", {}, {}, nullptr, nullptr, DeferToSubmenu, minarchMenu});
+            
+        if(deviceInfo.hasWifi())
+            mainItems.push_back(new MenuItem{ListItemType::Generic, "Network", "", {}, {}, nullptr, nullptr, DeferToSubmenu, new Wifi::Menu(appQuit, ctx.dirty)});
+        
+        if(deviceInfo.hasBluetooth())
+            mainItems.push_back(new MenuItem{ListItemType::Generic, "Bluetooth", "", {}, {}, nullptr, nullptr, DeferToSubmenu, new Bluetooth::Menu(appQuit, ctx.dirty)});
+
+        mainItems.push_back(new MenuItem{ListItemType::Generic, "About", "", {}, {}, nullptr, nullptr, DeferToSubmenu, aboutMenu});
+
+        ctx.menu = new MenuList(MenuItemType::List, "Main", mainItems);
 
         const bool showTitle = false;
         const bool showIndicator = true;

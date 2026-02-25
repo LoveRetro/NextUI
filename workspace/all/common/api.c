@@ -454,72 +454,81 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 		return 0;
 	}
 
-	const uint16_t *pixels = (const uint16_t *)data;
-	int pixel_count = width * height;
+	const uint32_t *pixels = (const uint32_t *)data;
+	int pixel_count = 0;
 
 	uint64_t total_r = 0;
 	uint64_t total_g = 0;
 	uint64_t total_b = 0;
+	uint64_t total_rcolor = 0;
+	uint64_t total_gcolor = 0;
+	uint64_t total_bcolor = 0;
 	uint32_t colorful_pixel_count = 0;
 
-	for (unsigned y = 0; y < height; y++)
+	// Downsample 7x7 instead of 8x8 to de-emphasize effect of
+	// repeated scrolling tiles (intentionally interfere with patterns)
+	for (unsigned y = 0; y < height; y+=7)
 	{
-		for (unsigned x = 0; x < width; x++)
+		for (unsigned x = 0; x < width; x+=7)
 		{
-			uint16_t pixel = pixels[y * (pitch / 2) + x];
+			uint32_t pixel = pixels[y * (pitch / 4) + x];
 
-			uint8_t r = ((pixel & 0xF800) >> 11) << 3;
-			uint8_t g = ((pixel & 0x07E0) >> 5) << 2;
-			uint8_t b = (pixel & 0x001F) << 3;
+			// input pixel format: AABBGGRR
+			uint8_t r =  pixel        & 0xFF;
+			uint8_t g = (pixel >> 8)  & 0xFF;
+			uint8_t b = (pixel >> 16) & 0xFF;
 
-			r |= r >> 5;
-			g |= g >> 6;
-			b |= b >> 5;
+			// max_c = max(max(r, g), b)
+			uint8_t max_c = r > g ? r : g;
+			max_c = max_c > b ? max_c : b;
 
-			uint8_t max_c = fmaxf(fmaxf(r, g), b);
-			uint8_t min_c = fminf(fminf(r, g), b);
+			// min_c = min(min(r, g), b)
+			uint8_t min_c = r < g ? r : g;
+			min_c = min_c < b ? min_c : b;
+
 			uint8_t saturation = max_c == 0 ? 0 : (max_c - min_c) * 255 / max_c;
 
+			total_r += r;
+			total_g += g;
+			total_b += b;
+			pixel_count++;
 			if (saturation > 50 && max_c > 50)
 			{
-				total_r += r;
-				total_g += g;
-				total_b += b;
+				total_rcolor += r;
+				total_gcolor += g;
+				total_bcolor += b;
 				colorful_pixel_count++;
 			}
 		}
 	}
 
-	if (colorful_pixel_count == 0)
+	if (colorful_pixel_count > 0)
 	{
-
-		colorful_pixel_count = pixel_count;
-		total_r = total_g = total_b = 0;
-		for (unsigned y = 0; y < height; y++)
-		{
-			for (unsigned x = 0; x < width; x++)
-			{
-				uint16_t pixel = pixels[y * (pitch / 2) + x];
-				uint8_t r = ((pixel & 0xF800) >> 11) << 3;
-				uint8_t g = ((pixel & 0x07E0) >> 5) << 2;
-				uint8_t b = (pixel & 0x001F) << 3;
-
-				r |= r >> 5;
-				g |= g >> 6;
-				b |= b >> 5;
-
-				total_r += r;
-				total_g += g;
-				total_b += b;
-			}
-		}
+		total_r = total_rcolor;
+		total_g = total_gcolor;
+		total_b = total_bcolor;
+		pixel_count = colorful_pixel_count;
 	}
 
-	uint8_t avg_r = total_r / colorful_pixel_count;
-	uint8_t avg_g = total_g / colorful_pixel_count;
-	uint8_t avg_b = total_b / colorful_pixel_count;
+	uint8_t ambient_r = total_r / pixel_count;
+	uint8_t ambient_g = total_g / pixel_count;
+	uint8_t ambient_b = total_b / pixel_count;
 
-	return (avg_r << 16) | (avg_g << 8) | avg_b;
+	// keep track of last invocation's values
+	// in order to blend them
+	static uint16_t amb_prev_r = 0;
+	static uint16_t amb_prev_g = 0;
+	static uint16_t amb_prev_b = 0;
+
+	uint32_t average_color = (((amb_prev_r + ambient_r) / 2) << 16) |
+		(((amb_prev_g + ambient_g) / 2) << 8) |
+		((amb_prev_b + ambient_b) / 2);
+
+	amb_prev_r = ambient_r;
+	amb_prev_g = ambient_g;
+	amb_prev_b = ambient_b;
+
+	return average_color;
 }
 
 void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch, int mode)
@@ -533,22 +542,18 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 	{
 		(lightsAmbient)[2].color1 = dominant_color;
 		(lightsAmbient)[2].effect = 4;
-		(lightsAmbient)[2].brightness = 100;
 	}
 	if (mode == 1 || mode == 3)
 	{
 		(lightsAmbient)[0].color1 = dominant_color;
 		(lightsAmbient)[0].effect = 4;
-		(lightsAmbient)[0].brightness = 100;
 		(lightsAmbient)[1].color1 = dominant_color;
 		(lightsAmbient)[1].effect = 4;
-		(lightsAmbient)[1].brightness = 100;
 	}
 	if (mode == 1 || mode == 4 || mode == 5)
 	{
 		(lightsAmbient)[3].color1 = dominant_color;
 		(lightsAmbient)[3].effect = 4;
-		(lightsAmbient)[3].brightness = 100;
 	}
 }
 
@@ -921,6 +926,91 @@ int GFX_wrapText(TTF_Font *font, char *str, int max_width, int max_lines)
 	if (line_width > max_line_width)
 		max_line_width = line_width;
 	return max_line_width;
+}
+
+int GFX_blitWrappedText(TTF_Font *font, const char *text, int max_width, int max_lines, SDL_Color color, SDL_Surface *surface, int y)
+{
+	if (!text || !text[0])
+		return y;
+
+	int center_x = surface->w / 2;
+
+	char *text_copy = strdup(text);
+	if (!text_copy)
+		return y;
+
+	char *words[256];
+	int word_count = 0;
+
+	// Split text into words
+	char *token = strtok(text_copy, " ");
+	while (token && word_count < 256) {
+		words[word_count++] = token;
+		token = strtok(NULL, " ");
+	}
+
+	// Build and render lines
+	char line[512] = "";
+	int line_num = 0;
+	for (int w = 0; w < word_count; w++) {
+		char test_line[512];
+		if (line[0] == '\0') {
+			snprintf(test_line, sizeof(test_line), "%s", words[w]);
+		} else {
+			snprintf(test_line, sizeof(test_line), "%s %s", line, words[w]);
+		}
+
+		int test_width, test_height;
+		TTF_SizeUTF8(font, test_line, &test_width, &test_height);
+
+		if (test_width > max_width && line[0] != '\0') {
+			// Current line is full
+			if (!max_lines || line_num < max_lines - 1) {
+				// Render line and continue to next
+				SDL_Surface *line_surface = TTF_RenderUTF8_Blended(font, line, color);
+				if (line_surface) {
+					SDL_BlitSurface(line_surface, NULL, surface, &(SDL_Rect){
+						center_x - line_surface->w / 2, y
+					});
+					y += line_surface->h;
+					SDL_FreeSurface(line_surface);
+				}
+				line_num++;
+				snprintf(line, sizeof(line), "%s", words[w]);
+			} else {
+				// Last allowed line with more words remaining - add ellipsis
+				char truncated[512];
+				snprintf(truncated, sizeof(truncated), "%s...", line);
+				SDL_Surface *line_surface = TTF_RenderUTF8_Blended(font, truncated, color);
+				if (line_surface) {
+					SDL_BlitSurface(line_surface, NULL, surface, &(SDL_Rect){
+						center_x - line_surface->w / 2, y
+					});
+					y += line_surface->h;
+					SDL_FreeSurface(line_surface);
+				}
+				line[0] = '\0';  // Mark as rendered
+				break;
+			}
+		} else {
+			snprintf(line, sizeof(line), "%s", test_line);
+		}
+	}
+
+	// Render any remaining text
+	if (line[0] != '\0') {
+		SDL_Surface *line_surface = TTF_RenderUTF8_Blended(font, line, color);
+		if (line_surface) {
+			SDL_BlitSurface(line_surface, NULL, surface, &(SDL_Rect){
+				center_x - line_surface->w / 2, y
+			});
+			y += line_surface->h;
+			SDL_FreeSurface(line_surface);
+		}
+	}
+
+	free(text_copy);
+	return y;
 }
 
 ///////////////////////////////
@@ -1785,65 +1875,94 @@ void GFX_blitBatteryAtPosition(SDL_Surface *dst, int x, int y)
 	}
 }
 
+// Helper function to render a hardware indicator (volume/brightness/colortemp) at a specific position.
+// This is the reusable core extracted from GFX_blitHardwareGroup for use in notifications.
+int GFX_blitHardwareIndicator(SDL_Surface *dst, int x, int y, IndicatorType indicator_type)
+{
+	int setting_value;
+	int setting_min;
+	int setting_max;
+	int asset;
+	
+	int ow = SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
+	int ox = x;
+	int oy = y;
+	
+	// Draw the pill background
+	GFX_blitPillLight(ASSET_WHITE_PILL, dst, &(SDL_Rect){ox, oy, ow, SCALE1(PILL_SIZE)});
+	
+	// Determine which setting to display
+	if (indicator_type == INDICATOR_BRIGHTNESS)
+	{
+		setting_value = GetBrightness();
+		setting_min = BRIGHTNESS_MIN;
+		setting_max = BRIGHTNESS_MAX;
+		asset = ASSET_BRIGHTNESS;
+	}
+	else if (indicator_type == INDICATOR_COLORTEMP)
+	{
+		setting_value = GetColortemp();
+		setting_min = COLORTEMP_MIN;
+		setting_max = COLORTEMP_MAX;
+		asset = ASSET_COLORTEMP;
+	}
+	else // INDICATOR_VOLUME
+	{
+		setting_value = GetVolume();
+		setting_min = VOLUME_MIN;
+		setting_max = VOLUME_MAX;
+		if(GetAudioSink() == AUDIO_SINK_BLUETOOTH)
+			asset = (setting_value > 0 ? ASSET_BLUETOOTH : ASSET_BLUETOOTH_OFF);
+		else
+			asset = (setting_value > 0 ? ASSET_VOLUME : ASSET_VOLUME_MUTE);
+	}
+	
+	// Draw the icon
+	SDL_Rect asset_rect;
+	GFX_assetRect(asset, &asset_rect);
+	int ax = ox + (SCALE1(PILL_SIZE) - asset_rect.w) / 2;
+	int ay = oy + (SCALE1(PILL_SIZE) - asset_rect.h) / 2;
+	GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){ax, ay}, THEME_COLOR6_255);
+	
+	// Draw the progress bar background
+	ox += SCALE1(PILL_SIZE);
+	int bar_y = y + SCALE1((PILL_SIZE - SETTINGS_SIZE) / 2);
+	GFX_blitPillColor(gfx.mode == MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, 
+		&(SDL_Rect){ox, bar_y, SCALE1(SETTINGS_WIDTH), SCALE1(SETTINGS_SIZE)}, THEME_COLOR3, RGB_WHITE);
+	
+	// Draw the progress bar fill
+	float percent = ((float)(setting_value - setting_min) / (setting_max - setting_min));
+	if (indicator_type == 1 || indicator_type == 3 || setting_value > 0)
+	{
+		GFX_blitPillDark(ASSET_BAR, dst, &(SDL_Rect){ox, bar_y, SCALE1(SETTINGS_WIDTH) * percent, SCALE1(SETTINGS_SIZE)});
+	}
+	
+	return ow;
+}
+
+SDL_Surface* GFX_createScreenFormatSurface(int width, int height)
+{
+	if (!gfx.screen) return NULL;
+	return SDL_CreateRGBSurfaceWithFormat(
+		SDL_SWSURFACE, width, height, 
+		gfx.screen->format->BitsPerPixel, 
+		gfx.screen->format->format
+	);
+}
+
 int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 {
 	int ox;
 	int oy;
 	int ow = 0;
 
-	int setting_value;
-	int setting_min;
-	int setting_max;
-
 	if (show_setting && !GetHDMI())
 	{
-		int asset;
+		// Use the helper function to render the indicator at the standard position
 		ow = SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
 		ox = dst->w - SCALE1(PADDING) - ow;
 		oy = SCALE1(PADDING);
-		GFX_blitPillColor(ASSET_WHITE_PILL, dst, &(SDL_Rect){ox, oy, ow, SCALE1(PILL_SIZE)}, THEME_COLOR2, RGB_WHITE);
-
-		if (show_setting == 1)
-		{
-			setting_value = GetBrightness();
-			setting_min = BRIGHTNESS_MIN;
-			setting_max = BRIGHTNESS_MAX;
-			asset = ASSET_BRIGHTNESS;
-		}
-		else if (show_setting == 3)
-		{
-			setting_value = GetColortemp();
-			setting_min = COLORTEMP_MIN;
-			setting_max = COLORTEMP_MAX;
-			asset = ASSET_COLORTEMP;
-		}
-		else
-		{
-			setting_value = GetVolume();
-			setting_min = VOLUME_MIN;
-			setting_max = VOLUME_MAX;
-			if(GetAudioSink() == AUDIO_SINK_BLUETOOTH)
-				asset = (setting_value > 0 ? ASSET_BLUETOOTH : ASSET_BLUETOOTH_OFF);
-			else
-				asset = (setting_value > 0 ? ASSET_VOLUME : ASSET_VOLUME_MUTE);
-		}
-
-		SDL_Rect asset_rect;
-		GFX_assetRect(asset, &asset_rect);
-		int ax = ox + (SCALE1(PILL_SIZE) - asset_rect.w) / 2;
-		int ay = oy + (SCALE1(PILL_SIZE) - asset_rect.h) / 2;
-		GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){ax, ay}, THEME_COLOR6_255);
-
-		ox += SCALE1(PILL_SIZE);
-		oy += SCALE1((PILL_SIZE - SETTINGS_SIZE) / 2);
-		GFX_blitPillColor(gfx.mode == MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, &(SDL_Rect){ox, oy, SCALE1(SETTINGS_WIDTH), SCALE1(SETTINGS_SIZE)}, 
-			THEME_COLOR3, RGB_WHITE);
-
-		float percent = ((float)(setting_value - setting_min) / (setting_max - setting_min));
-		if (show_setting == 1 || show_setting == 3 || setting_value > 0)
-		{
-			GFX_blitPillDark(ASSET_BAR, dst, &(SDL_Rect){ox, oy, SCALE1(SETTINGS_WIDTH) * percent, SCALE1(SETTINGS_SIZE)});
-		}
+		GFX_blitHardwareIndicator(dst, ox, oy, (IndicatorType)show_setting);
 	}
 	else
 	{
