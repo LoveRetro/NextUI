@@ -7,6 +7,7 @@ extern "C"
 #include "utils.h"
 }
 
+#include <cmath>
 #include <mutex>
 #include <shared_mutex>
 typedef std::shared_mutex Lock;
@@ -1094,39 +1095,78 @@ void ColorPickerMenu::drawPreset(SDL_Surface *surface, const SDL_Rect &row,
     SDL_FreeSurface(name_surf);
 }
 
+static void drawSolidRoundedRect(SDL_Surface *surface, const SDL_Rect &rect, int radius, uint32_t color)
+{
+    int r = std::max(0, std::min(radius, std::min(rect.w, rect.h) / 2));
+    for (int row = 0; row < rect.h; row++)
+    {
+        int x_clip = 0;
+        if (row < r) {
+            float dx = sqrtf((float)(2 * r * row - row * row));
+            x_clip = r - (int)dx;
+        } else if (row >= rect.h - r) {
+            int i = rect.h - 1 - row;
+            float dx = sqrtf((float)(2 * r * i - i * i));
+            x_clip = r - (int)dx;
+        }
+        int x0 = rect.x + x_clip;
+        int span = rect.w - 2 * x_clip;
+        if (span <= 0) continue;
+        SDL_Rect l = {x0, rect.y + row, span, 1};
+        SDL_FillRect(surface, &l, color);
+    }
+}
+
+static void drawRoundedRect(SDL_Surface *surface, const SDL_Rect &rect, int radius,
+                             uint32_t outer, uint32_t middle, uint32_t fill)
+{
+    drawSolidRoundedRect(surface, rect, radius, outer);
+    if (rect.w > 2 && rect.h > 2) {
+        SDL_Rect r1 = {rect.x+1, rect.y+1, rect.w-2, rect.h-2};
+        drawSolidRoundedRect(surface, r1, std::max(0, radius-1), middle);
+    }
+    if (rect.w > 4 && rect.h > 4) {
+        SDL_Rect r2 = {rect.x+2, rect.y+2, rect.w-4, rect.h-4};
+        drawSolidRoundedRect(surface, r2, std::max(0, radius-2), fill);
+    }
+}
+
 void ColorPickerMenu::drawCustom(SDL_Surface *surface, const SDL_Rect &dst)
 {
-    const int PREVIEW_W = SCALE1(BUTTON_SIZE * 2 + PADDING);
-    const int SLIDER_AREA_W = dst.w - PREVIEW_W - SCALE1(PADDING);
+    const int TOP_OFFSET    = SCALE1(4);
+    const int PREVIEW_SIZE  = SCALE1(BUTTON_SIZE * 2 + PADDING);
+    const int SLIDER_AREA_W = dst.w - PREVIEW_SIZE - SCALE1(PADDING);
+    const int PREVIEW_RADIUS = SCALE1(4);
+
+    uint32_t white = SDL_MapRGB(surface->format, 255, 255, 255);
+    uint32_t black = SDL_MapRGB(surface->format, 0, 0, 0);
+    uint32_t col = currentColor();
+    uint32_t col_mapped = SDL_MapRGB(surface->format, (col >> 16) & 0xFF, (col >> 8) & 0xFF, col & 0xFF);
 
     // R, G, B slider rows
     const char *channel_labels[] = {"R", "G", "B"};
     int channel_values[] = {r, g, b};
     for (int i = 0; i < 3; i++)
     {
-        SDL_Rect row = {dst.x, dst.y + SCALE1(i * BUTTON_SIZE), SLIDER_AREA_W, SCALE1(BUTTON_SIZE)};
+        SDL_Rect row = {dst.x, dst.y + TOP_OFFSET + SCALE1(i * BUTTON_SIZE), SLIDER_AREA_W, SCALE1(BUTTON_SIZE)};
         drawSlider(surface, row, channel_labels[i], channel_values[i], selected == i, i);
     }
 
-    // Color preview square to the right of sliders
+    // Color preview square to the right of sliders, centered vertically in the 3-slider area
     SDL_Rect preview = {
         dst.x + SLIDER_AREA_W + SCALE1(PADDING),
-        dst.y,
-        PREVIEW_W,
-        SCALE1(BUTTON_SIZE * 3)
+        dst.y + TOP_OFFSET + (SCALE1(BUTTON_SIZE * 3) - PREVIEW_SIZE) / 2,
+        PREVIEW_SIZE,
+        PREVIEW_SIZE
     };
-    SDL_FillRect(surface, &preview, SDL_MapRGB(surface->format, 255, 255, 255));
-    SDL_Rect preview_inner = {preview.x + 1, preview.y + 1, preview.w - 2, preview.h - 2};
-    uint32_t col = currentColor();
-    SDL_FillRect(surface, &preview_inner,
-                 SDL_MapRGB(surface->format, (col >> 16) & 0xFF, (col >> 8) & 0xFF, col & 0xFF));
+    drawRoundedRect(surface, preview, PREVIEW_RADIUS, white, black, col_mapped);
 
     // Preset rows below the sliders
     for (int i = 0; i < (int)presets.size(); i++)
     {
         SDL_Rect row = {
             dst.x,
-            dst.y + SCALE1(BUTTON_SIZE * 3) + SCALE1(i * BUTTON_SIZE),
+            dst.y + TOP_OFFSET + SCALE1(BUTTON_SIZE * 3) + SCALE1(i * BUTTON_SIZE),
             dst.w,
             SCALE1(BUTTON_SIZE)
         };
