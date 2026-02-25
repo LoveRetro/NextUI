@@ -130,8 +130,8 @@ extern int on_hdmi;
 
 ///////////////////////////////
 
-#define MAIN_ROW_COUNT (on_hdmi?8:6)
-#define PADDING (on_hdmi?40:10)
+#define MAIN_ROW_COUNT (on_hdmi?10:6)
+#define PADDING (on_hdmi?5:10)
 
 ///////////////////////////////
 

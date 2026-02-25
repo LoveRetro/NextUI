@@ -3327,16 +3327,10 @@ int main (int argc, char *argv[]) {
 		assert(animationdirection == ANIM_NONE);
 
 		// handle HDMI change
-		static int had_hdmi = -1;
-		int has_hdmi = GetHDMI();
-		if (had_hdmi==-1) had_hdmi = has_hdmi;
-		if (has_hdmi!=had_hdmi) {
-			had_hdmi = has_hdmi;
-
+		if(GFX_hdmiChanged()) {
 			Entry* entry = top->entries->items[top->selected];
-			LOG_info("restarting after HDMI change... (%s)\n", entry->path);
 			saveLast(entry->path); // NOTE: doesn't work in Recents (by design)
-			sleep(4);
+			sleep(2);
 			quit = 1;
 		}
 	}

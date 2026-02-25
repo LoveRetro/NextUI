@@ -532,6 +532,15 @@ SDL_Surface* PLAT_initVideo(void) {
 	int h = FIXED_HEIGHT;
 	int p = FIXED_PITCH;
 
+#ifdef HAS_HDMI
+	if (InitializedSettings() && GetHDMI()) {
+		w = HDMI_WIDTH;
+		h = HDMI_HEIGHT;
+		p = HDMI_PITCH;
+		on_hdmi = 1;
+	}
+#endif
+
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"1");
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER,"opengl");
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");

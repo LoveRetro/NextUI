@@ -26,16 +26,6 @@
 
 ///////////////////////////////
 
-int on_hdmi = 0;
-
-#define HDMI_STATE_PATH "/sys/class/drm/card0-HDMI-A-1/status"
-
-static int HDMI_enabled(void) {
-	char value[64];
-	getFile(HDMI_STATE_PATH, value, 64);
-	return exactMatch(value, "connected\n");
-}
-
 #define LID_PATH "/sys/devices/platform/hall-mh248/hallvalue" // 1 open, 0 closed
 void PLAT_initLid(void) {
 	lid.has_lid = exists(LID_PATH);
@@ -606,6 +596,8 @@ void PLAT_setNetworkTimeSync(bool on) {
 /////////////////////////
 
 // We use the generic video implementation here
+
+int on_hdmi = 0; // for platform.h
 #include "generic_video.c"
 
 /////////////////////////
