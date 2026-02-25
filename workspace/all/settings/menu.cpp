@@ -1013,6 +1013,77 @@ InputReactionHint ColorPickerMenu::handleInput(int &dirty, int &quit)
     return Unhandled;
 }
 
+static void drawSolidRoundedRect(SDL_Surface *surface, const SDL_Rect &rect, int radius, uint32_t color)
+{
+    int r = std::max(0, std::min(radius, std::min(rect.w, rect.h) / 2));
+    for (int row = 0; row < rect.h; row++)
+    {
+        int x_clip = 0;
+        if (row < r) {
+            float dx = sqrtf((float)(2 * r * row - row * row));
+            x_clip = r - (int)dx;
+        } else if (row >= rect.h - r) {
+            int i = rect.h - 1 - row;
+            float dx = sqrtf((float)(2 * r * i - i * i));
+            x_clip = r - (int)dx;
+        }
+        int x0 = rect.x + x_clip;
+        int span = rect.w - 2 * x_clip;
+        if (span <= 0) continue;
+        SDL_Rect l = {x0, rect.y + row, span, 1};
+        SDL_FillRect(surface, &l, color);
+    }
+}
+
+static void drawRoundedRect(SDL_Surface *surface, const SDL_Rect &rect, int radius,
+                             uint32_t outer, uint32_t middle, uint32_t fill)
+{
+    drawSolidRoundedRect(surface, rect, radius, outer);
+    if (rect.w > 2 && rect.h > 2) {
+        SDL_Rect r1 = {rect.x+1, rect.y+1, rect.w-2, rect.h-2};
+        drawSolidRoundedRect(surface, r1, std::max(0, radius-1), middle);
+    }
+    if (rect.w > 4 && rect.h > 4) {
+        SDL_Rect r2 = {rect.x+2, rect.y+2, rect.w-4, rect.h-4};
+        drawSolidRoundedRect(surface, r2, std::max(0, radius-2), fill);
+    }
+}
+
+static void drawGradientCapsule(SDL_Surface *surface, const SDL_Rect &bar,
+                                 int r, int g, int b, int channel)
+{
+    if (bar.w <= 0 || bar.h <= 0) return;
+    const int R = bar.h / 2;
+
+    for (int x = 0; x < bar.w; x++)
+    {
+        int ch_val = (bar.w > 1) ? (int)((float)x / (bar.w - 1) * 255.0f) : 128;
+        uint8_t cr = (channel == 0) ? (uint8_t)ch_val : (uint8_t)r;
+        uint8_t cg = (channel == 1) ? (uint8_t)ch_val : (uint8_t)g;
+        uint8_t cb = (channel == 2) ? (uint8_t)ch_val : (uint8_t)b;
+        uint32_t col = SDL_MapRGB(surface->format, cr, cg, cb);
+
+        int y_inset = 0;
+        if (R > 0) {
+            if (x < R) {
+                int dx = R - x;
+                float dy = sqrtf((float)(R * R - dx * dx));
+                y_inset = R - (int)dy;
+            } else if (x >= bar.w - R) {
+                int dx = x - (bar.w - 1 - R);
+                float inner = (float)(R * R - dx * dx);
+                if (inner < 0.0f) continue;
+                y_inset = R - (int)sqrtf(inner);
+            }
+        }
+
+        int col_h = bar.h - 2 * y_inset;
+        if (col_h <= 0) continue;
+        SDL_Rect col_rect = {bar.x + x, bar.y + y_inset, 1, col_h};
+        SDL_FillRect(surface, &col_rect, col);
+    }
+}
+
 void ColorPickerMenu::drawSlider(SDL_Surface *surface, const SDL_Rect &row,
                                  const char *label, int value, bool is_selected, int channel)
 {
@@ -1046,18 +1117,25 @@ void ColorPickerMenu::drawSlider(SDL_Surface *surface, const SDL_Rect &row,
 
     if (bar_w > 0)
     {
-        SDL_Rect bg = {bar_x, bar_y, bar_w, bar_h};
-        SDL_FillRect(surface, &bg, SDL_MapRGB(surface->format, 50, 50, 50));
+        // Gradient capsule
+        drawGradientCapsule(surface, {bar_x, bar_y, bar_w, bar_h}, this->r, this->g, this->b, channel);
 
-        int fill_w = (int)(bar_w * value / 255.0f);
-        if (fill_w > 0)
-        {
-            SDL_Rect fill = {bar_x, bar_y, fill_w, bar_h};
-            uint8_t cr = (channel == 0) ? 255 : 0;
-            uint8_t cg = (channel == 1) ? 255 : 0;
-            uint8_t cb = (channel == 2) ? 255 : 0;
-            SDL_FillRect(surface, &fill, SDL_MapRGB(surface->format, cr, cg, cb));
-        }
+        // Circle thumb indicator
+        const int circ_d      = bar_h + SCALE1(4);   // slightly larger than bar
+        const int circ_border = SCALE1(2);            // black ring thickness (each side)
+        uint32_t white = SDL_MapRGB(surface->format, 255, 255, 255);
+        uint32_t black = SDL_MapRGB(surface->format, 0, 0, 0);
+
+        int cx = bar_x + (int)((float)value / 255.0f * (bar_w - 1));
+        int cy = bar_y + bar_h / 2;
+        // clamp so circle stays inside bar bounds
+        cx = std::max(bar_x + circ_d / 2, std::min(bar_x + bar_w - 1 - circ_d / 2, cx));
+
+        SDL_Rect outer_rect = {cx - circ_d / 2, cy - circ_d / 2, circ_d, circ_d};
+        drawSolidRoundedRect(surface, outer_rect, circ_d / 2, black);
+        int inner_d = circ_d - circ_border * 2;
+        SDL_Rect inner_rect = {cx - inner_d / 2, cy - inner_d / 2, inner_d, inner_d};
+        drawSolidRoundedRect(surface, inner_rect, inner_d / 2, white);
     }
 }
 
@@ -1093,42 +1171,6 @@ void ColorPickerMenu::drawPreset(SDL_Surface *surface, const SDL_Rect &row,
                        {hex_x + hex_w + SCALE1(OPTION_PADDING),
                         row.y + (row.h - name_surf->h) / 2});
     SDL_FreeSurface(name_surf);
-}
-
-static void drawSolidRoundedRect(SDL_Surface *surface, const SDL_Rect &rect, int radius, uint32_t color)
-{
-    int r = std::max(0, std::min(radius, std::min(rect.w, rect.h) / 2));
-    for (int row = 0; row < rect.h; row++)
-    {
-        int x_clip = 0;
-        if (row < r) {
-            float dx = sqrtf((float)(2 * r * row - row * row));
-            x_clip = r - (int)dx;
-        } else if (row >= rect.h - r) {
-            int i = rect.h - 1 - row;
-            float dx = sqrtf((float)(2 * r * i - i * i));
-            x_clip = r - (int)dx;
-        }
-        int x0 = rect.x + x_clip;
-        int span = rect.w - 2 * x_clip;
-        if (span <= 0) continue;
-        SDL_Rect l = {x0, rect.y + row, span, 1};
-        SDL_FillRect(surface, &l, color);
-    }
-}
-
-static void drawRoundedRect(SDL_Surface *surface, const SDL_Rect &rect, int radius,
-                             uint32_t outer, uint32_t middle, uint32_t fill)
-{
-    drawSolidRoundedRect(surface, rect, radius, outer);
-    if (rect.w > 2 && rect.h > 2) {
-        SDL_Rect r1 = {rect.x+1, rect.y+1, rect.w-2, rect.h-2};
-        drawSolidRoundedRect(surface, r1, std::max(0, radius-1), middle);
-    }
-    if (rect.w > 4 && rect.h > 4) {
-        SDL_Rect r2 = {rect.x+2, rect.y+2, rect.w-4, rect.h-4};
-        drawSolidRoundedRect(surface, r2, std::max(0, radius-2), fill);
-    }
 }
 
 void ColorPickerMenu::drawCustom(SDL_Surface *surface, const SDL_Rect &dst)
