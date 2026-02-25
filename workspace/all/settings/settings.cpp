@@ -82,6 +82,28 @@ static const std::vector<std::string> scaling_strings = {"Fullscreen", "Fit", "F
 static const std::vector<std::any> scaling = {(int)GFX_SCALE_FULLSCREEN, (int)GFX_SCALE_FIT, (int)GFX_SCALE_FILL};
 
 namespace {
+    struct ColorDef { int id; const char *name; };
+    static const ColorDef g_colorDefs[] = {
+        {1, "Main Color"},
+        {2, "Primary Accent Color"},
+        {3, "Secondary Accent Color"},
+        {4, "List Text"},
+        {5, "List Text Selected"},
+        {6, "Hint info Color"},
+        {7, "Background Color"},
+    };
+
+    static std::vector<ColorPreset> buildColorPresets(int excludeId)
+    {
+        std::vector<ColorPreset> result;
+        for (const auto &def : g_colorDefs)
+        {
+            if (def.id != excludeId)
+                result.push_back({CFG_getColor(def.id), def.name});
+        }
+        return result;
+    }
+
     std::string execCommand(const char* cmd) {
         std::array<char, 128> buffer;
         std::string result;
@@ -149,39 +171,76 @@ int main(int argc, char *argv[])
             tz_labels.push_back(std::string(timezones[i]));
         }
 
+        // Pre-create one RGB picker per color setting (reused across opens)
+        auto *picker1 = new ColorPickerMenu(CFG_getColor(1), [](const std::any &v){ CFG_setColor(1, std::any_cast<uint32_t>(v)); }, buildColorPresets(1));
+        auto *picker2 = new ColorPickerMenu(CFG_getColor(2), [](const std::any &v){ CFG_setColor(2, std::any_cast<uint32_t>(v)); }, buildColorPresets(2));
+        auto *picker3 = new ColorPickerMenu(CFG_getColor(3), [](const std::any &v){ CFG_setColor(3, std::any_cast<uint32_t>(v)); }, buildColorPresets(3));
+        auto *picker4 = new ColorPickerMenu(CFG_getColor(4), [](const std::any &v){ CFG_setColor(4, std::any_cast<uint32_t>(v)); }, buildColorPresets(4));
+        auto *picker5 = new ColorPickerMenu(CFG_getColor(5), [](const std::any &v){ CFG_setColor(5, std::any_cast<uint32_t>(v)); }, buildColorPresets(5));
+        auto *picker6 = new ColorPickerMenu(CFG_getColor(6), [](const std::any &v){ CFG_setColor(6, std::any_cast<uint32_t>(v)); }, buildColorPresets(6));
+        auto *picker7 = new ColorPickerMenu(CFG_getColor(7), [](const std::any &v){ CFG_setColor(7, std::any_cast<uint32_t>(v)); }, buildColorPresets(7));
+
         auto appearanceMenu = new MenuList(MenuItemType::Fixed, "Appearance",
-            {new MenuItem{ListItemType::Generic, "Font", "The font to render all UI text.", {0, 1}, font_names, 
+            {new MenuItem{ListItemType::Generic, "Font", "The font to render all UI text.", {0, 1}, font_names,
                 []() -> std::any{ return CFG_getFontId(); },
                 [](const std::any &value){ CFG_setFontId(std::any_cast<int>(value)); },
                 []() { CFG_setFontId(CFG_DEFAULT_FONT_ID);}},
-                new MenuItem{ListItemType::Color, "Main Color", "The color used to render main UI elements.", colors, color_strings, 
-                []() -> std::any{ return CFG_getColor(1); }, 
+                new MenuItem{ListItemType::Color, "Main Color", "The color used to render main UI elements.", colors, color_strings,
+                []() -> std::any{ return CFG_getColor(1); },
                 [](const std::any &value){ CFG_setColor(1, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(1, CFG_DEFAULT_COLOR1);}},
-                new MenuItem{ListItemType::Color, "Primary Accent Color", "The color used to highlight important things in the user interface.", colors, color_strings, 
-                []() -> std::any{ return CFG_getColor(2); }, 
+                []() { CFG_setColor(1, CFG_DEFAULT_COLOR1);},
+                [picker1](AbstractMenuItem &item) -> InputReactionHint {
+                    picker1->reset(CFG_getColor(1), buildColorPresets(1));
+                    return DeferToSubmenu(item);
+                }, picker1},
+                new MenuItem{ListItemType::Color, "Primary Accent Color", "The color used to highlight important things in the user interface.", colors, color_strings,
+                []() -> std::any{ return CFG_getColor(2); },
                 [](const std::any &value){ CFG_setColor(2, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(2, CFG_DEFAULT_COLOR2);}},
-                new MenuItem{ListItemType::Color, "Secondary Accent Color", "A secondary highlight color.", colors, color_strings, 
-                []() -> std::any{ return CFG_getColor(3); }, 
+                []() { CFG_setColor(2, CFG_DEFAULT_COLOR2);},
+                [picker2](AbstractMenuItem &item) -> InputReactionHint {
+                    picker2->reset(CFG_getColor(2), buildColorPresets(2));
+                    return DeferToSubmenu(item);
+                }, picker2},
+                new MenuItem{ListItemType::Color, "Secondary Accent Color", "A secondary highlight color.", colors, color_strings,
+                []() -> std::any{ return CFG_getColor(3); },
                 [](const std::any &value){ CFG_setColor(3, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(3, CFG_DEFAULT_COLOR3);}},
-                new MenuItem{ListItemType::Color, "Hint info Color", "Color for button hints and info", colors, color_strings, 
-                []() -> std::any{ return CFG_getColor(6); }, 
+                []() { CFG_setColor(3, CFG_DEFAULT_COLOR3);},
+                [picker3](AbstractMenuItem &item) -> InputReactionHint {
+                    picker3->reset(CFG_getColor(3), buildColorPresets(3));
+                    return DeferToSubmenu(item);
+                }, picker3},
+                new MenuItem{ListItemType::Color, "Hint info Color", "Color for button hints and info", colors, color_strings,
+                []() -> std::any{ return CFG_getColor(6); },
                 [](const std::any &value){ CFG_setColor(6, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(6, CFG_DEFAULT_COLOR6);}},
-                new MenuItem{ListItemType::Color, "List Text", "List text color", colors, color_strings, 
-                []() -> std::any{ return CFG_getColor(4); }, 
+                []() { CFG_setColor(6, CFG_DEFAULT_COLOR6);},
+                [picker6](AbstractMenuItem &item) -> InputReactionHint {
+                    picker6->reset(CFG_getColor(6), buildColorPresets(6));
+                    return DeferToSubmenu(item);
+                }, picker6},
+                new MenuItem{ListItemType::Color, "List Text", "List text color", colors, color_strings,
+                []() -> std::any{ return CFG_getColor(4); },
                 [](const std::any &value){ CFG_setColor(4, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(4, CFG_DEFAULT_COLOR4);}},
-                new MenuItem{ListItemType::Color, "List Text Selected", "List selected text color", colors, color_strings, 
-                []() -> std::any { return CFG_getColor(5); }, 
+                []() { CFG_setColor(4, CFG_DEFAULT_COLOR4);},
+                [picker4](AbstractMenuItem &item) -> InputReactionHint {
+                    picker4->reset(CFG_getColor(4), buildColorPresets(4));
+                    return DeferToSubmenu(item);
+                }, picker4},
+                new MenuItem{ListItemType::Color, "List Text Selected", "List selected text color", colors, color_strings,
+                []() -> std::any { return CFG_getColor(5); },
                 [](const std::any &value) { CFG_setColor(5, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(5, CFG_DEFAULT_COLOR5);}},
+                []() { CFG_setColor(5, CFG_DEFAULT_COLOR5);},
+                [picker5](AbstractMenuItem &item) -> InputReactionHint {
+                    picker5->reset(CFG_getColor(5), buildColorPresets(5));
+                    return DeferToSubmenu(item);
+                }, picker5},
                 new MenuItem{ListItemType::Color, "Background Color", "Background color used when no background image is set.", colors, color_strings,
                 []() -> std::any { return CFG_getColor(7); },
                 [](const std::any &value) { CFG_setColor(7, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(7, CFG_DEFAULT_COLOR7);}},
+                []() { CFG_setColor(7, CFG_DEFAULT_COLOR7);},
+                [picker7](AbstractMenuItem &item) -> InputReactionHint {
+                    picker7->reset(CFG_getColor(7), buildColorPresets(7));
+                    return DeferToSubmenu(item);
+                }, picker7},
                 new MenuItem{ListItemType::Generic, "Show battery percentage", "Show battery level as percent in the status pill", {false, true}, on_off, 
                 []() -> std::any { return CFG_getShowBatteryPercent(); },
                 [](const std::any &value) { CFG_setShowBatteryPercent(std::any_cast<bool>(value)); },
@@ -633,6 +692,11 @@ int main(int argc, char *argv[])
         delete appearanceMenu;
         delete systemMenu;
         ctx.menu = NULL;
+
+        // Color pickers are not owned by their menu items (submenu deletion is
+        // commented out in AbstractMenuItem), so delete them explicitly.
+        delete picker1; delete picker2; delete picker3;
+        delete picker4; delete picker5; delete picker6; delete picker7;
 
         QuitSettings();
         PWR_quit();

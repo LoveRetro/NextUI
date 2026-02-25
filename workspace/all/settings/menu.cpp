@@ -691,7 +691,13 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
 
         if (item.getType() == ListItemType::Color)
         {
-            uint32_t color = mapUint(surface, std::any_cast<uint32_t>(item.getValue()));
+            // Read the live color directly from on_get() so the swatch and hex
+            // label always reflect the current value, even after the RGB picker
+            // sets an arbitrary color that is not in the predefined palette.
+            uint32_t rawColor = item.on_get
+                ? std::any_cast<uint32_t>(item.on_get())
+                : std::any_cast<uint32_t>(item.getValue());
+            uint32_t color = mapUint(surface, rawColor);
             SDL_Rect rect = {
                 dst.x + dst.w - SCALE1(OPTION_PADDING + FONT_TINY),
                 dst.y + SCALE1(BUTTON_SIZE - FONT_TINY) / 2,
@@ -702,6 +708,11 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
             rect.w -= 1;
             SDL_FillRect(surface, &rect, color);
 #define COLOR_PADDING 4
+            // Rerender the label from the live hex value
+            SDL_FreeSurface(text);
+            char hexLabel[12];
+            snprintf(hexLabel, sizeof(hexLabel), "0x%06X", rawColor);
+            text = TTF_RenderUTF8_Blended(font.tiny, hexLabel, text_color_value);
             SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + mw - text->w - SCALE1(OPTION_PADDING + COLOR_PADDING + FONT_TINY), dst.y + ((dst.h - text->h) / 2)});
         }
         else if(item.getType() == ListItemType::Button) {
@@ -887,6 +898,240 @@ bool MenuList::isOverlayVisible()
 {
     ReadLock r(overlayLock);
     return overlayVisible;
+}
+
+///////////////////////////////////////////////////////////
+// ColorPickerMenu
+
+ColorPickerMenu::ColorPickerMenu(uint32_t initialColor, ValueSetCallback on_set,
+                                 std::vector<ColorPreset> presets)
+    : MenuList(MenuItemType::Custom, "", {}), on_set(on_set),
+      presets(std::move(presets)), r(0), g(0), b(0), selected(0)
+{
+    r = (initialColor >> 16) & 0xFF;
+    g = (initialColor >> 8) & 0xFF;
+    b = initialColor & 0xFF;
+}
+
+void ColorPickerMenu::reset(uint32_t color, std::vector<ColorPreset> newPresets)
+{
+    r = (color >> 16) & 0xFF;
+    g = (color >> 8) & 0xFF;
+    b = color & 0xFF;
+    selected = 0;
+    presets = std::move(newPresets);
+}
+
+uint32_t ColorPickerMenu::currentColor() const
+{
+    return ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;
+}
+
+void ColorPickerMenu::applyColor()
+{
+    if (on_set)
+        on_set(currentColor());
+}
+
+InputReactionHint ColorPickerMenu::handleInput(int &dirty, int &quit)
+{
+    int total = 3 + (int)presets.size();
+
+    if (PAD_justRepeated(BTN_UP))
+    {
+        if (selected > 0)
+        {
+            selected--;
+            dirty = 1;
+        }
+        return NoOp;
+    }
+    else if (PAD_justRepeated(BTN_DOWN))
+    {
+        if (selected < total - 1)
+        {
+            selected++;
+            dirty = 1;
+        }
+        return NoOp;
+    }
+    else if (PAD_justPressed(BTN_B))
+    {
+        quit = 1;
+        return NoOp;
+    }
+
+    if (selected < 3)
+    {
+        int *channel = (selected == 0) ? &r : (selected == 1) ? &g : &b;
+        if (PAD_justRepeated(BTN_LEFT))
+        {
+            *channel = std::max(0, *channel - 1);
+            applyColor();
+            dirty = 1;
+            return NoOp;
+        }
+        else if (PAD_justRepeated(BTN_RIGHT))
+        {
+            *channel = std::min(255, *channel + 1);
+            applyColor();
+            dirty = 1;
+            return NoOp;
+        }
+        else if (PAD_justRepeated(BTN_L1))
+        {
+            *channel = std::max(0, *channel - 16);
+            applyColor();
+            dirty = 1;
+            return NoOp;
+        }
+        else if (PAD_justRepeated(BTN_R1))
+        {
+            *channel = std::min(255, *channel + 16);
+            applyColor();
+            dirty = 1;
+            return NoOp;
+        }
+    }
+    else
+    {
+        int presetIdx = selected - 3;
+        if (PAD_justPressed(BTN_A) && presetIdx < (int)presets.size())
+        {
+            const auto &preset = presets[presetIdx];
+            r = (preset.color >> 16) & 0xFF;
+            g = (preset.color >> 8) & 0xFF;
+            b = preset.color & 0xFF;
+            applyColor();
+            selected = 0;
+            dirty = 1;
+            return NoOp;
+        }
+    }
+
+    return Unhandled;
+}
+
+void ColorPickerMenu::drawSlider(SDL_Surface *surface, const SDL_Rect &row,
+                                 const char *label, int value, bool is_selected, int channel)
+{
+    if (is_selected)
+        GFX_blitPillLightCPP(ASSET_BUTTON, surface, row);
+
+    SDL_Color text_color = is_selected ? uintToColour(THEME_COLOR5_255) : uintToColour(THEME_COLOR4_255);
+
+    // Channel label ("R", "G", "B")
+    SDL_Surface *label_surf = TTF_RenderUTF8_Blended(font.small, label, text_color);
+    int label_w = label_surf->w;
+    SDL_BlitSurfaceCPP(label_surf, {}, surface,
+                       {row.x + SCALE1(OPTION_PADDING), row.y + (row.h - label_surf->h) / 2});
+    SDL_FreeSurface(label_surf);
+
+    // Hex value right-aligned ("FF", "00", etc.)
+    char hex_str[3];
+    snprintf(hex_str, sizeof(hex_str), "%02X", value);
+    SDL_Surface *hex_surf = TTF_RenderUTF8_Blended(font.tiny, hex_str, text_color);
+    int hex_w = hex_surf->w;
+    SDL_BlitSurfaceCPP(hex_surf, {}, surface,
+                       {row.x + row.w - hex_w - SCALE1(OPTION_PADDING),
+                        row.y + (row.h - hex_surf->h) / 2});
+    SDL_FreeSurface(hex_surf);
+
+    // Slider bar
+    int bar_x = row.x + SCALE1(OPTION_PADDING) + label_w + SCALE1(OPTION_PADDING);
+    int bar_w = row.w - SCALE1(OPTION_PADDING) - label_w - SCALE1(OPTION_PADDING * 3) - hex_w;
+    int bar_h = SCALE1(6);
+    int bar_y = row.y + (row.h - bar_h) / 2;
+
+    if (bar_w > 0)
+    {
+        SDL_Rect bg = {bar_x, bar_y, bar_w, bar_h};
+        SDL_FillRect(surface, &bg, SDL_MapRGB(surface->format, 50, 50, 50));
+
+        int fill_w = (int)(bar_w * value / 255.0f);
+        if (fill_w > 0)
+        {
+            SDL_Rect fill = {bar_x, bar_y, fill_w, bar_h};
+            uint8_t cr = (channel == 0) ? 255 : 0;
+            uint8_t cg = (channel == 1) ? 255 : 0;
+            uint8_t cb = (channel == 2) ? 255 : 0;
+            SDL_FillRect(surface, &fill, SDL_MapRGB(surface->format, cr, cg, cb));
+        }
+    }
+}
+
+void ColorPickerMenu::drawPreset(SDL_Surface *surface, const SDL_Rect &row,
+                                 const ColorPreset &preset, bool is_selected)
+{
+    if (is_selected)
+        GFX_blitPillLightCPP(ASSET_BUTTON, surface, row);
+
+    // Small color square with white border
+    int sq = SCALE1(FONT_TINY);
+    SDL_Rect sq_rect = {row.x + SCALE1(OPTION_PADDING), row.y + (row.h - sq) / 2, sq, sq};
+    SDL_FillRect(surface, &sq_rect, SDL_MapRGB(surface->format, 255, 255, 255));
+    SDL_Rect sq_inner = {sq_rect.x + 1, sq_rect.y + 1, sq_rect.w - 2, sq_rect.h - 2};
+    SDL_FillRect(surface, &sq_inner, SDL_MapRGB(surface->format,
+        (preset.color >> 16) & 0xFF, (preset.color >> 8) & 0xFF, preset.color & 0xFF));
+
+    SDL_Color text_color = is_selected ? uintToColour(THEME_COLOR5_255) : uintToColour(THEME_COLOR4_255);
+
+    // Hex value "#RRGGBB"
+    char hex_str[8];
+    snprintf(hex_str, sizeof(hex_str), "#%06X", preset.color);
+    SDL_Surface *hex_surf = TTF_RenderUTF8_Blended(font.tiny, hex_str, text_color);
+    int hex_x = sq_rect.x + sq + SCALE1(OPTION_PADDING / 2 + 2);
+    SDL_BlitSurfaceCPP(hex_surf, {}, surface,
+                       {hex_x, row.y + (row.h - hex_surf->h) / 2});
+    int hex_w = hex_surf->w;
+    SDL_FreeSurface(hex_surf);
+
+    // Name label
+    SDL_Surface *name_surf = TTF_RenderUTF8_Blended(font.tiny, preset.label.c_str(), text_color);
+    SDL_BlitSurfaceCPP(name_surf, {}, surface,
+                       {hex_x + hex_w + SCALE1(OPTION_PADDING),
+                        row.y + (row.h - name_surf->h) / 2});
+    SDL_FreeSurface(name_surf);
+}
+
+void ColorPickerMenu::drawCustom(SDL_Surface *surface, const SDL_Rect &dst)
+{
+    const int PREVIEW_W = SCALE1(BUTTON_SIZE * 2 + PADDING);
+    const int SLIDER_AREA_W = dst.w - PREVIEW_W - SCALE1(PADDING);
+
+    // R, G, B slider rows
+    const char *channel_labels[] = {"R", "G", "B"};
+    int channel_values[] = {r, g, b};
+    for (int i = 0; i < 3; i++)
+    {
+        SDL_Rect row = {dst.x, dst.y + SCALE1(i * BUTTON_SIZE), SLIDER_AREA_W, SCALE1(BUTTON_SIZE)};
+        drawSlider(surface, row, channel_labels[i], channel_values[i], selected == i, i);
+    }
+
+    // Color preview square to the right of sliders
+    SDL_Rect preview = {
+        dst.x + SLIDER_AREA_W + SCALE1(PADDING),
+        dst.y,
+        PREVIEW_W,
+        SCALE1(BUTTON_SIZE * 3)
+    };
+    SDL_FillRect(surface, &preview, SDL_MapRGB(surface->format, 255, 255, 255));
+    SDL_Rect preview_inner = {preview.x + 1, preview.y + 1, preview.w - 2, preview.h - 2};
+    uint32_t col = currentColor();
+    SDL_FillRect(surface, &preview_inner,
+                 SDL_MapRGB(surface->format, (col >> 16) & 0xFF, (col >> 8) & 0xFF, col & 0xFF));
+
+    // Preset rows below the sliders
+    for (int i = 0; i < (int)presets.size(); i++)
+    {
+        SDL_Rect row = {
+            dst.x,
+            dst.y + SCALE1(BUTTON_SIZE * 3) + SCALE1(i * BUTTON_SIZE),
+            dst.w,
+            SCALE1(BUTTON_SIZE)
+        };
+        drawPreset(surface, row, presets[i], selected == 3 + i);
+    }
 }
 
 static void drawOverlayLocal(SDL_Surface* screen) {
