@@ -701,9 +701,10 @@ void Cheats_free() {
 
 bool Cheats_load() {
 	int success = 0;
-	struct Cheats *cheats = &cheatcodes;
 	FILE *file = NULL;
 	size_t i;
+	struct Cheats *cheats = &cheatcodes;
+	memset(&cheatcodes, 0, sizeof(struct Cheats));
 
 	// we get our paths frrom Cheat_getPaths, some might be wildcards
 	char paths[CHEAT_MAX_PATHS][MAX_PATH];
@@ -732,8 +733,8 @@ bool Cheats_load() {
 					}
 					filename[0] = '\0';
 				}
+				globfree(&glob_results);
 			}
-			globfree(&glob_results);
 			if (filename[0] == '\0') continue; // no match
 		} else {
 			strcpy(filename, paths[i]);
@@ -760,30 +761,31 @@ bool Cheats_load() {
 	cheatcodes.count = parse_count(file);
 	if (cheatcodes.count <= 0) {
 		LOG_error("Couldn't read cheat count\n");
-		goto finish;
+		goto close;
 	}
 
 	cheatcodes.cheats = calloc(cheatcodes.count, sizeof(struct Cheat));
 	if (!cheatcodes.cheats) {
 		LOG_error("Couldn't allocate memory for cheats\n");
-		goto finish;
+		goto close;
 	}
 
 	if (parse_cheats(&cheatcodes, file)) {
 		LOG_error("Error reading cheat %d\n", i);
-		goto finish;
+		goto close;
 	}
 
 	LOG_info("Found %i cheats for the current game.\n", cheatcodes.count);
 
 	success = 1;
-finish:
-	if (!success) {
-		Cheats_free();
-	}
 
+close:
 	if (file)
 		fclose(file);
+finish:
+	if (!success)
+		Cheats_free();
+	return success;
 }
 
 ///////////////////////////////////////
