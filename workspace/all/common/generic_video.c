@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <math.h>
 
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)
@@ -1397,12 +1398,24 @@ SDL_Surface* PLAT_captureRendererToSurface() {
 	return surface;
 }
 
+static float anim_ease(float t, int easing) {
+	switch (easing) {
+		case ANIM_EASE_OUT:
+			return 1.0f - powf(1.0f - t, 2.0f);
+		case ANIM_EASE_IN:
+			return t * t * t;
+		default:
+			return t;
+	}
+}
+
 void PLAT_animateAndFadeSurface(
 	SDL_Surface *inputSurface,
 	int x, int y, int target_x, int target_y, int w, int h, int duration_ms,
 	SDL_Surface *fadeSurface,
-	int fade_x, int fade_y, int fade_w, int fade_h,
-	int start_opacity, int target_opacity,int layer
+	int fade_x, int fade_y, int fade_target_x, int fade_target_y, int fade_w, int fade_h,
+	int start_opacity, int target_opacity, int layer,
+	int input_easing, int fade_easing
 ) {
 	if (!inputSurface || !vid.renderer) return;
 
@@ -1438,9 +1451,11 @@ void PLAT_animateAndFadeSurface(
 	for (int frame = 0; frame <= total_frames; ++frame) {
 
 		float t = (float)frame / total_frames;
+		float t_input = anim_ease(t, input_easing);
+		float t_fade  = anim_ease(t, fade_easing);
 
-		int current_x = x + (int)((target_x - x) * t);
-		int current_y = y + (int)((target_y - y) * t);
+		int current_x = x + (int)((target_x - x) * t_input);
+		int current_y = y + (int)((target_y - y) * t_input);
 
 		int current_opacity = start_opacity + (int)((target_opacity - start_opacity) * t);
 		if (current_opacity < 0) current_opacity = 0;
@@ -1476,7 +1491,9 @@ void PLAT_animateAndFadeSurface(
 
 		if (fadeTexture) {
 			SDL_SetTextureAlphaMod(fadeTexture, current_opacity);
-			SDL_Rect fadeDstRect = { fade_x, fade_y, fade_w, fade_h };
+			int fade_current_x = fade_x + (int)((fade_target_x - fade_x) * t_fade);
+			int fade_current_y = fade_y + (int)((fade_target_y - fade_y) * t_fade);
+			SDL_Rect fadeDstRect = { fade_current_x, fade_current_y, fade_w, fade_h };
 			SDL_RenderCopy(vid.renderer, fadeTexture, NULL, &fadeDstRect);
 		}
 

@@ -3141,8 +3141,8 @@ int main (int argc, char *argv[]) {
 					SDL_Surface *tmpNewScreen = GFX_captureRendererToSurface();
 					SDL_SetSurfaceBlendMode(tmpNewScreen,SDL_BLENDMODE_BLEND);
 					GFX_clearLayers(LAYER_THUMBNAIL);
-					if(animationdirection == SLIDE_LEFT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpNewScreen,1,0,FIXED_WIDTH,FIXED_HEIGHT,0,255,LAYER_THUMBNAIL);
-					if(animationdirection == SLIDE_RIGHT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpNewScreen,1,0,FIXED_WIDTH,FIXED_HEIGHT,0,255,LAYER_THUMBNAIL);
+					if(animationdirection == SLIDE_LEFT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,-250,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpNewScreen,FIXED_WIDTH,0,0,0,FIXED_WIDTH,FIXED_HEIGHT,255,255,LAYER_THUMBNAIL,ANIM_EASE_OUT,ANIM_EASE_OUT);
+					if(animationdirection == SLIDE_RIGHT) GFX_animateAndFadeSurface(tmpNewScreen,-250,0,0,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpOldScreen,0,0,FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,255,255,LAYER_THUMBNAIL,ANIM_EASE_OUT,ANIM_EASE_OUT);
 					GFX_clearLayers(LAYER_THUMBNAIL);
 					SDL_FreeSurface(tmpNewScreen);
 				}
