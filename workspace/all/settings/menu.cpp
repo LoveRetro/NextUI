@@ -1117,14 +1117,21 @@ void ColorPickerMenu::drawSlider(SDL_Surface *surface, const SDL_Rect &row,
 
     if (bar_w > 0)
     {
+        uint32_t white = SDL_MapRGB(surface->format, 255, 255, 255);
+        uint32_t black = SDL_MapRGB(surface->format, 0, 0, 0);
+
+        // Capsule border: black outer ring, white inner ring (mirrors color preview style)
+        SDL_Rect border_outer = {bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4};
+        drawSolidRoundedRect(surface, border_outer, bar_h / 2 + 2, black);
+        SDL_Rect border_inner = {bar_x - 1, bar_y - 1, bar_w + 2, bar_h + 2};
+        drawSolidRoundedRect(surface, border_inner, bar_h / 2 + 1, white);
+
         // Gradient capsule
         drawGradientCapsule(surface, {bar_x, bar_y, bar_w, bar_h}, this->r, this->g, this->b, channel);
 
         // Circle thumb indicator
         const int circ_d      = bar_h + SCALE1(4);   // slightly larger than bar
         const int circ_border = SCALE1(2);            // black ring thickness (each side)
-        uint32_t white = SDL_MapRGB(surface->format, 255, 255, 255);
-        uint32_t black = SDL_MapRGB(surface->format, 0, 0, 0);
 
         int cx = bar_x + (int)((float)value / 255.0f * (bar_w - 1));
         int cy = bar_y + bar_h / 2;
