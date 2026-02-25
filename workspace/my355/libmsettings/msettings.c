@@ -181,15 +181,16 @@ void InitSettings(void) {
 		// these shouldn't be persisted
 		// settings->jack = 0;
 		// settings->hdmi = 0;
+		int jack = JACK_enabled();
+		int hdmi = HDMI_enabled();
+
+		// both of these set volume
+		SetJack(jack);
+		SetHDMI(hdmi);
 	}
-
-	int jack = JACK_enabled();
-	int hdmi = HDMI_enabled();
-	printf("brightness: %i (hdmi: %i)\nspeaker: %i (jack: %i)\n", settings->brightness, hdmi, settings->speaker, jack); fflush(stdout);
-
-	// // both of these set volume
-	SetJack(jack);
-	SetHDMI(hdmi);
+	printf("brightness: %i (hdmi: %i)\nspeaker: %i (jack: %i)\n", settings->brightness, settings->hdmi, settings->speaker, settings->jack); 
+	fflush(stdout);
+	system("amixer");
 
 	char cmd[256];
 	sprintf(cmd, "amixer sset 'Playback Path' '%s' > /dev/null 2>&1", GetJack() ? "HP" : "SPK");
@@ -355,9 +356,13 @@ void SetAudioSink(int value) {
 }
 
 void SetHDMI(int value){
-	// printf("SetHDMI(%i)\n", value); fflush(stdout);
+	printf("SetHDMI(%i)\n", value); fflush(stdout);
+
 	settings->hdmi = value;
-	if (value) SetRawVolume(100); // max
+	if (value) {
+		SetRawVolume(100); // max
+		SaveSettings();
+	} 
 	else SetVolume(GetVolume()); // restore
 };
 

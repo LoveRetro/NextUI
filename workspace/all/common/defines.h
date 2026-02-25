@@ -94,9 +94,6 @@ enum
 
 ///////////////////////////////
 
-#define STR_HELPER(x) #x
-#define STR(x) STR_HELPER(x)
-
 #define MAX(a, b) (a) > (b) ? (a) : (b)
 #define MIN(a, b) (a) < (b) ? (a) : (b)
 #define CEIL_DIV(a,b) ((a) + (b) - 1) / (b)

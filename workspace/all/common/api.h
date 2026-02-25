@@ -23,26 +23,6 @@ void LOG_note(int level, const char* fmt, ...);
 
 ///////////////////////////////
 
-#define PAGE_COUNT	2
-#define PAGE_SCALE	3
-#define PAGE_WIDTH	(FIXED_WIDTH * PAGE_SCALE)
-#define PAGE_HEIGHT	(FIXED_HEIGHT * PAGE_SCALE)
-#define PAGE_PITCH	(PAGE_WIDTH * FIXED_BPP)
-#define PAGE_SIZE	(PAGE_PITCH * PAGE_HEIGHT)
-
-///////////////////////////////
-
-// TODO: these only seem to be used by a tmp.pak in trimui (model s)
-// used by minarch, optionally defined in platform.h
-#ifndef PLAT_PAGE_BPP
-#define PLAT_PAGE_BPP 	FIXED_BPP
-#endif
-#define PLAT_PAGE_DEPTH (PLAT_PAGE_BPP * 8)
-#define PLAT_PAGE_PITCH (PAGE_WIDTH * PLAT_PAGE_BPP)
-#define PLAT_PAGE_SIZE	(PLAT_PAGE_PITCH * PAGE_HEIGHT)
-
-///////////////////////////////
-
 #define RGBA_MASK_AUTO	0x0, 0x0, 0x0, 0x0
 #define RGBA_MASK_565	0xF800, 0x07E0, 0x001F, 0x0000
 #define RGBA_MASK_8888	0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000

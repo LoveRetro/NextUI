@@ -128,8 +128,6 @@ extern int on_hdmi;
 #define HDMI_PITCH 	(HDMI_WIDTH * FIXED_BPP)
 #define HDMI_SIZE	(HDMI_PITCH * HDMI_HEIGHT)
 
-// TODO: if HDMI_HEIGHT > FIXED_HEIGHT then MAIN_ROW_COUNT will be insufficient
-
 ///////////////////////////////
 
 #define MAIN_ROW_COUNT (on_hdmi?8:6)

@@ -99,9 +99,6 @@ static struct VID_Context {
 	int sharpness;
 } vid;
 
-static int device_width;
-static int device_height;
-static int device_pitch;
 static uint32_t SDL_transparentBlack = 0;
 
 #define OVERLAYS_FOLDER SDCARD_PATH "/Overlays"
@@ -433,7 +430,7 @@ GLuint load_shader_from_file(GLenum type, const char* filename, const char* path
 
 void PLAT_initShaders() {
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
-	glViewport(0, 0, device_width, device_height);
+	glViewport(0, 0, vid.width, vid.height);
 	
 	GLuint vertex;
 	GLuint fragment;
@@ -465,9 +462,9 @@ void PLAT_initNotificationTexture(void) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	// Allocate full-screen texture with transparent pixels
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, device_width, device_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	notif.tex_w = device_width;
-	notif.tex_h = device_height;
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.width, vid.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	notif.tex_w = vid.width;
+	notif.tex_h = vid.height;
 }
 
 static void sdl_log_stdout(
@@ -589,10 +586,6 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.pitch	= p;
 	
 	SDL_transparentBlack = SDL_MapRGBA(vid.screen->format, 0, 0, 0, 0);
-	
-	device_width	= w;
-	device_height	= h;
-	device_pitch	= p;
 	
 	vid.sharpness = SHARPNESS_SOFT;
 	
@@ -794,7 +787,7 @@ static void resizeVideo(int w, int h, int p) {
 	
 	// TODO: minarch disables crisp (and nn upscale before linear downscale) when native, is this true?
 	
-	if (w>=device_width && h>=device_height) hard_scale = 1;
+	if (w>=vid.width && h>=vid.height) hard_scale = 1;
 	// else if (h>=160) hard_scale = 2; // limits gba and up to 2x (seems sufficient for 640x480)
 	else hard_scale = 4;
 
@@ -1500,35 +1493,35 @@ void setRectToAspectRatio(SDL_Rect* dst_rect) {
     if (vid.blit->aspect == 0) {
         w = vid.blit->src_w * vid.blit->scale;
         h = vid.blit->src_h * vid.blit->scale;
-        dst_rect->x = (device_width - w) / 2 + screenx;
-        dst_rect->y = (device_height - h) / 2 + screeny;
+        dst_rect->x = (vid.width - w) / 2 + screenx;
+        dst_rect->y = (vid.height - h) / 2 + screeny;
         dst_rect->w = w;
         dst_rect->h = h;
     } else if (vid.blit->aspect > 0) {
         if (should_rotate) {
-            h = device_width;
+            h = vid.width;
             w = h * vid.blit->aspect;
-            if (w > device_height) {
-                w = device_height;
+            if (w > vid.height) {
+                w = vid.height;
                 h = w / vid.blit->aspect;
             }
         } else {
-            h = device_height;
+            h = vid.height;
             w = h * vid.blit->aspect;
-            if (w > device_width) {
-                w = device_width;
+            if (w > vid.width) {
+                w = vid.width;
                 h = w / vid.blit->aspect;
             }
         }
-        dst_rect->x = (device_width - w) / 2 + screenx;
-        dst_rect->y = (device_height - h) / 2 + screeny;
+        dst_rect->x = (vid.width - w) / 2 + screenx;
+        dst_rect->y = (vid.height - h) / 2 + screeny;
         dst_rect->w = w;
         dst_rect->h = h;
     } else {
         dst_rect->x = screenx;
         dst_rect->y = screeny;
-        dst_rect->w = should_rotate ? device_height : device_width;
-        dst_rect->h = should_rotate ? device_width : device_height;
+        dst_rect->w = should_rotate ? vid.height : vid.width;
+        dst_rect->h = should_rotate ? vid.width : vid.height;
     }
 }
 
@@ -1546,7 +1539,7 @@ void PLAT_clearShaders() {
 
 void PLAT_flipHidden() {
 	SDL_RenderClear(vid.renderer);
-	resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
+	resizeVideo(vid.width, vid.height, vid.pitch); // !!!???
 	SDL_UpdateTexture(vid.stream_layer1, NULL, vid.screen->pixels, vid.screen->pitch);
 	SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
@@ -1562,7 +1555,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 	// dont think we need this here tbh
 	// SDL_RenderClear(vid.renderer);    
 	if (!vid.blit) {
-        resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
+        resizeVideo(vid.width, vid.height, vid.pitch); // !!!???
         SDL_UpdateTexture(vid.stream_layer1, NULL, vid.screen->pixels, vid.screen->pitch);
 		SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
         SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
@@ -1578,7 +1571,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
     if (vid.width != vid.blit->true_w || vid.height != vid.blit->true_h) {
         // Texture size doesn't match buffer, clear blit and use screen buffer instead
         vid.blit = NULL;
-        resizeVideo(device_width, device_height, FIXED_PITCH);
+        resizeVideo(vid.width, vid.height, vid.pitch);
         SDL_UpdateTexture(vid.stream_layer1, NULL, vid.screen->pixels, vid.screen->pitch);
         SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
         SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
@@ -1610,7 +1603,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
     }
 
     SDL_Rect* src_rect = &(SDL_Rect){x, y, w, h};
-    SDL_Rect* dst_rect = &(SDL_Rect){0, 0, device_width, device_height};
+    SDL_Rect* dst_rect = &(SDL_Rect){0, 0, vid.width, vid.height};
 
     setRectToAspectRatio(dst_rect);
 	
@@ -1905,7 +1898,7 @@ void PLAT_GL_Swap() {
         if (notif.clear_frames > 0) notif.clear_frames--;
     }
 
-    SDL_Rect dst_rect = {0, 0, device_width, device_height};
+    SDL_Rect dst_rect = {0, 0, vid.width, vid.height};
     setRectToAspectRatio(&dst_rect);
 
     if (!vid.blit->src) {
@@ -2142,7 +2135,7 @@ void PLAT_GL_Swap() {
             overlay_tex,
             g_shader_overlay,
             NULL,
-            0, 0, device_width, device_height,
+            0, 0, vid.width, vid.height,
             &(Shader){.srcw = vid.blit->src_w, .srch = vid.blit->src_h, .texw = overlay_w, .texh = overlay_h},
             1, GL_NONE
         );
@@ -2212,7 +2205,7 @@ void PLAT_pixelFlipper(uint8_t* pixels, int width, int height) {
 }
 
 unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight) {
-    glViewport(0, 0, device_width, device_height);
+    glViewport(0, 0, vid.width, vid.height);
     GLint viewport[4];
     glGetIntegerv(GL_VIEWPORT, viewport);
 	
