@@ -2617,7 +2617,7 @@ int main (int argc, char *argv[]) {
 			// (settings.cpp does this same thing; without it the transparent-black screen
 			//  causes premultiplied alpha artifacts when composited over LAYER_BACKGROUND)
 			if (!folderbgbmp) {
-				uint32_t bgc = CFG_getColor(7);
+				uint32_t bgc = CFG_getColor(COLOR_BACKGROUND);
 				SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format,
 					(bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
 			}
@@ -3135,7 +3135,7 @@ int main (int argc, char *argv[]) {
 						GFX_drawOnLayer(folderbgbmp, 0, 0, screen->w, screen->h, 1.0f, 0, LAYER_BACKGROUND);
 					} else {
 						SDL_Surface *bgfill = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, screen->format->BitsPerPixel, screen->format->format);
-						uint32_t bgc = CFG_getColor(7);
+						uint32_t bgc = CFG_getColor(COLOR_BACKGROUND);
 						SDL_FillRect(bgfill, NULL, SDL_MapRGB(screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
 						GFX_drawOnLayer(bgfill, 0, 0, screen->w, screen->h, 1.0f, 0, LAYER_BACKGROUND);
 						SDL_FreeSurface(bgfill);
@@ -3163,7 +3163,7 @@ int main (int argc, char *argv[]) {
 						GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,LAYER_BACKGROUND);
 					else {
 						SDL_Surface *bgfill = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, screen->format->BitsPerPixel, screen->format->format);
-						uint32_t bgc = CFG_getColor(7);
+						uint32_t bgc = CFG_getColor(COLOR_BACKGROUND);
 						SDL_FillRect(bgfill, NULL, SDL_MapRGB(screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
 						GFX_drawOnLayer(bgfill, 0, 0, screen->w, screen->h, 1.0f, 0, LAYER_BACKGROUND);
 						SDL_FreeSurface(bgfill);
@@ -3179,7 +3179,7 @@ int main (int argc, char *argv[]) {
 						GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,LAYER_BACKGROUND);
 					else {
 						SDL_Surface *bgfill = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, screen->format->BitsPerPixel, screen->format->format);
-						uint32_t bgc = CFG_getColor(7);
+						uint32_t bgc = CFG_getColor(COLOR_BACKGROUND);
 						SDL_FillRect(bgfill, NULL, SDL_MapRGB(screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
 						GFX_drawOnLayer(bgfill, 0, 0, screen->w, screen->h, 1.0f, 0, LAYER_BACKGROUND);
 						SDL_FreeSurface(bgfill);
@@ -3237,7 +3237,7 @@ int main (int argc, char *argv[]) {
 					GFX_drawOnLayer(folderbgbmp,0, 0, screen->w, screen->h,1.0f,0,LAYER_BACKGROUND);
 				else {
 					SDL_Surface *bgfill = SDL_CreateRGBSurfaceWithFormat(0, screen->w, screen->h, screen->format->BitsPerPixel, screen->format->format);
-					uint32_t bgc = CFG_getColor(7);
+					uint32_t bgc = CFG_getColor(COLOR_BACKGROUND);
 					SDL_FillRect(bgfill, NULL, SDL_MapRGB(screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
 					GFX_drawOnLayer(bgfill, 0, 0, screen->w, screen->h, 1.0f, 0, LAYER_BACKGROUND);
 					SDL_FreeSurface(bgfill);
