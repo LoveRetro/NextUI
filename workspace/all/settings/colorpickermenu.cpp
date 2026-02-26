@@ -2,24 +2,29 @@
 
 #include <cmath>
 
+static constexpr int NUM_SLIDERS = 3;
+
+static void decodeColor(uint32_t c, int &r, int &g, int &b)
+{
+    r = (c >> 16) & 0xFF;
+    g = (c >> 8)  & 0xFF;
+    b =  c        & 0xFF;
+}
+
 ///////////////////////////////////////////////////////////
 // ColorPickerMenu
 
 ColorPickerMenu::ColorPickerMenu(uint32_t initialColor, ValueSetCallback on_set,
                                  std::vector<ColorPreset> presets)
     : MenuList(MenuItemType::Custom, "", {}), on_set(on_set),
-      presets(std::move(presets)), r(0), g(0), b(0), selected(0)
+      presets(std::move(presets)), selected(0)
 {
-    r = (initialColor >> 16) & 0xFF;
-    g = (initialColor >> 8) & 0xFF;
-    b = initialColor & 0xFF;
+    decodeColor(initialColor, r, g, b);
 }
 
 void ColorPickerMenu::reset(uint32_t color, std::vector<ColorPreset> newPresets)
 {
-    r = (color >> 16) & 0xFF;
-    g = (color >> 8) & 0xFF;
-    b = color & 0xFF;
+    decodeColor(color, r, g, b);
     selected = 0;
     presets = std::move(newPresets);
 }
@@ -37,7 +42,7 @@ void ColorPickerMenu::applyColor()
 
 InputReactionHint ColorPickerMenu::handleInput(int &dirty, int &quit)
 {
-    int total = 3 + (int)presets.size();
+    int total = NUM_SLIDERS + (int)presets.size();
 
     if (PAD_justRepeated(BTN_UP))
     {
@@ -63,7 +68,7 @@ InputReactionHint ColorPickerMenu::handleInput(int &dirty, int &quit)
         return NoOp;
     }
 
-    if (selected < 3)
+    if (selected < NUM_SLIDERS)
     {
         int *channel = (selected == 0) ? &r : (selected == 1) ? &g : &b;
         if (PAD_justRepeated(BTN_LEFT))
@@ -97,13 +102,11 @@ InputReactionHint ColorPickerMenu::handleInput(int &dirty, int &quit)
     }
     else
     {
-        int presetIdx = selected - 3;
+        int presetIdx = selected - NUM_SLIDERS;
         if (PAD_justPressed(BTN_A) && presetIdx < (int)presets.size())
         {
             const auto &preset = presets[presetIdx];
-            r = (preset.color >> 16) & 0xFF;
-            g = (preset.color >> 8) & 0xFF;
-            b = preset.color & 0xFF;
+            decodeColor(preset.color, r, g, b);
             applyColor();
             selected = 0;
             dirty = 1;
@@ -296,16 +299,16 @@ void ColorPickerMenu::drawCustom(SDL_Surface *surface, const SDL_Rect &dst)
     // R, G, B slider rows
     const char *channel_labels[] = {"R", "G", "B"};
     int channel_values[] = {r, g, b};
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < NUM_SLIDERS; i++)
     {
         SDL_Rect row = {dst.x, dst.y + TOP_OFFSET + SCALE1(i * BUTTON_SIZE), SLIDER_AREA_W, SCALE1(BUTTON_SIZE)};
         drawSlider(surface, row, channel_labels[i], channel_values[i], selected == i, i);
     }
 
-    // Color preview square to the right of sliders, centered vertically in the 3-slider area
+    // Color preview square to the right of sliders, centered vertically in the slider area
     SDL_Rect preview = {
         dst.x + SLIDER_AREA_W + SCALE1(PADDING),
-        dst.y + TOP_OFFSET + (SCALE1(BUTTON_SIZE * 3) - PREVIEW_SIZE) / 2,
+        dst.y + TOP_OFFSET + (SCALE1(BUTTON_SIZE * NUM_SLIDERS) - PREVIEW_SIZE) / 2,
         PREVIEW_SIZE,
         PREVIEW_SIZE
     };
@@ -316,10 +319,10 @@ void ColorPickerMenu::drawCustom(SDL_Surface *surface, const SDL_Rect &dst)
     {
         SDL_Rect row = {
             dst.x,
-            dst.y + TOP_OFFSET + SCALE1(BUTTON_SIZE * 3) + SCALE1(i * BUTTON_SIZE),
+            dst.y + TOP_OFFSET + SCALE1(BUTTON_SIZE * NUM_SLIDERS) + SCALE1(i * BUTTON_SIZE),
             dst.w,
             SCALE1(BUTTON_SIZE)
         };
-        drawPreset(surface, row, presets[i], selected == 3 + i);
+        drawPreset(surface, row, presets[i], selected == NUM_SLIDERS + i);
     }
 }
