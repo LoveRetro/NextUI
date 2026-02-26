@@ -15,6 +15,7 @@ extern "C"
 #include "wifimenu.hpp"
 #include "btmenu.hpp"
 #include "keyboardprompt.hpp"
+#include "colorpickermenu.hpp"
 
 #define BUSYBOX_STOCK_VERSION "1.27.2"
 
