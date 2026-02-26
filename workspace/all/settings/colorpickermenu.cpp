@@ -70,7 +70,8 @@ InputReactionHint ColorPickerMenu::handleInput(int &dirty, int &quit)
 
     if (selected < NUM_SLIDERS)
     {
-        int *channel = (selected == 0) ? &r : (selected == 1) ? &g : &b;
+        int *channels[] = {&r, &g, &b};
+        int *channel = channels[selected];
         if (PAD_justRepeated(BTN_LEFT))
         {
             *channel = std::max(0, *channel - 1);
@@ -293,8 +294,7 @@ void ColorPickerMenu::drawCustom(SDL_Surface *surface, const SDL_Rect &dst)
 
     uint32_t white = SDL_MapRGB(surface->format, 255, 255, 255);
     uint32_t black = SDL_MapRGB(surface->format, 0, 0, 0);
-    uint32_t col = currentColor();
-    uint32_t col_mapped = SDL_MapRGB(surface->format, (col >> 16) & 0xFF, (col >> 8) & 0xFF, col & 0xFF);
+    uint32_t col_mapped = SDL_MapRGB(surface->format, r, g, b);
 
     // R, G, B slider rows
     const char *channel_labels[] = {"R", "G", "B"};

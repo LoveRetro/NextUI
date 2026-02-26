@@ -10,6 +10,7 @@ extern "C"
 
 #include <csignal>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <regex>
 #include "wifimenu.hpp"
@@ -298,14 +299,25 @@ int main(int argc, char *argv[])
             tz_labels.push_back(std::string(timezones[i]));
         }
 
+        // Factory helpers to avoid repeating identical lambda boilerplate for each picker
+        auto makeColorSetter = [](int id) -> ValueSetCallback {
+            return [id](const std::any &v){ CFG_setColor(id, std::any_cast<uint32_t>(v)); };
+        };
+        auto makeColorOpener = [](ColorPickerMenu *picker, int id) -> MenuListCallback {
+            return [picker, id](AbstractMenuItem &item) -> InputReactionHint {
+                picker->reset(CFG_getColor(id), buildColorPresets(id));
+                return DeferToSubmenu(item);
+            };
+        };
+
         // Pre-create one RGB picker per color setting (reused across opens)
-        auto *picker1 = new ColorPickerMenu(CFG_getColor(1), [](const std::any &v){ CFG_setColor(1, std::any_cast<uint32_t>(v)); }, buildColorPresets(1));
-        auto *picker2 = new ColorPickerMenu(CFG_getColor(2), [](const std::any &v){ CFG_setColor(2, std::any_cast<uint32_t>(v)); }, buildColorPresets(2));
-        auto *picker3 = new ColorPickerMenu(CFG_getColor(3), [](const std::any &v){ CFG_setColor(3, std::any_cast<uint32_t>(v)); }, buildColorPresets(3));
-        auto *picker4 = new ColorPickerMenu(CFG_getColor(4), [](const std::any &v){ CFG_setColor(4, std::any_cast<uint32_t>(v)); }, buildColorPresets(4));
-        auto *picker5 = new ColorPickerMenu(CFG_getColor(5), [](const std::any &v){ CFG_setColor(5, std::any_cast<uint32_t>(v)); }, buildColorPresets(5));
-        auto *picker6 = new ColorPickerMenu(CFG_getColor(6), [](const std::any &v){ CFG_setColor(6, std::any_cast<uint32_t>(v)); }, buildColorPresets(6));
-        auto *picker7 = new ColorPickerMenu(CFG_getColor(7), [](const std::any &v){ CFG_setColor(7, std::any_cast<uint32_t>(v)); }, buildColorPresets(7));
+        auto picker1 = std::make_unique<ColorPickerMenu>(CFG_getColor(1), makeColorSetter(1), buildColorPresets(1));
+        auto picker2 = std::make_unique<ColorPickerMenu>(CFG_getColor(2), makeColorSetter(2), buildColorPresets(2));
+        auto picker3 = std::make_unique<ColorPickerMenu>(CFG_getColor(3), makeColorSetter(3), buildColorPresets(3));
+        auto picker4 = std::make_unique<ColorPickerMenu>(CFG_getColor(4), makeColorSetter(4), buildColorPresets(4));
+        auto picker5 = std::make_unique<ColorPickerMenu>(CFG_getColor(5), makeColorSetter(5), buildColorPresets(5));
+        auto picker6 = std::make_unique<ColorPickerMenu>(CFG_getColor(6), makeColorSetter(6), buildColorPresets(6));
+        auto picker7 = std::make_unique<ColorPickerMenu>(CFG_getColor(7), makeColorSetter(7), buildColorPresets(7));
 
         auto appearanceMenu = new MenuList(MenuItemType::Fixed, "Appearance",
             {new MenuItem{ListItemType::Generic, "Font", "The font to render all UI text.", {0, 1}, font_names,
@@ -316,58 +328,37 @@ int main(int argc, char *argv[])
                 []() -> std::any{ return CFG_getColor(1); },
                 [](const std::any &value){ CFG_setColor(1, std::any_cast<uint32_t>(value)); },
                 []() { CFG_setColor(1, CFG_DEFAULT_COLOR1);},
-                [picker1](AbstractMenuItem &item) -> InputReactionHint {
-                    picker1->reset(CFG_getColor(1), buildColorPresets(1));
-                    return DeferToSubmenu(item);
-                }, picker1},
+                makeColorOpener(picker1.get(), 1), picker1.get()},
                 new MenuItem{ListItemType::Color, "Primary Accent Color", "The color used to highlight important things in the user interface.", colors, color_strings,
                 []() -> std::any{ return CFG_getColor(2); },
                 [](const std::any &value){ CFG_setColor(2, std::any_cast<uint32_t>(value)); },
                 []() { CFG_setColor(2, CFG_DEFAULT_COLOR2);},
-                [picker2](AbstractMenuItem &item) -> InputReactionHint {
-                    picker2->reset(CFG_getColor(2), buildColorPresets(2));
-                    return DeferToSubmenu(item);
-                }, picker2},
+                makeColorOpener(picker2.get(), 2), picker2.get()},
                 new MenuItem{ListItemType::Color, "Secondary Accent Color", "A secondary highlight color.", colors, color_strings,
                 []() -> std::any{ return CFG_getColor(3); },
                 [](const std::any &value){ CFG_setColor(3, std::any_cast<uint32_t>(value)); },
                 []() { CFG_setColor(3, CFG_DEFAULT_COLOR3);},
-                [picker3](AbstractMenuItem &item) -> InputReactionHint {
-                    picker3->reset(CFG_getColor(3), buildColorPresets(3));
-                    return DeferToSubmenu(item);
-                }, picker3},
+                makeColorOpener(picker3.get(), 3), picker3.get()},
                 new MenuItem{ListItemType::Color, "Hint info Color", "Color for button hints and info", colors, color_strings,
                 []() -> std::any{ return CFG_getColor(6); },
                 [](const std::any &value){ CFG_setColor(6, std::any_cast<uint32_t>(value)); },
                 []() { CFG_setColor(6, CFG_DEFAULT_COLOR6);},
-                [picker6](AbstractMenuItem &item) -> InputReactionHint {
-                    picker6->reset(CFG_getColor(6), buildColorPresets(6));
-                    return DeferToSubmenu(item);
-                }, picker6},
+                makeColorOpener(picker6.get(), 6), picker6.get()},
                 new MenuItem{ListItemType::Color, "List Text", "List text color", colors, color_strings,
                 []() -> std::any{ return CFG_getColor(4); },
                 [](const std::any &value){ CFG_setColor(4, std::any_cast<uint32_t>(value)); },
                 []() { CFG_setColor(4, CFG_DEFAULT_COLOR4);},
-                [picker4](AbstractMenuItem &item) -> InputReactionHint {
-                    picker4->reset(CFG_getColor(4), buildColorPresets(4));
-                    return DeferToSubmenu(item);
-                }, picker4},
+                makeColorOpener(picker4.get(), 4), picker4.get()},
                 new MenuItem{ListItemType::Color, "List Text Selected", "List selected text color", colors, color_strings,
                 []() -> std::any { return CFG_getColor(5); },
                 [](const std::any &value) { CFG_setColor(5, std::any_cast<uint32_t>(value)); },
                 []() { CFG_setColor(5, CFG_DEFAULT_COLOR5);},
-                [picker5](AbstractMenuItem &item) -> InputReactionHint {
-                    picker5->reset(CFG_getColor(5), buildColorPresets(5));
-                    return DeferToSubmenu(item);
-                }, picker5},
+                makeColorOpener(picker5.get(), 5), picker5.get()},
                 new MenuItem{ListItemType::Color, "Background Color", "Background color used when no background image is set.", colors, color_strings,
                 []() -> std::any { return CFG_getColor(7); },
                 [](const std::any &value) { CFG_setColor(7, std::any_cast<uint32_t>(value)); },
                 []() { CFG_setColor(7, CFG_DEFAULT_COLOR7);},
-                [picker7](AbstractMenuItem &item) -> InputReactionHint {
-                    picker7->reset(CFG_getColor(7), buildColorPresets(7));
-                    return DeferToSubmenu(item);
-                }, picker7},
+                makeColorOpener(picker7.get(), 7), picker7.get()},
                 new MenuItem{ListItemType::Generic, "Show battery percentage", "Show battery level as percent in the status pill", {false, true}, on_off, 
                 []() -> std::any { return CFG_getShowBatteryPercent(); },
                 [](const std::any &value) { CFG_setShowBatteryPercent(std::any_cast<bool>(value)); },
@@ -968,10 +959,7 @@ int main(int argc, char *argv[])
         delete systemMenu;
         ctx.menu = NULL;
 
-        // Color pickers are not owned by their menu items (submenu deletion is
-        // commented out in AbstractMenuItem), so delete them explicitly.
-        delete picker1; delete picker2; delete picker3;
-        delete picker4; delete picker5; delete picker6; delete picker7;
+        // Color pickers are owned by unique_ptrs above; destroyed automatically here.
 
         QuitSettings();
         PWR_quit();
