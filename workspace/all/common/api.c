@@ -3608,9 +3608,9 @@ static void *PWR_monitorBattery(void *arg)
 		int interval = SDL_AtomicGet(&pwr_ctx->update_secs);
 		if (interval <= 0)
 			interval = 1;
-		sleep(interval);
 		PWR_updateBatteryStatus();
 		PWR_updateNetworkStatus();
+		sleep(interval);
 	}
 	return NULL;
 }
