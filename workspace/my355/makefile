@@ -23,7 +23,7 @@ early: $(REQUIRES_EVTEST) $(REQUIRES_MKBOOTIMG) $(REQUIRES_RSCEGO) $(REQUIRES_FI
 	cd $(REQUIRES_FILEMGR) && make -j
 	cd $(REQUIRES_EVTEST) && $(CROSS_COMPILE)gcc -o evtest evtest.c
 	cd $(REQUIRES_MKBOOTIMG) && make
-	cd $(REQUIRES_RSCEGO) && go build -o rsce_tool
+	cd $(REQUIRES_RSCEGO) && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o rsce_tool
 
 clean:
 	cd $(REQUIRES_FILEMGR) && make clean
