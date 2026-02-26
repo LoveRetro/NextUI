@@ -303,9 +303,9 @@ int main(int argc, char *argv[])
         auto makeColorSetter = [](int id) -> ValueSetCallback {
             return [id](const std::any &v){ CFG_setColor(id, std::any_cast<uint32_t>(v)); };
         };
-        auto makeColorOpener = [](ColorPickerMenu *picker, int id) -> MenuListCallback {
-            return [picker, id](AbstractMenuItem &item) -> InputReactionHint {
-                picker->reset(CFG_getColor(id), buildColorPresets(id));
+        auto makeColorOpener = [](ColorPickerMenu *picker, int id, std::string name) -> MenuListCallback {
+            return [picker, id, name](AbstractMenuItem &item) -> InputReactionHint {
+                picker->reset(CFG_getColor(id), buildColorPresets(id), name);
                 return DeferToSubmenu(item);
             };
         };
@@ -321,7 +321,7 @@ int main(int argc, char *argv[])
         pickers.reserve(std::size(g_colorDefs));
         for (const auto &def : g_colorDefs)
             pickers.push_back(std::make_unique<ColorPickerMenu>(
-                CFG_getColor(def.id), makeColorSetter(def.id), buildColorPresets(def.id)));
+                CFG_getColor(def.id), makeColorSetter(def.id), buildColorPresets(def.id), def.name));
 
         // Build color MenuItems (loop order = g_colorDefs order = display order)
         std::vector<AbstractMenuItem *> colorMenuItems;
@@ -335,7 +335,7 @@ int main(int argc, char *argv[])
                 makeColorGetter(def.id),
                 makeColorSetter(def.id),
                 makeColorResetter(def.id, def.defaultColor),
-                makeColorOpener(picker, def.id), picker});
+                makeColorOpener(picker, def.id, def.name), picker});
         }
 
         std::vector<AbstractMenuItem *> appearanceItems;

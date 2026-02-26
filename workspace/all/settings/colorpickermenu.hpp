@@ -13,6 +13,8 @@ class ColorPickerMenu : public MenuList
     int selected;
     ValueSetCallback on_set;
     std::vector<ColorPreset> presets;
+    std::string label_;
+    uint32_t originalColor_;
 
     uint32_t currentColor() const;
     void applyColor();
@@ -23,9 +25,9 @@ class ColorPickerMenu : public MenuList
 
 public:
     ColorPickerMenu(uint32_t initialColor, ValueSetCallback on_set,
-                    std::vector<ColorPreset> presets);
+                    std::vector<ColorPreset> presets, std::string label);
 
-    void reset(uint32_t color, std::vector<ColorPreset> newPresets);
+    void reset(uint32_t color, std::vector<ColorPreset> newPresets, std::string label);
 
     InputReactionHint handleInput(int &dirty, int &quit) override;
     void drawCustom(SDL_Surface *surface, const SDL_Rect &dst) override;
