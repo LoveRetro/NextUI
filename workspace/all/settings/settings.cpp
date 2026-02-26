@@ -341,6 +341,10 @@ int main(int argc, char *argv[])
                 []() -> std::any { return CFG_getShowTools(); },
                 [](const std::any &value) { CFG_setShowTools(std::any_cast<bool>(value)); },
                 []() { CFG_setShowTools(CFG_DEFAULT_SHOWTOOLS);}},
+                new MenuItem{ListItemType::Generic, "Show Collections", "Show \"Collections\" menu entry in game list.", {false, true}, on_off, 
+                []() -> std::any { return CFG_getShowCollections(); },
+                [](const std::any &value) { CFG_setShowCollections(std::any_cast<bool>(value)); },
+                []() { CFG_setShowCollections(CFG_DEFAULT_SHOWCOLLECTIONS);}},
                 new MenuItem{ListItemType::Generic, "Show game art", "Show game artwork in the main menu", {false, true}, on_off, []() -> std::any
                 { return CFG_getShowGameArt(); },
                 [](const std::any &value)
