@@ -124,15 +124,15 @@ static const std::vector<std::string> ra_sort_labels = {
 };
 
 namespace {
-    struct ColorDef { int id; const char *name; };
+    struct ColorDef { int id; const char *name; const char *desc; uint32_t defaultColor; };
     static const ColorDef g_colorDefs[] = {
-        {1, "Main Color"},
-        {2, "Primary Accent Color"},
-        {3, "Secondary Accent Color"},
-        {4, "List Text"},
-        {5, "List Text Selected"},
-        {6, "Hint info Color"},
-        {7, "Background Color"},
+        {1, "Main Color",             "The color used to render main UI elements.",                         CFG_DEFAULT_COLOR1},
+        {2, "Primary Accent Color",   "The color used to highlight important things in the user interface.", CFG_DEFAULT_COLOR2},
+        {3, "Secondary Accent Color", "A secondary highlight color.",                                        CFG_DEFAULT_COLOR3},
+        {6, "Hint info Color",        "Color for button hints and info",                                     CFG_DEFAULT_COLOR6},
+        {4, "List Text",              "List text color",                                                     CFG_DEFAULT_COLOR4},
+        {5, "List Text Selected",     "List selected text color",                                            CFG_DEFAULT_COLOR5},
+        {7, "Background Color",       "Background color used when no background image is set.",              CFG_DEFAULT_COLOR7},
     };
 
     static std::vector<ColorPreset> buildColorPresets(int excludeId)
@@ -309,112 +309,95 @@ int main(int argc, char *argv[])
                 return DeferToSubmenu(item);
             };
         };
+        auto makeColorGetter = [](int id) -> ValueGetCallback {
+            return [id]() -> std::any { return CFG_getColor(id); };
+        };
+        auto makeColorResetter = [](int id, uint32_t defaultColor) -> ValueResetCallback {
+            return [id, defaultColor]() { CFG_setColor(id, defaultColor); };
+        };
 
         // Pre-create one RGB picker per color setting (reused across opens)
-        auto picker1 = std::make_unique<ColorPickerMenu>(CFG_getColor(1), makeColorSetter(1), buildColorPresets(1));
-        auto picker2 = std::make_unique<ColorPickerMenu>(CFG_getColor(2), makeColorSetter(2), buildColorPresets(2));
-        auto picker3 = std::make_unique<ColorPickerMenu>(CFG_getColor(3), makeColorSetter(3), buildColorPresets(3));
-        auto picker4 = std::make_unique<ColorPickerMenu>(CFG_getColor(4), makeColorSetter(4), buildColorPresets(4));
-        auto picker5 = std::make_unique<ColorPickerMenu>(CFG_getColor(5), makeColorSetter(5), buildColorPresets(5));
-        auto picker6 = std::make_unique<ColorPickerMenu>(CFG_getColor(6), makeColorSetter(6), buildColorPresets(6));
-        auto picker7 = std::make_unique<ColorPickerMenu>(CFG_getColor(7), makeColorSetter(7), buildColorPresets(7));
+        std::vector<std::unique_ptr<ColorPickerMenu>> pickers;
+        pickers.reserve(std::size(g_colorDefs));
+        for (const auto &def : g_colorDefs)
+            pickers.push_back(std::make_unique<ColorPickerMenu>(
+                CFG_getColor(def.id), makeColorSetter(def.id), buildColorPresets(def.id)));
 
-        auto appearanceMenu = new MenuList(MenuItemType::Fixed, "Appearance",
-            {new MenuItem{ListItemType::Generic, "Font", "The font to render all UI text.", {0, 1}, font_names,
-                []() -> std::any{ return CFG_getFontId(); },
-                [](const std::any &value){ CFG_setFontId(std::any_cast<int>(value)); },
-                []() { CFG_setFontId(CFG_DEFAULT_FONT_ID);}},
-                new MenuItem{ListItemType::Color, "Main Color", "The color used to render main UI elements.", colors, color_strings,
-                []() -> std::any{ return CFG_getColor(1); },
-                [](const std::any &value){ CFG_setColor(1, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(1, CFG_DEFAULT_COLOR1);},
-                makeColorOpener(picker1.get(), 1), picker1.get()},
-                new MenuItem{ListItemType::Color, "Primary Accent Color", "The color used to highlight important things in the user interface.", colors, color_strings,
-                []() -> std::any{ return CFG_getColor(2); },
-                [](const std::any &value){ CFG_setColor(2, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(2, CFG_DEFAULT_COLOR2);},
-                makeColorOpener(picker2.get(), 2), picker2.get()},
-                new MenuItem{ListItemType::Color, "Secondary Accent Color", "A secondary highlight color.", colors, color_strings,
-                []() -> std::any{ return CFG_getColor(3); },
-                [](const std::any &value){ CFG_setColor(3, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(3, CFG_DEFAULT_COLOR3);},
-                makeColorOpener(picker3.get(), 3), picker3.get()},
-                new MenuItem{ListItemType::Color, "Hint info Color", "Color for button hints and info", colors, color_strings,
-                []() -> std::any{ return CFG_getColor(6); },
-                [](const std::any &value){ CFG_setColor(6, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(6, CFG_DEFAULT_COLOR6);},
-                makeColorOpener(picker6.get(), 6), picker6.get()},
-                new MenuItem{ListItemType::Color, "List Text", "List text color", colors, color_strings,
-                []() -> std::any{ return CFG_getColor(4); },
-                [](const std::any &value){ CFG_setColor(4, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(4, CFG_DEFAULT_COLOR4);},
-                makeColorOpener(picker4.get(), 4), picker4.get()},
-                new MenuItem{ListItemType::Color, "List Text Selected", "List selected text color", colors, color_strings,
-                []() -> std::any { return CFG_getColor(5); },
-                [](const std::any &value) { CFG_setColor(5, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(5, CFG_DEFAULT_COLOR5);},
-                makeColorOpener(picker5.get(), 5), picker5.get()},
-                new MenuItem{ListItemType::Color, "Background Color", "Background color used when no background image is set.", colors, color_strings,
-                []() -> std::any { return CFG_getColor(7); },
-                [](const std::any &value) { CFG_setColor(7, std::any_cast<uint32_t>(value)); },
-                []() { CFG_setColor(7, CFG_DEFAULT_COLOR7);},
-                makeColorOpener(picker7.get(), 7), picker7.get()},
-                new MenuItem{ListItemType::Generic, "Show battery percentage", "Show battery level as percent in the status pill", {false, true}, on_off, 
-                []() -> std::any { return CFG_getShowBatteryPercent(); },
-                [](const std::any &value) { CFG_setShowBatteryPercent(std::any_cast<bool>(value)); },
-                []() { CFG_setShowBatteryPercent(CFG_DEFAULT_SHOWBATTERYPERCENT);}},
-                new MenuItem{ListItemType::Generic, "Show menu animations", "Enable or disable menu animations", {false, true}, on_off, 
-                []() -> std::any{ return CFG_getMenuAnimations(); },
-                [](const std::any &value) { CFG_setMenuAnimations(std::any_cast<bool>(value)); },
-                []() { CFG_setMenuAnimations(CFG_DEFAULT_SHOWMENUANIMATIONS);}},
-                new MenuItem{ListItemType::Generic, "Show menu transitions", "Enable or disable animated transitions", {false, true}, on_off, 
-                []() -> std::any{ return CFG_getMenuTransitions(); },
-                [](const std::any &value) { CFG_setMenuTransitions(std::any_cast<bool>(value)); },
-                []() { CFG_setMenuTransitions(CFG_DEFAULT_SHOWMENUTRANSITIONS);}},
-                new MenuItem{ListItemType::Generic, "Game art corner radius", "Set the radius for the rounded corners of game art", 0, 24, "px",
-                []() -> std::any{ return CFG_getThumbnailRadius(); }, 
-                [](const std::any &value) { CFG_setThumbnailRadius(std::any_cast<int>(value)); },
-                []() { CFG_setThumbnailRadius(CFG_DEFAULT_THUMBRADIUS);}},
-                new MenuItem{ListItemType::Generic, "Game art width", "Set the percentage of screen width used for game art.\nUI elements might overrule this to avoid clipping.", 
-                5, 100, "%",
-                []() -> std::any{ return (int)(CFG_getGameArtWidth() * 100); }, 
-                [](const std::any &value) { CFG_setGameArtWidth((double)std::any_cast<int>(value) / 100.0); },
-                []() { CFG_setGameArtWidth(CFG_DEFAULT_GAMEARTWIDTH);}},
-                new MenuItem{ListItemType::Generic, "Show folder names at root", "Show folder names at root directory", {false, true}, on_off,
-                []() -> std::any { return CFG_getShowFolderNamesAtRoot(); },
-                [](const std::any &value) { CFG_setShowFolderNamesAtRoot(std::any_cast<bool>(value)); },
-                []() { CFG_setShowFolderNamesAtRoot(CFG_DEFAULT_SHOWFOLDERNAMESATROOT);}},
-                new MenuItem{ListItemType::Generic, "Show Recents", "Show \"Recently Played\" menu entry in game list.", {false, true}, on_off, 
-                []() -> std::any { return CFG_getShowRecents(); },
-                [](const std::any &value) { CFG_setShowRecents(std::any_cast<bool>(value)); },
-                []() { CFG_setShowRecents(CFG_DEFAULT_SHOWRECENTS);}},
-                new MenuItem{ListItemType::Generic, "Show Tools", "Show \"Tools\" menu entry in game list.", {false, true}, on_off, 
-                []() -> std::any { return CFG_getShowTools(); },
-                [](const std::any &value) { CFG_setShowTools(std::any_cast<bool>(value)); },
-                []() { CFG_setShowTools(CFG_DEFAULT_SHOWTOOLS);}},
-                new MenuItem{ListItemType::Generic, "Show game art", "Show game artwork in the main menu", {false, true}, on_off, []() -> std::any
-                { return CFG_getShowGameArt(); },
-                [](const std::any &value)
-                { CFG_setShowGameArt(std::any_cast<bool>(value)); },
-                []() { CFG_setShowGameArt(CFG_DEFAULT_SHOWGAMEART);}},
-                new MenuItem{ListItemType::Generic, "Use folder background for ROMs", "If enabled, used the emulator background image. Otherwise uses the default.", {false, true}, on_off, []() -> std::any
-                { return CFG_getRomsUseFolderBackground(); },
-                [](const std::any &value)
-                { CFG_setRomsUseFolderBackground(std::any_cast<bool>(value)); },
-                []() { CFG_setRomsUseFolderBackground(CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND);}},
-                new MenuItem{ListItemType::Generic, "Show Quickswitcher UI", "Show/hide Quickswitcher UI elements.\nWhen hidden, will only draw background images.", {false, true}, on_off, 
-                []() -> std::any{ return CFG_getShowQuickswitcherUI(); },
-                [](const std::any &value){ CFG_setShowQuickswitcherUI(std::any_cast<bool>(value)); },
-                []() { CFG_setShowQuickswitcherUI(CFG_DEFAULT_SHOWQUICKWITCHERUI);}},
-                // not needed anymore
-                // new MenuItem{ListItemType::Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
-                // { return CFG_getGameSwitcherScaling(); },
-                // [](const std::any &value)
-                // { CFG_setGameSwitcherScaling(std::any_cast<int>(value)); },
-                // []() { CFG_setGameSwitcherScaling(CFG_DEFAULT_GAMESWITCHERSCALING);}},
+        // Build color MenuItems (loop order = g_colorDefs order = display order)
+        std::vector<AbstractMenuItem *> colorMenuItems;
+        colorMenuItems.reserve(std::size(g_colorDefs));
+        for (int i = 0; i < (int)std::size(g_colorDefs); i++)
+        {
+            const auto &def = g_colorDefs[i];
+            ColorPickerMenu *picker = pickers[i].get();
+            colorMenuItems.push_back(new MenuItem{
+                ListItemType::Color, def.name, def.desc, colors, color_strings,
+                makeColorGetter(def.id),
+                makeColorSetter(def.id),
+                makeColorResetter(def.id, def.defaultColor),
+                makeColorOpener(picker, def.id), picker});
+        }
 
-                new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
-        });
+        std::vector<AbstractMenuItem *> appearanceItems;
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Font", "The font to render all UI text.", {0, 1}, font_names,
+            []() -> std::any{ return CFG_getFontId(); },
+            [](const std::any &value){ CFG_setFontId(std::any_cast<int>(value)); },
+            []() { CFG_setFontId(CFG_DEFAULT_FONT_ID);}});
+        for (auto *item : colorMenuItems)
+            appearanceItems.push_back(item);
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show battery percentage", "Show battery level as percent in the status pill", {false, true}, on_off,
+            []() -> std::any { return CFG_getShowBatteryPercent(); },
+            [](const std::any &value) { CFG_setShowBatteryPercent(std::any_cast<bool>(value)); },
+            []() { CFG_setShowBatteryPercent(CFG_DEFAULT_SHOWBATTERYPERCENT);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show menu animations", "Enable or disable menu animations", {false, true}, on_off,
+            []() -> std::any{ return CFG_getMenuAnimations(); },
+            [](const std::any &value) { CFG_setMenuAnimations(std::any_cast<bool>(value)); },
+            []() { CFG_setMenuAnimations(CFG_DEFAULT_SHOWMENUANIMATIONS);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show menu transitions", "Enable or disable animated transitions", {false, true}, on_off,
+            []() -> std::any{ return CFG_getMenuTransitions(); },
+            [](const std::any &value) { CFG_setMenuTransitions(std::any_cast<bool>(value)); },
+            []() { CFG_setMenuTransitions(CFG_DEFAULT_SHOWMENUTRANSITIONS);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Game art corner radius", "Set the radius for the rounded corners of game art", 0, 24, "px",
+            []() -> std::any{ return CFG_getThumbnailRadius(); },
+            [](const std::any &value) { CFG_setThumbnailRadius(std::any_cast<int>(value)); },
+            []() { CFG_setThumbnailRadius(CFG_DEFAULT_THUMBRADIUS);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Game art width", "Set the percentage of screen width used for game art.\nUI elements might overrule this to avoid clipping.",
+            5, 100, "%",
+            []() -> std::any{ return (int)(CFG_getGameArtWidth() * 100); },
+            [](const std::any &value) { CFG_setGameArtWidth((double)std::any_cast<int>(value) / 100.0); },
+            []() { CFG_setGameArtWidth(CFG_DEFAULT_GAMEARTWIDTH);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show folder names at root", "Show folder names at root directory", {false, true}, on_off,
+            []() -> std::any { return CFG_getShowFolderNamesAtRoot(); },
+            [](const std::any &value) { CFG_setShowFolderNamesAtRoot(std::any_cast<bool>(value)); },
+            []() { CFG_setShowFolderNamesAtRoot(CFG_DEFAULT_SHOWFOLDERNAMESATROOT);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show Recents", "Show \"Recently Played\" menu entry in game list.", {false, true}, on_off,
+            []() -> std::any { return CFG_getShowRecents(); },
+            [](const std::any &value) { CFG_setShowRecents(std::any_cast<bool>(value)); },
+            []() { CFG_setShowRecents(CFG_DEFAULT_SHOWRECENTS);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show Tools", "Show \"Tools\" menu entry in game list.", {false, true}, on_off,
+            []() -> std::any { return CFG_getShowTools(); },
+            [](const std::any &value) { CFG_setShowTools(std::any_cast<bool>(value)); },
+            []() { CFG_setShowTools(CFG_DEFAULT_SHOWTOOLS);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show game art", "Show game artwork in the main menu", {false, true}, on_off,
+            []() -> std::any { return CFG_getShowGameArt(); },
+            [](const std::any &value) { CFG_setShowGameArt(std::any_cast<bool>(value)); },
+            []() { CFG_setShowGameArt(CFG_DEFAULT_SHOWGAMEART);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Use folder background for ROMs", "If enabled, used the emulator background image. Otherwise uses the default.", {false, true}, on_off,
+            []() -> std::any { return CFG_getRomsUseFolderBackground(); },
+            [](const std::any &value) { CFG_setRomsUseFolderBackground(std::any_cast<bool>(value)); },
+            []() { CFG_setRomsUseFolderBackground(CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show Quickswitcher UI", "Show/hide Quickswitcher UI elements.\nWhen hidden, will only draw background images.", {false, true}, on_off,
+            []() -> std::any{ return CFG_getShowQuickswitcherUI(); },
+            [](const std::any &value){ CFG_setShowQuickswitcherUI(std::any_cast<bool>(value)); },
+            []() { CFG_setShowQuickswitcherUI(CFG_DEFAULT_SHOWQUICKWITCHERUI);}});
+        // not needed anymore
+        // new MenuItem{ListItemType::Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
+        // { return CFG_getGameSwitcherScaling(); },
+        // [](const std::any &value)
+        // { CFG_setGameSwitcherScaling(std::any_cast<int>(value)); },
+        // []() { CFG_setGameSwitcherScaling(CFG_DEFAULT_GAMESWITCHERSCALING);}},
+        appearanceItems.push_back(new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu});
+        auto *appearanceMenu = new MenuList(MenuItemType::Fixed, "Appearance", std::move(appearanceItems));
 
         std::vector<AbstractMenuItem*> displayItems = {
             new MenuItem{ListItemType::Generic, "Brightness", "Display brightness (0 to 10)", 0, 10, "",[]() -> std::any

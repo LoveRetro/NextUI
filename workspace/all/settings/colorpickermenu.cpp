@@ -16,7 +16,7 @@ static void decodeColor(uint32_t c, int &r, int &g, int &b)
 
 ColorPickerMenu::ColorPickerMenu(uint32_t initialColor, ValueSetCallback on_set,
                                  std::vector<ColorPreset> presets)
-    : MenuList(MenuItemType::Custom, "", {}), on_set(on_set),
+    : MenuList(MenuItemType::Custom, "", {}), on_set(std::move(on_set)),
       presets(std::move(presets)), selected(0)
 {
     decodeColor(initialColor, r, g, b);
