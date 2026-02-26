@@ -2626,7 +2626,7 @@ int main (int argc, char *argv[]) {
 				char fallbackBgPath[MAX_PATH];
 				sprintf(newBgPath, SDCARD_PATH "/.media/quick_%s%s.png", current->name, 
 					!strcmp(current->name,"Wifi") && CFG_getWifi() || 							// wifi or wifi_off, based on state
-					!strcmp(current->name,"Bluetooth") && CFG_getBluetooth() ? "_off" : "");	// bluetooth or bluetooth_off, based on state
+					!strcmp(current->name,"Bluetooth") && CFG_getBluetooth() ? "" : "_off");	// bluetooth or bluetooth_off, based on state
 				sprintf(fallbackBgPath, SDCARD_PATH "/.media/quick.png");
 				
 				// background
@@ -2738,11 +2738,11 @@ int main (int argc, char *argv[]) {
 
 						GFX_blitPillColor(ASSET_WHITE_PILL, screen, &item_rect, item_color, RGB_WHITE);
 
-						int asset = ASSET_WIFI;
+						int asset = ASSET_WIFI_OFF;
 						if (!strcmp(item->name,"Wifi"))
-							asset = CFG_getWifi() ? ASSET_WIFI_OFF : ASSET_WIFI;
+							asset = CFG_getWifi() ? ASSET_WIFI : ASSET_WIFI_OFF;
 						else if (!strcmp(item->name,"Bluetooth"))
-							asset = CFG_getBluetooth() ? ASSET_BLUETOOTH_OFF : ASSET_BLUETOOTH;
+							asset = CFG_getBluetooth() ? ASSET_BLUETOOTH : ASSET_BLUETOOTH_OFF;
 						else if (!strcmp(item->name,"Sleep"))
 							asset = ASSET_SUSPEND;
 						else if (!strcmp(item->name,"Reboot"))
