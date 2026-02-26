@@ -3295,7 +3295,7 @@ int main (int argc, char *argv[]) {
 				} 
 			}
 			else {
-				SDL_Delay(100); // why are we running long delays on the render thread, wtf?
+				GFX_sync();
 			}
 			dirty = 0;
 		} 
@@ -3308,9 +3308,7 @@ int main (int argc, char *argv[]) {
 				PLAT_GPU_Flip();
 				setNeedDraw(0);
 			} else {
-				// TODO: Why 17? Seems like an odd choice for 60fps, it almost guarantees we miss at least one frame.
-				// This should either be 16(.66666667) or make proper use of SDL_Ticks to only wait for the next render pass.
-				SDL_Delay(17); 
+				GFX_sync();
 			}
 			SDL_UnlockMutex(animqueueMutex);
 			SDL_UnlockMutex(thumbqueueMutex);
