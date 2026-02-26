@@ -2268,6 +2268,7 @@ int main (int argc, char *argv[]) {
 	int show_setting = 0; // 1=brightness,2=volume
 	int was_online = PWR_isOnline();
     int had_bt = PLAT_btIsConnected();
+	int had_sink = GetAudioSink();
 
 	pthread_t cpucheckthread = 0;
 	if (pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL) == 0) {
@@ -2313,6 +2314,11 @@ int main (int argc, char *argv[]) {
         if (had_bt != has_bt)
             dirty = 1;
         had_bt = has_bt;
+
+		int has_sink = GetAudioSink();
+		if (had_sink != has_sink)
+			dirty = 1;
+		had_sink = has_sink;
 
 		int gsanimdir = ANIM_NONE;
 
