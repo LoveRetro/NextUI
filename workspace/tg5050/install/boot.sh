@@ -27,9 +27,19 @@ else
 		fi
 	done
 fi
+LOGO_PATH="logo.png"
+# If the user put a custom logo under /mnt/SDCARD/.media/splash_logo.png, use that instead
+if [ -f "$SDCARD_PATH/.media/splash_logo.png" ]; then
+	LOGO_PATH="$SDCARD_PATH/.media/splash_logo.png"
+fi
+
 if [ "$SHOW_SPLASH" = "yes" ] ; then
 	cd $(dirname "$0")/$PLATFORM
-	./show2.elf --mode=daemon --image="logo.png" --text="Installing..." --logoheight=128 --progress=-1 &
+	if [ "$DEVICE" = "brick" ]; then
+		./show2.elf --mode=daemon --image="$LOGO_PATH" --text="Installing..." --logoheight=144 --fontsize=32 --progress=-1 &
+	else
+		./show2.elf --mode=daemon --image="$LOGO_PATH" --text="Installing..." --logoheight=128 --progress=-1 &
+	fi
 	#sleep 0.5
 	#SHOW_PID=$!
 fi

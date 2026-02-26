@@ -165,21 +165,19 @@ public:
             std::cerr << "Image not found: " << config.image_path << std::endl;
         }
 
-        // Initialize font for progress/daemon modes
-        if (config.mode != DisplayMode::Simple) {
-            if (TTF_Init() < 0) {
-                std::cerr << "TTF_Init failed: " << TTF_GetError() << std::endl;
-            } else {
-                SDL_RWops* rw = SDL_RWFromConstMem(RoundedMplus1c_Bold_reduced_ttf,
-                                                    RoundedMplus1c_Bold_reduced_ttf_len);
-                if (rw) {
-                    font = TTF_OpenFontRW(rw, 1, config.font_size);
-                    if (!font) {
-                        std::cerr << "Failed to load embedded font: " << TTF_GetError() << std::endl;
-                    }
-                } else {
-                    std::cerr << "Failed to create RWops for embedded font" << std::endl;
+        // Initialize font
+        if (TTF_Init() < 0) {
+            std::cerr << "TTF_Init failed: " << TTF_GetError() << std::endl;
+        } else {
+            SDL_RWops* rw = SDL_RWFromConstMem(RoundedMplus1c_Bold_reduced_ttf,
+                                                RoundedMplus1c_Bold_reduced_ttf_len);
+            if (rw) {
+                font = TTF_OpenFontRW(rw, 1, config.font_size);
+                if (!font) {
+                    std::cerr << "Failed to load embedded font: " << TTF_GetError() << std::endl;
                 }
+            } else {
+                std::cerr << "Failed to create RWops for embedded font" << std::endl;
             }
         }
 
@@ -344,20 +342,6 @@ private:
     }
 
     void renderSimple() {
-        if (logo) {
-            // Center image without stretching - use original dimensions
-            SDL_Rect src = {0, 0, logo->w, logo->h};
-            SDL_Rect dst = {
-                (screen->w - logo->w) / 2,
-                (screen->h - logo->h) / 2,
-                logo->w,
-                logo->h
-            };
-            SDL_BlitSurface(logo, &src, screen, &dst);
-        }
-    }
-
-    void renderProgress() {
         // Draw logo - always centered without stretching
         if (logo) {
             SDL_Rect src = {0, 0, logo->w, logo->h};
@@ -385,6 +369,10 @@ private:
                 SDL_FreeSurface(text_surface);
             }
         }
+    }
+
+    void renderProgress() {
+        renderSimple(); // Draw logo and text first
 
         // Draw progress bar at percentage-based Y position
         int progress_y = (screen->h * current_progress_y_pct) / 100;
@@ -543,7 +531,9 @@ std::map<std::string, std::string> parseArguments(int argc, char* argv[]) {
 
 void printUsage() {
     std::cout << "Usage:\n";
-    std::cout << "  Simple mode:   show2.elf --mode=simple --image=<path> [--bgcolor=0x000000] [--logoheight=N] [--timeout=N]\n";
+    std::cout << "  Simple mode:   show2.elf --mode=simple --image=<path> [--bgcolor=0x000000] [--fontcolor=0xFFFFFF]\n";
+    std::cout << "                 [--text=\"message\"] [--texty=80] [--progressy=90]\n";
+    std::cout << "                 [--logoheight=N] [--fontsize=24] [--timeout=N]\n";
     std::cout << "  Progress mode: show2.elf --mode=progress --image=<path> [--bgcolor=0x000000] [--fontcolor=0xFFFFFF]\n";
     std::cout << "                 [--text=\"message\"] [--progress=0] [--texty=80] [--progressy=90]\n";
     std::cout << "                 [--logoheight=N] [--fontsize=24] [--timeout=N]\n";

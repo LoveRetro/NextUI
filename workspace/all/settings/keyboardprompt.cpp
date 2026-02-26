@@ -96,7 +96,8 @@ InputReactionHint KeyboardPrompt::handleInput(int &dirty, int &quit)
 
 void KeyboardPrompt::handleKeyboardInput(AppState &state)
 {
-    // redraw unless a key was not pressed
+    // redraw unless a key was not pressed (preserve pending redraws e.g. from setInitialText)
+    bool was_dirty = state.redraw;
     state.redraw = true;
 
     // track current keyboard layout
@@ -224,8 +225,8 @@ void KeyboardPrompt::handleKeyboardInput(AppState &state)
     }
     else
     {
-        // do not redraw if no key was pressed
-        state.redraw = false;
+        // do not redraw if no key was pressed (but preserve pending redraws)
+        state.redraw = was_dirty;
     }
 }
 
