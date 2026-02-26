@@ -2631,8 +2631,8 @@ int main (int argc, char *argv[]) {
 				char newBgPath[MAX_PATH];
 				char fallbackBgPath[MAX_PATH];
 				sprintf(newBgPath, SDCARD_PATH "/.media/quick_%s%s.png", current->name, 
-					!strcmp(current->name,"Wifi") && CFG_getWifi() || 							// wifi or wifi_off, based on state
-					!strcmp(current->name,"Bluetooth") && CFG_getBluetooth() ? "" : "_off");	// bluetooth or bluetooth_off, based on state
+					!strcmp(current->name,"Wifi") && !CFG_getWifi() || 							// wifi or wifi_off, based on state
+					!strcmp(current->name,"Bluetooth") && !CFG_getBluetooth() ? "_off" : "");	// bluetooth or bluetooth_off, based on state
 				sprintf(fallbackBgPath, SDCARD_PATH "/.media/quick.png");
 				
 				// background
