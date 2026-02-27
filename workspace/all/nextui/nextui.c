@@ -2035,7 +2035,7 @@ int animWorker(void* unused) {
 
     AnimTask* task = node->task;
 		finishedTask* finaltask = (finishedTask*)malloc(sizeof(finishedTask));
-		int total_frames = task->frames;		
+		int total_frames = task->frames;
 		for (int frame = 0; frame <= total_frames; frame++) {
 			// Check for shutdown at start of each frame
 			if (SDL_AtomicGet(&workerThreadsShutdown)) break;
@@ -3086,7 +3086,7 @@ int main (int argc, char *argv[]) {
 							task->targetX = SCALE1(BUTTON_MARGIN);
 							task->targetY = SCALE1(targetY+PADDING);
 							task->targetTextY = SCALE1(PADDING + targetY) + text_offset_y;
-							pilltargetTextY = +screen->w;
+							pilltargetTextY = task->targetTextY;
 							task->move_w = max_width;
 							task->move_h = SCALE1(PILL_SIZE);
 							task->frames = should_animate && CFG_getMenuAnimations() ? 3:1;
@@ -3207,7 +3207,7 @@ int main (int argc, char *argv[]) {
 				SDL_LockMutex(animMutex);
 				if (list_show_entry_names) {
 					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
-					// GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
+					GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
 				}
 				SDL_UnlockMutex(animMutex);
 			}
