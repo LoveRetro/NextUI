@@ -1759,7 +1759,6 @@ static void updatePillTextSurface(const char* entry_name, int move_w, SDL_Color 
 		0, crop_rect.w, crop_rect.h, screen->format->BitsPerPixel, screen->format->format
 	);
 	if (cropped) {
-		SDL_SetSurfaceBlendMode(converted, SDL_BLENDMODE_NONE);
 		SDL_BlitSurface(converted, &crop_rect, cropped, NULL);
 	}
 	SDL_FreeSurface(converted);
@@ -2614,14 +2613,6 @@ int main (int argc, char *argv[]) {
 				GFX_clearLayers(LAYER_IDK2);
 			}
 			GFX_clear(screen);
-			// Fill screen with bg color so pill anti-aliased edges blend correctly
-			// (settings.cpp does this same thing; without it the transparent-black screen
-			//  causes premultiplied alpha artifacts when composited over LAYER_BACKGROUND)
-			if (!folderbgbmp) {
-				uint32_t bgc = CFG_getColor(COLOR_BACKGROUND);
-				SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format,
-					(bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
-			}
 
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
 			if (currentScreen == SCREEN_QUICKMENU) {

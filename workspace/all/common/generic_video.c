@@ -35,6 +35,17 @@ static int finalScaleFilter=GL_LINEAR;
 static int reloadShaderTextures = 1;
 static int shaderResetRequested = 0;
 
+static SDL_BlendMode getPremultipliedBlendMode(void) {
+	return SDL_ComposeCustomBlendMode(
+		SDL_BLENDFACTOR_ONE,
+		SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+		SDL_BLENDOPERATION_ADD,
+		SDL_BLENDFACTOR_ONE,
+		SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+		SDL_BLENDOPERATION_ADD
+	);
+}
+
 // shader stuff
 
 typedef struct Shader {
@@ -578,11 +589,12 @@ SDL_Surface* PLAT_initVideo(void) {
 
 	vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
 
+	SDL_BlendMode premult = getPremultipliedBlendMode();
 	SDL_SetSurfaceBlendMode(vid.screen, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureBlendMode(vid.stream_layer1, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureBlendMode(vid.target_layer2, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureBlendMode(vid.target_layer3, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureBlendMode(vid.target_layer4, SDL_BLENDMODE_BLEND);
+	SDL_SetTextureBlendMode(vid.stream_layer1, premult);
+	SDL_SetTextureBlendMode(vid.target_layer2, premult);
+	SDL_SetTextureBlendMode(vid.target_layer3, SDL_BLENDMODE_BLEND); // straight alpha game art
+	SDL_SetTextureBlendMode(vid.target_layer4, premult);
 	SDL_SetTextureBlendMode(vid.target_layer5, SDL_BLENDMODE_BLEND);
 
 	vid.width	= w;
@@ -806,7 +818,7 @@ static void resizeVideo(int w, int h, int p) {
 
 	// SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, vid.sharpness==SHARPNESS_SOFT?"1":"0", SDL_HINT_OVERRIDE);
 	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w,h);
-	SDL_SetTextureBlendMode(vid.stream_layer1, SDL_BLENDMODE_BLEND);
+	SDL_SetTextureBlendMode(vid.stream_layer1, getPremultipliedBlendMode());
 
 	if (vid.sharpness==SHARPNESS_CRISP) {
 		// SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, "1", SDL_HINT_OVERRIDE);
@@ -1558,8 +1570,8 @@ void PLAT_flipHidden() {
 	resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
 	SDL_UpdateTexture(vid.stream_layer1, NULL, vid.screen->pixels, vid.screen->pitch);
 	SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
-	SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
+	SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer3, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer4, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer5, NULL, NULL);
@@ -1574,8 +1586,8 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
         resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
         SDL_UpdateTexture(vid.stream_layer1, NULL, vid.screen->pixels, vid.screen->pitch);
 		SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
+		SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
         SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
-        SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
 		SDL_RenderCopy(vid.renderer, vid.target_layer3, NULL, NULL);
 		SDL_RenderCopy(vid.renderer, vid.target_layer4, NULL, NULL);
 		SDL_RenderCopy(vid.renderer, vid.target_layer5, NULL, NULL);
@@ -1590,8 +1602,8 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
         resizeVideo(device_width, device_height, FIXED_PITCH);
         SDL_UpdateTexture(vid.stream_layer1, NULL, vid.screen->pixels, vid.screen->pitch);
         SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
-        SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
         SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
+        SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
         SDL_RenderCopy(vid.renderer, vid.target_layer3, NULL, NULL);
         SDL_RenderCopy(vid.renderer, vid.target_layer4, NULL, NULL);
         SDL_RenderCopy(vid.renderer, vid.target_layer5, NULL, NULL);
@@ -2163,7 +2175,7 @@ void PLAT_GL_Swap() {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, notif.surface->w, notif.surface->h, GL_RGBA, GL_UNSIGNED_BYTE, notif.surface->pixels);
         notif.dirty = 0;
     }
-    
+
     if (notif.tex && notif.surface) {
         runShaderPass(
             notif.tex,
