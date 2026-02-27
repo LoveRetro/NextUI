@@ -6356,6 +6356,42 @@ static int Menu_message(char* message, char** pairs) {
 	return Menu_messageWithFont(message, pairs, font.medium);
 }
 
+static bool Menu_confirm(char* message) {
+	GFX_setMode(MODE_MAIN);
+	int dirty = 1;
+	bool confirmed = false;
+	while (1) {
+		GFX_startFrame();
+		PAD_poll();
+
+		if (PAD_justPressed(BTN_A)) {
+			confirmed = true;
+			break;
+		}
+		else if (PAD_justPressed(BTN_B)) {
+			confirmed = false;
+			break;
+		}
+
+		PWR_update(&dirty, NULL, Menu_beforeSleep, Menu_afterSleep);
+
+		GFX_clear(screen);
+		GFX_blitMessage(font.medium, message, screen, &(SDL_Rect){
+			SCALE1(PADDING),
+			SCALE1(PADDING),
+			screen->w - SCALE1(2 * PADDING),
+			screen->h - SCALE1(PILL_SIZE + PADDING)
+		});
+		GFX_blitButtonGroup((char*[]){ "B","CANCEL", "A","OKAY", NULL }, 0, screen, 1);
+		GFX_flip(screen);
+		dirty = 0;
+
+		hdmimon();
+	}
+	GFX_setMode(MODE_MENU);
+	return confirmed;
+}
+
 static int Menu_options(MenuList* list);
 
 static int MenuList_freeItems(MenuList* list, int i) {
@@ -8470,6 +8506,25 @@ static void Menu_loadState(void) {
 	}
 }
 
+static void Menu_deleteState(void) {
+	Menu_updateState();
+	if (!menu.save_exists) return;
+
+	int last_slot = state_slot;
+	state_slot = menu.slot;
+
+	char save_path[256];
+	State_getPath(save_path);
+
+	state_slot = last_slot;
+
+	unlink(save_path);
+	unlink(menu.bmp_path);
+	unlink(menu.txt_path);
+	menu.save_exists = 0;
+	menu.preview_exists = 0;
+}
+
 static void Menu_loop(void) {
 
 	int cw, ch;
@@ -8591,6 +8646,16 @@ static void Menu_loop(void) {
 		if (PAD_justPressed(BTN_B) || (BTN_WAKE!=BTN_MENU && PAD_tappedMenu(now))) {
 			status = STATUS_CONT;
 			show_menu = 0;
+		}
+		else if ((selected==ITEM_SAVE || selected==ITEM_LOAD) && PAD_justPressed(BTN_X)) {
+			Menu_updateState();
+			if (!menu.save_exists) {
+				Menu_message("Slot is already empty.", (char*[]){ "A","OKAY", NULL });
+			}
+			else if (Menu_confirm("Delete this save state?")) {
+				Menu_deleteState();
+				dirty = 1;
+			}
 		}
 		else if (PAD_justPressed(BTN_A)) {
 			switch(selected) {
