@@ -1297,8 +1297,8 @@ void PLAT_scrollTextTexture(
 void PLAT_GPU_Flip() {
 	SDL_RenderClear(vid.renderer);
 	SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
-	SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
+	SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer3, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer4, NULL, NULL);
 	SDL_RenderCopy(vid.renderer, vid.target_layer5, NULL, NULL);
