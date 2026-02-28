@@ -2267,6 +2267,7 @@ int main (int argc, char *argv[]) {
 	int show_setting = 0; // 1=brightness,2=volume
 	int was_online = PWR_isOnline();
     int had_bt = PLAT_btIsConnected();
+	int had_sink = GetAudioSink();
 
 	pthread_t cpucheckthread = 0;
 	if (pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL) == 0) {
@@ -2312,6 +2313,11 @@ int main (int argc, char *argv[]) {
         if (had_bt != has_bt)
             dirty = 1;
         had_bt = has_bt;
+
+		int has_sink = GetAudioSink();
+		if (had_sink != has_sink)
+			dirty = 1;
+		had_sink = has_sink;
 
 		int gsanimdir = ANIM_NONE;
 
@@ -2623,9 +2629,10 @@ int main (int argc, char *argv[]) {
 				Entry *current = qm_row == 0 ? quick->items[qm_col] : quickActions->items[qm_col];
 				char newBgPath[MAX_PATH];
 				char fallbackBgPath[MAX_PATH];
-				sprintf(newBgPath, SDCARD_PATH "/.media/quick_%s%s.png", current->name,
-					!strcmp(current->name,"Wifi") && CFG_getWifi() || 							// wifi or wifi_off, based on state
-					!strcmp(current->name,"Bluetooth") && CFG_getBluetooth() ? "" : "_off");	// bluetooth or bluetooth_off, based on state
+
+				sprintf(newBgPath, SDCARD_PATH "/.media/quick_%s%s.png", current->name, 
+					!strcmp(current->name,"Wifi") && !CFG_getWifi() || 							// wifi or wifi_off, based on state
+					!strcmp(current->name,"Bluetooth") && !CFG_getBluetooth() ? "_off" : "");	// bluetooth or bluetooth_off, based on state
 				sprintf(fallbackBgPath, SDCARD_PATH "/.media/quick.png");
 
 				// background

@@ -1971,6 +1971,7 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 		// no need to handle in PLAT_updateNetworkStatus,
 		// this one is async anyway
 		int show_bt = BT_isConnected();
+		int show_external_audio = GetAudioSink() != AUDIO_SINK_DEFAULT;
 		bool show_clock = CFG_getShowClock();
 		SDL_Rect battery_rect = asset_rects[ASSET_BATTERY];
 
@@ -2001,6 +2002,12 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 			{
 				SDL_Rect wifi_rect = asset_rects[ASSET_WIFI];
 				ow += wifi_rect.w + SCALE1(BUTTON_MARGIN);
+			}
+
+			if (show_external_audio)
+			{
+				SDL_Rect external_audio_rect = asset_rects[ASSET_AUDIO];
+				ow += external_audio_rect.w + SCALE1(BUTTON_MARGIN);
 			}
 
 			ow += battery_rect.w + SCALE1(BUTTON_MARGIN);
@@ -2051,6 +2058,17 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 
 				GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){x, y}, THEME_COLOR6);
 				ox += wifi_rect.w + SCALE1(BUTTON_MARGIN);
+			}
+
+			if (show_external_audio)
+			{
+				int asset = ASSET_AUDIO;
+				SDL_Rect external_audio_rect = asset_rects[asset];
+				int x = ox;
+				int y = oy + (SCALE1(PILL_SIZE) - external_audio_rect.h) / 2;
+
+				GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){x, y}, THEME_COLOR6);
+				ox += external_audio_rect.w + SCALE1(BUTTON_MARGIN);
 			}
 
 			int battery_x = ox;
