@@ -270,8 +270,6 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_setOffsetY PLAT_setOffsetY// (int effect)
 #define GFX_drawOnLayer PLAT_drawOnLayer //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_clearLayers PLAT_clearLayers //(SDL_Surface *inputSurface,int x, int y)
-void PLAT_setBackgroundColor(uint32_t rgb);
-#define GFX_setBackgroundColor PLAT_setBackgroundColor // (uint32_t rgb)
 #define GFX_captureRendererToSurface PLAT_captureRendererToSurface //(void)
 #define GFX_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateSurfaceOpacity PLAT_animateSurfaceOpacity //(SDL_Surface *inputSurface,int x, int y)

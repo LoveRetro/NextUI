@@ -114,7 +114,6 @@ static int device_width;
 static int device_height;
 static int device_pitch;
 static uint32_t SDL_transparentBlack = 0;
-static uint8_t vid_bgR = 0, vid_bgG = 0, vid_bgB = 0;
 
 #define OVERLAYS_FOLDER SDCARD_PATH "/Overlays"
 
@@ -1043,16 +1042,11 @@ void applyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius) {
     }
 }
 
-void PLAT_setBackgroundColor(uint32_t rgb) {
-	vid_bgR = (rgb >> 16) & 0xFF;
-	vid_bgG = (rgb >> 8) & 0xFF;
-	vid_bgB = rgb & 0xFF;
-}
-
 void PLAT_clearLayers(int layer) {
 	if(layer==0 || layer==1) {
+		uint32_t bg = CFG_getColor(COLOR_BACKGROUND);
 		SDL_SetRenderTarget(vid.renderer, vid.target_layer1);
-		SDL_SetRenderDrawColor(vid.renderer, vid_bgR, vid_bgG, vid_bgB, 255);
+		SDL_SetRenderDrawColor(vid.renderer, (bg >> 16) & 0xFF, (bg >> 8) & 0xFF, bg & 0xFF, 255);
 		SDL_RenderClear(vid.renderer);
 	}
 	SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);

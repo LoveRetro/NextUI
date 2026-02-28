@@ -2223,8 +2223,7 @@ int main (int argc, char *argv[]) {
 	InitSettings();
 
 	screen = GFX_init(MODE_MAIN);
-	GFX_setBackgroundColor(CFG_getColor(COLOR_BACKGROUND));
-	// LOG_info("- graphics init: %lu\n", SDL_GetTicks() - main_begin);
+// LOG_info("- graphics init: %lu\n", SDL_GetTicks() - main_begin);
 
 	PAD_init();
 	// LOG_info("- input init: %lu\n", SDL_GetTicks() - main_begin);
