@@ -1883,6 +1883,7 @@ int GFX_blitHardwareIndicator(SDL_Surface *dst, int x, int y, IndicatorType indi
 	int setting_min;
 	int setting_max;
 	int asset;
+	bool readonly = false;
 	
 	int ow = SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
 	int ox = x;
@@ -1898,6 +1899,7 @@ int GFX_blitHardwareIndicator(SDL_Surface *dst, int x, int y, IndicatorType indi
 		setting_min = BRIGHTNESS_MIN;
 		setting_max = BRIGHTNESS_MAX;
 		asset = ASSET_BRIGHTNESS;
+		readonly = GetMute() && GetMutedBrightness() != SETTINGS_DEFAULT_MUTE_NO_CHANGE;
 	}
 	else if (indicator_type == INDICATOR_COLORTEMP)
 	{
@@ -1905,6 +1907,7 @@ int GFX_blitHardwareIndicator(SDL_Surface *dst, int x, int y, IndicatorType indi
 		setting_min = COLORTEMP_MIN;
 		setting_max = COLORTEMP_MAX;
 		asset = ASSET_COLORTEMP;
+		readonly = GetMute() && GetMutedColortemp() != SETTINGS_DEFAULT_MUTE_NO_CHANGE;
 	}
 	else // INDICATOR_VOLUME
 	{
@@ -1915,8 +1918,9 @@ int GFX_blitHardwareIndicator(SDL_Surface *dst, int x, int y, IndicatorType indi
 			asset = (setting_value > 0 ? ASSET_BLUETOOTH : ASSET_BLUETOOTH_OFF);
 		else
 			asset = (setting_value > 0 ? ASSET_VOLUME : ASSET_VOLUME_MUTE);
+		readonly = GetMute() && GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE;
 	}
-	
+
 	// Draw the icon
 	SDL_Rect asset_rect;
 	GFX_assetRect(asset, &asset_rect);
@@ -1930,11 +1934,23 @@ int GFX_blitHardwareIndicator(SDL_Surface *dst, int x, int y, IndicatorType indi
 	GFX_blitPillColor(gfx.mode == MODE_MAIN ? ASSET_BAR_BG : ASSET_BAR_BG_MENU, dst, 
 		&(SDL_Rect){ox, bar_y, SCALE1(SETTINGS_WIDTH), SCALE1(SETTINGS_SIZE)}, THEME_COLOR3, RGB_WHITE);
 	
-	// Draw the progress bar fill
-	float percent = ((float)(setting_value - setting_min) / (setting_max - setting_min));
-	if (indicator_type == 1 || indicator_type == 3 || setting_value > 0)
+	// Draw the lock icon centered over the bar if the setting is read-only
+	if (readonly)
 	{
-		GFX_blitPillDark(ASSET_BAR, dst, &(SDL_Rect){ox, bar_y, SCALE1(SETTINGS_WIDTH) * percent, SCALE1(SETTINGS_SIZE)});
+		SDL_Rect lock_rect;
+		GFX_assetRect(ASSET_LOCK, &lock_rect);
+		int lx = ox + (SCALE1(SETTINGS_WIDTH) - lock_rect.w) / 2;
+		int ly = bar_y + (SCALE1(SETTINGS_SIZE) - lock_rect.h) / 2;
+		GFX_blitAssetColor(ASSET_LOCK, NULL, dst, &(SDL_Rect){lx, ly}, THEME_COLOR6_255);
+	}
+	else {
+		// Draw the progress bar fill
+		float percent = ((float)(setting_value - setting_min) / (setting_max - setting_min));
+		if (indicator_type == 1 || indicator_type == 3 || setting_value > 0)
+		{
+			if(!readonly)
+				GFX_blitPillDark(ASSET_BAR, dst, &(SDL_Rect){ox, bar_y, SCALE1(SETTINGS_WIDTH) * percent, SCALE1(SETTINGS_SIZE)});
+		}
 	}
 	
 	return ow;
