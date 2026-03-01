@@ -2892,7 +2892,7 @@ int main (int argc, char *argv[]) {
 					else {
 						SDL_Rect preview_rect = {ox,oy,screen->w,screen->h};
 						SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,screen->format->BitsPerPixel,screen->format->format);
-						SDL_FillRect(tmpsur, &preview_rect, SDL_MapRGBA(screen->format,0,0,0,255));
+						SDL_FillRect(tmpsur, &preview_rect, CFG_getColor(COLOR_BACKGROUND));
 						if(lastScreen == SCREEN_GAME) {
 							GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,LAYER_BACKGROUND);
 						} else if(lastScreen == SCREEN_GAMELIST) {
