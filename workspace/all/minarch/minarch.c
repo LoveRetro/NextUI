@@ -830,14 +830,14 @@ static void SRAM_read(void) {
 	if(!sram_file) return;
 
 	if (!sram || rzipstream_read(sram_file, sram, sram_size) < 0)
-	  LOG_error("rzipstream: Error reading SRAM data\n");
+		LOG_error("rzipstream: Error reading SRAM data\n");
 		
 	rzipstream_close(sram_file);
 #else 
 	FILE *sram_file = fopen(filename, "r");
 	if (!sram_file) return;
 	if (!sram || !fread(sram, 1, sram_size, sram_file)) {
-	  LOG_error("Error reading SRAM data\n");
+		LOG_error("Error reading SRAM data\n");
 	}
 	fclose(sram_file);
 #endif
