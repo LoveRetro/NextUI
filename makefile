@@ -12,7 +12,7 @@ endif
 
 ifeq (,$(PLATFORMS))
 #PLATFORMS = miyoomini trimuismart rg35xx rg35xxplus my355 tg5040 zero28 rgb30 m17 gkdpixel my282 magicmini
-PLATFORMS = tg5050 tg5040
+PLATFORMS =  tg5040 tg5050 my355
 endif
 
 ###########################################################
@@ -50,12 +50,12 @@ export MAKEFLAGS=--no-print-directory
 deploy: setup $(PLATFORMS) special package
 	adb push ./build/BASE/MinUI.zip /mnt/SDCARD && adb shell reboot
 
-all: setup $(PLATFORMS) special package done
-	
+all: setup $(PLATFORMS) special package
+
 shell:
 	make -f $(TOOLCHAIN_FILE) PLATFORM=$(PLATFORM)
 
-name: 
+name:
 	@echo $(RELEASE_NAME)
 
 build:
@@ -78,7 +78,7 @@ endif
 
 system:
 	make -f ./workspace/$(PLATFORM)/platform/makefile.copy PLATFORM=$(PLATFORM)
-	
+
 	# populate system
 ifneq ($(PLATFORM), desktop)
 	cp ./workspace/$(PLATFORM)/keymon/keymon.elf ./build/SYSTEM/$(PLATFORM)/bin/
@@ -95,7 +95,6 @@ ifneq ($(PLATFORM), desktop)
 	cp ./workspace/all/libgametimedb/build/$(PLATFORM)/libgametimedb.so ./build/SYSTEM/$(PLATFORM)/lib
 	cp ./workspace/all/gametimectl/build/$(PLATFORM)/gametimectl.elf ./build/SYSTEM/$(PLATFORM)/bin/
 	cp ./workspace/all/gametime/build/$(PLATFORM)/gametime.elf ./build/EXTRAS/Tools/$(PLATFORM)/Game\ Tracker.pak/
-endif
 	cp ./workspace/$(PLATFORM)/libmsettings/libmsettings.so ./build/SYSTEM/$(PLATFORM)/lib
 	cp ./workspace/all/nextui/build/$(PLATFORM)/nextui.elf ./build/SYSTEM/$(PLATFORM)/bin/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/minarch.elf ./build/SYSTEM/$(PLATFORM)/bin/
@@ -103,28 +102,42 @@ endif
 	cp ./workspace/all/clock/build/$(PLATFORM)/clock.elf ./build/EXTRAS/Tools/$(PLATFORM)/Clock.pak/
 	cp ./workspace/all/minput/build/$(PLATFORM)/minput.elf ./build/EXTRAS/Tools/$(PLATFORM)/Input.pak/
 	cp ./workspace/all/settings/build/$(PLATFORM)/settings.elf ./build/EXTRAS/Tools/$(PLATFORM)/Settings.pak/
+endif
+ 
 ifneq (,$(filter $(PLATFORM),tg5040 tg5050))
 	cp ./workspace/all/ledcontrol/build/$(PLATFORM)/ledcontrol.elf ./build/EXTRAS/Tools/$(PLATFORM)/LedControl.pak/
-	cp ./workspace/all/bootlogo/build/$(PLATFORM)/bootlogo.elf ./build/EXTRAS/Tools/$(PLATFORM)/Bootlogo.pak/
+endif
+
 ifeq ($(PLATFORM), tg5040)
 	# Limbo fix
 	cp ./workspace/$(PLATFORM)/poweroff_next/build/$(PLATFORM)/poweroff_next.elf ./build/SYSTEM/$(PLATFORM)/bin/poweroff_next
 endif
+
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))
+	cp ./workspace/all/bootlogo/build/$(PLATFORM)/bootlogo.elf ./build/EXTRAS/Tools/$(PLATFORM)/Bootlogo.pak/
+
 	# Audio resampling
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libsamplerate.* ./build/SYSTEM/$(PLATFORM)/lib/
 
 	# ROM decompression and SRM support
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libzip.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libbz2.* ./build/SYSTEM/$(PLATFORM)/lib/
-	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.* ./build/SYSTEM/$(PLATFORM)/lib/
-	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.so.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 
 	# libchdr for RetroAchievements CHD hashing
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 
-ifeq ($(PLATFORM), tg5040)
+ifneq (,$(filter $(PLATFORM),tg5040 my355))
 	# liblz4 for Rewind support
-	cp -L ./workspace/all/minarch/build/$(PLATFORM)/liblz4.so.1 ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/liblz4.* ./build/SYSTEM/$(PLATFORM)/lib/
+endif
+
+ifeq ($(PLATFORM), my355)
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libcrypto.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libtinyalsa.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libsqlite3.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libffi.* ./build/SYSTEM/$(PLATFORM)/lib/
 endif
 endif
 
@@ -143,7 +156,6 @@ cores: # TODO: can't assume every platform will have the same stock cores (platf
 	cp ./workspace/$(PLATFORM)/cores/output/picodrive_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
 	cp ./workspace/$(PLATFORM)/cores/output/snes9x_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
 	cp ./workspace/$(PLATFORM)/cores/output/pcsx_rearmed_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
-	
 	# extras
 	cp ./workspace/$(PLATFORM)/cores/output/a5200_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/A5200.pak
 	cp ./workspace/$(PLATFORM)/cores/output/prosystem_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/A7800.pak
@@ -172,7 +184,7 @@ cores: # TODO: can't assume every platform will have the same stock cores (platf
 endif
 
 common: build system cores
-	
+
 clean:
 	rm -rf ./build
 	make clean -f $(TOOLCHAIN_FILE) PLATFORM=$(PLATFORM) COMPILE_CORES=$(COMPILE_CORES)
@@ -181,61 +193,56 @@ setup: name
 	# ----------------------------------------------------
 	# make sure we're running in an input device
 	tty -s || echo "No tty detected"
-	
+
 	# ready fresh build
 	rm -rf ./build
 	mkdir -p ./releases
 	cp -R ./skeleton ./build
-	
+
 	# remove authoring detritus
 	cd ./build && find . -type f -name '.keep' -delete
+	cd ./build && find . -type f -name '.gitkeep' -delete
 	cd ./build && find . -type f -name '*.meta' -delete
 	echo $(BUILD_HASH) > ./workspace/hash.txt
-	
+
+	# dont ship desktop as a platform in the release, it's just for testing
+	cd ./build && find . -type d -name 'desktop' -exec rm -rf {} +
+
 	# copy readmes to workspace so we can use Linux fmt instead of host's
 	mkdir -p ./workspace/readmes
 	cp ./skeleton/BASE/README.txt ./workspace/readmes/BASE-in.txt
 	cp ./skeleton/EXTRAS/README.txt ./workspace/readmes/EXTRAS-in.txt
-	
-done:
-	# say "done" 2>/dev/null || true
 
 special:
 	# setup miyoomini/trimui/magicx family .tmp_update in BOOT
 	mv ./build/BOOT/common ./build/BOOT/.tmp_update
-#	mv ./build/BOOT/miyoo ./build/BASE/
+	mv ./build/BOOT/miyoo ./build/BASE/
 	mv ./build/BOOT/trimui ./build/BASE/
-#	mv ./build/BOOT/magicx ./build/BASE/
-#	cp -R ./build/BOOT/.tmp_update ./build/BASE/miyoo/app/
+	cp -R ./build/BOOT/.tmp_update ./build/BASE/miyoo/app/
+	rm -rf ./build/BASE/miyoo/app/.tmp_update/tg*
 	cp -R ./build/BOOT/.tmp_update ./build/BASE/trimui/app/
-#	cp -R ./build/BOOT/.tmp_update ./build/BASE/magicx/
-#	cp -R ./build/BASE/miyoo ./build/BASE/miyoo354
-#	cp -R ./build/BASE/miyoo ./build/BASE/miyoo355
-#ifneq (,$(findstring my355, $(PLATFORMS)))
-#	cp -R ./workspace/my355/init ./build/BASE/miyoo355/app/my355
-#	cp -r ./workspace/my355/other/squashfs/output/* ./build/BASE/miyoo355/app/my355/payload/
-#endif
+	rm -rf ./build/BASE/trimui/app/.tmp_update/my355*
+	cp -R ./build/BASE/miyoo ./build/BASE/miyoo355
+ifneq (,$(findstring my355, $(PLATFORMS)))
+	cp -R ./workspace/my355/init ./build/BASE/miyoo355/app/my355
+	cp -r ./workspace/my355/other/squashfs/output/* ./build/BASE/miyoo355/app/my355/payload/
+	cp ./workspace/all/show2/build/my355/show2.elf ./build/BASE/miyoo355/app/my355/payload/bin/
+endif
 
 tidy:
-	rm -f releases/$(RELEASE_NAME)-base.zip 
+	rm -f releases/$(RELEASE_NAME)-base.zip
 	rm -f releases/$(RELEASE_NAME)-extras.zip
 	rm -f releases/$(RELEASE_NAME)-all.zip
-	# ----------------------------------------------------
-	# copy update from merged platform to old pre-merge platform bin so old cards update properly
-#ifneq (,$(findstring rg35xxplus, $(PLATFORMS)))
-#	mkdir -p ./build/SYSTEM/rg40xxcube/bin/
-#	cp ./build/SYSTEM/rg35xxplus/bin/install.sh ./build/SYSTEM/rg40xxcube/bin/
-#endif
 
 package: tidy
 	# ----------------------------------------------------
 	# zip up build
-		
+
 	# move formatted readmes from workspace to build
 	cp ./workspace/readmes/BASE-out.txt ./build/BASE/README.txt
 	cp ./workspace/readmes/EXTRAS-out.txt ./build/EXTRAS/README.txt
 	rm -rf ./workspace/readmes
-	
+
 	cd ./build/SYSTEM && echo "$(RELEASE_NAME)\n$(BUILD_HASH)" > version.txt
 	./commits.sh > ./build/SYSTEM/commits.txt
 	cd ./build && find . -type f -name '.DS_Store' -delete
@@ -243,7 +250,7 @@ package: tidy
 	mv ./build/SYSTEM ./build/PAYLOAD/.system
 	cp -R ./build/BOOT/.tmp_update ./build/PAYLOAD/
 	cp -R ./build/EXTRAS/Tools ./build/PAYLOAD/
-	
+
 	cd ./build/PAYLOAD && zip -r MinUI.zip .system .tmp_update Tools
 	mv ./build/PAYLOAD/MinUI.zip ./build/BASE
 
@@ -259,20 +266,18 @@ package: tidy
 	# Move renamed .pakz files into base folder
 	mkdir -p ./build/BASE
 	mv $(VENDOR_DEST)/* ./build/BASE/
-	
+
 	# TODO: can I just add everything in BASE to zip?
-	# cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves miyoo miyoo354 trimui rg35xx rg35xxplus gkdpixel miyoo355 magicx em_ui.sh MinUI.zip README.txt
-	cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves Shaders Overlays trimui em_ui.sh MinUI.zip *.pakz README.txt
+	cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves Shaders Overlays trimui miyoo miyoo355 MinUI.zip *.pakz README.txt
 	cd ./build/EXTRAS && zip -r ../../releases/$(RELEASE_NAME)-extras.zip Bios Emus Roms Saves Shaders Overlays Tools README.txt
 	echo "$(RELEASE_VERSION)" > ./build/latest.txt
 
-	# compound zip (brew install libzip needed) 
+	# compound zip (brew install libzip needed)
 	cd ./releases && zipmerge $(RELEASE_NAME)-all.zip $(RELEASE_NAME)-base.zip  && zipmerge $(RELEASE_NAME)-all.zip $(RELEASE_NAME)-extras.zip
-	
+
 ###########################################################
 
 .DEFAULT:
 	# ----------------------------------------------------
 	# $@
 	@echo "$(PLATFORMS)" | grep -q "\b$@\b" && (make common PLATFORM=$@) || (exit 1)
-	

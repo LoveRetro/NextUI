@@ -1,0 +1,22 @@
+diff --git forkSrcPrefix/platform/libretro/Makefile forkDstPrefix/platform/libretro/Makefile
+index be0f1b46bb3ab10be4a9f896f5e8841dd630b35b..f6b4d892627ec2a81b01ddb4da7f0c7a8022221f 100644
+--- forkSrcPrefix/platform/libretro/Makefile
++++ forkDstPrefix/platform/libretro/Makefile
+@@ -123,7 +123,16 @@ else ifeq ($(platform), miyoomini)
+    CXXFLAGS += -marm -mtune=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard -march=armv7ve -D_NEED_FULL_PATH_
+    fpic := -fPIC
+    SHARED := -shared -Wl,--version-script=link.T
+-
++# MIYOO FLIP
++else ifeq ($(platform), my355)
++   TARGET := $(TARGET_NAME)_libretro.so
++   CC = $(CROSS_COMPILE)gcc
++   CXX = $(CROSS_COMPILE)g++
++   AR = $(CROSS_COMPILE)ar
++   STRIP = $(CROSS_COMPILE)strip
++   CXXFLAGS += -mcpu=cortex-a55 -mtune=cortex-a55
++   fpic := -fPIC
++   SHARED := -shared -Wl,--version-script=link.T
+ else ifeq ($(platform), gcw0)
+    TARGET := $(TARGET_NAME)_libretro_gcw0.so
+    CC = /opt/gcw0-toolchain/usr/bin/mipsel-linux-gcc

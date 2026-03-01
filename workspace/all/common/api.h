@@ -23,26 +23,6 @@ void LOG_note(int level, const char* fmt, ...);
 
 ///////////////////////////////
 
-#define PAGE_COUNT	2
-#define PAGE_SCALE	3
-#define PAGE_WIDTH	(FIXED_WIDTH * PAGE_SCALE)
-#define PAGE_HEIGHT	(FIXED_HEIGHT * PAGE_SCALE)
-#define PAGE_PITCH	(PAGE_WIDTH * FIXED_BPP)
-#define PAGE_SIZE	(PAGE_PITCH * PAGE_HEIGHT)
-
-///////////////////////////////
-
-// TODO: these only seem to be used by a tmp.pak in trimui (model s)
-// used by minarch, optionally defined in platform.h
-#ifndef PLAT_PAGE_BPP
-#define PLAT_PAGE_BPP 	FIXED_BPP
-#endif
-#define PLAT_PAGE_DEPTH (PLAT_PAGE_BPP * 8)
-#define PLAT_PAGE_PITCH (PAGE_WIDTH * PLAT_PAGE_BPP)
-#define PLAT_PAGE_SIZE	(PLAT_PAGE_PITCH * PAGE_HEIGHT)
-
-///////////////////////////////
-
 #define RGBA_MASK_AUTO	0x0, 0x0, 0x0, 0x0
 #define RGBA_MASK_565	0xF800, 0x07E0, 0x001F, 0x0000
 #define RGBA_MASK_8888	0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000
@@ -130,9 +110,9 @@ enum {
 	ASSET_UNDERLINE,
 	ASSET_DOT,
 	ASSET_HOLE,
-	
+
 	ASSET_COLORS,
-	
+
 	ASSET_BRIGHTNESS,
 	ASSET_COLORTEMP,
 	ASSET_VOLUME_MUTE,
@@ -142,10 +122,10 @@ enum {
 	ASSET_BATTERY_FILL,
 	ASSET_BATTERY_FILL_LOW,
 	ASSET_BATTERY_BOLT,
-	
+
 	ASSET_SCROLL_UP,
 	ASSET_SCROLL_DOWN,
-	
+
 	ASSET_WIFI,
 	ASSET_WIFI_MED,
 	ASSET_WIFI_LOW,
@@ -155,7 +135,7 @@ enum {
 	ASSET_BLUETOOTH_OFF,
 	ASSET_AUDIO,
 	ASSET_CONTROLLER,
-	
+
 	ASSET_CHECKCIRCLE,
 	ASSET_LOCK,
 	ASSET_SETTINGS,
@@ -164,7 +144,7 @@ enum {
 	ASSET_POWEROFF,
 	ASSET_RESTART,
 	ASSET_SUSPEND,
-	
+
 	ASSET_COUNT,
 };
 
@@ -196,7 +176,7 @@ typedef struct GFX_Renderer {
 	void* blit;
 	double aspect; // 0 for integer, -1 for fullscreen, otherwise aspect ratio, used for SDL2 accelerated scaling
 	int scale;
-	
+
 	// TODO: document this better
 	int true_w;
 	int true_h;
@@ -206,7 +186,7 @@ typedef struct GFX_Renderer {
 	int src_w;
 	int src_h;
 	int src_p;
-	
+
 	// TODO: I think this is overscaled
 	int dst_x;
 	int dst_y;
@@ -552,7 +532,7 @@ void LEDS_initLeds();
 void LEDS_applyRules();
 
 // temporary overrides outside of the scope of LEDS_applyRules
-// these will survive LEDS_applyRules() and need to be manually revoked, e.g. 
+// these will survive LEDS_applyRules() and need to be manually revoked, e.g.
 /*
 	LEDS_applyRules(); // applies rules
 	LEDS_pushProfile(LIGHT_PROFILE_AMBIENT); // manual override
@@ -785,7 +765,7 @@ void PLAT_wifiForget(char *ssid, WifiSecurityType sec);
 // attempt to connect to this SSID, using, stored credentials.
 // \sa PLAT_wifiHasCredentials
 void PLAT_wifiConnect(char *ssid, WifiSecurityType sec);
-// attempt to connect to this SSID with password given. 
+// attempt to connect to this SSID with password given.
 // If successful, stores credentials with wpa_supplicant.
 void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass);
 // disconnect from any active network
