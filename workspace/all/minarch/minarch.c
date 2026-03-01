@@ -4645,6 +4645,19 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 			*out = core.saves_dir; // save_dir;
 		break;
 	}
+	case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: { /* 32 */
+		const struct retro_system_av_info *av = (const struct retro_system_av_info *)data;
+		if (av) {
+			double a = av->geometry.aspect_ratio;
+			if (a <= 0) a = (double)av->geometry.base_width / av->geometry.base_height;
+
+			core.fps = av->timing.fps;
+			core.sample_rate = av->timing.sample_rate;
+			core.aspect_ratio = a;
+			renderer.dst_p = 0;
+		}
+		return true;
+	}
 	case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: { /* 35 */
 		// LOG_info("RETRO_ENVIRONMENT_SET_CONTROLLER_INFO\n");
 		const struct retro_controller_info *infos = (const struct retro_controller_info *)data;
@@ -4669,6 +4682,16 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		const struct retro_memory_map* mmap = (const struct retro_memory_map*)data;
 		RA_setMemoryMap(mmap);
 		break;
+	}
+	case RETRO_ENVIRONMENT_SET_GEOMETRY: { /* 37 */
+		const struct retro_game_geometry *geom = (const struct retro_game_geometry *)data;
+		if (geom) {
+			double a = geom->aspect_ratio;
+			if (a <= 0) a = (double)geom->base_width / geom->base_height;
+			core.aspect_ratio = a;
+			renderer.dst_p = 0;
+		}
+		return true;
 	}
 	case RETRO_ENVIRONMENT_GET_LANGUAGE: { /* 39 */
 		// puts("RETRO_ENVIRONMENT_GET_LANGUAGE");
@@ -4792,6 +4815,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		if (data) {
 			OptionList_reset();
 			OptionList_v2_init((const struct retro_core_options_v2 *)data); 
+			Config_readOptions();
 		}
 		break;
 	}
@@ -4799,8 +4823,11 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL");
 		if (data) {
 			const struct retro_core_options_v2_intl *intl = (const struct retro_core_options_v2_intl *)data;
-			OptionList_reset();
-			OptionList_v2_init(intl->us);
+			if (intl && intl->us) {
+				OptionList_reset();
+				OptionList_v2_init(intl->us);
+				Config_readOptions();
+			}
 		}
 		break;
 	}
