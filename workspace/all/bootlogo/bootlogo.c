@@ -166,7 +166,9 @@ int main(int argc, char *argv[])
 
         if (dirty)
         {
-            GFX_clear(screen);
+            // We always want black, no matter the background color setting
+            //GFX_clear(screen);
+            SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0, 0, 0));
 
             if(count > 0) {
                 // render the selected image, centered on screen
