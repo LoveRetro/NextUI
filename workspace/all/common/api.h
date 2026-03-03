@@ -279,6 +279,7 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_scrollTextTexture PLAT_scrollTextTexture // (TTF_Font* font, const char* in_name,int x, int y, int w, int h, SDL_Color color, float transparency, SDL_mutex* fontMutex);
 #define GFX_flipHidden PLAT_flipHidden //(void)
 #define GFX_GL_screenCapture PLAT_GL_screenCapture //(void)
+#define GFX_setClearColor PLAT_setClearColor //(uint32_t color)
 
 void GFX_setMode(int mode);
 int GFX_hdmiChanged(void);
@@ -659,6 +660,7 @@ void PLAT_flip(SDL_Surface* screen, int sync);
 void PLAT_GL_Swap();
 void GFX_GL_Swap();
 unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight);
+void PLAT_setClearColor(uint32_t color);
 void PLAT_GPU_Flip();
 void PLAT_setShaders(int nr);
 void PLAT_resetShaders();

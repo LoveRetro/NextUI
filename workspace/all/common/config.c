@@ -401,13 +401,13 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
     }
 
     // load gfx related stuff until we drop the indirection
-    CFG_setColor(1, CFG_getColor(1));
-    CFG_setColor(2, CFG_getColor(2));
-    CFG_setColor(3, CFG_getColor(3));
-    CFG_setColor(4, CFG_getColor(4));
-    CFG_setColor(5, CFG_getColor(5));
-    CFG_setColor(6, CFG_getColor(6));
-    CFG_setColor(7, CFG_getColor(7));
+    CFG_setColor(1, CFG_getColor(COLOR_MAIN));
+    CFG_setColor(2, CFG_getColor(COLOR_ACCENT));
+    CFG_setColor(3, CFG_getColor(COLOR_ACCENT2));
+    CFG_setColor(4, CFG_getColor(COLOR_LIST_TEXT));
+    CFG_setColor(5, CFG_getColor(COLOR_LIST_TEXT_SELECTED));
+    CFG_setColor(6, CFG_getColor(COLOR_HINT));
+    CFG_setColor(7, CFG_getColor(COLOR_BACKGROUND));
     // avoid reloading the font if not neccessary
     if (!fontLoaded)
         CFG_setFontId(CFG_getFontId());
@@ -1024,31 +1024,31 @@ void CFG_get(const char *key, char *value)
     }
     else if (strcmp(key, "color1") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(1));
+        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_MAIN));
     }
     else if (strcmp(key, "color2") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(2));
+        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_ACCENT));
     }
     else if (strcmp(key, "color3") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(3));
+        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_ACCENT2));
     }
     else if (strcmp(key, "color4") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(4));
+        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_LIST_TEXT));
     }
     else if (strcmp(key, "color5") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(5));
+        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_LIST_TEXT_SELECTED));
     }
     else if (strcmp(key, "color6") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(6));
+        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_HINT));
     }
     else if (strcmp(key, "color7") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(7));
+        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_BACKGROUND));
     }
     else if (strcmp(key, "radius") == 0)
     {
