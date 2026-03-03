@@ -2027,6 +2027,14 @@ static char* resample_labels[] = {
 	"Max",
 	NULL
 };
+static char* buffer_size_labels[] = {
+	"128", "256", "512", "1024",
+	NULL
+};
+static char* buffer_multiplier_labels[] = {
+	"4", "6", "8", "10",
+	NULL
+};
 static char* rewind_enable_labels[] = {
 	"Off",
 	"On",
@@ -2319,6 +2327,8 @@ enum {
 	FE_OPT_REWIND_COMPRESSION,
 	FE_OPT_REWIND_COMPRESSION_ACCEL,
 	FE_OPT_REWIND_AUDIO,
+	FE_OPT_AUDIO_BUFFER,
+	FE_OPT_AUDIO_LATENCY,
 	FE_OPT_COUNT,
 };
 
@@ -2737,6 +2747,26 @@ static struct Config {
 				.values = onoff_labels,
 				.labels = onoff_labels,
 			},
+			[FE_OPT_AUDIO_BUFFER] = {
+				.key	= "minarch__audio_buffer",
+				.name	= "Audio Buffer Size",
+				.desc	= "Size of audio chunks sent to the device.\nSmaller values lower latency but use more CPU.",
+				.default_value = 2,
+				.value = 2,
+				.count = 4,
+				.values = buffer_size_labels,
+				.labels = buffer_size_labels,
+			},
+			[FE_OPT_AUDIO_LATENCY] = {
+				.key	= "minarch__audio_latency",
+				.name	= "Audio Buffer Headroom",
+				.desc	= "How much audio is buffered ahead of time.\nSmaller values lower latency but may crackle.",
+				.default_value = 2,
+				.value = 2,
+				.count = 4,
+				.values = buffer_multiplier_labels,
+				.labels = buffer_multiplier_labels,
+			},
 			[FE_OPT_COUNT] = {NULL}
 		}
 	},
@@ -3108,6 +3138,16 @@ static void Config_syncFrontend(char* key, int value) {
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_REWIND_COMPRESSION_ACCEL].key)) {
 		i = FE_OPT_REWIND_COMPRESSION_ACCEL;
+	}
+	else if (exactMatch(key, config.frontend.options[FE_OPT_AUDIO_BUFFER].key)) {
+		int buf_size = atoi(config.frontend.options[FE_OPT_AUDIO_BUFFER].values[value]);
+		SND_setBufferSize(buf_size);
+		i = FE_OPT_AUDIO_BUFFER;
+	}
+	else if (exactMatch(key, config.frontend.options[FE_OPT_AUDIO_LATENCY].key)) {
+		int multiplier = atoi(config.frontend.options[FE_OPT_AUDIO_LATENCY].values[value]);
+		SND_setBufferMultiplier(multiplier);
+		i = FE_OPT_AUDIO_LATENCY;
 	}
 	if (i==-1) return;
 	Option* option = &config.frontend.options[i];
