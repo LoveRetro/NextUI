@@ -108,6 +108,7 @@ static struct VID_Context {
 	int height;
 	int pitch;
 	int sharpness;
+	uint32_t clear_color;
 } vid;
 
 static int device_width;
@@ -601,6 +602,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.pitch	= p;
 
 	SDL_transparentBlack = SDL_MapRGBA(vid.screen->format, 0, 0, 0, 0);
+	PLAT_setClearColor(SDL_transparentBlack);
 
 	device_width	= w;
 	device_height	= h;
@@ -609,6 +611,10 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.sharpness = SHARPNESS_SOFT;
 
 	return vid.screen;
+}
+
+void PLAT_setClearColor(uint32_t color) {
+	vid.clear_color = color;
 }
 
 #define MAX_SHADER_PRAGMAS 32
@@ -714,7 +720,7 @@ void PLAT_setShaders(int nr) {
 static void clearVideo(void) {
 	for (int i=0; i<3; i++) {
 		SDL_RenderClear(vid.renderer);
-		SDL_FillRect(vid.screen, NULL, SDL_transparentBlack);
+		SDL_FillRect(vid.screen, NULL, vid.clear_color);
 		SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
 		SDL_RenderPresent(vid.renderer);
 	}
@@ -1044,7 +1050,7 @@ void applyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius) {
 
 void PLAT_clearLayers(int layer) {
 	if(layer==0 || layer==1) {
-		uint32_t bg = CFG_getColor(COLOR_BACKGROUND);
+		uint32_t bg = vid.clear_color;
 		SDL_SetRenderTarget(vid.renderer, vid.target_layer1);
 		SDL_SetRenderDrawColor(vid.renderer, (bg >> 16) & 0xFF, (bg >> 8) & 0xFF, bg & 0xFF, 255);
 		SDL_RenderClear(vid.renderer);

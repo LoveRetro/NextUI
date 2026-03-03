@@ -308,6 +308,11 @@ SDL_Surface *GFX_init(int mode)
 	
 	CFG_init(GFX_loadSystemFont, GFX_updateColors);
 
+	// by default, we will clear with whatever background color the user prefers
+	// if MODE_MENU /e.g. minarch, clear with default black)
+	if(mode == MODE_MAIN)
+		GFX_setClearColor(mapUint(CFG_getColor(COLOR_BACKGROUND)));
+
 	// We always have to symlink, does not depend on NTP being enabled
 	PLAT_initTimezones();
 	PLAT_setCurrentTimezone(PLAT_getCurrentTimezone());

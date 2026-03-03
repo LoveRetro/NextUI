@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
         memcpy(lightnames, default_names, sizeof(default_names)); // Copy values
     }
     
-    SDL_Surface* screen = GFX_init(MODE_MENU);
+    SDL_Surface* screen = GFX_init(MODE_MAIN);
 	PAD_init();
 	PWR_init();
 

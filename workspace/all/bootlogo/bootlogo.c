@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 
     PWR_setCPUSpeed(CPU_SPEED_MENU);
 
-    screen = GFX_init(MODE_MAIN);
+    screen = GFX_init(MODE_MENU);
     PAD_init();
     PWR_init();
 
@@ -166,9 +166,7 @@ int main(int argc, char *argv[])
 
         if (dirty)
         {
-            // We always want black, no matter the background color setting
-            //GFX_clear(screen);
-            SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0, 0, 0));
+            GFX_clear(screen);
 
             if(count > 0) {
                 // render the selected image, centered on screen
