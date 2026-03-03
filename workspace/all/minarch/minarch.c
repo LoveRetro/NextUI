@@ -2344,7 +2344,8 @@ enum {
 	SHORTCUT_TOGGLE_TURBO_L2,
 	SHORTCUT_TOGGLE_TURBO_R,
 	SHORTCUT_TOGGLE_TURBO_R2,
-	// 
+	//
+	SHORTCUT_CYCLE_SAVE_STATE,
 	SHORTCUT_COUNT,
 };
 
@@ -2963,6 +2964,7 @@ static struct Config {
 		[SHORTCUT_TOGGLE_TURBO_R]		= {"Toggle Turbo R",	-1, BTN_ID_NONE, 0},
 		[SHORTCUT_TOGGLE_TURBO_R2]		= {"Toggle Turbo R2",	-1, BTN_ID_NONE, 0},
 		// -----
+		[SHORTCUT_CYCLE_SAVE_STATE]		= {"Cycle & Save State",-1, BTN_ID_NONE, 0},
 		{NULL}
 	},
 };
@@ -4198,6 +4200,7 @@ static void Menu_screenshot(void);
 
 static void Menu_saveState(void);
 static void Menu_loadState(void);
+static void Menu_cycleSaveState(void);
 
 static int setFastForward(int enable) {
 	int val = enable ? 1 : 0;
@@ -4335,9 +4338,13 @@ static void input_poll_callback(void) {
 			}
 			else if (PAD_justPressed(btn)) {
 				switch (i) {
-					case SHORTCUT_SAVE_STATE: 
+					case SHORTCUT_SAVE_STATE:
 						newScreenshot = 1;
-						Menu_saveState(); 
+						Menu_saveState();
+						break;
+					case SHORTCUT_CYCLE_SAVE_STATE:
+						newScreenshot = 1;
+						Menu_cycleSaveState();
 						break;
 					case SHORTCUT_LOAD_STATE: Menu_loadState(); break;
 					case SHORTCUT_SCREENSHOT:
@@ -8455,6 +8462,11 @@ static void Menu_loadState(void) {
 			Notification_push(NOTIFICATION_LOAD_STATE, msg, NULL);
 		}
 	}
+}
+
+static void Menu_cycleSaveState(void) {
+	menu.slot = (menu.slot + 1) % MENU_SLOT_COUNT;
+	Menu_saveState();
 }
 
 static void Menu_loop(void) {
