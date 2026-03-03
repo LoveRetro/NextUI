@@ -413,6 +413,8 @@ void SND_quit(void);
 void SND_resetAudio(double sample_rate, double frame_rate);
 void SND_pauseAudio(bool paused);
 void SND_setQuality(int quality);
+void SND_setBufferSize(int samples);
+void SND_setBufferMultiplier(int multiplier);
 
 // watch audio device changes
 typedef enum {
