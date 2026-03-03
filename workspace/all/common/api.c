@@ -2275,6 +2275,9 @@ SDL_Color GFX_mapColor(uint32_t c)
 #ifndef SAMPLES
 #define SAMPLES 512 // default
 #endif
+#ifndef BUFFER_MULTIPLIER
+#define BUFFER_MULTIPLIER 8 // default
+#endif
 
 #define ms SDL_GetTicks
 
@@ -2342,6 +2345,32 @@ void SND_setQuality(int quality)
 	LOG_info("Set sound quality\n");
 	soundQuality = qualityLevels[quality];
 	resetSrcState = 1;
+}
+
+static int audio_buffer_samples = SAMPLES;
+static int audio_buffer_multiplier = BUFFER_MULTIPLIER;
+
+void SND_setBufferSize(int samples) {
+	if (samples != audio_buffer_samples) {
+		audio_buffer_samples = samples;
+		LOG_info("Audio buffer size set to %d samples\n", samples);
+		if (snd.initialized) {
+			SND_resetAudio(snd.sample_rate_in, snd.frame_rate);
+		}
+	}
+}
+
+void SND_setBufferMultiplier(int multiplier) {
+	if (multiplier != audio_buffer_multiplier) {
+		audio_buffer_multiplier = multiplier;
+		if (snd.initialized && snd.sample_rate_out > 0) {
+			snd.frame_count = ((float)snd.sample_rate_out / SCREEN_FPS) * audio_buffer_multiplier;
+			perf.buffer_size = snd.frame_count;
+			SND_resizeBuffer();
+			SND_pauseAudio(true);
+			LOG_info("Audio buffer multiplier set to %d, new frame_count: %d\n", multiplier, snd.frame_count);
+		}
+	}
 }
 ResampledFrames resample_audio(const SND_Frame *input_frames,
 							   int input_frame_count, int input_sample_rate,
@@ -2796,7 +2825,7 @@ void SND_init(double sample_rate, double frame_rate)
 	spec_in.freq = PLAT_pickSampleRate(sample_rate, MAX_SAMPLE_RATE);
 	spec_in.format = AUDIO_S16;
 	spec_in.channels = 2;
-	spec_in.samples = SAMPLES;
+	spec_in.samples = audio_buffer_samples;
 	spec_in.callback = SND_audioCallback;
 
 #if defined(USE_SDL2)
@@ -2821,7 +2850,7 @@ void SND_init(double sample_rate, double frame_rate)
 
 	LOG_info("We now have audio device #%d\n", snd.device_id);
 
-	snd.frame_count = ((float)spec_out.freq / SCREEN_FPS) * 8; // buffer size based on sample rate out (times 12 samples headroom)
+	snd.frame_count = ((float)spec_out.freq / SCREEN_FPS) * audio_buffer_multiplier;
 	perf.buffer_size = snd.frame_count;
 	snd.sample_rate_in = sample_rate;
 	snd.sample_rate_out = spec_out.freq;
@@ -2832,7 +2861,7 @@ void SND_init(double sample_rate, double frame_rate)
 
 	// start with audiodevice paused so buffer can fill a little, snd_batchsamples will unpause it
 	SND_pauseAudio(true);
-	LOG_info("sample rate: %i (req) %i (rec) [samples %i]\n", snd.sample_rate_in, snd.sample_rate_out, SAMPLES);
+	LOG_info("sample rate: %i (req) %i (rec) [samples %i]\n", snd.sample_rate_in, snd.sample_rate_out, audio_buffer_samples);
 	snd.initialized = 1;
 
 }
