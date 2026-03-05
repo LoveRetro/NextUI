@@ -113,8 +113,6 @@ extern int currentshaderdsth;
 extern int currentshadertexw;
 extern int currentshadertexh;
 extern int should_rotate;
-extern volatile int useAutoCpu;
-
 enum {
 	ASSET_WHITE_PILL,
 	ASSET_BLACK_PILL,
