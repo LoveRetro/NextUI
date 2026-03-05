@@ -62,7 +62,6 @@ void PLAT_powerOff(int reboot) {
 
 ///////////////////////////////
 
-volatile int useAutoCpu = 0;
 void PLAT_setCPUSpeed(int speed) {
 	// buh
 }
