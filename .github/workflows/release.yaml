@@ -61,6 +61,7 @@ jobs:
         toolchain:
           - tg5040
           - tg5050
+          - my355
 
     steps:
       - name: Checkout
@@ -83,6 +84,7 @@ jobs:
         toolchain:
           - tg5040
           - tg5050
+          - my355
         core: ${{ fromJson(needs.core-matrix.outputs.cores) }}
     steps:
       - name: Checkout
@@ -142,6 +144,18 @@ jobs:
         run: make tg5050
         env:
           PLATFORM: tg5050
+
+      - name: Download Cores (my355)
+        uses: actions/download-artifact@v4.3.0
+        with:
+          path: workspace/my355/cores/output/
+          pattern: core-my355-*
+          merge-multiple: true
+
+      - name: Build (my355)
+        run: make my355
+        env:
+          PLATFORM: my355
 
       - name: Special
         run: make special

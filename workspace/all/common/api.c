@@ -533,7 +533,7 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 
 void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch, int mode)
 {
-	if (mode == 0)
+	if (MAX_LIGHTS <= 0 || mode == 0)
 		return;
 
 	uint32_t dominant_color = GFX_extract_average_color(data, width, height, pitch);
@@ -2113,7 +2113,7 @@ void GFX_blitHardwareHints(SDL_Surface *dst, int show_setting)
 	else if (show_setting == 3)
 		GFX_blitButtonGroup((char *[]){BRIGHTNESS_BUTTON_LABEL, "COLOR TEMP", NULL}, 0, dst, 0);
 	else
-		GFX_blitButtonGroup((char *[]){"MNU", "BRGHT", "SEL", "CLTMP", NULL}, 0, dst, 0);
+		GFX_blitButtonGroup((char *[]){"MNU", "BRGHT", "SEL", "TEMP", NULL}, 0, dst, 0);
 }
 
 int GFX_blitButtonGroup(char **pairs, int primary, SDL_Surface *dst, int align_right)
@@ -2551,7 +2551,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 		SND_pauseAudio(false);
 	} else if (perf.buffer_free > snd.frame_count * 0.99f) { // if for some reason buffer drops below threshold again, pause it (like psx core can stop sending audio in between scenes or after fast forward etc)
 		SND_pauseAudio(true);
-	} 
+	}
 
 
 	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000.0f;
@@ -2672,7 +2672,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 		SND_pauseAudio(false);
 	} else if (perf.buffer_free > snd.frame_count * 0.99f) { // if for some reason buffer drops below 1% again, pause audio again (like psx core can stop sending audio in between scenes or after fast forward etc)
 		SND_pauseAudio(true);
-	} 
+	}
 
 	float tempdelay = ((snd.frame_count - remaining_space) / snd.sample_rate_out) * 1000;
 	perf.buffer_ms = tempdelay;
@@ -3104,6 +3104,13 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 				btn = BTN_POWEROFF;
 				id = BTN_ID_POWEROFF;
 			} // nano-only
+
+			// Filter: ignore spurious +/- events that arrive immediately after resume. (mainly a miyoo flip issue)
+			#define RESUME_IGNORE_MS 250
+			if ((id == BTN_ID_PLUS || id == BTN_ID_MINUS) && pwr.resume_tick && (tick - pwr.resume_tick < RESUME_IGNORE_MS)) {
+				//OG_info("ignoring spurious +/- press after resume (id=%d delta=%u)", id, tick - pwr.resume_tick);
+				btn = BTN_NONE; // drop this event
+			}
 		}
 		else if (event.type == SDL_JOYBUTTONDOWN || event.type == SDL_JOYBUTTONUP)
 		{
@@ -3749,7 +3756,7 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 	if (
 		pwr.requested_sleep ||											   // hardware requested sleep
 		(screenOffDelay > 0 && now - last_input_at >= screenOffDelay) ||   // autosleep
-		(pwr.can_sleep && PAD_justReleased(BTN_SLEEP) && power_pressed_at) // manual sleep
+		(pwr.can_sleep && PAD_justReleased(BTN_SLEEP) && (power_pressed_at || !lid.is_open)) // manual sleep
 	)
 	{
 		pwr.requested_sleep = 0;
@@ -3941,7 +3948,7 @@ static void PWR_exitSleep(void)
 	LOG_info("Reinitialize audio after sleep\n");
 	SND_resetAudio(snd.sample_rate_in, snd.frame_rate);
 
-	sync();
+	sync(); // why?
 }
 
 static void PWR_waitForWake(void)
@@ -4132,7 +4139,7 @@ void LEDS_applyRules()
 		LOG_error("LEDS_applyRules: lights not initialized, skipping\n");
 		return;
 	}
-	
+
 	// some rules rely on pwr.is_charging and pwr.charge being valid
 	if(pwr.initialized == 0)
 		LOG_warn("LEDS_applyRules called before PWR_init\n");
@@ -4177,7 +4184,7 @@ void LEDS_updateLeds(bool indicator_only)
 		LOG_error("LEDS_updateLeds: lights not initialized, skipping\n");
 		return;
 	}
-		
+
 	int lightsize = 3;
 	char *device = getenv("DEVICE");
 	int is_brick = exactMatch("brick", device);
@@ -4237,7 +4244,7 @@ void LEDS_initLeds()
 		lightsCharging[i] = lightsDefault[i];
 		lightsCharging[i].effect = 2; // breathe
 		lightsCharging[i].color1 = 0x00FF00;
-		lightsCharging[i].cycles = -1; // infinite	
+		lightsCharging[i].cycles = -1; // infinite
 
 		// LIGHT_PROFILE_SLEEP
 		lightsSleep[i] = lightsDefault[i];

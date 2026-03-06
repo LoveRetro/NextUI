@@ -3078,9 +3078,9 @@ int main (int argc, char *argv[]) {
 							SDL_UnlockMutex(animMutex);
 							updatePillTextSurface(entry_name, max_width, uintToColour(THEME_COLOR5_255));
 							AnimTask* task = malloc(sizeof(AnimTask));
-							task->startX = SCALE1(BUTTON_MARGIN);
+							task->startX = SCALE1(PADDING);
 							task->startY = SCALE1(previousY+PADDING);
-							task->targetX = SCALE1(BUTTON_MARGIN);
+							task->targetX = SCALE1(PADDING);
 							task->targetY = SCALE1(targetY+PADDING);
 							task->targetTextY = SCALE1(PADDING + targetY) + text_offset_y;
 							pilltargetTextY = +screen->w;
@@ -3091,7 +3091,7 @@ int main (int argc, char *argv[]) {
 							animPill(task);
 						}
 						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
-						SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)) + text_offset_y };
+						SDL_Rect dest_rect = { SCALE1(PADDING + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)) + text_offset_y };
 
 						if(list_show_entry_names) {
 							SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
@@ -3135,8 +3135,8 @@ int main (int argc, char *argv[]) {
 					SDL_Surface *tmpNewScreen = GFX_captureRendererToSurface();
 					SDL_SetSurfaceBlendMode(tmpNewScreen,SDL_BLENDMODE_BLEND);
 					GFX_clearLayers(LAYER_THUMBNAIL);
-					if(animationdirection == SLIDE_LEFT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpNewScreen,1,0,FIXED_WIDTH,FIXED_HEIGHT,0,255,LAYER_THUMBNAIL);
-					if(animationdirection == SLIDE_RIGHT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpNewScreen,1,0,FIXED_WIDTH,FIXED_HEIGHT,0,255,LAYER_THUMBNAIL);
+					if(animationdirection == SLIDE_LEFT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0-screen->w,0,screen->w,screen->h,200,tmpNewScreen,1,0,screen->w,screen->h,0,255,LAYER_THUMBNAIL);
+					if(animationdirection == SLIDE_RIGHT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,0+screen->w,0,screen->w,screen->h,200,tmpNewScreen,1,0,screen->w,screen->h,0,255,LAYER_THUMBNAIL);
 					GFX_clearLayers(LAYER_THUMBNAIL);
 					SDL_FreeSurface(tmpNewScreen);
 				}
@@ -3180,7 +3180,7 @@ int main (int argc, char *argv[]) {
 						new_w = (int)(new_h / aspect_ratio);
 					}
 
-					int target_x = screen->w-(new_w + SCALE1(BUTTON_MARGIN*3));
+					int target_x = screen->w-(new_w + SCALE1(BUTTON_MARGIN*3)); // FIX: this factor seems pretty random
 					int target_y = (int)(screen->h * 0.50);
 					int center_y = target_y - (new_h / 2); // FIX: use new_h instead of thumbbmp->h
 					GFX_clearLayers(LAYER_THUMBNAIL);
@@ -3235,7 +3235,7 @@ int main (int argc, char *argv[]) {
 					new_w = (int)(new_h / aspect_ratio);
 				}
 	
-				int target_x = screen->w-(new_w + SCALE1(BUTTON_MARGIN*3));
+				int target_x = screen->w-(new_w + SCALE1(BUTTON_MARGIN*3)); // FIX: this factor seems pretty random
 				int target_y = (int)(screen->h * 0.50);
 				int center_y = target_y - (new_h / 2); // FIX: use new_h instead of thumbbmp->h
 				GFX_clearLayers(LAYER_THUMBNAIL);
@@ -3279,7 +3279,7 @@ int main (int argc, char *argv[]) {
 						GFX_scrollTextTexture(
 							font.large,
 							entry_text,
-							SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + previous_row * PILL_SIZE) + text_offset_y,
+							SCALE1(PADDING + BUTTON_PADDING), SCALE1(PADDING + previous_row * PILL_SIZE) + text_offset_y,
 							max_width - SCALE1(BUTTON_PADDING * 2),
 							0,
 							text_color,
@@ -3294,7 +3294,7 @@ int main (int argc, char *argv[]) {
 					SDL_LockMutex(animMutex);
 					if (list_show_entry_names) {
 						GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
-						GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
+						GFX_drawOnLayer(globalText, SCALE1(PADDING + BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
 					}
 					SDL_UnlockMutex(animMutex);
 					PLAT_GPU_Flip();

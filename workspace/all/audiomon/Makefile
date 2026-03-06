@@ -15,6 +15,7 @@ endif
 ###########################################################
 
 include ../../$(PLATFORM)/platform/makefile.env
+SDL?=SDL
 
 ###########################################################
 
@@ -23,12 +24,11 @@ TARGET = audiomon.elf
 .PHONY: all clean
 
 CC = $(CROSS_COMPILE)gcc
-CCXX= $(CROSS_COMPILE)g++
+CXX= $(CROSS_COMPILE)g++
 
-CXXFLAGS += -Wall -O2 -I. -I../common/ -I../../$(PLATFORM)/platform/ -I$(PREFIX)/include/dbus-1.0 -I$(PREFIX)/lib/dbus-1.0/include
-LDFLAGS += $$(pkg-config --libs dbus-1 libudev)
+CXXFLAGS += $(OPT) $(CFLAGS) -I. -I../common/ -I../../$(PLATFORM)/platform/ 
 CXXFLAGS += -I$(PREFIX_LOCAL)/include -DPLATFORM=\"$(PLATFORM)\" $$(pkg-config --cflags dbus-1 libudev)
-LDFLAGS += -L$(PREFIX_LOCAL)/lib -lmsettings
+LDFLAGS += -L$(PREFIX_LOCAL)/lib -lmsettings $$(pkg-config --libs dbus-1 libudev)
 
 SRCS = audiomon.cpp
 OBJS = $(addprefix build/$(PLATFORM)/,$(SRCS:.cpp=.o))
