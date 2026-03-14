@@ -47,6 +47,7 @@ typedef struct ShaderProgram {
 	GLint u_InputSize;
 	GLint OrigInputSize;
 	GLint TexLocation;
+	GLint OrigTexLocation;
 	GLint TexelSizeLocation;
 	ShaderParam *pragmas;  // Dynamic array of parsed pragma parameters
 	int num_pragmas;       // Count of valid pragma parameters
@@ -501,6 +502,7 @@ void init_shader_program(ShaderProgram * shader, const char * path, const char *
 		shader->u_InputSize = glGetUniformLocation( shader->shader_p, "InputSize");
 		shader->OrigInputSize = glGetUniformLocation( shader->shader_p, "OrigInputSize");
 		shader->TexLocation = glGetUniformLocation(shader->shader_p, "Texture");
+		shader->OrigTexLocation = glGetUniformLocation(shader->shader_p, "OrigTexture");
 		shader->TexelSizeLocation = glGetUniformLocation(shader->shader_p, "texelSize");
 		for (int i = 0; i < shader->num_pragmas; ++i) {
 			shader->pragmas[i].uniformLocation = glGetUniformLocation(shader->shader_p, shader->pragmas[i].name);
@@ -1639,6 +1641,9 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 }
 
 static int frame_count = 0;
+static GLuint orig_texture = 0;
+static int orig_w = 0;
+static int orig_h = 0;
 void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 				   GLuint * target_texture, int next_filter,
 				   int src_w, int src_h, int tex_w, int tex_h,
@@ -1734,7 +1739,7 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		if (shader_program->u_FrameCount >= 0) glUniform1i(shader_program->u_FrameCount, frame_count);
 		if (shader_program->u_OutputSize >= 0) glUniform2f(shader_program->u_OutputSize, dst_width, dst_height);
 		if (shader_program->u_TextureSize >= 0) glUniform2f(shader_program->u_TextureSize, tex_w, tex_h);
-		if (shader_program->OrigInputSize >= 0) glUniform2f(shader_program->OrigInputSize, src_w, src_h);
+		if (shader_program->OrigInputSize >= 0) glUniform2f(shader_program->OrigInputSize, orig_w, orig_h);
 		if (shader_program->u_InputSize >= 0) glUniform2f(shader_program->u_InputSize, src_w, src_h);
 		for (int i = 0; i < shader_program->num_pragmas; ++i) {
 			glUniform1f(shader_program->pragmas[i].uniformLocation, shader_program->pragmas[i].value);
@@ -1813,6 +1818,13 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 
 	
 	if (shader_program->TexLocation >= 0) glUniform1i(shader_program->TexLocation, 0);
+
+	if (shader_program->OrigTexLocation >= 0) {
+		glUniform1i(shader_program->OrigTexLocation, 1);
+		glActiveTexture(GL_TEXTURE0+1);
+		glBindTexture(GL_TEXTURE_2D, orig_texture);
+		glActiveTexture(GL_TEXTURE0);
+	}
 	
 	if (shader_program->TexelSizeLocation >= 0) {
 		glUniform2fv(shader_program->TexelSizeLocation, 1, texelSize);
@@ -1951,12 +1963,11 @@ void PLAT_GL_Swap() {
 	static int overlay_w = 0, overlay_h = 0;
 	static int overlayload = 0;
 
-	static GLuint src_texture = 0;
 	static int src_w_last = 0, src_h_last = 0;
 	static int last_w = 0, last_h = 0;
 
 	if (shaderResetRequested) {
-		if (src_texture) { glDeleteTextures(1, &src_texture); src_texture = 0; }
+		if (orig_texture) { glDeleteTextures(1, &orig_texture); orig_texture = 0; }
 		src_w_last = src_h_last = 0;
 		last_w = last_h = 0;
 		if (effect_tex) { 
@@ -2041,25 +2052,27 @@ void PLAT_GL_Swap() {
 		pthread_mutex_unlock(&video_prep_mutex);
     }
 
-	if (!src_texture || reloadShaderTextures) {
-        // if (src_texture) {
-        //     glDeleteTextures(1, &src_texture);
-        //     src_texture = 0;
+	if (!orig_texture || reloadShaderTextures) {
+        // if (orig_texture) {
+        //     glDeleteTextures(1, &orig_texture);
+        //     orig_texture = 0;
         // }
-		if (src_texture==0)
-        	glGenTextures(1, &src_texture);
-        glBindTexture(GL_TEXTURE_2D, src_texture);
+		if (orig_texture==0)
+			glGenTextures(1, &orig_texture);
+        glBindTexture(GL_TEXTURE_2D, orig_texture);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, nrofshaders > 0 ? shaders[0].filter : finalScaleFilter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nrofshaders > 0 ? shaders[0].filter : finalScaleFilter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     }
 
-    glBindTexture(GL_TEXTURE_2D, src_texture);
+    glBindTexture(GL_TEXTURE_2D, orig_texture);
     if (vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last || reloadShaderTextures) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
         src_w_last = vid.blit->src_w;
         src_h_last = vid.blit->src_h;
+        orig_w = vid.blit->src_w;
+        orig_h = vid.blit->src_h;
     } else {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
     }
@@ -2109,7 +2122,7 @@ void PLAT_GL_Swap() {
 
 		runShaderPass(
 			&shaders[i],
-			(i == 0) ? src_texture : shaders[i - 1].target_texture,
+			(i == 0) ? orig_texture : shaders[i - 1].target_texture,
 			&shaders[i].target_texture,
 			(i == nrofshaders) ? finalScaleFilter : shaders[i+1].filter,
 			shaders[i].srcw, shaders[i].srch,
@@ -2134,7 +2147,7 @@ void PLAT_GL_Swap() {
 		//LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
 		runShaderPass(
 			&sp_finalscale,
-			src_texture,
+			orig_texture,
 			NULL,
 			GL_NONE,
 			vid.blit->src_w, vid.blit->src_h,
