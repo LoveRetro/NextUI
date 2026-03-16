@@ -61,7 +61,6 @@ typedef struct ShaderPass {
 	ShaderProgram * program;
 	int filter;
 	int alpha;
-	GLuint source_texture;
 	GLuint target_texture;
 	int target_updated;
 	int scale;
@@ -73,22 +72,36 @@ typedef struct ShaderPass {
 	int texh;
 } ShaderPass;
 
-ShaderPass shaders[MAXSHADERS] = {
-	{ .program = &(ShaderProgram){ .shader_p = 0, .filename = "stock.glsl" },
-	  .filter = GL_LINEAR, .scale = 1, .scaletype = 0, .srctype = 0, .target_texture = 0, .target_updated = 1 },
-	{ .program = &(ShaderProgram){ .shader_p = 0, .filename = "stock.glsl" },
-	  .filter = GL_LINEAR, .scale = 1, .scaletype = 0, .srctype = 0, .target_texture = 0, .target_updated = 1 },
-	{ .program = &(ShaderProgram){ .shader_p = 0, .filename = "stock.glsl" },
-	  .filter = GL_LINEAR, .scale = 1, .scaletype = 0, .srctype = 0, .target_texture = 0, .target_updated = 1 }
-};
+ShaderProgram shader_programs[MAXSHADERS];
+ShaderPass shaders[MAXSHADERS];
 
-ShaderPass sp_finalscale = { .program = &s_shader_default,
-	.filter = GL_NEAREST, .filter = GL_NEAREST, .alpha = 0,
+// memcpy these in initShaders()
+const ShaderProgram blank_shader_program = {
+	.shader_p = 0, .filename = "stock.glsl"
+};
+const ShaderPass blank_shader_pass = { .program = NULL,
+	.filter = GL_LINEAR, .alpha = 0,
+	.scale = 1, .scaletype = 0, .srctype = 0,
 	.target_texture = 0, .target_updated = 1
 };
 
-ShaderPass sp_overlay = { .program = &s_shader_overlay,
-	.filter = GL_NEAREST, .filter = GL_NEAREST, .alpha = 1,
+ShaderPass s_pass_finalscale = { .program = &s_shader_default,
+	.filter = GL_NEAREST, .alpha = 0,
+	.target_texture = 0, .target_updated = 1
+};
+
+ShaderPass s_pass_effect = { .program = &s_shader_overlay,
+	.filter = GL_NEAREST, .alpha = 1,
+	.target_texture = 0, .target_updated = 1
+};
+
+ShaderPass s_pass_overlay = { .program = &s_shader_overlay,
+	.filter = GL_NEAREST, .alpha = 1,
+	.target_texture = 0, .target_updated = 1
+};
+
+ShaderPass s_pass_notif = { .program = &s_shader_overlay,
+	.filter = GL_NEAREST, .alpha = 1,
 	.target_texture = 0, .target_updated = 1
 };
 
@@ -525,7 +538,15 @@ void PLAT_initShaders() {
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, device_width, device_height);
 
-	// Final  display shader (simple texture blit)
+	// Init user shaders
+	for (int i = 0; i < MAXSHADERS; i++) {
+		memcpy(&shader_programs[i], &blank_shader_program, sizeof(ShaderProgram));
+		memcpy(&shaders[i], &blank_shader_pass, sizeof(ShaderPass));
+		shaders[i].program = &shader_programs[i];
+	}
+
+	// Init .system shaders
+	// Final display shader (simple texture blit)
 	init_shader_program(&s_shader_default, SYSSHADERS_FOLDER, "default.glsl");
 
 	// Overlay shader, for png overlays and static line/grid overlays
@@ -1646,7 +1667,6 @@ static int orig_w = 0;
 static int orig_h = 0;
 void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 				   GLuint * target_texture, int next_filter,
-				   int src_w, int src_h, int tex_w, int tex_h,
                    int x, int y, int dst_width, int dst_height) {
 
 	static GLuint static_VAO = 0, static_VBO = 0;
@@ -1669,6 +1689,11 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 
 	const int alpha = shader_pass->alpha;
 	const GLuint shader_program_handle = shader_program->shader_p;
+
+	const int src_w = shader_pass->srcw;
+	const int src_h = shader_pass->srch;
+	const int tex_w = shader_pass->texw;
+	const int tex_h = shader_pass->texh;
 
 	while ((pre_err = glGetError()) != GL_NO_ERROR) {
 		(void)pre_err;
@@ -2012,6 +2037,8 @@ void PLAT_GL_Swap() {
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, loaded_effect->w, loaded_effect->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, loaded_effect->pixels);
 			effect_w = loaded_effect->w;
 			effect_h = loaded_effect->h;
+			s_pass_effect.srcw = s_pass_effect.texw = effect_w;
+			s_pass_effect.srch = s_pass_effect.texh = effect_h;
 		} else {
 			if (effect_tex) {
 				glDeleteTextures(1, &effect_tex);
@@ -2040,7 +2067,8 @@ void PLAT_GL_Swap() {
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, loaded_overlay->w, loaded_overlay->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, loaded_overlay->pixels);
 			overlay_w = loaded_overlay->w;
 			overlay_h = loaded_overlay->h;
-		
+			s_pass_overlay.srcw = s_pass_overlay.texw = overlay_w;
+			s_pass_overlay.srch = s_pass_overlay.texh = overlay_h;
 		} else {
 			if (overlay_tex) {
 				glDeleteTextures(1, &overlay_tex);
@@ -2125,8 +2153,6 @@ void PLAT_GL_Swap() {
 			(i == 0) ? orig_texture : shaders[i - 1].target_texture,
 			&shaders[i].target_texture,
 			(i == nrofshaders) ? finalScaleFilter : shaders[i+1].filter,
-			shaders[i].srcw, shaders[i].srch,
-			shaders[i].texw, shaders[i].texh,
 			0, 0, dst_w, dst_h);
 
         last_w = dst_w;
@@ -2135,41 +2161,40 @@ void PLAT_GL_Swap() {
 
     if (nrofshaders > 0) {
 		//LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
+		s_pass_finalscale.srcw = s_pass_finalscale.texw = last_w;
+		s_pass_finalscale.srch = s_pass_finalscale.texh = last_h;
 		runShaderPass(
-			&sp_finalscale,
+			&s_pass_finalscale,
 			shaders[nrofshaders - 1].target_texture,
 			NULL,
 			GL_NONE,
-			last_w, last_h, last_w, last_h,
             dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h);
     }
 	else {
 		//LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
+		s_pass_finalscale.srcw = s_pass_finalscale.texw = orig_w;
+		s_pass_finalscale.srch = s_pass_finalscale.texh = orig_h;
 		runShaderPass(
-			&sp_finalscale,
+			&s_pass_finalscale,
 			orig_texture,
 			NULL,
 			GL_NONE,
-			vid.blit->src_w, vid.blit->src_h,
-			vid.blit->src_w, vid.blit->src_h,
             dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h);
     }
 
     if (effect_tex) {
 		//LOG_info("Shader Pass: Screen Effect\n");
 		runShaderPass(
-			&sp_overlay, effect_tex, NULL,
+			&s_pass_overlay, effect_tex, NULL,
 			GL_NONE,
-			effect_w, effect_h, effect_w, effect_h,
 			dst_rect.x, dst_rect.y, effect_w, effect_h);
     }
 
     if (overlay_tex) {
 		//LOG_info("Shader Pass: Overlay\n");
 		runShaderPass(
-			&sp_overlay, overlay_tex, NULL,
+			&s_pass_overlay, overlay_tex, NULL,
 			GL_NONE,
-			vid.blit->src_w, vid.blit->src_h, overlay_w, overlay_h,
             0, 0, device_width, device_height);
     }
 
@@ -2177,15 +2202,15 @@ void PLAT_GL_Swap() {
     if (notif.dirty && notif.surface) {
 		glBindTexture(GL_TEXTURE_2D, notif.tex);
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, notif.surface->w, notif.surface->h, GL_RGBA, GL_UNSIGNED_BYTE, notif.surface->pixels);
+		s_pass_notif.srcw = s_pass_notif.texw = notif.tex_w;
+		s_pass_notif.srch = s_pass_notif.texh = notif.tex_h;
 		notif.dirty = 0;
     }
     
     if (notif.tex && notif.surface) {
 		runShaderPass(
-			&sp_overlay, notif.tex, NULL,
+			&s_pass_overlay, notif.tex, NULL,
 			GL_NONE,
-			notif.tex_w, notif.tex_h,
-			notif.tex_w, notif.tex_h,
 			notif.x, notif.y, notif.tex_w, notif.tex_h);
     }
 
