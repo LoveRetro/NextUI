@@ -2156,7 +2156,7 @@ void PLAT_GL_Swap() {
 			&shaders[i],
 			(i == 0) ? orig_texture : shaders[i - 1].target_texture,
 			&shaders[i].target_texture,
-			(i == nrofshaders) ? finalScaleFilter : shaders[i+1].filter,
+			(i == nrofshaders - 1) ? finalScaleFilter : shaders[i+1].filter,
 			0, 0, dst_w, dst_h);
 
         last_w = dst_w;
