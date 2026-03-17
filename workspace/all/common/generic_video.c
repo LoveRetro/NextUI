@@ -45,10 +45,10 @@ typedef struct ShaderProgram {
 	GLint u_OutputSize;
 	GLint u_TextureSize;
 	GLint u_InputSize;
-	GLint OrigInputSize;
-	GLint TexLocation;
-	GLint OrigTexLocation;
-	GLint TexelSizeLocation;
+	GLint u_OrigInputSize;
+	GLint u_TexLocation;
+	GLint u_OrigTexLocation;
+	GLint u_TexelSizeLocation;
 	ShaderParam *pragmas;  // Dynamic array of parsed pragma parameters
 	int num_pragmas;       // Count of valid pragma parameters
 } ShaderProgram;
@@ -513,10 +513,10 @@ void init_shader_program(ShaderProgram * shader, const char * path, const char *
 		shader->u_OutputSize = glGetUniformLocation( shader->shader_p, "OutputSize");
 		shader->u_TextureSize = glGetUniformLocation( shader->shader_p, "TextureSize");
 		shader->u_InputSize = glGetUniformLocation( shader->shader_p, "InputSize");
-		shader->OrigInputSize = glGetUniformLocation( shader->shader_p, "OrigInputSize");
-		shader->TexLocation = glGetUniformLocation(shader->shader_p, "Texture");
-		shader->OrigTexLocation = glGetUniformLocation(shader->shader_p, "OrigTexture");
-		shader->TexelSizeLocation = glGetUniformLocation(shader->shader_p, "texelSize");
+		shader->u_OrigInputSize = glGetUniformLocation( shader->shader_p, "OrigInputSize");
+		shader->u_TexLocation = glGetUniformLocation(shader->shader_p, "Texture");
+		shader->u_OrigTexLocation = glGetUniformLocation(shader->shader_p, "OrigTexture");
+		shader->u_TexelSizeLocation = glGetUniformLocation(shader->shader_p, "texelSize");
 		for (int i = 0; i < shader->num_pragmas; ++i) {
 			shader->pragmas[i].uniformLocation = glGetUniformLocation(shader->shader_p, shader->pragmas[i].name);
 			shader->pragmas[i].value = shader->pragmas[i].def;
@@ -1764,7 +1764,7 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		if (shader_program->u_FrameCount >= 0) glUniform1i(shader_program->u_FrameCount, frame_count);
 		if (shader_program->u_OutputSize >= 0) glUniform2f(shader_program->u_OutputSize, dst_width, dst_height);
 		if (shader_program->u_TextureSize >= 0) glUniform2f(shader_program->u_TextureSize, tex_w, tex_h);
-		if (shader_program->OrigInputSize >= 0) glUniform2f(shader_program->OrigInputSize, orig_w, orig_h);
+		if (shader_program->u_OrigInputSize >= 0) glUniform2f(shader_program->u_OrigInputSize, orig_w, orig_h);
 		if (shader_program->u_InputSize >= 0) glUniform2f(shader_program->u_InputSize, src_w, src_h);
 		for (int i = 0; i < shader_program->num_pragmas; ++i) {
 			glUniform1f(shader_program->pragmas[i].uniformLocation, shader_program->pragmas[i].value);
@@ -1842,17 +1842,17 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 	glViewport(x, y, dst_width, dst_height);
 
 	
-	if (shader_program->TexLocation >= 0) glUniform1i(shader_program->TexLocation, 0);
+	if (shader_program->u_TexLocation >= 0) glUniform1i(shader_program->u_TexLocation, 0);
 
-	if (shader_program->OrigTexLocation >= 0) {
-		glUniform1i(shader_program->OrigTexLocation, 1);
+	if (shader_program->u_OrigTexLocation >= 0) {
+		glUniform1i(shader_program->u_OrigTexLocation, 1);
 		glActiveTexture(GL_TEXTURE0+1);
 		glBindTexture(GL_TEXTURE_2D, orig_texture);
 		glActiveTexture(GL_TEXTURE0);
 	}
 	
-	if (shader_program->TexelSizeLocation >= 0) {
-		glUniform2fv(shader_program->TexelSizeLocation, 1, texelSize);
+	if (shader_program->u_TexelSizeLocation >= 0) {
+		glUniform2fv(shader_program->u_TexelSizeLocation, 1, texelSize);
 		last_texelSize[0] = texelSize[0];
 		last_texelSize[1] = texelSize[1];
 	}
