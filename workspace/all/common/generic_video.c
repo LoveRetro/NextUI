@@ -46,6 +46,7 @@ typedef struct ShaderProgram {
 	GLint u_TextureSize;
 	GLint u_InputSize;
 	GLint u_OrigInputSize;
+	GLint u_OrigTextureSize;
 	GLint u_TexLocation;
 	GLint u_OrigTexLocation;
 	GLint u_TexelSizeLocation;
@@ -514,6 +515,7 @@ void init_shader_program(ShaderProgram * shader, const char * path, const char *
 		shader->u_TextureSize = glGetUniformLocation( shader->shader_p, "TextureSize");
 		shader->u_InputSize = glGetUniformLocation( shader->shader_p, "InputSize");
 		shader->u_OrigInputSize = glGetUniformLocation( shader->shader_p, "OrigInputSize");
+		shader->u_OrigTextureSize = glGetUniformLocation( shader->shader_p, "OrigTextureSize");
 		shader->u_TexLocation = glGetUniformLocation(shader->shader_p, "Texture");
 		shader->u_OrigTexLocation = glGetUniformLocation(shader->shader_p, "OrigTexture");
 		shader->u_TexelSizeLocation = glGetUniformLocation(shader->shader_p, "texelSize");
@@ -1665,6 +1667,8 @@ static int frame_count = 0;
 static GLuint orig_texture = 0;
 static int orig_w = 0;
 static int orig_h = 0;
+static int origtex_w = 0;
+static int origtex_h = 0;
 void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 				   GLuint * target_texture, int next_filter,
                    int x, int y, int dst_width, int dst_height) {
@@ -1759,6 +1763,7 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		if (shader_program->u_OutputSize >= 0) glUniform2f(shader_program->u_OutputSize, dst_width, dst_height);
 		if (shader_program->u_TextureSize >= 0) glUniform2f(shader_program->u_TextureSize, shader_pass->texw, shader_pass->texh);
 		if (shader_program->u_OrigInputSize >= 0) glUniform2f(shader_program->u_OrigInputSize, orig_w, orig_h);
+		if (shader_program->u_OrigTextureSize >= 0) glUniform2f(shader_program->u_OrigTextureSize, origtex_w, origtex_h);
 		if (shader_program->u_InputSize >= 0) glUniform2f(shader_program->u_InputSize, shader_pass->srcw, shader_pass->srch);
 		for (int i = 0; i < shader_program->num_pragmas; ++i) {
 			glUniform1f(shader_program->pragmas[i].uniformLocation, shader_program->pragmas[i].value);
@@ -2095,6 +2100,8 @@ void PLAT_GL_Swap() {
         src_h_last = vid.blit->src_h;
         orig_w = vid.blit->src_w;
         orig_h = vid.blit->src_h;
+        origtex_w = vid.blit->src_w;
+        origtex_h = vid.blit->src_h;
     } else {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
     }
