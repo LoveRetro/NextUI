@@ -1687,13 +1687,7 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		shader_program = &s_noshader;
 	}
 
-	const int alpha = shader_pass->alpha;
 	const GLuint shader_program_handle = shader_program->shader_p;
-
-	const int src_w = shader_pass->srcw;
-	const int src_h = shader_pass->srch;
-	const int tex_w = shader_pass->texw;
-	const int tex_h = shader_pass->texh;
 
 	while ((pre_err = glGetError()) != GL_NO_ERROR) {
 		(void)pre_err;
@@ -1724,8 +1718,8 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		last_bound_texture = 0;
 	}
 
-	texelSize[0] = 1.0f / tex_w;
-	texelSize[1] = 1.0f / tex_h;
+	texelSize[0] = 1.0f / shader_pass->texw;
+	texelSize[1] = 1.0f / shader_pass->texh;
 
 
 	if (shader_program_handle != last_program)
@@ -1763,9 +1757,9 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		if (shader_program->u_FrameDirection >= 0) glUniform1i(shader_program->u_FrameDirection, 1);
 		if (shader_program->u_FrameCount >= 0) glUniform1i(shader_program->u_FrameCount, frame_count);
 		if (shader_program->u_OutputSize >= 0) glUniform2f(shader_program->u_OutputSize, dst_width, dst_height);
-		if (shader_program->u_TextureSize >= 0) glUniform2f(shader_program->u_TextureSize, tex_w, tex_h);
+		if (shader_program->u_TextureSize >= 0) glUniform2f(shader_program->u_TextureSize, shader_pass->texw, shader_pass->texh);
 		if (shader_program->u_OrigInputSize >= 0) glUniform2f(shader_program->u_OrigInputSize, orig_w, orig_h);
-		if (shader_program->u_InputSize >= 0) glUniform2f(shader_program->u_InputSize, src_w, src_h);
+		if (shader_program->u_InputSize >= 0) glUniform2f(shader_program->u_InputSize, shader_pass->srcw, shader_pass->srch);
 		for (int i = 0; i < shader_program->num_pragmas; ++i) {
 			glUniform1f(shader_program->pragmas[i].uniformLocation, shader_program->pragmas[i].value);
 		}
@@ -1827,7 +1821,7 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-	if(alpha==1) {
+	if(shader_pass->alpha==1) {
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	} else {
