@@ -31,7 +31,6 @@
 #define NEXTUI_TSAN 1
 #endif
 
-static int finalScaleFilter=GL_NEAREST;
 static int reloadShaderTextures = 1;
 static int shaderResetRequested = 0;
 
@@ -88,6 +87,7 @@ const ShaderPass blank_shader_pass = { .program = NULL,
 };
 
 ShaderPass s_pass_finalscale = { .program = &s_shader_default,
+	.filter = GL_NEAREST,
 	.alpha = 0, .target_texture = 0, .target_updated = 1
 };
 
@@ -870,12 +870,11 @@ SDL_Surface* PLAT_resizeVideo(int w, int h, int p) {
 
 void PLAT_setSharpness(int sharpness) {
 	if(sharpness==1) {
-		finalScaleFilter=GL_LINEAR;
+		s_pass_finalscale.filter = GL_LINEAR;
 	} 
 	else {
-		finalScaleFilter = GL_NEAREST;
+		s_pass_finalscale.filter = GL_NEAREST;
 	}
-	s_pass_finalscale.filter = finalScaleFilter;
 	reloadShaderTextures = 1;
 }
 
@@ -2085,8 +2084,8 @@ void PLAT_GL_Swap() {
 		if (orig_texture==0)
 			glGenTextures(1, &orig_texture);
         glBindTexture(GL_TEXTURE_2D, orig_texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, nrofshaders > 0 ? shaders[0].filter : finalScaleFilter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nrofshaders > 0 ? shaders[0].filter : finalScaleFilter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, nrofshaders > 0 ? shaders[0].filter : s_pass_finalscale.filter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nrofshaders > 0 ? shaders[0].filter : s_pass_finalscale.filter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     }
@@ -2151,7 +2150,7 @@ void PLAT_GL_Swap() {
 			&shaders[i],
 			(i == 0) ? orig_texture : shaders[i - 1].target_texture,
 			&shaders[i].target_texture,
-			(i == nrofshaders - 1) ? finalScaleFilter : shaders[i+1].filter,
+			(i == nrofshaders - 1) ? s_pass_finalscale.filter : shaders[i+1].filter,
 			0, 0, dst_w, dst_h);
 
         last_w = dst_w;
