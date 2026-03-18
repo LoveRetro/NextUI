@@ -6972,8 +6972,10 @@ static int OptionShaders_optionChanged(MenuList* list, int i) {
 		item->value = config.shaders.options[y].value;
 	}
 	// Recursively call Config_syncShaders again for some reason
-	if(i==SH_SHADERS_PRESET) 
+	if(i==SH_SHADERS_PRESET) {
 		initShaders();
+		Config_syncShaders(item->key, item->value);
+	}
 	return MENU_CALLBACK_NOP;
 }
 
