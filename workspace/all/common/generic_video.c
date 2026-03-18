@@ -31,7 +31,7 @@
 #define NEXTUI_TSAN 1
 #endif
 
-static int finalScaleFilter=GL_LINEAR;
+static int finalScaleFilter=GL_NEAREST;
 static int reloadShaderTextures = 1;
 static int shaderResetRequested = 0;
 
@@ -84,29 +84,23 @@ const ShaderProgram blank_shader_program = {
 	.shader_p = 0, .filename = "stock.glsl"
 };
 const ShaderPass blank_shader_pass = { .program = NULL,
-	.filter = GL_LINEAR, .alpha = 0,
-	.scale = 1, .scaletype = 0, .srctype = 0,
-	.target_texture = 0, .target_updated = 1
+	.alpha = 0, .target_texture = 0, .target_updated = 1
 };
 
 ShaderPass s_pass_finalscale = { .program = &s_shader_default,
-	.filter = GL_NEAREST, .alpha = 0,
-	.target_texture = 0, .target_updated = 1
+	.alpha = 0, .target_texture = 0, .target_updated = 1
 };
 
 ShaderPass s_pass_effect = { .program = &s_shader_overlay,
-	.filter = GL_NEAREST, .alpha = 1,
-	.target_texture = 0, .target_updated = 1
+	.alpha = 1, .target_texture = 0, .target_updated = 1
 };
 
 ShaderPass s_pass_overlay = { .program = &s_shader_overlay,
-	.filter = GL_NEAREST, .alpha = 1,
-	.target_texture = 0, .target_updated = 1
+	.alpha = 1, .target_texture = 0, .target_updated = 1
 };
 
 ShaderPass s_pass_notif = { .program = &s_shader_overlay,
-	.filter = GL_NEAREST, .alpha = 1,
-	.target_texture = 0, .target_updated = 1
+	.alpha = 1, .target_texture = 0, .target_updated = 1
 };
 
 
@@ -881,6 +875,7 @@ void PLAT_setSharpness(int sharpness) {
 	else {
 		finalScaleFilter = GL_NEAREST;
 	}
+	s_pass_finalscale.filter = finalScaleFilter;
 	reloadShaderTextures = 1;
 }
 
