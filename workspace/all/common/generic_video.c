@@ -708,7 +708,7 @@ SDL_Surface* PLAT_initVideo(void) {
 
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *srctype) {
 
-    if (i < 0 || i >= nrofshaders) {
+    if (i < 0) {
         return;
     }
     ShaderPass* shader_pass = &shaders[i];
