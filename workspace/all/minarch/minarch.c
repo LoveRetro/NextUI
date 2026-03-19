@@ -6971,9 +6971,15 @@ static int OptionShaders_optionChanged(MenuList* list, int i) {
 		MenuItem* item = &list->items[y];
 		item->value = config.shaders.options[y].value;
 	}
-	// Recursively call Config_syncShaders again for some reason
+
 	if(i==SH_SHADERS_PRESET) {
+		// On shader preset change:
+		// Push all new shader settings to shader engine,
+		// compile shaders if needed, populate pragmas list
 		initShaders();
+
+		// Now that we have a list of shader parameters,
+		// re-read shader preset file to set pragma values
 		Config_syncShaders(item->key, item->value);
 	}
 	return MENU_CALLBACK_NOP;
