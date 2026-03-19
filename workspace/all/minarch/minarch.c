@@ -6979,8 +6979,11 @@ static int OptionShaders_optionChanged(MenuList* list, int i) {
 		initShaders();
 
 		// Now that we have a list of shader parameters,
-		// re-read shader preset file to set pragma values
+		// re-read shader preset file to set pragma values in-menu
 		Config_syncShaders(item->key, item->value);
+
+		// Push parameters to shader engine
+		applyShaderSettings();
 	}
 	return MENU_CALLBACK_NOP;
 }
