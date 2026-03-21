@@ -8854,7 +8854,7 @@ static void limitFF(void) {
 	last_time = now;
 }
 
-static void Rewind_run_frame(void) {
+static void run_frame(void) {
 	// if rewind is toggled, fast-forward toggle must stay off; fast-forward hold pauses rewind
 	int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
 	if (do_rewind) {
@@ -8907,16 +8907,8 @@ static void Rewind_run_frame(void) {
 			ff_paused_by_rewind_hold = 0;
 		}
 
-		int ff_runs = 1;
-		if (fast_forward) {
-			// when "None" is selected, assume a modest 2x instead of unbounded spam
-			ff_runs = max_ff_speed ? max_ff_speed + 1 : 2;
-		}
-
-		for (int ff_step = 0; ff_step < ff_runs; ff_step++) {
-			core.run();
-			Rewind_push(0);
-		}
+		core.run();
+		Rewind_push(0);
 	}
 	limitFF();
 }
@@ -9087,7 +9079,7 @@ int main(int argc , char* argv[]) {
 	while (!quit) {
 		GFX_startFrame();
 
-		Rewind_run_frame();
+		run_frame();
 		
 		// Process RetroAchievements for this frame
 		RA_doFrame();
