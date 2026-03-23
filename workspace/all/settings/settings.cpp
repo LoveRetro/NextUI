@@ -595,7 +595,7 @@ int main(int argc, char *argv[])
             });
         }
 
-        if(deviceInfo.hasMuteToggle() && deviceInfo.hasAnalogSticks()){
+        if(deviceInfo.hasMuteToggle() && !deviceInfo.hasAnalogSticks()){
             muteItems.push_back(
                 new MenuItem{ListItemType::Generic, "Dpad mode when toggled", "Dpad: default. Joystick: Dpad exclusively acts as analog stick.\nBoth: Dpad and Joystick inputs at the same time.", {0, 1, 2}, {"Dpad", "Joystick", "Both"}, []() -> std::any
                 {
