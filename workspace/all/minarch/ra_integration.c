@@ -5,6 +5,7 @@
 #include "http.h"
 #include "notification.h"
 #include "ra_badges.h"
+#include "ra_offline.h"
 #include "defines.h"
 #include "api.h"
 
@@ -19,6 +20,7 @@
 #include <rcheevos/rc_client.h>
 #include <rcheevos/rc_libretro.h>
 #include <rcheevos/rc_hash.h>
+#include <rcheevos/rc_api_runtime.h>
 
 // Logging macros - use NextUI log levels
 #define RA_LOG_DEBUG(fmt, ...) LOG_debug("[RA] " fmt, ##__VA_ARGS__)
@@ -33,6 +35,7 @@
 static rc_client_t* ra_client = NULL;
 static bool ra_game_loaded = false;
 static bool ra_logged_in = false;
+static bool ra_deferred_offline_notification = false;
 
 // Current game hash (for mute file path)
 static char ra_game_hash[64] = {0};
@@ -395,8 +398,12 @@ static bool ra_queue_pop(RA_QueuedResponse* out) {
 // Called from main thread in RA_idle() - process all queued responses
 static void ra_process_queued_responses(void) {
 	RA_QueuedResponse resp;
+	int processed = 0;
 	
 	while (ra_queue_pop(&resp)) {
+		processed++;
+		RA_LOG_INFO("Processing queued response #%d: http_status=%d, body_len=%zu\n",
+		            processed, resp.http_status_code, resp.body_length);
 		// Build the server response structure
 		rc_api_server_response_t server_response;
 		memset(&server_response, 0, sizeof(server_response));
@@ -581,6 +588,8 @@ static uint32_t ra_read_memory(uint32_t address, uint8_t* buffer, uint32_t num_b
 typedef struct {
 	rc_client_server_callback_t callback;
 	void* callback_data;
+	char* url;        /* Owned copy for write-through caching */
+	char* post_data;  /* Owned copy for write-through caching (may be NULL) */
 } RA_ServerCallData;
 
 static void ra_http_callback(HTTP_Response* response, void* userdata) {
@@ -595,6 +604,34 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 		body = response->data;
 		body_length = response->size;
 		http_status = response->http_status;
+		
+		// Write-through cache: store successful responses for offline use
+		if (http_status == 200 && body_length > 0) {
+			RA_Offline_cacheResponse(data->url, data->post_data, body, body_length);
+			
+			// SYNC_ACK: when an online awardachievement succeeds, mark it in the ledger
+			// so the sync engine won't re-submit it after a crash
+			if (data->post_data && strstr(data->post_data, "r=awardachievement")) {
+				// Extract achievement_id ('a' param) from post_data
+				// Look for "&a=" (mid-string) or "a=" at start of post_data
+				const char* a_param = NULL;
+				const char* search = data->post_data;
+				while ((search = strstr(search, "a=")) != NULL) {
+					// Verify this is the 'a' parameter (preceded by & or start of string)
+					if (search == data->post_data || *(search - 1) == '&') {
+						a_param = search + 2;  // skip 'a='
+						break;
+					}
+					search += 2;
+				}
+				if (a_param) {
+					uint32_t ach_id = (uint32_t)strtoul(a_param, NULL, 10);
+					if (ach_id > 0) {
+						RA_Offline_ledgerWriteSyncAck(ach_id, 0);
+					}
+				}
+			}
+		}
 	} else {
 		// Error case
 		if (response && response->error) {
@@ -613,6 +650,8 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 	if (response) {
 		HTTP_freeResponse(response);
 	}
+	free(data->url);
+	free(data->post_data);
 	free(data);
 }
 
@@ -621,6 +660,38 @@ static void ra_server_call(const rc_api_request_t* request,
                            void* callback_data, rc_client_t* client) {
 	(void)client; // unused
 	
+	// Offline mode: serve cached responses or synthesize empty responses
+	if (RA_Offline_isOffline()) {
+		RA_LOG_INFO("OFFLINE server_call: url=%s post_data=%s\n",
+		            request->url ? request->url : "(null)",
+		            request->post_data ? request->post_data : "(null)");
+		
+		char* cached_body = NULL;
+		size_t cached_len = 0;
+		
+		if (RA_Offline_getCachedResponse(request->url, request->post_data,
+		                                  &cached_body, &cached_len)) {
+			// Cache hit - deliver cached response via queue
+			RA_LOG_INFO("OFFLINE cache HIT (%zu bytes)\n", cached_len);
+			if (!ra_queue_push(cached_body, cached_len, 200, callback, callback_data)) {
+				RA_LOG_WARN("Failed to queue cached response\n");
+			}
+			free(cached_body);
+			return;
+		}
+		
+		// Cache miss - synthesize a minimal success response for non-cacheable requests
+		// (ping, startsession without cache, awardachievement)
+		// This lets rc_client proceed without server contact
+		RA_LOG_WARN("OFFLINE cache MISS - returning synthetic {\"Success\":true}\n");
+		static const char* empty_success = "{\"Success\":true}";
+		if (!ra_queue_push(empty_success, strlen(empty_success), 200, callback, callback_data)) {
+			RA_LOG_WARN("Failed to queue synthetic offline response\n");
+		}
+		return;
+	}
+	
+	// Online mode: make real HTTP request
 	// Allocate data structure to pass through to callback
 	RA_ServerCallData* data = (RA_ServerCallData*)malloc(sizeof(RA_ServerCallData));
 	if (!data) {
@@ -634,6 +705,8 @@ static void ra_server_call(const rc_api_request_t* request,
 	
 	data->callback = callback;
 	data->callback_data = callback_data;
+	data->url = request->url ? strdup(request->url) : NULL;
+	data->post_data = request->post_data ? strdup(request->post_data) : NULL;
 	
 	// Make async HTTP request
 	if (request->post_data && strlen(request->post_data) > 0) {
@@ -678,6 +751,16 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		Notification_push(NOTIFICATION_ACHIEVEMENT, message, badge_icon);
 		RA_LOG_INFO("Achievement unlocked: %s (%d points)\n",
 		       event->achievement->title, event->achievement->points);
+		
+		// Write-ahead log: persist unlock to ledger (survives app crash)
+		{
+			const rc_client_game_t* game = rc_client_get_game_info(client);
+			if (game) {
+				RA_Offline_ledgerWriteUnlock(game->id, event->achievement->id,
+				                             game->hash,
+				                             rc_client_get_hardcore_enabled(client) ? 1 : 0);
+			}
+		}
 		break;
 		
 	case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_SHOW:
@@ -789,6 +872,9 @@ static void ra_login_callback(int result, const char* error_message,
                               rc_client_t* client, void* userdata) {
 	(void)userdata;
 	
+	RA_LOG_INFO("ra_login_callback: result=%d, error=%s\n", result,
+	            error_message ? error_message : "(none)");
+	
 	if (result == RC_OK) {
 		// Success - reset retry state
 		ra_reset_login_state();
@@ -889,12 +975,261 @@ static void ra_prefetch_badges(rc_client_t* client) {
 }
 
 /*****************************************************************************
+ * Offline sync engine
+ * 
+ * When online, replays pending offline achievement unlocks to the server.
+ * Runs on a background thread with realistic timing between submissions
+ * to avoid looking automated.
+ *****************************************************************************/
+
+static SDL_Thread* ra_sync_thread = NULL;
+static volatile bool ra_sync_abort = false;
+
+/**
+ * Generate a pseudo-random delay between min_ms and max_ms (inclusive).
+ * Uses a simple LCG seeded from SDL_GetTicks + address of stack variable.
+ */
+static uint32_t ra_sync_random_delay(uint32_t min_ms, uint32_t max_ms) {
+	static uint32_t seed = 0;
+	if (seed == 0) {
+		uint32_t stack_val;
+		seed = SDL_GetTicks() ^ (uint32_t)(uintptr_t)&stack_val;
+	}
+	seed = seed * 1103515245 + 12345;
+	uint32_t range = max_ms - min_ms + 1;
+	return min_ms + (seed % range);
+}
+
+/**
+ * Background thread function: replay pending offline unlocks.
+ */
+static int ra_sync_thread_func(void* data) {
+	(void)data;
+	
+	RA_PendingUnlock* unlocks = NULL;
+	uint32_t count = 0;
+	
+	if (!RA_Offline_ledgerGetPendingUnlocks(&unlocks, &count)) {
+		RA_LOG_ERROR("Sync: failed to read pending unlocks from ledger\n");
+		RA_Offline_setSyncing(false);
+		return 1;
+	}
+	
+	if (count == 0 || !unlocks) {
+		RA_LOG_DEBUG("Sync: no pending unlocks to replay\n");
+		RA_Offline_setSyncing(false);
+		return 0;
+	}
+	
+	RA_LOG_INFO("Sync: replaying %u pending offline unlocks\n", count);
+	
+	// Show notification
+	{
+		char msg[NOTIFICATION_MAX_MESSAGE];
+		snprintf(msg, sizeof(msg), "Syncing %u offline achievement%s...",
+		         count, count == 1 ? "" : "s");
+		Notification_push(NOTIFICATION_ACHIEVEMENT, msg, NULL);
+	}
+	
+	// Get credentials (these are config values, safe to read from any thread)
+	const char* username = CFG_getRAUsername();
+	const char* token = CFG_getRAToken();
+	
+	if (!username || !token || strlen(username) == 0 || strlen(token) == 0) {
+		RA_LOG_ERROR("Sync: no credentials available\n");
+		free(unlocks);
+		RA_Offline_setSyncing(false);
+		return 1;
+	}
+	
+	uint32_t synced = 0;
+	uint32_t skipped = 0;
+	uint32_t failed = 0;
+	time_t now = time(NULL);
+	
+	for (uint32_t i = 0; i < count && !ra_sync_abort; i++) {
+		RA_PendingUnlock* unlock = &unlocks[i];
+		
+		// Skip hardcore unlocks (softcore only, should already be filtered)
+		if (unlock->hardcore) {
+			RA_LOG_DEBUG("Sync: skipping hardcore unlock %u (not permitted)\n",
+			             unlock->achievement_id);
+			skipped++;
+			continue;
+		}
+		
+		// Compute seconds since unlock
+		uint32_t seconds_since = 0;
+		if ((time_t)unlock->timestamp < now) {
+			seconds_since = (uint32_t)(now - (time_t)unlock->timestamp);
+		}
+		
+		// Build award request using rcheevos API (handles MD5 signature)
+		rc_api_award_achievement_request_t api_params;
+		memset(&api_params, 0, sizeof(api_params));
+		api_params.username = username;
+		api_params.api_token = token;
+		api_params.achievement_id = unlock->achievement_id;
+		api_params.hardcore = 0;  // Always softcore
+		api_params.game_hash = unlock->game_hash;
+		api_params.seconds_since_unlock = seconds_since;
+		
+		rc_api_request_t request;
+		memset(&request, 0, sizeof(request));
+		
+		int rc = rc_api_init_award_achievement_request(&request, &api_params);
+		if (rc != RC_OK) {
+			RA_LOG_ERROR("Sync: failed to build award request for achievement %u (rc=%d)\n",
+			             unlock->achievement_id, rc);
+			skipped++;
+			rc_api_destroy_request(&request);
+			continue;
+		}
+		
+		RA_LOG_INFO("Sync: submitting achievement %u (game %u, %us ago) [%u/%u]\n",
+		            unlock->achievement_id, unlock->game_id, seconds_since, i + 1, count);
+		
+		// Synchronous HTTP POST (we're on a background thread)
+		HTTP_Response* http_resp = HTTP_post(request.url, request.post_data,
+		                                     request.content_type);
+		rc_api_destroy_request(&request);
+		
+		if (!http_resp || http_resp->http_status != 200 || !http_resp->data) {
+			RA_LOG_WARN("Sync: HTTP error for achievement %u (status=%d) - stopping sync\n",
+			            unlock->achievement_id,
+			            http_resp ? http_resp->http_status : -1);
+			if (http_resp) HTTP_freeResponse(http_resp);
+			failed++;
+			break;  // Network error: stop sync, will retry next game load
+		}
+		
+		// Parse server response
+		rc_api_award_achievement_response_t award_resp;
+		rc_api_server_response_t server_resp;
+		memset(&server_resp, 0, sizeof(server_resp));
+		server_resp.body = http_resp->data;
+		server_resp.body_length = http_resp->size;
+		server_resp.http_status_code = http_resp->http_status;
+		
+		rc = rc_api_process_award_achievement_server_response(&award_resp, &server_resp);
+		HTTP_freeResponse(http_resp);
+		
+		bool success = false;
+		if (rc == RC_OK && award_resp.response.succeeded) {
+			success = true;
+		} else if (award_resp.response.error_message &&
+		           strstr(award_resp.response.error_message, "User already has") != NULL) {
+			// Already unlocked on server — treat as success
+			RA_LOG_INFO("Sync: achievement %u already unlocked on server\n",
+			            unlock->achievement_id);
+			success = true;
+		} else {
+			// Genuine rejection (invalid achievement, etc.) — skip and continue
+			RA_LOG_WARN("Sync: server rejected achievement %u: %s\n",
+			            unlock->achievement_id,
+			            award_resp.response.error_message ?
+			            award_resp.response.error_message : "unknown error");
+			skipped++;
+		}
+		
+		rc_api_destroy_award_achievement_response(&award_resp);
+		
+		if (success) {
+			// Write SYNC_ACK to ledger
+			RA_Offline_ledgerWriteSyncAck(unlock->achievement_id, unlock->game_id);
+			synced++;
+			RA_LOG_INFO("Sync: achievement %u confirmed (%u/%u)\n",
+			            unlock->achievement_id, synced, count);
+		}
+		
+		// Delay before next submission (skip delay after last item)
+		if (i + 1 < count && !ra_sync_abort) {
+			uint32_t delay;
+			if ((i + 1) % 5 == 0) {
+				// Longer pause every 5 unlocks
+				delay = ra_sync_random_delay(5000, 10000);
+			} else {
+				// Normal 2-5 second delay
+				delay = ra_sync_random_delay(2000, 5000);
+			}
+			RA_LOG_DEBUG("Sync: waiting %ums before next submission\n", delay);
+			
+			// Sleep in small increments so we can respond to abort
+			uint32_t slept = 0;
+			while (slept < delay && !ra_sync_abort) {
+				uint32_t chunk = (delay - slept > 200) ? 200 : (delay - slept);
+				SDL_Delay(chunk);
+				slept += chunk;
+			}
+		}
+	}
+	
+	free(unlocks);
+	
+	// Show completion notification
+	{
+		char msg[NOTIFICATION_MAX_MESSAGE];
+		if (failed > 0) {
+			snprintf(msg, sizeof(msg), "Sync incomplete: %u synced, will retry later", synced);
+		} else if (synced > 0) {
+			snprintf(msg, sizeof(msg), "Synced %u offline achievement%s",
+			         synced, synced == 1 ? "" : "s");
+		} else if (skipped > 0) {
+			snprintf(msg, sizeof(msg), "Sync: %u achievement%s skipped",
+			         skipped, skipped == 1 ? "" : "s");
+		}
+		// Only show if something happened
+		if (synced > 0 || failed > 0) {
+			Notification_push(NOTIFICATION_ACHIEVEMENT, msg, NULL);
+		}
+	}
+	
+	RA_LOG_INFO("Sync complete: %u synced, %u skipped, %u failed\n", synced, skipped, failed);
+	RA_Offline_setSyncing(false);
+	return 0;
+}
+
+/**
+ * Start offline sync if we're online and have pending unlocks.
+ * Called after successful online game load.
+ */
+static void ra_start_offline_sync(void) {
+	if (RA_Offline_isOffline()) return;
+	if (RA_Offline_isSyncing()) return;
+	
+	// Quick check: any pending unlocks?
+	RA_PendingUnlock* unlocks = NULL;
+	uint32_t count = 0;
+	if (!RA_Offline_ledgerGetPendingUnlocks(&unlocks, &count) || count == 0) {
+		free(unlocks);
+		return;
+	}
+	free(unlocks);
+	
+	// Start sync on background thread
+	RA_LOG_INFO("Starting offline sync (%u pending unlocks)\n", count);
+	ra_sync_abort = false;
+	RA_Offline_setSyncing(true);
+	ra_sync_thread = SDL_CreateThread(ra_sync_thread_func, "ra_sync", NULL);
+	if (!ra_sync_thread) {
+		RA_LOG_ERROR("Failed to create sync thread\n");
+		RA_Offline_setSyncing(false);
+	} else {
+		SDL_DetachThread(ra_sync_thread);
+		ra_sync_thread = NULL;
+	}
+}
+
+/*****************************************************************************
  * Callback: Game load callback
  *****************************************************************************/
 
 static void ra_game_loaded_callback(int result, const char* error_message,
                                     rc_client_t* client, void* userdata) {
 	(void)userdata;
+	
+	RA_LOG_INFO("ra_game_loaded_callback: result=%d, error=%s\n", result,
+	            error_message ? error_message : "(none)");
 	
 	if (result == RC_OK) {
 		const rc_client_game_t* game = rc_client_get_game_info(client);
@@ -954,6 +1289,13 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 			snprintf(message, sizeof(message), "%s - %u/%u achievements",
 			         game->title, display_unlocked, display_total);
 			Notification_push(NOTIFICATION_ACHIEVEMENT, message, NULL);
+			
+			// Ledger: record session start
+			RA_Offline_ledgerWriteSessionStart(game->id, game->hash,
+			                                   rc_client_get_hardcore_enabled(client) ? 1 : 0);
+			
+			// Sync any pending offline unlocks (runs in background)
+			ra_start_offline_sync();
 		} else {
 			RA_LOG_WARN("Game not recognized by RetroAchievements\n");
 		}
@@ -968,43 +1310,54 @@ static void ra_game_loaded_callback(int result, const char* error_message,
  *****************************************************************************/
 
 void RA_init(void) {
+	RA_LOG_INFO("RA_init() called, RAEnable=%d\n", CFG_getRAEnable());
 	if (!CFG_getRAEnable()) {
-		RA_LOG_DEBUG("RetroAchievements disabled in settings\n");
+		RA_LOG_INFO("RetroAchievements disabled in settings, returning early\n");
 		return;
 	}
 	
 	if (ra_client) {
-		RA_LOG_DEBUG("Already initialized\n");
+		RA_LOG_INFO("Already initialized, returning early\n");
 		return;
 	}
 	
-	// Check wifi state before attempting to connect
-	if (!PLAT_wifiEnabled()) {
-		RA_LOG_WARN("WiFi disabled - cannot connect to RetroAchievements\n");
-		Notification_push(NOTIFICATION_ACHIEVEMENT, 
-		                  "RetroAchievements requires WiFi", NULL);
-		return;
+	// Initialize offline subsystem (always, regardless of WiFi state)
+	RA_Offline_init(SHARED_USERDATA_PATH);
+	
+	// Determine WiFi connectivity
+	bool wifi_available = false;
+	RA_LOG_INFO("WiFi check: enabled=%d\n", PLAT_wifiEnabled());
+	if (PLAT_wifiEnabled()) {
+		if (PLAT_wifiConnected()) {
+			wifi_available = true;
+		} else {
+			// Wait for wifi to connect (handles wake-from-sleep scenario)
+			RA_LOG_DEBUG("WiFi enabled but not connected, waiting up to %dms...\n", RA_WIFI_WAIT_MAX_MS);
+			uint32_t start = SDL_GetTicks();
+			while (!PLAT_wifiConnected() && 
+			       (SDL_GetTicks() - start) < RA_WIFI_WAIT_MAX_MS) {
+				SDL_Delay(RA_WIFI_WAIT_POLL_MS);
+			}
+			wifi_available = PLAT_wifiConnected();
+			if (wifi_available) {
+				RA_LOG_DEBUG("WiFi connected after %ums\n", SDL_GetTicks() - start);
+			} else {
+				RA_LOG_WARN("WiFi did not connect within %dms - entering offline mode\n", RA_WIFI_WAIT_MAX_MS);
+			}
+		}
 	}
 	
-	// Wait for wifi to connect (handles wake-from-sleep scenario)
-	if (!PLAT_wifiConnected()) {
-		RA_LOG_DEBUG("WiFi enabled but not connected, waiting up to %dms...\n", RA_WIFI_WAIT_MAX_MS);
-		uint32_t start = SDL_GetTicks();
-		while (!PLAT_wifiConnected() && 
-		       (SDL_GetTicks() - start) < RA_WIFI_WAIT_MAX_MS) {
-			SDL_Delay(RA_WIFI_WAIT_POLL_MS);
-		}
-		
-		if (!PLAT_wifiConnected()) {
-			RA_LOG_WARN("WiFi did not connect within %dms\n", RA_WIFI_WAIT_MAX_MS);
-			Notification_push(NOTIFICATION_ACHIEVEMENT, 
-			                  "RetroAchievements requires WiFi", NULL);
-			return;
-		}
-		RA_LOG_DEBUG("WiFi connected after %ums\n", SDL_GetTicks() - start);
-	}
+	// Set offline mode based on connectivity
+	RA_Offline_setOffline(!wifi_available);
 	
-	RA_LOG_INFO("Initializing...\n");
+	if (!wifi_available) {
+		// Offline: force softcore mode
+		RA_LOG_INFO("Initializing in offline mode (softcore only)...\n");
+		// Defer notification — Notification_init() hasn't been called yet at this point
+		ra_deferred_offline_notification = true;
+	} else {
+		RA_LOG_INFO("Initializing...\n");
+	}
 	
 	// Initialize the response queue (must be before any HTTP requests)
 	ra_queue_init();
@@ -1040,21 +1393,38 @@ void RA_init(void) {
 	}
 	
 	// Configure hardcore mode from settings
-	rc_client_set_hardcore_enabled(ra_client, CFG_getRAHardcoreMode() ? 1 : 0);
+	// Force softcore when offline
+	if (RA_Offline_isOffline()) {
+		rc_client_set_hardcore_enabled(ra_client, 0);
+	} else {
+		rc_client_set_hardcore_enabled(ra_client, CFG_getRAHardcoreMode() ? 1 : 0);
+	}
 	
 	// Reset login state before attempting
 	ra_reset_login_state();
 	
 	// Attempt login with stored token
+	RA_LOG_INFO("Credentials check: authenticated=%d, token_len=%zu, username=%s\n",
+	            CFG_getRAAuthenticated(), strlen(CFG_getRAToken()), CFG_getRAUsername());
 	if (CFG_getRAAuthenticated() && strlen(CFG_getRAToken()) > 0) {
-		RA_LOG_INFO("Logging in with stored token...\n");
+		RA_LOG_INFO("Logging in with stored token (offline=%d)...\n", RA_Offline_isOffline());
 		ra_start_login();
 	} else {
 		RA_LOG_WARN("No stored token - user needs to authenticate in settings\n");
 	}
+	RA_LOG_INFO("RA_init() complete\n");
 }
 
 void RA_quit(void) {
+	// Abort any running sync
+	if (RA_Offline_isSyncing()) {
+		RA_LOG_INFO("Aborting offline sync for shutdown\n");
+		ra_sync_abort = true;
+		for (int i = 0; i < 20 && RA_Offline_isSyncing(); i++) {
+			SDL_Delay(50);
+		}
+	}
+	
 	// Clear any pending game data
 	ra_clear_pending_game();
 	
@@ -1088,6 +1458,9 @@ void RA_quit(void) {
 	
 	// Clean up the response queue (after rc_client is destroyed)
 	ra_queue_quit();
+	
+	// Shut down offline subsystem (after everything else)
+	RA_Offline_shutdown();
 	
 	ra_game_loaded = false;
 	ra_logged_in = false;
@@ -1241,6 +1614,8 @@ static void ra_do_load_game(const char* rom_path, const uint8_t* rom_data, size_
 }
 
 void RA_loadGame(const char* rom_path, const uint8_t* rom_data, size_t rom_size, const char* emu_tag) {
+	RA_LOG_INFO("RA_loadGame: client=%p, RAEnable=%d, logged_in=%d, path=%s\n",
+	            (void*)ra_client, CFG_getRAEnable(), ra_logged_in, rom_path);
 	if (!ra_client || !CFG_getRAEnable()) {
 		return;
 	}
@@ -1288,6 +1663,22 @@ void RA_unloadGame(void) {
 	if (ra_game_loaded) {
 		RA_LOG_INFO("Unloading game\n");
 		
+		// Abort any running sync before unloading
+		if (RA_Offline_isSyncing()) {
+			RA_LOG_INFO("Aborting offline sync for game unload\n");
+			ra_sync_abort = true;
+			// Give sync thread time to notice the abort
+			for (int i = 0; i < 10 && RA_Offline_isSyncing(); i++) {
+				SDL_Delay(50);
+			}
+		}
+		
+		// Write SESSION_END to ledger before cleanup invalidates game info
+		const rc_client_game_t* game = rc_client_get_game_info(ra_client);
+		if (game) {
+			RA_Offline_ledgerWriteSessionEnd(game->id, game->hash);
+		}
+		
 		// Save any pending muted achievements
 		ra_save_muted_achievements();
 		ra_clear_muted_achievements();
@@ -1323,6 +1714,13 @@ void RA_doFrame(void) {
 }
 
 void RA_idle(void) {
+	// Push deferred offline notification (Notification_init() wasn't ready during RA_init())
+	if (ra_deferred_offline_notification) {
+		ra_deferred_offline_notification = false;
+		Notification_push(NOTIFICATION_ACHIEVEMENT, 
+		                  "RetroAchievements: Offline mode (softcore)", NULL);
+	}
+	
 	// Process queued HTTP responses on main thread
 	// This must happen even if ra_client is NULL (e.g., during shutdown)
 	// to avoid memory leaks from pending responses
