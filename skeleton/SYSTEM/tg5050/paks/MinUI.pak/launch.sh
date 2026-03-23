@@ -167,6 +167,36 @@ fi
 cd $(dirname "$0")
 
 #######################################
+# Hook system
+
+HOOKS_DIR="$USERDATA_PATH/.hooks"
+
+run_hooks() {
+	_hook_phase="$1"
+	_hook_dir="$HOOKS_DIR/${_hook_phase}-launch.d"
+	[ -d "$_hook_dir" ] || return 0
+	for _hook_script in "$_hook_dir"/*.sh; do
+		[ -f "$_hook_script" ] || continue
+		( export HOOK_PHASE="$_hook_phase"; "$_hook_script" ) > /dev/null 2>&1 || true
+	done
+}
+
+parse_hook_cmd() {
+	HOOK_CMD="$1"
+	HOOK_EMU_PATH=$(echo "$HOOK_CMD" | sed "s/^'\\([^']*\\)'.*/\\1/")
+	_remainder=$(echo "$HOOK_CMD" | sed "s/^'[^']*'//")
+	if echo "$_remainder" | grep -q "'"; then
+		HOOK_TYPE="rom"
+		HOOK_ROM_PATH=$(echo "$_remainder" | sed "s/.*'\\([^']*\\)'.*/\\1/")
+	else
+		HOOK_TYPE="pak"
+		HOOK_ROM_PATH=""
+	fi
+	[ -f /tmp/last.txt ] && HOOK_LAST=$(cat /tmp/last.txt) || HOOK_LAST=""
+	export HOOK_CMD HOOK_EMU_PATH HOOK_TYPE HOOK_ROM_PATH HOOK_LAST
+}
+
+#######################################
 
 # kill show2.elf if running
 killall -9 show2.elf > /dev/null 2>&1
@@ -180,7 +210,10 @@ while [ -f $EXEC_PATH ]; do
 
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
+		parse_hook_cmd "$CMD"
+		run_hooks pre
 		eval $CMD
+		run_hooks post
 		rm -f $NEXT_PATH
 		echo $CPU_SPEED_PERF > $BIG_PATH
 	fi
