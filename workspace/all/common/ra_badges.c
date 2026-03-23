@@ -24,9 +24,8 @@
 
 #define RA_BADGE_BASE_URL "https://media.retroachievements.org/Badge/"
 #define MAX_BADGE_NAME 32
-#define MAX_CACHED_BADGES 256
+#define MAX_CACHED_BADGES 2048
 #define MAX_CONCURRENT_DOWNLOADS 8
-#define MAX_QUEUED_DOWNLOADS 512
 #define NOTIFICATION_TIMEOUT_MS 15000
 
 /*****************************************************************************
@@ -63,7 +62,7 @@ static uint32_t notification_start_time = 0;
 
 // Download queue for rate limiting
 typedef struct {
-	QueuedDownload items[MAX_QUEUED_DOWNLOADS];
+	QueuedDownload items[MAX_CACHED_BADGES];
 	int head;
 	int tail;
 	int count;
@@ -196,7 +195,7 @@ static void badge_download_callback(HTTP_Response* response, void* userdata);
 
 // Queue a download for later processing (must hold mutex)
 static void queue_download(const char* badge_name, bool locked) {
-	if (download_queue.count >= MAX_QUEUED_DOWNLOADS) {
+	if (download_queue.count >= MAX_CACHED_BADGES) {
 		BADGE_LOG_WARN("Download queue full, dropping badge %s\n", badge_name);
 		return;
 	}
@@ -206,7 +205,7 @@ static void queue_download(const char* badge_name, bool locked) {
 	item->badge_name[MAX_BADGE_NAME - 1] = '\0';
 	item->locked = locked;
 	
-	download_queue.tail = (download_queue.tail + 1) % MAX_QUEUED_DOWNLOADS;
+	download_queue.tail = (download_queue.tail + 1) % MAX_CACHED_BADGES;
 	download_queue.count++;
 }
 
@@ -215,7 +214,7 @@ static bool dequeue_and_start_download(void) {
 	if (download_queue.count == 0) return false;
 	
 	QueuedDownload* item = &download_queue.items[download_queue.head];
-	download_queue.head = (download_queue.head + 1) % MAX_QUEUED_DOWNLOADS;
+	download_queue.head = (download_queue.head + 1) % MAX_CACHED_BADGES;
 	download_queue.count--;
 	
 	// Get entry and check if still needs download
