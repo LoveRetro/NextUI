@@ -637,12 +637,26 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 		}
 	} else {
 		// Error case — network failure, timeout, DNS error, etc.
+		// Extract request type only (don't log full post_data — it may contain API tokens)
+		const char* err_rtype = "unknown";
+		char err_rt_buf[32] = {0};
+		if (data->post_data) {
+			const char* rp = strstr(data->post_data, "r=");
+			if (rp && (rp == data->post_data || *(rp-1) == '&')) {
+				const char* rv = rp + 2;
+				const char* re = rv;
+				while (*re && *re != '&') re++;
+				size_t rl = (size_t)(re - rv);
+				if (rl >= sizeof(err_rt_buf)) rl = sizeof(err_rt_buf) - 1;
+				memcpy(err_rt_buf, rv, rl);
+				err_rt_buf[rl] = '\0';
+				err_rtype = err_rt_buf;
+			}
+		}
 		if (response && response->error) {
-			RA_LOG_ERROR("HTTP error for %s: %s\n",
-			             data->post_data ? data->post_data : "(no post_data)", response->error);
+			RA_LOG_ERROR("HTTP error for r=%s: %s\n", err_rtype, response->error);
 		} else {
-			RA_LOG_ERROR("HTTP error for %s: no response\n",
-			             data->post_data ? data->post_data : "(no post_data)");
+			RA_LOG_ERROR("HTTP error for r=%s: no response\n", err_rtype);
 		}
 	}
 	
@@ -719,25 +733,22 @@ static void ra_server_call(const rc_api_request_t* request,
 	
 	// Offline mode: serve cached responses or synthesize empty responses
 	if (RA_Offline_isOffline()) {
-		// Identify request type for diagnostic logging
-		const char* diag_rtype = NULL;
+		// Extract request type for logging
+		const char* req_type = NULL;
 		if (request->post_data) {
 			const char* rp = strstr(request->post_data, "r=");
 			if (rp && (rp == request->post_data || *(rp-1) == '&')) {
-				static char diag_rt[32];
+				static char rt_buf[32];
 				const char* rv = rp + 2;
 				const char* re = rv;
 				while (*re && *re != '&') re++;
 				size_t rl = (size_t)(re - rv);
-				if (rl >= sizeof(diag_rt)) rl = sizeof(diag_rt) - 1;
-				memcpy(diag_rt, rv, rl);
-				diag_rt[rl] = '\0';
-				diag_rtype = diag_rt;
+				if (rl >= sizeof(rt_buf)) rl = sizeof(rt_buf) - 1;
+				memcpy(rt_buf, rv, rl);
+				rt_buf[rl] = '\0';
+				req_type = rt_buf;
 			}
 		}
-		RA_LOG_INFO("OFFLINE server_call: type=%s url=%s\n",
-		            diag_rtype ? diag_rtype : "unknown",
-		            request->url ? request->url : "(null)");
 		
 		char* cached_body = NULL;
 		size_t cached_len = 0;
@@ -745,8 +756,8 @@ static void ra_server_call(const rc_api_request_t* request,
 		if (RA_Offline_getCachedResponse(request->url, request->post_data,
 		                                  &cached_body, &cached_len)) {
 			// Cache hit - deliver cached response via queue
-			RA_LOG_INFO("OFFLINE cache HIT for %s (%zu bytes)\n",
-			            diag_rtype ? diag_rtype : "unknown", cached_len);
+			RA_LOG_DEBUG("Offline cache hit: %s (%zu bytes)\n",
+			             req_type ? req_type : "unknown", cached_len);
 			if (!ra_queue_push(cached_body, cached_len, 200, callback, callback_data)) {
 				RA_LOG_WARN("Failed to queue cached response\n");
 			}
@@ -757,8 +768,8 @@ static void ra_server_call(const rc_api_request_t* request,
 		// Cache miss - synthesize a minimal success response for non-cacheable requests
 		// (ping, startsession without cache, awardachievement)
 		// This lets rc_client proceed without server contact
-		RA_LOG_WARN("OFFLINE cache MISS for %s - returning synthetic {\"Success\":true}\n",
-		            diag_rtype ? diag_rtype : "unknown");
+		RA_LOG_DEBUG("Offline cache miss: %s — returning synthetic success\n",
+		             req_type ? req_type : "unknown");
 		static const char* empty_success = "{\"Success\":true}";
 		if (!ra_queue_push(empty_success, strlen(empty_success), 200, callback, callback_data)) {
 			RA_LOG_WARN("Failed to queue synthetic offline response\n");
@@ -1274,6 +1285,9 @@ static int ra_sync_thread_func(void* data) {
 	// Clear pending cache since synced achievements are now server-confirmed
 	if (failed == 0) {
 		RA_Offline_clearPendingCache();
+		// Compact the ledger: remove synced UNLOCK+SYNC_ACK pairs so
+		// stale records don't accumulate across sessions
+		RA_Offline_ledgerCompact();
 	} else {
 		// Partial sync — refresh cache to only keep truly pending ones
 		RA_Offline_refreshPendingCache();
@@ -1289,11 +1303,11 @@ static int ra_sync_thread_func(void* data) {
  */
 static void ra_start_offline_sync(void) {
 	if (RA_Offline_isOffline()) {
-		RA_LOG_INFO("Sync: skipped (offline mode active)\n");
+		RA_LOG_DEBUG("Sync: skipped (offline mode active)\n");
 		return;
 	}
 	if (RA_Offline_isSyncing()) {
-		RA_LOG_INFO("Sync: skipped (already syncing)\n");
+		RA_LOG_DEBUG("Sync: skipped (already syncing)\n");
 		return;
 	}
 	
@@ -1301,7 +1315,7 @@ static void ra_start_offline_sync(void) {
 	RA_PendingUnlock* unlocks = NULL;
 	uint32_t count = 0;
 	if (!RA_Offline_ledgerGetPendingUnlocks(&unlocks, &count) || count == 0) {
-		RA_LOG_INFO("Sync: no pending unlocks found in ledger\n");
+		RA_LOG_DEBUG("Sync: no pending unlocks found in ledger\n");
 		free(unlocks);
 		return;
 	}

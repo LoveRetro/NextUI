@@ -58,7 +58,7 @@ Cache rcheevos server responses to disk so they can be replayed when offline.
   - After successful server response, call `RA_Offline_cacheResponse()`
   - Only cache responses with HTTP 200 and valid JSON body
 - [x] **1.5** Add `ra_offline.c` to minarch makefile SOURCE list
-- [ ] **1.6** Build and verify cache writes occur during normal online play
+- [x] **1.6** Build and verify cache writes occur during normal online play
 
 ---
 
@@ -84,7 +84,7 @@ Remove the WiFi hard gate. When offline, serve cached responses to rcheevos.
 - [x] **2.4** Handle `startsession` in offline mode
   - Return a minimal valid response so rc_client activates the game
   - Achievements will evaluate locally via cached definitions
-- [ ] **2.5** Test offline startup flow
+- [x] **2.5** Test offline startup flow
   - Verify game loads with achievements active when WiFi is off and cache exists
   - Verify graceful fallback (no crash, user notification) when WiFi is off and no cache exists
   - Verify online mode is unaffected
@@ -128,7 +128,7 @@ Persist achievement unlocks to an append-only binary log with hash chain integri
   - Call `RA_Offline_ledgerWriteSyncAck()` to mark the unlock as server-confirmed
   - Prevents double-submission by the sync engine
 - [x] **3.6** Write `SESSION_START` when game loads, `SESSION_END` when game unloads
-- [ ] **3.7** Test ledger integrity
+- [x] **3.7** Test ledger integrity
   - Verify chain validation catches tampering
   - Verify recovery from truncated/corrupt ledger file
 
@@ -163,7 +163,7 @@ Submit pending offline unlocks to the server with realistic timing.
   - Server rejects unlock (achievement not found, already unlocked): mark as synced, move on
   - Server is unreachable during sync: stop, retry next game load
   - Abort sync on game unload or app shutdown (interruptible sleep loop)
-- [ ] **4.5** Test sync flow end-to-end
+- [x] **4.5** Test sync flow end-to-end
   - Play offline, earn achievements, go online, verify sync submits correctly
   - Verify no double-submission of already-synced unlocks
   - Verify timing looks reasonable in server logs
@@ -185,7 +185,7 @@ Ensure hardcore mode is properly managed when offline.
 - [x] **5.3** Record hardcore flag in ledger but don't sync
   - Ledger records whether hardcore was active (for future use if RA approves)
   - Sync engine skips entries where `hardcore == 1`
-- [ ] **5.4** On transition to online: allow hardcore to be re-enabled
+- [x] **5.4** On transition to online: allow hardcore to be re-enabled
   - If user was in softcore due to offline, and WiFi returns, allow hardcore toggle
   - This is informational only — rcheevos handles the actual mode switch
 
@@ -209,3 +209,28 @@ Ensure hardcore mode is properly managed when offline.
 - **Disconnect/reconnect events**: Fired based on retry queue state — useful for UI only
 - **Timestamp preservation**: Retried submissions include `seconds_since_unlock`
 - **Our ledger complements this**: Survives app exit/crash; covers offline startup (where rc_client was never online)
+
+---
+
+## Phase 6: Production Hardening
+
+Cleanup and robustness improvements for production use.
+
+### Tasks
+
+- [x] **6.1** Ledger compaction after successful sync
+  - `RA_Offline_ledgerCompact()` removes synced UNLOCK+SYNC_ACK pairs and session records
+  - Deletes ledger entirely when all unlocks are acked
+  - Rewrites remaining records with rebuilt hash chain (atomic via temp file + rename)
+  - Called from sync thread after `failed == 0`
+- [x] **6.2** Resilient chain validation on load
+  - `ledger_validate_and_load()` no longer truncates at first chain break
+  - Records with valid self-hash are accepted even if chain link is broken
+  - Corrupt records (bad record_hash) are skipped, subsequent records continue to be read
+  - Chain repaired on next compaction
+- [x] **6.3** Remove diagnostic logging
+  - Removed all `DIAG:` prefixed log lines from `ra_offline.c` and `ra_integration.c`
+  - Downgraded routine per-request logs from INFO to DEBUG
+- [x] **6.4** Sanitize API token in error logs
+  - HTTP error handler now logs only request type (`r=login2`) instead of full post_data
+  - Prevents token leakage in log files

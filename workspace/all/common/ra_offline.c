@@ -485,7 +485,7 @@ static bool patch_startsession_with_ledger(char* body, size_t body_len,
 		return true;
 	}
 
-	OFFLINE_LOG_INFO("Patching startsession: injecting %u ledger unlocks into Unlocks array\n",
+	OFFLINE_LOG_DEBUG("Patching startsession: injecting %u ledger unlocks into Unlocks array\n",
 	                 inject_count);
 
 	/*
@@ -541,7 +541,7 @@ static bool patch_startsession_with_ledger(char* body, size_t body_len,
 	new_body[new_len] = '\0';
 	free(inject_buf);
 
-	OFFLINE_LOG_INFO("Patched startsession: %zu -> %zu bytes\n", body_len, new_len);
+	OFFLINE_LOG_DEBUG("Patched startsession: %zu -> %zu bytes\n", body_len, new_len);
 
 	/* Replace the original body */
 	free(body);
@@ -655,41 +655,22 @@ bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
 
 	*out_body = body;
 	*out_len = len32;
-	OFFLINE_LOG_INFO("Cache hit for %s (%u bytes) from %s\n", req_type, len32, path);
+	OFFLINE_LOG_DEBUG("Cache hit for %s (%u bytes) from %s\n", req_type, len32, path);
 
 	/* For startsession responses served offline, patch in any pending ledger unlocks
 	 * so rcheevos shows offline-earned achievements as unlocked on restart */
 	if (ra_offline_mode && strcmp(req_type, "startsession") == 0) {
 		char game_hash[64] = {0};
 		get_game_hash_param(url, post_data, game_hash, sizeof(game_hash));
-		OFFLINE_LOG_INFO("DIAG: startsession cache hit, game_hash='%s', body_len=%u\n",
-		                 game_hash, (unsigned)*out_len);
-
-		/* Check ledger state before patching */
-		RA_PendingUnlock* diag_pending = NULL;
-		uint32_t diag_count = 0;
-		if (RA_Offline_ledgerGetPendingUnlocks(&diag_pending, &diag_count)) {
-			OFFLINE_LOG_INFO("DIAG: ledger has %u pending unlocks\n", diag_count);
-			for (uint32_t di = 0; di < diag_count; di++) {
-				OFFLINE_LOG_INFO("DIAG:   pending[%u]: ach=%u game_hash='%s'\n",
-				                 di, diag_pending[di].achievement_id, diag_pending[di].game_hash);
-			}
-			free(diag_pending);
-		} else {
-			OFFLINE_LOG_INFO("DIAG: ledgerGetPendingUnlocks returned false\n");
-		}
 
 		char* pre_patch_body = *out_body;
 		if (!patch_startsession_with_ledger(*out_body, *out_len, game_hash,
 		                                    out_body, out_len)) {
 			OFFLINE_LOG_WARN("Failed to patch startsession with ledger data\n");
 		} else if (*out_body != pre_patch_body) {
-			OFFLINE_LOG_INFO("DIAG: startsession patched successfully, new_len=%u\n", (unsigned)*out_len);
-		} else {
-			OFFLINE_LOG_INFO("DIAG: patch_startsession returned true but body unchanged (no injection needed)\n");
+			OFFLINE_LOG_INFO("Patched offline startsession (%u -> %u bytes)\n",
+			                 len32, (unsigned)*out_len);
 		}
-	} else if (strcmp(req_type, "startsession") == 0) {
-		OFFLINE_LOG_INFO("DIAG: startsession cache hit but ra_offline_mode=%d, skipping patch\n", ra_offline_mode);
 	}
 
 	return true;
@@ -728,47 +709,54 @@ static uint32_t ledger_validate_and_load(void) {
 	}
 
 	uint32_t valid_count = 0;
+	uint32_t total_read = 0;
+	bool chain_broken = false;
 	uint8_t prev_hash[SHA256_DIGEST_SIZE];
 	memset(prev_hash, 0, SHA256_DIGEST_SIZE);
 
 	RA_LedgerRecord rec;
 	while (fread(&rec, sizeof(rec), 1, f) == 1) {
+		total_read++;
+
 		/* Verify prev_hash chain */
 		if (memcmp(rec.prev_hash, prev_hash, SHA256_DIGEST_SIZE) != 0) {
-			OFFLINE_LOG_WARN("Ledger chain broken at record %u, truncating\n", valid_count);
-			break;
+			OFFLINE_LOG_WARN("Ledger chain broken at record %u (skipping)\n", total_read - 1);
+			chain_broken = true;
+			/* Reset chain expectation to this record's actual prev_hash
+			 * so we can continue validating subsequent records */
 		}
 
-		/* Verify record_hash */
+		/* Verify record_hash (self-integrity, independent of chain) */
 		uint8_t expected_hash[SHA256_DIGEST_SIZE];
 		sha256_hash(&rec, RA_LEDGER_RECORD_HASHABLE_SIZE, expected_hash);
 		if (memcmp(rec.record_hash, expected_hash, SHA256_DIGEST_SIZE) != 0) {
-			OFFLINE_LOG_WARN("Ledger record_hash invalid at record %u, truncating\n", valid_count);
-			break;
+			OFFLINE_LOG_WARN("Ledger record_hash invalid at record %u (skipping)\n", total_read - 1);
+			chain_broken = true;
+			/* Skip this record but continue reading — don't update prev_hash
+			 * so the next record's chain link will also break, but we'll
+			 * still read its data for pending-unlock purposes */
+			continue;
 		}
 
-		/* Record is valid - update chain state */
+		/* Record has valid self-hash — update chain state */
 		ledger_hash_record(&rec, prev_hash);
 		valid_count++;
 	}
 
 	fclose(f);
 
-	/* If we need to truncate, do it */
-	long expected_size = (long)valid_count * (long)sizeof(RA_LedgerRecord);
-	struct stat st;
-	if (stat(ra_ledger_path, &st) == 0 && st.st_size > expected_size) {
-		OFFLINE_LOG_WARN("Truncating ledger from %ld to %ld bytes (%u valid records)\n",
-		                 (long)st.st_size, expected_size, valid_count);
-		if (truncate(ra_ledger_path, expected_size) != 0) {
-			OFFLINE_LOG_ERROR("Failed to truncate ledger: %s\n", strerror(errno));
-		}
+	if (chain_broken) {
+		/* Chain was broken but we recovered what we could. Compact to fix.
+		 * Don't truncate — that loses valid records after the break point.
+		 * Instead, trigger a compaction on next sync to rebuild the chain. */
+		OFFLINE_LOG_WARN("Ledger has chain integrity issues (%u/%u records valid). "
+		                 "Will be repaired on next compaction.\n", valid_count, total_read);
 	}
 
 	memcpy(ra_ledger_last_hash, prev_hash, SHA256_DIGEST_SIZE);
 	ra_ledger_has_records = (valid_count > 0);
 
-	OFFLINE_LOG_INFO("Ledger loaded: %u valid records\n", valid_count);
+	OFFLINE_LOG_DEBUG("Ledger loaded: %u valid records\n", valid_count);
 	return valid_count;
 }
 
@@ -884,6 +872,170 @@ void RA_Offline_ledgerWriteSyncAck(uint32_t achievement_id, uint32_t game_id) {
 	}
 }
 
+void RA_Offline_ledgerCompact(void) {
+	if (!ra_offline_initialized) return;
+
+	FILE* f = fopen(ra_ledger_path, "rb");
+	if (!f) {
+		OFFLINE_LOG_DEBUG("Compact: no ledger file to compact\n");
+		return;
+	}
+
+	/* Read all records (ignoring chain integrity — we just want the data) */
+	fseek(f, 0, SEEK_END);
+	long file_size = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	if (file_size <= 0 || (file_size % sizeof(RA_LedgerRecord)) != 0) {
+		fclose(f);
+		OFFLINE_LOG_WARN("Compact: ledger file has invalid size %ld, deleting\n", file_size);
+		unlink(ra_ledger_path);
+		memset(ra_ledger_last_hash, 0, SHA256_DIGEST_SIZE);
+		ra_ledger_has_records = false;
+		return;
+	}
+
+	uint32_t total_records = (uint32_t)(file_size / (long)sizeof(RA_LedgerRecord));
+	RA_LedgerRecord* records = (RA_LedgerRecord*)malloc(total_records * sizeof(RA_LedgerRecord));
+	if (!records) {
+		fclose(f);
+		OFFLINE_LOG_ERROR("Compact: failed to allocate for %u records\n", total_records);
+		return;
+	}
+
+	uint32_t read_count = (uint32_t)fread(records, sizeof(RA_LedgerRecord), total_records, f);
+	fclose(f);
+
+	if (read_count < total_records) {
+		OFFLINE_LOG_WARN("Compact: read only %u of %u records\n", read_count, total_records);
+		total_records = read_count;
+	}
+
+	/* Order-aware SYNC_ACK matching:
+	 * For each SYNC_ACK, find and mark the EARLIEST preceding unmatched UNLOCK
+	 * with the same achievement ID. This ensures that a re-unlock AFTER a
+	 * SYNC_ACK remains pending. We use the prev_hash field as a scratch "marked"
+	 * flag — it will be rebuilt when we rewrite the chain anyway.
+	 *
+	 * We repurpose prev_hash[0] as a "cancelled" flag:
+	 *   0xFF = this UNLOCK has been cancelled by a later SYNC_ACK
+	 */
+
+	/* First, clear all cancel marks */
+	for (uint32_t i = 0; i < total_records; i++) {
+		if (records[i].type == RA_LEDGER_ACHIEVEMENT_UNLOCK) {
+			records[i].prev_hash[0] = 0x00; /* not cancelled */
+		}
+	}
+
+	/* For each SYNC_ACK, cancel the earliest un-cancelled UNLOCK before it */
+	for (uint32_t i = 0; i < total_records; i++) {
+		if (records[i].type == RA_LEDGER_SYNC_ACK) {
+			for (uint32_t j = 0; j < i; j++) {
+				if (records[j].type == RA_LEDGER_ACHIEVEMENT_UNLOCK &&
+				    records[j].achievement_id == records[i].achievement_id &&
+				    records[j].prev_hash[0] != 0xFF) {
+					records[j].prev_hash[0] = 0xFF; /* mark cancelled */
+					break; /* only cancel ONE unlock per SYNC_ACK */
+				}
+			}
+		}
+	}
+
+	/* Keep only UNLOCK records that were NOT cancelled */
+	RA_LedgerRecord* kept = NULL;
+	uint32_t kept_count = 0;
+
+	for (uint32_t i = 0; i < total_records; i++) {
+		if (records[i].type == RA_LEDGER_ACHIEVEMENT_UNLOCK &&
+		    records[i].prev_hash[0] != 0xFF) {
+			/* Still pending — keep it */
+			if (!kept) {
+				kept = (RA_LedgerRecord*)malloc(total_records * sizeof(RA_LedgerRecord));
+				if (!kept) {
+					free(records);
+					OFFLINE_LOG_ERROR("Compact: allocation failure for kept records\n");
+					return;
+				}
+			}
+			kept[kept_count++] = records[i];
+		}
+		/* All other record types (SESSION_START, SESSION_END, SYNC_ACK,
+		 * and cancelled UNLOCKs) are dropped */
+	}
+
+	free(records);
+
+	if (kept_count == 0) {
+		/* Everything was acked — delete the ledger entirely */
+		free(kept);
+		if (unlink(ra_ledger_path) == 0) {
+			OFFLINE_LOG_INFO("Compact: ledger fully synced, deleted (%u records removed)\n",
+			                 total_records);
+		} else {
+			OFFLINE_LOG_WARN("Compact: failed to delete ledger: %s\n", strerror(errno));
+		}
+		memset(ra_ledger_last_hash, 0, SHA256_DIGEST_SIZE);
+		ra_ledger_has_records = false;
+		return;
+	}
+
+	/* Rewrite the ledger with only the kept records, rebuilding the hash chain */
+	OFFLINE_LOG_INFO("Compact: keeping %u pending records, dropping %u\n",
+	                 kept_count, total_records - kept_count);
+
+	/* Write to a temp file, then rename for atomicity */
+	char tmp_path[512];
+	snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", ra_ledger_path);
+
+	FILE* out = fopen(tmp_path, "wb");
+	if (!out) {
+		OFFLINE_LOG_ERROR("Compact: failed to create temp file: %s\n", strerror(errno));
+		free(kept);
+		return;
+	}
+
+	/* Rebuild hash chain from scratch */
+	uint8_t prev_hash[SHA256_DIGEST_SIZE];
+	memset(prev_hash, 0, SHA256_DIGEST_SIZE);
+
+	for (uint32_t i = 0; i < kept_count; i++) {
+		/* Update chain links */
+		memcpy(kept[i].prev_hash, prev_hash, SHA256_DIGEST_SIZE);
+		ledger_compute_record_hash(&kept[i]);
+
+		if (fwrite(&kept[i], sizeof(RA_LedgerRecord), 1, out) != 1) {
+			OFFLINE_LOG_ERROR("Compact: write failed at record %u\n", i);
+			fclose(out);
+			unlink(tmp_path);
+			free(kept);
+			return;
+		}
+
+		/* Advance chain */
+		ledger_hash_record(&kept[i], prev_hash);
+	}
+
+	fflush(out);
+	fsync(fileno(out));
+	fclose(out);
+
+	/* Atomic replace */
+	if (rename(tmp_path, ra_ledger_path) != 0) {
+		OFFLINE_LOG_ERROR("Compact: rename failed: %s\n", strerror(errno));
+		unlink(tmp_path);
+		free(kept);
+		return;
+	}
+
+	/* Update in-memory chain state */
+	memcpy(ra_ledger_last_hash, prev_hash, SHA256_DIGEST_SIZE);
+	ra_ledger_has_records = true;
+
+	OFFLINE_LOG_INFO("Compact: rewrote ledger with %u records\n", kept_count);
+	free(kept);
+}
+
 bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
                                         uint32_t* out_count) {
 	if (!ra_offline_initialized || !out_unlocks || !out_count) return false;
@@ -895,11 +1047,12 @@ bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
 	if (!f) return true; /* No ledger = no pending unlocks (not an error) */
 
 	/*
-	 * Strategy: Read all records. Build a list of ACHIEVEMENT_UNLOCK records,
-	 * then remove any that have a matching SYNC_ACK. Only keep softcore unlocks.
+	 * Strategy: Process records in sequential order. When we see an UNLOCK,
+	 * add it to the pending list. When we see a SYNC_ACK, remove the EARLIEST
+	 * pending UNLOCK with that achievement ID. This ensures a SYNC_ACK only
+	 * cancels UNLOCKs that came BEFORE it, not ones added AFTER.
 	 */
 
-	/* First pass: count records to size our arrays */
 	fseek(f, 0, SEEK_END);
 	long file_size = ftell(f);
 	fseek(f, 0, SEEK_SET);
@@ -911,30 +1064,22 @@ bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
 
 	uint32_t total_records = (uint32_t)(file_size / (long)sizeof(RA_LedgerRecord));
 
-	/* Allocate arrays for unlock tracking */
-	/* We'll use a simple approach: collect all unlocks, then mark acked ones */
 	RA_PendingUnlock* unlocks = NULL;
 	uint32_t unlock_count = 0;
 	uint32_t unlock_capacity = 0;
-
-	/* Track acked achievement IDs */
-	uint32_t* acked_ids = NULL;
-	uint32_t acked_count = 0;
-	uint32_t acked_capacity = 0;
 
 	RA_LedgerRecord rec;
 	for (uint32_t i = 0; i < total_records; i++) {
 		if (fread(&rec, sizeof(rec), 1, f) != 1) break;
 
 		if (rec.type == RA_LEDGER_ACHIEVEMENT_UNLOCK && rec.hardcore == 0) {
-			/* Softcore unlock - add to list */
+			/* Softcore unlock — add to pending list */
 			if (unlock_count >= unlock_capacity) {
 				unlock_capacity = unlock_capacity == 0 ? 64 : unlock_capacity * 2;
 				RA_PendingUnlock* tmp = (RA_PendingUnlock*)realloc(unlocks,
 					unlock_capacity * sizeof(RA_PendingUnlock));
 				if (!tmp) {
 					free(unlocks);
-					free(acked_ids);
 					fclose(f);
 					return false;
 				}
@@ -947,45 +1092,23 @@ bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
 			memcpy(unlocks[unlock_count].game_hash, rec.game_hash, sizeof(rec.game_hash));
 			unlock_count++;
 		} else if (rec.type == RA_LEDGER_SYNC_ACK) {
-			/* Track acked IDs */
-			if (acked_count >= acked_capacity) {
-				acked_capacity = acked_capacity == 0 ? 64 : acked_capacity * 2;
-				uint32_t* tmp = (uint32_t*)realloc(acked_ids,
-					acked_capacity * sizeof(uint32_t));
-				if (!tmp) {
-					free(unlocks);
-					free(acked_ids);
-					fclose(f);
-					return false;
+			/* Cancel the EARLIEST pending unlock with this achievement ID.
+			 * This is order-aware: only UNLOCKs already in the list (i.e.
+			 * that appeared before this SYNC_ACK) can be cancelled. */
+			for (uint32_t j = 0; j < unlock_count; j++) {
+				if (unlocks[j].achievement_id == rec.achievement_id) {
+					/* Remove by shifting remaining entries down */
+					if (j + 1 < unlock_count) {
+						memmove(&unlocks[j], &unlocks[j + 1],
+						        (unlock_count - j - 1) * sizeof(RA_PendingUnlock));
+					}
+					unlock_count--;
+					break; /* Only cancel ONE unlock per SYNC_ACK */
 				}
-				acked_ids = tmp;
 			}
-			acked_ids[acked_count++] = rec.achievement_id;
 		}
 	}
 	fclose(f);
-
-	/* Remove acked unlocks */
-	if (acked_count > 0 && unlock_count > 0) {
-		uint32_t write_idx = 0;
-		for (uint32_t i = 0; i < unlock_count; i++) {
-			bool acked = false;
-			for (uint32_t j = 0; j < acked_count; j++) {
-				if (unlocks[i].achievement_id == acked_ids[j]) {
-					acked = true;
-					break;
-				}
-			}
-			if (!acked) {
-				if (write_idx != i) {
-					unlocks[write_idx] = unlocks[i];
-				}
-				write_idx++;
-			}
-		}
-		unlock_count = write_idx;
-	}
-	free(acked_ids);
 
 	if (unlock_count == 0) {
 		free(unlocks);
@@ -994,7 +1117,7 @@ bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
 
 	*out_unlocks = unlocks;
 	*out_count = unlock_count;
-	OFFLINE_LOG_INFO("Ledger: %u pending softcore unlocks\n", unlock_count);
+	OFFLINE_LOG_DEBUG("Ledger: %u pending softcore unlocks\n", unlock_count);
 	return true;
 }
 

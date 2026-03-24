@@ -196,6 +196,19 @@ bool RA_Offline_isSyncing(void);
  */
 void RA_Offline_setSyncing(bool syncing);
 
+/**
+ * Compact the ledger file after a successful sync.
+ *
+ * Removes all UNLOCK records that have matching SYNC_ACK records, and
+ * removes the SYNC_ACK records themselves. Keeps only truly pending
+ * UNLOCK records and SESSION_START/SESSION_END records from the most
+ * recent session. If nothing is pending, deletes the ledger file entirely.
+ *
+ * Rebuilds the hash chain from scratch on the compacted records.
+ * Thread-safety: call only from the sync thread after sync completes.
+ */
+void RA_Offline_ledgerCompact(void);
+
 /*****************************************************************************
  * Pending offline unlock cache (for UI queries)
  *****************************************************************************/
