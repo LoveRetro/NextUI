@@ -92,7 +92,6 @@ static RALoginRetry ra_login_retry = {0};
 #define RA_PROBE_SLEEP_CHUNK_MS 200  // Sleep granularity for abort responsiveness
 
 // Connectivity probe state (background thread polls RA login endpoint)
-static SDL_Thread* ra_probe_thread = NULL;
 static volatile bool ra_probe_abort = false;
 static volatile bool ra_probe_running = false;
 
@@ -104,9 +103,6 @@ static volatile bool ra_deferred_hardcore_enable = false;
 // Track whether the user has seen an "offline mode" notification,
 // so we only show "Connected" if there was a visible offline state.
 static volatile bool ra_user_saw_offline = false;
-
-// Track whether a sync attempt failed and needs retry
-static volatile bool ra_sync_needs_retry = false;
 
 /*****************************************************************************
  * Thread-safe response queue
@@ -384,7 +380,7 @@ static bool ra_queue_push(const char* body, size_t body_length, int http_status,
 		ra_response_queue_count++;
 		success = true;
 	} else {
-		RA_LOG_WARN("Warning: Response queue full, dropping response\n");
+		RA_LOG_WARN("Response queue full, dropping response\n");
 	}
 	
 	SDL_UnlockMutex(ra_queue_mutex);
@@ -427,7 +423,7 @@ static void ra_process_queued_responses(void) {
 	
 	while (ra_queue_pop(&resp)) {
 		processed++;
-		RA_LOG_INFO("Processing queued response #%d: http_status=%d, body_len=%zu\n",
+		RA_LOG_DEBUG("Processing queued response #%d: http_status=%d, body_len=%zu\n",
 		            processed, resp.http_status_code, resp.body_length);
 		// Build the server response structure
 		rc_api_server_response_t server_response;
@@ -735,7 +731,7 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 	// The queue makes a copy of the body, so we can free the response after
 	if (!ra_queue_push(body, body_length, http_status, data->callback, data->callback_data)) {
 		// Queue failed (full or not initialized) - log but don't crash
-		RA_LOG_WARN("Warning: Failed to queue HTTP response\n");
+		RA_LOG_WARN("Failed to queue HTTP response\n");
 	}
 	
 	// Cleanup - safe to free now since queue copied the data
@@ -826,6 +822,9 @@ static void ra_server_call(const rc_api_request_t* request,
 			rc_api_server_response_t error_response;
 			memset(&error_response, 0, sizeof(error_response));
 			error_response.http_status_code = RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
+			// Direct callback is safe here: ra_server_call runs on the main thread,
+			// and rcheevos has no internal threading — all server_call invocations
+			// are synchronous on the calling thread.
 			callback(&error_response, callback_data);
 		}
 		return;
@@ -1353,10 +1352,6 @@ static int ra_sync_thread_func(void* data) {
 	
 	RA_LOG_INFO("Sync complete: %u synced, %u skipped, %u failed\n", synced, skipped, failed);
 	
-	// Track whether retry is needed so the next probe success or
-	// RECONNECTED event can re-trigger the sync
-	ra_sync_needs_retry = (failed > 0);
-	
 	// If sync failed, go back to offline mode and restart the probe
 	// so connectivity can be re-verified and sync retried
 	if (failed > 0) {
@@ -1752,7 +1747,6 @@ void RA_init(void) {
 	
 	RA_Offline_setOffline(start_offline);
 	ra_user_saw_offline = false;
-	ra_sync_needs_retry = false;
 	
 	if (start_offline) {
 		RA_LOG_INFO("Initializing in offline mode (softcore only)...\n");
@@ -1773,7 +1767,7 @@ void RA_init(void) {
 	}
 	
 	// Configure logging
-	rc_client_enable_logging(ra_client, RC_CLIENT_LOG_LEVEL_INFO, ra_log_message);
+	rc_client_enable_logging(ra_client, RC_CLIENT_LOG_LEVEL_WARN, ra_log_message);
 	
 	// Set event handler
 	rc_client_set_event_handler(ra_client, ra_event_handler);
@@ -1948,7 +1942,7 @@ void RA_initMemoryRegions(uint32_t console_id) {
 		RA_LOG_DEBUG("Memory regions initialized: %u regions, %zu total bytes\n",
 		       ra_memory_regions.count, ra_memory_regions.total_size);
 	} else {
-		RA_LOG_WARN("Warning: Failed to initialize memory regions for console %u\n", console_id);
+		RA_LOG_WARN("Failed to initialize memory regions for console %u\n", console_id);
 	}
 }
 
