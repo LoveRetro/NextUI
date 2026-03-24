@@ -234,3 +234,109 @@ Cleanup and robustness improvements for production use.
 - [x] **6.4** Sanitize API token in error logs
   - HTTP error handler now logs only request type (`r=login2`) instead of full post_data
   - Prevents token leakage in log files
+- [x] **6.5** Order-aware SYNC_ACK matching in ledger
+  - `ledgerGetPendingUnlocks()` processes records sequentially; SYNC_ACK cancels earliest preceding UNLOCK only
+  - `ledgerCompact()` uses same order-aware matching via scratch flag in prev_hash field
+  - Fixes bug where re-unlocking a previously synced achievement was silently dropped
+
+---
+
+## Phase 7: Connectivity State Machine
+
+Offline-first startup with async background connectivity probe. Seamless online/offline
+transitions without blocking the user or losing unlocks.
+
+### Design
+
+```
+State Machine:
+
+                     RA_init()
+                        │
+           ┌────────────┴────────────┐
+           │ cache exists?           │ no cache
+           ▼                         ▼
+    ┌──────────────┐          ┌──────────────┐
+    │   OFFLINE    │          │  CONNECTING  │
+    │  (from cache)│          │ (current     │
+    │  probe runs  │          │  behavior)   │
+    └──────┬───────┘          └──────────────┘
+           │                         │
+    probe succeeds              login succeeds
+           │                         │
+           ▼                         ▼
+    ┌──────────────┐          ┌──────────────┐
+    │    ONLINE    │◄─────────│    ONLINE    │
+    │  probe stops │          │              │
+    └──────┬───────┘          └──────────────┘
+           │
+    DISCONNECTED event
+    (rcheevos detects failures)
+           │
+           ▼
+    ┌──────────────┐
+    │   OFFLINE    │
+    │  probe runs  │──── probe succeeds ──► ONLINE
+    └──────────────┘
+```
+
+**States:**
+
+| State | `RA_Offline_isOffline()` | `ra_server_call` behavior | Probe thread |
+|-------|--------------------------|---------------------------|-------------|
+| OFFLINE | true | Serve from cache / synthetic | Running (30s interval) |
+| ONLINE | false | Real HTTP requests | Stopped |
+| CONNECTING | false | Real HTTP requests (may fail) | Not running |
+
+**Transitions:**
+
+- OFFLINE → ONLINE: probe login succeeds (or rcheevos RECONNECTED event)
+- ONLINE → OFFLINE: rcheevos fires DISCONNECTED event
+- CONNECTING → ONLINE: initial login succeeds (existing login retry logic)
+- CONNECTING → failed: all login retries exhausted (no cache, no connectivity)
+
+### Tasks
+
+- [x] **7.1** Add connectivity probe state and constants
+  - `RA_PROBE_INTERVAL_MS` (30000ms = 30s between probes)
+  - `ra_probe_thread`, `ra_probe_abort` volatile flag
+  - Deferred flags: `ra_deferred_online_notification`, `ra_deferred_sync`, `ra_deferred_hardcore_enable`
+- [x] **7.2** Implement `ra_connectivity_probe_func()` background thread
+  - Build login request via `rc_api_init_login_request()` (independent of rcheevos client)
+  - `HTTP_post()` synchronous call (background thread, blocking OK)
+  - On HTTP 200 with `"Success":true`: set `RA_Offline_setOffline(false)`, set deferred flags, exit
+  - On failure: sleep 30s in 200ms chunks (checking abort flag), retry
+  - No retry limit — probes until success or abort
+  - Caches the successful login response (write-through)
+- [x] **7.3** Implement `ra_start_connectivity_probe()` / `ra_stop_connectivity_probe()`
+  - Start: guard against double-start, create detached SDL thread
+  - Stop: set abort flag, wait up to 1s for thread exit
+- [x] **7.4** Modify `RA_init()` for offline-first startup
+  - Remove 3-second blocking WiFi wait loop
+  - If WiFi enabled AND cached login exists: start offline, load from cache, launch probe
+  - If WiFi enabled but NO cached login: current behavior (online login with retries)
+  - If WiFi not enabled: pure offline mode (no probe)
+- [x] **7.5** Modify `RA_idle()` for deferred state transitions
+  - Check `ra_deferred_online_notification` → push "Connected" notification
+  - Check `ra_deferred_sync` → call `ra_start_offline_sync()`
+  - Check `ra_deferred_hardcore_enable` → re-enable hardcore if configured
+- [x] **7.6** Modify `RC_CLIENT_EVENT_DISCONNECTED` handler
+  - `RA_Offline_setOffline(true)` — flip to offline mode
+  - Force softcore: `rc_client_set_hardcore_enabled(client, 0)`
+  - Start connectivity probe
+- [x] **7.7** Modify `RC_CLIENT_EVENT_RECONNECTED` handler
+  - Stop connectivity probe (redundant — rcheevos confirmed connectivity)
+  - `RA_Offline_setOffline(false)`
+  - Re-enable hardcore if configured
+  - Start offline sync
+- [x] **7.8** Modify `RA_quit()` and `RA_unloadGame()`
+  - Abort connectivity probe thread alongside sync thread abort
+- [x] **7.9** Always update pending cache on achievement unlock
+  - Remove `if (RA_Offline_isOffline())` guard on `RA_Offline_addPendingCacheEntry()`
+  - Ensures `[O]` indicator is ready if disconnect occurs before server confirms
+- [ ] **7.10** Test connectivity state machine
+  - WiFi on + cache: instant offline load → probe connects → online
+  - WiFi on + no cache: online login with retries (current behavior)
+  - WiFi off: pure offline mode, no probe
+  - WiFi drops mid-session: DISCONNECTED → offline + probe → ONLINE when WiFi returns
+  - Hotspot with no actual connectivity: instant offline load, probe retries harmlessly

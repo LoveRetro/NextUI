@@ -21,6 +21,7 @@
 #include <rcheevos/rc_libretro.h>
 #include <rcheevos/rc_hash.h>
 #include <rcheevos/rc_api_runtime.h>
+#include <rcheevos/rc_api_user.h>
 
 // Logging macros - use NextUI log levels
 #define RA_LOG_DEBUG(fmt, ...) LOG_debug("[RA] " fmt, ##__VA_ARGS__)
@@ -86,6 +87,20 @@ static RALoginRetry ra_login_retry = {0};
 #define RA_WIFI_WAIT_MAX_MS 3000   // 3 seconds max blocking wait
 #define RA_WIFI_WAIT_POLL_MS 500   // Check every 500ms
 
+// Connectivity probe config
+#define RA_PROBE_INTERVAL_MS  30000  // 30 seconds between probe attempts
+#define RA_PROBE_SLEEP_CHUNK_MS 200  // Sleep granularity for abort responsiveness
+
+// Connectivity probe state (background thread polls RA login endpoint)
+static SDL_Thread* ra_probe_thread = NULL;
+static volatile bool ra_probe_abort = false;
+static volatile bool ra_probe_running = false;
+
+// Deferred state transition flags (set by probe thread, consumed by main thread in RA_idle)
+static volatile bool ra_deferred_online_notification = false;
+static volatile bool ra_deferred_sync = false;
+static volatile bool ra_deferred_hardcore_enable = false;
+
 /*****************************************************************************
  * Thread-safe response queue
  * 
@@ -126,6 +141,8 @@ static void ra_start_login(void);
 static void ra_start_offline_sync(void);
 static uint32_t ra_get_retry_delay_ms(int attempt);
 static void ra_login_callback(int result, const char* error_message, rc_client_t* client, void* userdata);
+static void ra_start_connectivity_probe(void);
+static void ra_stop_connectivity_probe(void);
 
 /*****************************************************************************
  * CHD (compressed hunks of data) reader support for disc images
@@ -846,9 +863,9 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 				                             game->hash,
 				                             rc_client_get_hardcore_enabled(client) ? 1 : 0);
 				// Update pending cache so UI shows offline indicator immediately
-				if (RA_Offline_isOffline()) {
-					RA_Offline_addPendingCacheEntry(event->achievement->id);
-				}
+				// (always add — if disconnect occurs before server confirms, the
+				// indicator is already in place; sync engine clears it on success)
+				RA_Offline_addPendingCacheEntry(event->achievement->id);
 			}
 		}
 		break;
@@ -939,12 +956,25 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		break;
 		
 	case RC_CLIENT_EVENT_DISCONNECTED:
-		RA_LOG_WARN("Disconnected - unlocks pending\n");
+		RA_LOG_WARN("Disconnected - switching to offline mode\n");
+		RA_Offline_setOffline(true);
+		// Force softcore when offline
+		rc_client_set_hardcore_enabled(client, 0);
 		Notification_push(NOTIFICATION_ACHIEVEMENT, "RetroAchievements: Offline mode", NULL);
+		// Start probe to detect when connectivity returns
+		ra_start_connectivity_probe();
 		break;
 		
 	case RC_CLIENT_EVENT_RECONNECTED:
-		RA_LOG_INFO("Reconnected - pending unlocks submitted\n");
+		RA_LOG_INFO("Reconnected - switching to online mode\n");
+		// Stop probe (redundant — rcheevos already confirmed connectivity)
+		ra_stop_connectivity_probe();
+		RA_Offline_setOffline(false);
+		// Re-enable hardcore if configured
+		if (CFG_getRAHardcoreMode()) {
+			rc_client_set_hardcore_enabled(client, 1);
+			RA_LOG_INFO("Hardcore re-enabled after reconnection\n");
+		}
 		Notification_push(NOTIFICATION_ACHIEVEMENT, "RetroAchievements: Reconnected", NULL);
 		// Network is back — try syncing any ledger entries from prior offline sessions
 		ra_start_offline_sync();
@@ -1336,6 +1366,155 @@ static void ra_start_offline_sync(void) {
 }
 
 /*****************************************************************************
+ * Connectivity probe
+ * 
+ * When starting in offline mode, a background thread periodically attempts
+ * a login request to the RA server. On success, it flips offline mode off
+ * and sets deferred flags so the main thread can push notifications, start
+ * sync, and re-enable hardcore. The probe uses HTTP_post() synchronously
+ * (background thread) and rc_api_init_login_request() to build the
+ * request — it does NOT call rc_client_begin_login (which rejects
+ * concurrent login attempts and accesses non-thread-safe client state).
+ *****************************************************************************/
+
+/**
+ * Background thread function: periodically probe RA login endpoint.
+ * On success, cache the response, flip to online, set deferred flags, exit.
+ * On failure, sleep RA_PROBE_INTERVAL_MS and retry.
+ * No retry limit — probes until success or ra_probe_abort.
+ */
+static int ra_connectivity_probe_func(void* data) {
+	(void)data;
+	
+	RA_LOG_INFO("Connectivity probe started\n");
+	
+	const char* username = CFG_getRAUsername();
+	const char* token = CFG_getRAToken();
+	
+	if (!username || !token || strlen(username) == 0 || strlen(token) == 0) {
+		RA_LOG_ERROR("Probe: no credentials available, exiting\n");
+		ra_probe_running = false;
+		return 1;
+	}
+	
+	while (!ra_probe_abort) {
+		// Build login request via rcheevos API
+		rc_api_login_request_t login_params;
+		memset(&login_params, 0, sizeof(login_params));
+		login_params.username = username;
+		login_params.api_token = token;
+		
+		rc_api_request_t request;
+		memset(&request, 0, sizeof(request));
+		
+		int rc = rc_api_init_login_request(&request, &login_params);
+		if (rc != RC_OK) {
+			RA_LOG_ERROR("Probe: failed to build login request (rc=%d)\n", rc);
+			rc_api_destroy_request(&request);
+			ra_probe_running = false;
+			return 1;
+		}
+		
+		RA_LOG_DEBUG("Probe: attempting login...\n");
+		
+		// Synchronous HTTP POST (background thread, blocking OK)
+		HTTP_Response* http_resp = HTTP_post(request.url, request.post_data,
+		                                     request.content_type);
+		
+		bool success = false;
+		if (http_resp && http_resp->http_status == 200 &&
+		    http_resp->data && http_resp->size > 0) {
+			// Check for "Success":true in response
+			if (strstr(http_resp->data, "\"Success\":true")) {
+				// Cache the login response (write-through)
+				RA_Offline_cacheResponse(request.url, request.post_data,
+				                         http_resp->data, http_resp->size);
+				
+				// Flip to online mode
+				RA_Offline_setOffline(false);
+				
+				// Set deferred flags for main thread to handle
+				ra_deferred_online_notification = true;
+				ra_deferred_sync = true;
+				if (CFG_getRAHardcoreMode()) {
+					ra_deferred_hardcore_enable = true;
+				}
+				
+				success = true;
+				RA_LOG_INFO("Probe: login successful, transitioning to online mode\n");
+			} else {
+				RA_LOG_WARN("Probe: server returned 200 but Success!=true\n");
+			}
+		} else {
+			RA_LOG_DEBUG("Probe: login failed (status=%d)\n",
+			             http_resp ? http_resp->http_status : -1);
+		}
+		
+		if (http_resp) HTTP_freeResponse(http_resp);
+		rc_api_destroy_request(&request);
+		
+		if (success || ra_probe_abort) break;
+		
+		// Sleep RA_PROBE_INTERVAL_MS in small chunks for abort responsiveness
+		uint32_t slept = 0;
+		while (slept < RA_PROBE_INTERVAL_MS && !ra_probe_abort) {
+			uint32_t chunk = (RA_PROBE_INTERVAL_MS - slept > RA_PROBE_SLEEP_CHUNK_MS)
+			                 ? RA_PROBE_SLEEP_CHUNK_MS
+			                 : (RA_PROBE_INTERVAL_MS - slept);
+			SDL_Delay(chunk);
+			slept += chunk;
+		}
+	}
+	
+	RA_LOG_INFO("Connectivity probe exiting\n");
+	ra_probe_running = false;
+	return 0;
+}
+
+/**
+ * Start the connectivity probe thread (if not already running).
+ */
+static void ra_start_connectivity_probe(void) {
+	if (ra_probe_running) {
+		RA_LOG_DEBUG("Probe: already running, not starting another\n");
+		return;
+	}
+	
+	ra_probe_abort = false;
+	ra_probe_running = true;
+	
+	SDL_Thread* thread = SDL_CreateThread(ra_connectivity_probe_func, "ra_probe", NULL);
+	if (!thread) {
+		RA_LOG_ERROR("Failed to create connectivity probe thread\n");
+		ra_probe_running = false;
+		return;
+	}
+	
+	SDL_DetachThread(thread);
+	RA_LOG_INFO("Connectivity probe thread launched\n");
+}
+
+/**
+ * Stop the connectivity probe thread (if running).
+ * Blocks up to ~1s waiting for the thread to exit.
+ */
+static void ra_stop_connectivity_probe(void) {
+	if (!ra_probe_running) return;
+	
+	RA_LOG_DEBUG("Stopping connectivity probe...\n");
+	ra_probe_abort = true;
+	
+	// Wait for thread to notice and exit (up to 1 second)
+	for (int i = 0; i < 20 && ra_probe_running; i++) {
+		SDL_Delay(50);
+	}
+	
+	if (ra_probe_running) {
+		RA_LOG_WARN("Probe thread did not exit within 1s, proceeding anyway\n");
+	}
+}
+
+/*****************************************************************************
  * Callback: Game load callback
  *****************************************************************************/
 
@@ -1448,39 +1627,76 @@ void RA_init(void) {
 	// Initialize offline subsystem (always, regardless of WiFi state)
 	RA_Offline_init(SHARED_USERDATA_PATH);
 	
-	// Determine WiFi connectivity
-	bool wifi_available = false;
-	RA_LOG_INFO("WiFi check: enabled=%d\n", PLAT_wifiEnabled());
-	if (PLAT_wifiEnabled()) {
-		if (PLAT_wifiConnected()) {
-			wifi_available = true;
-		} else {
-			// Wait for wifi to connect (handles wake-from-sleep scenario)
-			RA_LOG_DEBUG("WiFi enabled but not connected, waiting up to %dms...\n", RA_WIFI_WAIT_MAX_MS);
-			uint32_t start = SDL_GetTicks();
-			while (!PLAT_wifiConnected() && 
-			       (SDL_GetTicks() - start) < RA_WIFI_WAIT_MAX_MS) {
-				SDL_Delay(RA_WIFI_WAIT_POLL_MS);
-			}
-			wifi_available = PLAT_wifiConnected();
-			if (wifi_available) {
-				RA_LOG_DEBUG("WiFi connected after %ums\n", SDL_GetTicks() - start);
-			} else {
-				RA_LOG_WARN("WiFi did not connect within %dms - entering offline mode\n", RA_WIFI_WAIT_MAX_MS);
+	// Determine startup mode: offline-first (with probe) vs online vs pure offline
+	bool wifi_enabled = PLAT_wifiEnabled();
+	bool start_offline = false;
+	bool launch_probe = false;
+	
+	RA_LOG_INFO("WiFi check: enabled=%d, connected=%d\n",
+	            wifi_enabled, wifi_enabled ? PLAT_wifiConnected() : 0);
+	
+	if (wifi_enabled) {
+		// WiFi is on — check if we have a cached login for offline-first startup
+		char* cached_login = NULL;
+		size_t cached_len = 0;
+		// Build a probe-style login request to get the correct cache key
+		bool has_cached_login = false;
+		if (CFG_getRAAuthenticated() && strlen(CFG_getRAToken()) > 0) {
+			rc_api_login_request_t login_params;
+			memset(&login_params, 0, sizeof(login_params));
+			login_params.username = CFG_getRAUsername();
+			login_params.api_token = CFG_getRAToken();
+			
+			rc_api_request_t request;
+			memset(&request, 0, sizeof(request));
+			if (rc_api_init_login_request(&request, &login_params) == RC_OK) {
+				has_cached_login = RA_Offline_getCachedResponse(
+					request.url, request.post_data, &cached_login, &cached_len);
+				if (has_cached_login) {
+					free(cached_login);
+				}
+				rc_api_destroy_request(&request);
 			}
 		}
+		
+		if (has_cached_login) {
+			// Cache exists — start offline immediately, probe in background
+			RA_LOG_INFO("Cached login found — offline-first startup with background probe\n");
+			start_offline = true;
+			launch_probe = true;
+		} else {
+			// No cache — must go online for login (current behavior with blocking wait)
+			RA_LOG_INFO("No cached login — online startup with WiFi wait\n");
+			if (!PLAT_wifiConnected()) {
+				RA_LOG_DEBUG("WiFi enabled but not connected, waiting up to %dms...\n", RA_WIFI_WAIT_MAX_MS);
+				uint32_t start = SDL_GetTicks();
+				while (!PLAT_wifiConnected() &&
+				       (SDL_GetTicks() - start) < RA_WIFI_WAIT_MAX_MS) {
+					SDL_Delay(RA_WIFI_WAIT_POLL_MS);
+				}
+				if (PLAT_wifiConnected()) {
+					RA_LOG_DEBUG("WiFi connected after %ums\n", SDL_GetTicks() - start);
+				} else {
+					RA_LOG_WARN("WiFi did not connect within %dms - cannot start online, no cache available\n", RA_WIFI_WAIT_MAX_MS);
+					start_offline = true;  // pure offline, no probe (no cache to serve from)
+				}
+			}
+			// If WiFi connected and no cache, start_offline stays false → online path
+		}
+	} else {
+		// WiFi radio off — pure offline, no probe
+		RA_LOG_INFO("WiFi disabled — pure offline mode\n");
+		start_offline = true;
 	}
 	
-	// Set offline mode based on connectivity
-	RA_Offline_setOffline(!wifi_available);
+	RA_Offline_setOffline(start_offline);
 	
-	if (!wifi_available) {
-		// Offline: force softcore mode
+	if (start_offline) {
 		RA_LOG_INFO("Initializing in offline mode (softcore only)...\n");
 		// Defer notification — Notification_init() hasn't been called yet at this point
 		ra_deferred_offline_notification = true;
 	} else {
-		RA_LOG_INFO("Initializing...\n");
+		RA_LOG_INFO("Initializing in online mode...\n");
 	}
 	
 	// Initialize the response queue (must be before any HTTP requests)
@@ -1533,6 +1749,11 @@ void RA_init(void) {
 	if (CFG_getRAAuthenticated() && strlen(CFG_getRAToken()) > 0) {
 		RA_LOG_INFO("Logging in with stored token (offline=%d)...\n", RA_Offline_isOffline());
 		ra_start_login();
+		
+		// Launch connectivity probe if we started offline with a cached login
+		if (launch_probe) {
+			ra_start_connectivity_probe();
+		}
 	} else {
 		RA_LOG_WARN("No stored token - user needs to authenticate in settings\n");
 	}
@@ -1540,6 +1761,9 @@ void RA_init(void) {
 }
 
 void RA_quit(void) {
+	// Abort connectivity probe
+	ra_stop_connectivity_probe();
+	
 	// Abort any running sync
 	if (RA_Offline_isSyncing()) {
 		RA_LOG_INFO("Aborting offline sync for shutdown\n");
@@ -1787,7 +2011,9 @@ void RA_unloadGame(void) {
 	if (ra_game_loaded) {
 		RA_LOG_INFO("Unloading game\n");
 		
-		// Abort any running sync before unloading
+		// Abort connectivity probe and sync before unloading
+		ra_stop_connectivity_probe();
+		
 		if (RA_Offline_isSyncing()) {
 			RA_LOG_INFO("Aborting offline sync for game unload\n");
 			ra_sync_abort = true;
@@ -1843,6 +2069,24 @@ void RA_idle(void) {
 		ra_deferred_offline_notification = false;
 		Notification_push(NOTIFICATION_ACHIEVEMENT, 
 		                  "RetroAchievements: Offline mode (softcore)", NULL);
+	}
+	
+	// Handle deferred online transition (set by connectivity probe thread)
+	if (ra_deferred_online_notification) {
+		ra_deferred_online_notification = false;
+		Notification_push(NOTIFICATION_ACHIEVEMENT,
+		                  "RetroAchievements: Connected", NULL);
+	}
+	if (ra_deferred_hardcore_enable) {
+		ra_deferred_hardcore_enable = false;
+		if (ra_client && CFG_getRAHardcoreMode()) {
+			rc_client_set_hardcore_enabled(ra_client, 1);
+			RA_LOG_INFO("Hardcore re-enabled after online transition\n");
+		}
+	}
+	if (ra_deferred_sync) {
+		ra_deferred_sync = false;
+		ra_start_offline_sync();
 	}
 	
 	// Process queued HTTP responses on main thread
