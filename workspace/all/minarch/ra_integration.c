@@ -101,6 +101,13 @@ static volatile bool ra_deferred_online_notification = false;
 static volatile bool ra_deferred_sync = false;
 static volatile bool ra_deferred_hardcore_enable = false;
 
+// Track whether the user has seen an "offline mode" notification,
+// so we only show "Connected" if there was a visible offline state.
+static volatile bool ra_user_saw_offline = false;
+
+// Track whether a sync attempt failed and needs retry
+static volatile bool ra_sync_needs_retry = false;
+
 /*****************************************************************************
  * Thread-safe response queue
  * 
@@ -748,14 +755,14 @@ static void ra_server_call(const rc_api_request_t* request,
                            void* callback_data, rc_client_t* client) {
 	(void)client; // unused
 	
-	// Offline mode: serve cached responses or synthesize empty responses
+	// Offline mode: serve cached responses or return retryable errors
 	if (RA_Offline_isOffline()) {
-		// Extract request type for logging
+		// Extract request type for logging and decision-making
 		const char* req_type = NULL;
+		char rt_buf[32] = {0};
 		if (request->post_data) {
 			const char* rp = strstr(request->post_data, "r=");
 			if (rp && (rp == request->post_data || *(rp-1) == '&')) {
-				static char rt_buf[32];
 				const char* rv = rp + 2;
 				const char* re = rv;
 				while (*re && *re != '&') re++;
@@ -767,6 +774,7 @@ static void ra_server_call(const rc_api_request_t* request,
 			}
 		}
 		
+		// Try cache first — this handles login, gameid, achievementsets, startsession, patch
 		char* cached_body = NULL;
 		size_t cached_len = 0;
 		
@@ -782,14 +790,43 @@ static void ra_server_call(const rc_api_request_t* request,
 			return;
 		}
 		
-		// Cache miss - synthesize a minimal success response for non-cacheable requests
-		// (ping, startsession without cache, awardachievement)
-		// This lets rc_client proceed without server contact
-		RA_LOG_DEBUG("Offline cache miss: %s — returning synthetic success\n",
-		             req_type ? req_type : "unknown");
-		static const char* empty_success = "{\"Success\":true}";
-		if (!ra_queue_push(empty_success, strlen(empty_success), 200, callback, callback_data)) {
-			RA_LOG_WARN("Failed to queue synthetic offline response\n");
+		// Cache miss — behavior depends on request type.
+		// For non-cacheable requests (awardachievement, ping, submitlbentry, etc.),
+		// return a retryable error so rcheevos keeps them in its retry queue.
+		// This prevents false RECONNECTED events when rcheevos retries succeed
+		// against our synthetic responses while the network is still down.
+		// The connectivity probe handles the real reconnection detection.
+		//
+		// For cacheable request types without a cache entry (e.g., startsession
+		// for a never-before-played game while offline), we still synthesize
+		// {"Success":true} so rcheevos can proceed with the game load.
+		bool is_cacheable_type = false;
+		if (req_type) {
+			is_cacheable_type = (strcmp(req_type, "login2") == 0 ||
+			                     strcmp(req_type, "gameid") == 0 ||
+			                     strcmp(req_type, "achievementsets") == 0 ||
+			                     strcmp(req_type, "startsession") == 0 ||
+			                     strcmp(req_type, "patch") == 0);
+		}
+		
+		if (is_cacheable_type) {
+			// Cacheable type with cache miss — synthesize minimal success
+			// so rcheevos can proceed with game load
+			RA_LOG_DEBUG("Offline cache miss (cacheable): %s — returning synthetic success\n",
+			             req_type);
+			static const char* empty_success = "{\"Success\":true}";
+			if (!ra_queue_push(empty_success, strlen(empty_success), 200, callback, callback_data)) {
+				RA_LOG_WARN("Failed to queue synthetic offline response\n");
+			}
+		} else {
+			// Non-cacheable type (awardachievement, ping, etc.) — return retryable error
+			// so rcheevos keeps the request in its retry queue
+			RA_LOG_DEBUG("Offline cache miss (non-cacheable): %s — returning retryable error\n",
+			             req_type ? req_type : "unknown");
+			rc_api_server_response_t error_response;
+			memset(&error_response, 0, sizeof(error_response));
+			error_response.http_status_code = RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
+			callback(&error_response, callback_data);
 		}
 		return;
 	}
@@ -960,6 +997,7 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		RA_Offline_setOffline(true);
 		// Force softcore when offline
 		rc_client_set_hardcore_enabled(client, 0);
+		ra_user_saw_offline = true;
 		Notification_push(NOTIFICATION_ACHIEVEMENT, "RetroAchievements: Offline mode", NULL);
 		// Start probe to detect when connectivity returns
 		ra_start_connectivity_probe();
@@ -975,7 +1013,10 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 			rc_client_set_hardcore_enabled(client, 1);
 			RA_LOG_INFO("Hardcore re-enabled after reconnection\n");
 		}
-		Notification_push(NOTIFICATION_ACHIEVEMENT, "RetroAchievements: Reconnected", NULL);
+		if (ra_user_saw_offline) {
+			ra_user_saw_offline = false;
+			Notification_push(NOTIFICATION_ACHIEVEMENT, "RetroAchievements: Reconnected", NULL);
+		}
 		// Network is back — try syncing any ledger entries from prior offline sessions
 		ra_start_offline_sync();
 		break;
@@ -1312,6 +1353,17 @@ static int ra_sync_thread_func(void* data) {
 	
 	RA_LOG_INFO("Sync complete: %u synced, %u skipped, %u failed\n", synced, skipped, failed);
 	
+	// Track whether retry is needed so the next probe success or
+	// RECONNECTED event can re-trigger the sync
+	ra_sync_needs_retry = (failed > 0);
+	
+	// If sync failed, go back to offline mode and restart the probe
+	// so connectivity can be re-verified and sync retried
+	if (failed > 0) {
+		RA_Offline_setOffline(true);
+		ra_start_connectivity_probe();
+	}
+	
 	// Clear pending cache since synced achievements are now server-confirmed
 	if (failed == 0) {
 		RA_Offline_clearPendingCache();
@@ -1433,8 +1485,17 @@ static int ra_connectivity_probe_func(void* data) {
 				// Flip to online mode
 				RA_Offline_setOffline(false);
 				
-				// Set deferred flags for main thread to handle
-				ra_deferred_online_notification = true;
+				// Set deferred flags for main thread to handle.
+				// If the offline notification hasn't been displayed yet
+				// (still deferred), cancel it — the user never saw "Offline"
+				// so showing "Connected" would also be meaningless noise.
+				if (ra_deferred_offline_notification) {
+					ra_deferred_offline_notification = false;
+					RA_LOG_INFO("Probe: cancelled pending offline notification (connectivity arrived in time)\n");
+					// Don't set ra_deferred_online_notification — user never saw offline
+				} else {
+					ra_deferred_online_notification = true;
+				}
 				ra_deferred_sync = true;
 				if (CFG_getRAHardcoreMode()) {
 					ra_deferred_hardcore_enable = true;
@@ -1690,6 +1751,8 @@ void RA_init(void) {
 	}
 	
 	RA_Offline_setOffline(start_offline);
+	ra_user_saw_offline = false;
+	ra_sync_needs_retry = false;
 	
 	if (start_offline) {
 		RA_LOG_INFO("Initializing in offline mode (softcore only)...\n");
@@ -2053,20 +2116,17 @@ void RA_unloadGame(void) {
 	}
 }
 
-void RA_doFrame(void) {
-	// Process any pending HTTP responses before checking achievements
-	// This ensures game load completes and achievements are active
-	ra_process_queued_responses();
-	
-	if (ra_client && ra_game_loaded) {
-		rc_client_do_frame(ra_client);
-	}
-}
-
-void RA_idle(void) {
+/**
+ * Process deferred state transition flags set by background threads.
+ * Called periodically from RA_doFrame() (~every 500ms) and from RA_idle().
+ * Handles: offline/online notifications, hardcore re-enable, sync trigger,
+ * and login retry scheduling.
+ */
+static void ra_process_deferred_flags(void) {
 	// Push deferred offline notification (Notification_init() wasn't ready during RA_init())
 	if (ra_deferred_offline_notification) {
 		ra_deferred_offline_notification = false;
+		ra_user_saw_offline = true;
 		Notification_push(NOTIFICATION_ACHIEVEMENT, 
 		                  "RetroAchievements: Offline mode (softcore)", NULL);
 	}
@@ -2074,8 +2134,12 @@ void RA_idle(void) {
 	// Handle deferred online transition (set by connectivity probe thread)
 	if (ra_deferred_online_notification) {
 		ra_deferred_online_notification = false;
-		Notification_push(NOTIFICATION_ACHIEVEMENT,
-		                  "RetroAchievements: Connected", NULL);
+		// Only show "Connected" if the user previously saw an offline notification
+		if (ra_user_saw_offline) {
+			ra_user_saw_offline = false;
+			Notification_push(NOTIFICATION_ACHIEVEMENT,
+			                  "RetroAchievements: Connected", NULL);
+		}
 	}
 	if (ra_deferred_hardcore_enable) {
 		ra_deferred_hardcore_enable = false;
@@ -2089,6 +2153,41 @@ void RA_idle(void) {
 		ra_start_offline_sync();
 	}
 	
+	// Check for pending login retry
+	if (ra_client && ra_login_retry.pending && SDL_GetTicks() >= ra_login_retry.next_time) {
+		ra_login_retry.pending = false;
+		ra_start_login();
+	}
+}
+
+void RA_doFrame(void) {
+	// Process any pending HTTP responses before checking achievements
+	// This ensures game load completes and achievements are active
+	ra_process_queued_responses();
+	
+	if (ra_client && ra_game_loaded) {
+		rc_client_do_frame(ra_client);
+	}
+	
+	// Periodically process deferred state transitions (~every 500ms)
+	// This ensures connectivity probe results, login retries, and sync
+	// triggers are handled during gameplay without waiting for menu open.
+	// Cost: one SDL_GetTicks() + one integer comparison per frame.
+	{
+		static uint32_t last_deferred_check = 0;
+		uint32_t now = SDL_GetTicks();
+		if (now - last_deferred_check >= 500) {
+			last_deferred_check = now;
+			ra_process_deferred_flags();
+		}
+	}
+}
+
+void RA_idle(void) {
+	// Process any deferred flags (also done periodically in RA_doFrame,
+	// but running here too ensures prompt handling when menu is open)
+	ra_process_deferred_flags();
+	
 	// Process queued HTTP responses on main thread
 	// This must happen even if ra_client is NULL (e.g., during shutdown)
 	// to avoid memory leaks from pending responses
@@ -2096,12 +2195,6 @@ void RA_idle(void) {
 	
 	if (!ra_client) {
 		return;
-	}
-	
-	// Check for pending login retry
-	if (ra_login_retry.pending && SDL_GetTicks() >= ra_login_retry.next_time) {
-		ra_login_retry.pending = false;
-		ra_start_login();
 	}
 	
 	rc_client_idle(ra_client);
