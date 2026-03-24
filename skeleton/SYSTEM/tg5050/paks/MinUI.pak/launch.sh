@@ -164,22 +164,13 @@ if [ -f "$AUTO_PATH" ]; then
 	echo after auto.sh `cat /proc/uptime` >> /tmp/nextui_boottime
 fi
 
+# Composable boot hooks (run after auto.sh for backward compatibility)
+"$SYSTEM_PATH/bin/run_hooks.sh" boot.d
+
 cd $(dirname "$0")
 
 #######################################
 # Hook system
-
-HOOKS_DIR="$USERDATA_PATH/.hooks"
-
-run_hooks() {
-	_hook_phase="$1"
-	_hook_dir="$HOOKS_DIR/${_hook_phase}-launch.d"
-	[ -d "$_hook_dir" ] || return 0
-	for _hook_script in "$_hook_dir"/*.sh; do
-		[ -f "$_hook_script" ] || continue
-		( export HOOK_PHASE="$_hook_phase"; "$_hook_script" ) > /dev/null 2>&1 || true
-	done
-}
 
 parse_hook_cmd() {
 	HOOK_CMD="$1"
@@ -211,9 +202,9 @@ while [ -f $EXEC_PATH ]; do
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
 		parse_hook_cmd "$CMD"
-		run_hooks pre
+		"$SYSTEM_PATH/bin/run_hooks.sh" pre-launch.d
 		eval $CMD
-		run_hooks post
+		"$SYSTEM_PATH/bin/run_hooks.sh" post-launch.d
 		rm -f $NEXT_PATH
 		echo $CPU_SPEED_PERF > $BIG_PATH
 	fi
