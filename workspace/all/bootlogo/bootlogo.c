@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 
     PWR_setCPUSpeed(CPU_SPEED_MENU);
 
-    screen = GFX_init(MODE_MAIN);
+    screen = GFX_init(MODE_MENU);
     PAD_init();
     PWR_init();
 

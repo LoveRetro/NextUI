@@ -281,14 +281,14 @@ int GFX_updateColors(void)
 {
 	// We are currently micro managing all of these screen-mapped colors,
 	// should just move this to the caller.
-	THEME_COLOR1 = mapUint(CFG_getColor(1));
-	THEME_COLOR2 = mapUint(CFG_getColor(2));
-	THEME_COLOR3 = mapUint(CFG_getColor(3));
-	THEME_COLOR4 = mapUint(CFG_getColor(4));
-	THEME_COLOR5 = mapUint(CFG_getColor(5));
-	THEME_COLOR6 = mapUint(CFG_getColor(6));
-	THEME_COLOR7 = mapUint(CFG_getColor(7));
-	ALT_BUTTON_TEXT_COLOR = uintToColour(CFG_getColor(3));
+	THEME_COLOR1 = mapUint(CFG_getColor(COLOR_MAIN));
+	THEME_COLOR2 = mapUint(CFG_getColor(COLOR_ACCENT));
+	THEME_COLOR3 = mapUint(CFG_getColor(COLOR_ACCENT2));
+	THEME_COLOR4 = mapUint(CFG_getColor(COLOR_LIST_TEXT));
+	THEME_COLOR5 = mapUint(CFG_getColor(COLOR_LIST_TEXT_SELECTED));
+	THEME_COLOR6 = mapUint(CFG_getColor(COLOR_HINT));
+	THEME_COLOR7 = mapUint(CFG_getColor(COLOR_BACKGROUND));
+	ALT_BUTTON_TEXT_COLOR = uintToColour(CFG_getColor(COLOR_ACCENT2));
 
 	return 0;
 }
@@ -307,6 +307,11 @@ SDL_Surface *GFX_init(int mode)
 	// tried adding to PWR_init() but that was no good (not sure why)
 	
 	CFG_init(GFX_loadSystemFont, GFX_updateColors);
+
+	// by default, we will clear with whatever background color the user prefers
+	// if MODE_MENU /e.g. minarch, clear with default black)
+	if(mode == MODE_MAIN)
+		GFX_setClearColor(mapUint(CFG_getColor(COLOR_BACKGROUND)));
 
 	// We always have to symlink, does not depend on NTP being enabled
 	PLAT_initTimezones();
@@ -1823,7 +1828,7 @@ void GFX_blitMessage(TTF_Font *font, char *msg, SDL_Surface *dst, SDL_Rect *dst_
 
 		if (len)
 		{
-			text = TTF_RenderUTF8_Blended_Wrapped(font, line, COLOR_WHITE, dst_rect->w);
+			text = TTF_RenderUTF8_Blended_Wrapped(font, line, uintToColour(CFG_getColor(COLOR_LIST_TEXT)), dst_rect->w);
 			int x = dst_rect->x;
 			x += (dst_rect->w - text->w) / 2;
 			SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){x, y});
