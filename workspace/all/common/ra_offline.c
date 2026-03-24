@@ -174,6 +174,11 @@ static char ra_ledger_path[512] = {0};
 static uint8_t ra_ledger_last_hash[SHA256_DIGEST_SIZE];
 static bool ra_ledger_has_records = false;
 
+/* Cached pending offline achievement IDs for quick lookup */
+#define RA_MAX_PENDING_CACHE 512
+static uint32_t ra_pending_ids[RA_MAX_PENDING_CACHE];
+static uint32_t ra_pending_count = 0;
+
 /*****************************************************************************
  * Helpers: Directory creation
  *****************************************************************************/
@@ -358,6 +363,230 @@ void RA_Offline_cacheResponse(const char* url, const char* post_data,
 	OFFLINE_LOG_DEBUG("Cached %s response (%u bytes) to %s\n", req_type, len32, path);
 }
 
+/**
+ * Patch a cached startsession JSON response with offline ledger unlocks.
+ *
+ * The startsession response contains "Unlocks":[...] and "HardcoreUnlocks":[...]
+ * arrays that tell rcheevos which achievements are already unlocked. When we have
+ * offline ledger entries for achievements unlocked after the cache was written,
+ * we inject them into the "Unlocks" array so rcheevos shows them as unlocked.
+ *
+ * @param body        The cached JSON body (will be freed and replaced)
+ * @param body_len    Length of body
+ * @param game_hash   Game hash to filter ledger entries by
+ * @param out_body    Output: patched body (caller must free)
+ * @param out_len     Output: patched body length
+ * @return true if patching succeeded (or no patching needed), false on error
+ */
+static bool patch_startsession_with_ledger(char* body, size_t body_len,
+                                           const char* game_hash,
+                                           char** out_body, size_t* out_len) {
+	/* Get pending unlocks from ledger */
+	RA_PendingUnlock* pending = NULL;
+	uint32_t pending_count = 0;
+	if (!RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count)) {
+		*out_body = body;
+		*out_len = body_len;
+		return true;
+	}
+
+	if (pending_count == 0 || !pending) {
+		*out_body = body;
+		*out_len = body_len;
+		return true;
+	}
+
+	/* Filter to only unlocks for this game hash */
+	uint32_t game_count = 0;
+	for (uint32_t i = 0; i < pending_count; i++) {
+		if (game_hash && strcmp(pending[i].game_hash, game_hash) == 0) {
+			game_count++;
+		}
+	}
+
+	if (game_count == 0) {
+		free(pending);
+		*out_body = body;
+		*out_len = body_len;
+		return true;
+	}
+
+	/*
+	 * Parse existing Unlocks array to avoid duplicates.
+	 * Format: "Unlocks":[{"ID":123,"When":456},...] or "Unlocks":[]
+	 */
+	const char* unlocks_key = "\"Unlocks\"";
+	char* unlocks_pos = strstr(body, unlocks_key);
+	if (!unlocks_pos) {
+		/* No Unlocks field — very unusual, just return as-is */
+		OFFLINE_LOG_WARN("startsession response has no Unlocks field\n");
+		free(pending);
+		*out_body = body;
+		*out_len = body_len;
+		return true;
+	}
+
+	/* Find the '[' after "Unlocks" */
+	char* arr_start = strchr(unlocks_pos + strlen(unlocks_key), '[');
+	if (!arr_start) {
+		free(pending);
+		*out_body = body;
+		*out_len = body_len;
+		return true;
+	}
+
+	/* Find the matching ']' */
+	char* arr_end = strchr(arr_start, ']');
+	if (!arr_end) {
+		free(pending);
+		*out_body = body;
+		*out_len = body_len;
+		return true;
+	}
+
+	/* Check which pending achievement IDs are already in the Unlocks array */
+	/* Simple approach: search for "ID":NNNN in the existing array text */
+	bool* need_inject = (bool*)calloc(pending_count, sizeof(bool));
+	if (!need_inject) {
+		free(pending);
+		*out_body = body;
+		*out_len = body_len;
+		return true;
+	}
+
+	uint32_t inject_count = 0;
+	size_t arr_text_len = (size_t)(arr_end - arr_start);
+	for (uint32_t i = 0; i < pending_count; i++) {
+		if (!game_hash || strcmp(pending[i].game_hash, game_hash) != 0) {
+			continue;
+		}
+		/* Check if this ID already exists in the array */
+		char id_pattern[32];
+		snprintf(id_pattern, sizeof(id_pattern), "\"ID\":%u", pending[i].achievement_id);
+		bool found = false;
+		/* Search only within the existing array bounds */
+		for (char* p = arr_start; p < arr_end; p++) {
+			if (strncmp(p, id_pattern, strlen(id_pattern)) == 0) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			need_inject[i] = true;
+			inject_count++;
+		}
+	}
+
+	if (inject_count == 0) {
+		free(need_inject);
+		free(pending);
+		*out_body = body;
+		*out_len = body_len;
+		return true;
+	}
+
+	OFFLINE_LOG_INFO("Patching startsession: injecting %u ledger unlocks into Unlocks array\n",
+	                 inject_count);
+
+	/*
+	 * Build the injection string.
+	 * Each entry: {"ID":NNNN,"When":TTTTTTTTTT}
+	 * Max per entry: ~40 chars. Allocate generously.
+	 */
+	size_t inject_buf_size = inject_count * 48 + 1;
+	char* inject_buf = (char*)malloc(inject_buf_size);
+	if (!inject_buf) {
+		free(need_inject);
+		free(pending);
+		*out_body = body;
+		*out_len = body_len;
+		return true;
+	}
+
+	size_t inject_len = 0;
+	bool existing_entries = (arr_end - arr_start > 1); /* true if array is non-empty */
+	for (uint32_t i = 0; i < pending_count; i++) {
+		if (!need_inject[i]) continue;
+		int written;
+		if (existing_entries || inject_len > 0) {
+			written = snprintf(inject_buf + inject_len, inject_buf_size - inject_len,
+			                   ",{\"ID\":%u,\"When\":%u}",
+			                   pending[i].achievement_id, pending[i].timestamp);
+		} else {
+			written = snprintf(inject_buf + inject_len, inject_buf_size - inject_len,
+			                   "{\"ID\":%u,\"When\":%u}",
+			                   pending[i].achievement_id, pending[i].timestamp);
+		}
+		if (written > 0) inject_len += (size_t)written;
+	}
+	free(need_inject);
+	free(pending);
+
+	/* Build the new body: prefix + inject + suffix */
+	/* Insert just before the ']' of the Unlocks array */
+	size_t prefix_len = (size_t)(arr_end - body);
+	size_t suffix_len = body_len - prefix_len; /* includes ']' and everything after */
+	size_t new_len = prefix_len + inject_len + suffix_len;
+	char* new_body = (char*)malloc(new_len + 1);
+	if (!new_body) {
+		free(inject_buf);
+		*out_body = body;
+		*out_len = body_len;
+		return true;
+	}
+
+	memcpy(new_body, body, prefix_len);
+	memcpy(new_body + prefix_len, inject_buf, inject_len);
+	memcpy(new_body + prefix_len + inject_len, arr_end, suffix_len);
+	new_body[new_len] = '\0';
+	free(inject_buf);
+
+	OFFLINE_LOG_INFO("Patched startsession: %zu -> %zu bytes\n", body_len, new_len);
+
+	/* Replace the original body */
+	free(body);
+	*out_body = new_body;
+	*out_len = new_len;
+	return true;
+}
+
+bool RA_Offline_patchStartsessionResponse(char* body, size_t body_len,
+                                          const char* game_hash,
+                                          char** out_body, size_t* out_len) {
+	if (!ra_offline_initialized || !body || body_len == 0) return false;
+
+	/* Check if there are any pending unlocks for this game before doing work */
+	RA_PendingUnlock* pending = NULL;
+	uint32_t pending_count = 0;
+	if (!RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count) ||
+	    pending_count == 0) {
+		free(pending);
+		return false;
+	}
+
+	/* Check if any pending unlocks match this game hash */
+	bool has_match = false;
+	for (uint32_t i = 0; i < pending_count; i++) {
+		if (game_hash && strcmp(pending[i].game_hash, game_hash) == 0) {
+			has_match = true;
+			break;
+		}
+	}
+	free(pending);
+
+	if (!has_match) return false;
+
+	/* Delegate to the internal patching function */
+	char* orig_body = body;
+	if (!patch_startsession_with_ledger(body, body_len, game_hash, out_body, out_len)) {
+		return false;
+	}
+
+	/* patch_startsession_with_ledger returns the original body unchanged
+	 * when no patching is needed. Check if it actually changed. */
+	return (*out_body != orig_body);
+}
+
 bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
                                   char** out_body, size_t* out_len) {
 	if (!ra_offline_initialized || !out_body || !out_len) return false;
@@ -427,6 +656,42 @@ bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
 	*out_body = body;
 	*out_len = len32;
 	OFFLINE_LOG_INFO("Cache hit for %s (%u bytes) from %s\n", req_type, len32, path);
+
+	/* For startsession responses served offline, patch in any pending ledger unlocks
+	 * so rcheevos shows offline-earned achievements as unlocked on restart */
+	if (ra_offline_mode && strcmp(req_type, "startsession") == 0) {
+		char game_hash[64] = {0};
+		get_game_hash_param(url, post_data, game_hash, sizeof(game_hash));
+		OFFLINE_LOG_INFO("DIAG: startsession cache hit, game_hash='%s', body_len=%u\n",
+		                 game_hash, (unsigned)*out_len);
+
+		/* Check ledger state before patching */
+		RA_PendingUnlock* diag_pending = NULL;
+		uint32_t diag_count = 0;
+		if (RA_Offline_ledgerGetPendingUnlocks(&diag_pending, &diag_count)) {
+			OFFLINE_LOG_INFO("DIAG: ledger has %u pending unlocks\n", diag_count);
+			for (uint32_t di = 0; di < diag_count; di++) {
+				OFFLINE_LOG_INFO("DIAG:   pending[%u]: ach=%u game_hash='%s'\n",
+				                 di, diag_pending[di].achievement_id, diag_pending[di].game_hash);
+			}
+			free(diag_pending);
+		} else {
+			OFFLINE_LOG_INFO("DIAG: ledgerGetPendingUnlocks returned false\n");
+		}
+
+		char* pre_patch_body = *out_body;
+		if (!patch_startsession_with_ledger(*out_body, *out_len, game_hash,
+		                                    out_body, out_len)) {
+			OFFLINE_LOG_WARN("Failed to patch startsession with ledger data\n");
+		} else if (*out_body != pre_patch_body) {
+			OFFLINE_LOG_INFO("DIAG: startsession patched successfully, new_len=%u\n", (unsigned)*out_len);
+		} else {
+			OFFLINE_LOG_INFO("DIAG: patch_startsession returned true but body unchanged (no injection needed)\n");
+		}
+	} else if (strcmp(req_type, "startsession") == 0) {
+		OFFLINE_LOG_INFO("DIAG: startsession cache hit but ra_offline_mode=%d, skipping patch\n", ra_offline_mode);
+	}
+
 	return true;
 }
 
@@ -793,7 +1058,53 @@ void RA_Offline_shutdown(void) {
 	ra_offline_mode = false;
 	ra_sync_in_progress = false;
 	ra_ledger_has_records = false;
+	ra_pending_count = 0;
 	memset(ra_ledger_last_hash, 0, SHA256_DIGEST_SIZE);
 
 	OFFLINE_LOG_INFO("Shut down\n");
+}
+
+/*****************************************************************************
+ * Pending offline unlock cache (for UI queries)
+ *****************************************************************************/
+
+void RA_Offline_refreshPendingCache(void) {
+	ra_pending_count = 0;
+
+	RA_PendingUnlock* unlocks = NULL;
+	uint32_t count = 0;
+	if (!RA_Offline_ledgerGetPendingUnlocks(&unlocks, &count) || count == 0) {
+		free(unlocks);
+		return;
+	}
+
+	uint32_t to_cache = count < RA_MAX_PENDING_CACHE ? count : RA_MAX_PENDING_CACHE;
+	for (uint32_t i = 0; i < to_cache; i++) {
+		ra_pending_ids[i] = unlocks[i].achievement_id;
+	}
+	ra_pending_count = to_cache;
+	free(unlocks);
+
+	OFFLINE_LOG_DEBUG("Pending cache refreshed: %u entries\n", ra_pending_count);
+}
+
+bool RA_Offline_isUnlockPending(uint32_t achievement_id) {
+	for (uint32_t i = 0; i < ra_pending_count; i++) {
+		if (ra_pending_ids[i] == achievement_id) return true;
+	}
+	return false;
+}
+
+void RA_Offline_addPendingCacheEntry(uint32_t achievement_id) {
+	/* Check for duplicates */
+	for (uint32_t i = 0; i < ra_pending_count; i++) {
+		if (ra_pending_ids[i] == achievement_id) return;
+	}
+	if (ra_pending_count < RA_MAX_PENDING_CACHE) {
+		ra_pending_ids[ra_pending_count++] = achievement_id;
+	}
+}
+
+void RA_Offline_clearPendingCache(void) {
+	ra_pending_count = 0;
 }

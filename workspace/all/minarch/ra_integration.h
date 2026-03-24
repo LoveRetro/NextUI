@@ -130,6 +130,13 @@ bool RA_toggleAchievementMute(uint32_t achievement_id);
 void RA_setAchievementMuted(uint32_t achievement_id, bool muted);
 
 /**
+ * Check if an achievement has a pending offline unlock (not yet synced to server).
+ * @param achievement_id The achievement ID to check
+ * @return true if the achievement was unlocked offline and not yet synced
+ */
+bool RA_isAchievementOfflinePending(uint32_t achievement_id);
+
+/**
  * Typedef for memory read function pointer.
  * This allows minarch to provide its memory access function.
  */

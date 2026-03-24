@@ -125,6 +125,26 @@ void RA_Offline_cacheResponse(const char* url, const char* post_data,
 bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
                                   char** out_body, size_t* out_len);
 
+/**
+ * Patch a startsession response body with pending ledger unlocks.
+ * Injects unsynced UNLOCK records into the "Unlocks" JSON array so
+ * rcheevos shows offline-earned achievements as unlocked.
+ *
+ * Works for both online and offline responses. The input body is freed
+ * on success and replaced with a new allocation.
+ *
+ * @param body      Mutable response body (will be freed and replaced on success)
+ * @param body_len  Length of body
+ * @param game_hash Game hash to filter ledger entries
+ * @param out_body  Output: patched body (caller must free)
+ * @param out_len   Output: patched body length
+ * @return true if patching occurred (out_body/out_len updated), false if
+ *         no patching was needed (out_body/out_len unchanged, body NOT freed)
+ */
+bool RA_Offline_patchStartsessionResponse(char* body, size_t body_len,
+                                          const char* game_hash,
+                                          char** out_body, size_t* out_len);
+
 /*****************************************************************************
  * Unlock ledger
  *****************************************************************************/
@@ -175,5 +195,33 @@ bool RA_Offline_isSyncing(void);
  * Called by the sync engine in ra_integration.c.
  */
 void RA_Offline_setSyncing(bool syncing);
+
+/*****************************************************************************
+ * Pending offline unlock cache (for UI queries)
+ *****************************************************************************/
+
+/**
+ * Refresh the in-memory cache of pending offline achievement IDs.
+ * Call after game load or after ledger writes to keep the cache current.
+ */
+void RA_Offline_refreshPendingCache(void);
+
+/**
+ * Check if an achievement has a pending offline unlock (not yet synced).
+ * Uses the in-memory cache for fast per-row lookups in the UI.
+ * @return true if the achievement was unlocked offline and not yet synced
+ */
+bool RA_Offline_isUnlockPending(uint32_t achievement_id);
+
+/**
+ * Add an achievement ID to the pending cache (after a new offline unlock).
+ * Avoids needing to re-read the full ledger.
+ */
+void RA_Offline_addPendingCacheEntry(uint32_t achievement_id);
+
+/**
+ * Clear the pending cache (after successful sync).
+ */
+void RA_Offline_clearPendingCache(void);
 
 #endif /* __RA_OFFLINE_H__ */

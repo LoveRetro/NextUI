@@ -7158,6 +7158,7 @@ static int OptionAchievements_showDetail(MenuList* list, int i) {
 		
 		if (dirty) {
 			bool is_muted = RA_isAchievementMuted(ach->id);
+			bool is_offline_pending = RA_isAchievementOfflinePending(ach->id);
 			
 			GFX_clear(screen);
 			
@@ -7222,6 +7223,16 @@ static int OptionAchievements_showDetail(MenuList* list, int i) {
 				});
 				content_y += progress_text->h + SCALE1(2);
 				SDL_FreeSurface(progress_text);
+			}
+			
+			// Offline pending indicator
+			if (is_offline_pending) {
+				SDL_Surface* offline_text = TTF_RenderUTF8_Blended(font.tiny, "Unlocked offline - pending sync", COLOR_LIGHT_TEXT);
+				SDL_BlitSurface(offline_text, NULL, screen, &(SDL_Rect){
+					center_x - offline_text->w / 2, content_y
+				});
+				content_y += offline_text->h + SCALE1(2);
+				SDL_FreeSurface(offline_text);
 			}
 			
 			// Unlock rate/rarity (smaller font, gray)
@@ -7516,6 +7527,7 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 			for (int j = start, row = 0; j < end && j < filtered_count; j++, row++) {
 				const rc_client_achievement_t* ach = filtered[j];
 				bool is_muted = RA_isAchievementMuted(ach->id);
+				bool is_offline_pending = RA_isAchievementOfflinePending(ach->id);
 				bool is_selected = (row == selected_row);
 				SDL_Color text_color = COLOR_WHITE;
 
@@ -7536,7 +7548,7 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 
 				if (is_selected) {
 					// White pill for the text area with icon (like MENU_FIXED selected text pill)
-					// Calculate width needed for: badge + spacing + title + mute indicator + padding
+					// Calculate width needed for: badge + spacing + title + indicators + padding
 					int badge_display_size = SCALE1(BUTTON_SIZE - 4);  // Badge sized to fit in row
 					int title_width = 0;
 					TTF_SizeUTF8(font.small, ach->title, &title_width, NULL);
@@ -7545,7 +7557,12 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 						TTF_SizeUTF8(font.tiny, "[M]", &mute_width, NULL);
 						mute_width += SCALE1(4);  // spacing
 					}
-					int pill_width = opt_pad + badge_display_size + SCALE1(6) + title_width + mute_width + opt_pad;
+					int offline_width = 0;
+					if (is_offline_pending) {
+						TTF_SizeUTF8(font.tiny, "[O]", &offline_width, NULL);
+						offline_width += SCALE1(4);  // spacing
+					}
+					int pill_width = opt_pad + badge_display_size + SCALE1(6) + title_width + mute_width + offline_width + opt_pad;
 					
 					GFX_blitPillDark(ASSET_BUTTON, screen, &(SDL_Rect){
 						ox, oy + SCALE1(row * BUTTON_SIZE), pill_width, row_height
@@ -7581,6 +7598,16 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 						});
 						SDL_FreeSurface(mute_text);
 					}
+
+					// Offline pending indicator inside the pill
+					if (is_offline_pending) {
+						SDL_Surface* offline_text = TTF_RenderUTF8_Blended(font.tiny, "[O]", text_color);
+						SDL_BlitSurface(offline_text, NULL, screen, &(SDL_Rect){
+							ox + opt_pad + badge_display_size + SCALE1(6) + title_width + mute_width + SCALE1(4),
+							oy + SCALE1((row * BUTTON_SIZE) + 3)
+						});
+						SDL_FreeSurface(offline_text);
+					}
 				} else {
 					// Unselected row - just badge + title + mute indicator, no pills
 					int badge_display_size = SCALE1(BUTTON_SIZE - 4);
@@ -7615,6 +7642,23 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 							oy + SCALE1((row * BUTTON_SIZE) + 3)
 						});
 						SDL_FreeSurface(mute_text);
+					}
+
+					// Offline pending indicator
+					if (is_offline_pending) {
+						int title_width = 0;
+						TTF_SizeUTF8(font.small, ach->title, &title_width, NULL);
+						int mute_width = 0;
+						if (is_muted) {
+							TTF_SizeUTF8(font.tiny, "[M]", &mute_width, NULL);
+							mute_width += SCALE1(4);
+						}
+						SDL_Surface* offline_text = TTF_RenderUTF8_Blended(font.tiny, "[O]", COLOR_WHITE);
+						SDL_BlitSurface(offline_text, NULL, screen, &(SDL_Rect){
+							ox + opt_pad + badge_display_size + SCALE1(6) + title_width + mute_width + SCALE1(4),
+							oy + SCALE1((row * BUTTON_SIZE) + 3)
+						});
+						SDL_FreeSurface(offline_text);
 					}
 				}
 			}
