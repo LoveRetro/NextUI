@@ -56,6 +56,11 @@ static int last_system_indicator_type = SYSTEM_INDICATOR_NONE;
 
 ///////////////////////////////
 // Progress indicator state
+//
+// Thread safety: progress_state is written by background threads
+// (sync engine in ra_integration.c, badge download callbacks in
+// ra_badges.c) and read by the main thread during rendering.
+// All access is protected by progress_mutex.
 ///////////////////////////////
 
 #define PROGRESS_TITLE_MAX 48
@@ -72,6 +77,7 @@ typedef struct {
 } ProgressIndicatorState;
 
 static ProgressIndicatorState progress_state = {0};
+static SDL_mutex* progress_mutex = NULL;
 
 ///////////////////////////////
 // Rounded rectangle drawing
@@ -160,6 +166,11 @@ void Notification_init(void) {
     screen_width = FIXED_WIDTH;
     screen_height = FIXED_HEIGHT;
     
+    // Create progress indicator mutex (background threads write progress_state)
+    if (!progress_mutex) {
+        progress_mutex = SDL_CreateMutex();
+    }
+    
     render_dirty = 1;
     last_notification_count = 0;
     initialized = 1;
@@ -212,15 +223,24 @@ void Notification_update(uint32_t now) {
         }
     }
     
-    // Update progress indicator timeout (skip if persistent)
-    if (progress_state.active && !progress_state.persistent) {
-        uint32_t elapsed = now - progress_state.start_time;
-        int duration_seconds = CFG_getRAProgressNotificationDuration();
-        if (duration_seconds > 0 && elapsed >= (uint32_t)(duration_seconds * 1000)) {
-            progress_state.active = 0;
-            progress_state.dirty = 1;
-        }
-    }
+	// Update progress indicator timeout (skip if persistent)
+	// Snapshot under lock to avoid tearing from background writer threads
+	SDL_LockMutex(progress_mutex);
+	int prog_active = progress_state.active;
+	int prog_persistent = progress_state.persistent;
+	uint32_t prog_start = progress_state.start_time;
+	SDL_UnlockMutex(progress_mutex);
+	
+	if (prog_active && !prog_persistent) {
+		uint32_t elapsed = now - prog_start;
+		int duration_seconds = CFG_getRAProgressNotificationDuration();
+		if (duration_seconds > 0 && elapsed >= (uint32_t)(duration_seconds * 1000)) {
+			SDL_LockMutex(progress_mutex);
+			progress_state.active = 0;
+			progress_state.dirty = 1;
+			SDL_UnlockMutex(progress_mutex);
+		}
+	}
     
     // Check each notification for expiration
     for (int i = 0; i < notification_count; i++) {
@@ -241,8 +261,11 @@ void Notification_update(uint32_t now) {
 }
 
 // Render system indicator (top-right)
+// Width formula must match GFX_blitHardwareIndicator in api.c:
+//   SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4)
+// The 10 is internal pill content padding (not the screen-edge PADDING macro).
 static void render_system_indicator(void) {
-    int indicator_width = SCALE1(PILL_SIZE + SETTINGS_WIDTH + PADDING + SYS_INDICATOR_EXTRA_PAD);
+    int indicator_width = SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + SYS_INDICATOR_EXTRA_PAD);
     int indicator_height = SCALE1(PILL_SIZE);
     int indicator_x = screen_width - SCALE1(PADDING) - indicator_width;
     int indicator_y = SCALE1(PADDING);
@@ -269,67 +292,68 @@ static void render_system_indicator(void) {
 }
 
 // Render progress indicator pill (top-left)
-static void render_progress_indicator(void) {
-    SDL_Color text_color = uintToColour(THEME_COLOR1_255);
-    SDL_Color bg_color_sdl = uintToColour(THEME_COLOR2_255);
-    
-    // Format: "Title: Progress" or just "Title"
-    char progress_text[PROGRESS_TITLE_MAX + PROGRESS_STRING_MAX + 4];
-    if (progress_state.progress[0] != '\0') {
-        snprintf(progress_text, sizeof(progress_text), "%s: %s", 
-                 progress_state.title, progress_state.progress);
-    } else {
-        snprintf(progress_text, sizeof(progress_text), "%s", progress_state.title);
-    }
-    
-    int text_w = 0, text_h = 0;
-    TTF_SizeUTF8(font.tiny, progress_text, &text_w, &text_h);
-    
-    // Calculate icon dimensions if present
-    int icon_w = 0, icon_h = 0, icon_total_w = 0;
-    if (progress_state.icon) {
-        icon_h = text_h;
-        icon_w = (progress_state.icon->w * icon_h) / progress_state.icon->h;
-        icon_total_w = icon_w + notif_icon_gap;
-    }
-    
-    int pill_w = icon_total_w + text_w + (notif_padding_x * 2);
-    int pill_h = text_h + (notif_padding_y * 2);
-    int corner_radius = pill_h / 2;
-    int x = notif_margin;
-    int y = notif_margin;
-    
-    SDL_Surface* progress_surface = SDL_CreateRGBSurfaceWithFormat(
-        0, pill_w, pill_h, 32, SDL_PIXELFORMAT_ABGR8888
-    );
-    if (!progress_surface) return;
-    
-    SDL_FillRect(progress_surface, NULL, 0);
-    Uint32 bg_color = SDL_MapRGBA(progress_surface->format, 
-                                  bg_color_sdl.r, bg_color_sdl.g, bg_color_sdl.b, 255);
-    draw_rounded_rect(progress_surface, 0, 0, pill_w, pill_h, corner_radius, bg_color);
-    
-    int content_x = notif_padding_x;
-    
-    if (progress_state.icon && icon_w > 0 && icon_h > 0) {
-        SDL_Rect icon_dst = {content_x, notif_padding_y, icon_w, icon_h};
-        SDL_SetSurfaceBlendMode(progress_state.icon, SDL_BLENDMODE_BLEND);
-        SDL_BlitScaled(progress_state.icon, NULL, progress_surface, &icon_dst);
-        content_x += icon_total_w;
-    }
-    
-    SDL_Surface* text_surf = TTF_RenderUTF8_Blended(font.tiny, progress_text, text_color);
-    if (text_surf) {
-        SDL_SetSurfaceBlendMode(text_surf, SDL_BLENDMODE_BLEND);
-        SDL_Rect text_dst = {content_x, notif_padding_y, text_surf->w, text_surf->h};
-        SDL_BlitSurface(text_surf, NULL, progress_surface, &text_dst);
-        SDL_FreeSurface(text_surf);
-    }
-    
-    SDL_SetSurfaceBlendMode(progress_surface, SDL_BLENDMODE_NONE);
-    SDL_Rect dst_rect = {x, y, pill_w, pill_h};
-    SDL_BlitSurface(progress_surface, NULL, gl_notification_surface, &dst_rect);
-    SDL_FreeSurface(progress_surface);
+// Takes a snapshot of progress state to avoid holding the mutex during rendering.
+static void render_progress_indicator(const ProgressIndicatorState* snap) {
+	SDL_Color text_color = uintToColour(THEME_COLOR1_255);
+	SDL_Color bg_color_sdl = uintToColour(THEME_COLOR2_255);
+	
+	// Format: "Title: Progress" or just "Title"
+	char progress_text[PROGRESS_TITLE_MAX + PROGRESS_STRING_MAX + 4];
+	if (snap->progress[0] != '\0') {
+		snprintf(progress_text, sizeof(progress_text), "%s: %s", 
+		         snap->title, snap->progress);
+	} else {
+		snprintf(progress_text, sizeof(progress_text), "%s", snap->title);
+	}
+	
+	int text_w = 0, text_h = 0;
+	TTF_SizeUTF8(font.tiny, progress_text, &text_w, &text_h);
+	
+	// Calculate icon dimensions if present
+	int icon_w = 0, icon_h = 0, icon_total_w = 0;
+	if (snap->icon) {
+		icon_h = text_h;
+		icon_w = (snap->icon->w * icon_h) / snap->icon->h;
+		icon_total_w = icon_w + notif_icon_gap;
+	}
+	
+	int pill_w = icon_total_w + text_w + (notif_padding_x * 2);
+	int pill_h = text_h + (notif_padding_y * 2);
+	int corner_radius = pill_h / 2;
+	int x = notif_margin;
+	int y = notif_margin;
+	
+	SDL_Surface* progress_surface = SDL_CreateRGBSurfaceWithFormat(
+		0, pill_w, pill_h, 32, SDL_PIXELFORMAT_ABGR8888
+	);
+	if (!progress_surface) return;
+	
+	SDL_FillRect(progress_surface, NULL, 0);
+	Uint32 bg_color = SDL_MapRGBA(progress_surface->format, 
+	                               bg_color_sdl.r, bg_color_sdl.g, bg_color_sdl.b, 255);
+	draw_rounded_rect(progress_surface, 0, 0, pill_w, pill_h, corner_radius, bg_color);
+	
+	int content_x = notif_padding_x;
+	
+	if (snap->icon && icon_w > 0 && icon_h > 0) {
+		SDL_Rect icon_dst = {content_x, notif_padding_y, icon_w, icon_h};
+		SDL_SetSurfaceBlendMode(snap->icon, SDL_BLENDMODE_BLEND);
+		SDL_BlitScaled(snap->icon, NULL, progress_surface, &icon_dst);
+		content_x += icon_total_w;
+	}
+	
+	SDL_Surface* text_surf = TTF_RenderUTF8_Blended(font.tiny, progress_text, text_color);
+	if (text_surf) {
+		SDL_SetSurfaceBlendMode(text_surf, SDL_BLENDMODE_BLEND);
+		SDL_Rect text_dst = {content_x, notif_padding_y, text_surf->w, text_surf->h};
+		SDL_BlitSurface(text_surf, NULL, progress_surface, &text_dst);
+		SDL_FreeSurface(text_surf);
+	}
+	
+	SDL_SetSurfaceBlendMode(progress_surface, SDL_BLENDMODE_NONE);
+	SDL_Rect dst_rect = {x, y, pill_w, pill_h};
+	SDL_BlitSurface(progress_surface, NULL, gl_notification_surface, &dst_rect);
+	SDL_FreeSurface(progress_surface);
 }
 
 // Render a single notification pill
@@ -419,37 +443,47 @@ void Notification_renderToLayer(int layer) {
         return;
     }
     
-    int has_notifications = notification_count > 0;
-    int has_system_indicator = system_indicator_type != SYSTEM_INDICATOR_NONE;
-    int has_progress_indicator = progress_state.active;
-    
-    if (!has_notifications && !has_system_indicator && !has_progress_indicator) {
-        // When all notifications and indicators are gone, render one final transparent frame
-        if (gl_notification_surface) {
-            if (needs_clear_frame) {
-                SDL_FillRect(gl_notification_surface, NULL, 0);
-                PLAT_setNotificationSurface(gl_notification_surface, 0, 0);
-                needs_clear_frame = 0;
-                render_dirty = 0;
-                system_indicator_dirty = 0;
-                progress_state.dirty = 0;
-                last_system_indicator_type = SYSTEM_INDICATOR_NONE;
-                return;
-            }
-            PLAT_clearNotificationSurface();
-            SDL_FreeSurface(gl_notification_surface);
-            gl_notification_surface = NULL;
-        }
-        return;
-    }
-    
-    // We have notifications or indicators
-    needs_clear_frame = 1;
-    
-    // Check if anything changed
-    int notifications_changed = render_dirty || notification_count != last_notification_count;
-    int indicator_changed = system_indicator_dirty || system_indicator_type != last_system_indicator_type;
-    int progress_changed = progress_state.dirty;
+	int has_notifications = notification_count > 0;
+	int has_system_indicator = system_indicator_type != SYSTEM_INDICATOR_NONE;
+	
+	// Snapshot progress state under lock — sub-microsecond critical section.
+	// Rendering uses the snapshot so we never hold the lock during SDL calls.
+	ProgressIndicatorState progress_snap;
+	SDL_LockMutex(progress_mutex);
+	progress_snap = progress_state;
+	SDL_UnlockMutex(progress_mutex);
+	
+	int has_progress_indicator = progress_snap.active;
+	
+	if (!has_notifications && !has_system_indicator && !has_progress_indicator) {
+		// When all notifications and indicators are gone, render one final transparent frame
+		if (gl_notification_surface) {
+			if (needs_clear_frame) {
+				SDL_FillRect(gl_notification_surface, NULL, 0);
+				PLAT_setNotificationSurface(gl_notification_surface, 0, 0);
+				needs_clear_frame = 0;
+				render_dirty = 0;
+				system_indicator_dirty = 0;
+				SDL_LockMutex(progress_mutex);
+				progress_state.dirty = 0;
+				SDL_UnlockMutex(progress_mutex);
+				last_system_indicator_type = SYSTEM_INDICATOR_NONE;
+				return;
+			}
+			PLAT_clearNotificationSurface();
+			SDL_FreeSurface(gl_notification_surface);
+			gl_notification_surface = NULL;
+		}
+		return;
+	}
+	
+	// We have notifications or indicators
+	needs_clear_frame = 1;
+	
+	// Check if anything changed
+	int notifications_changed = render_dirty || notification_count != last_notification_count;
+	int indicator_changed = system_indicator_dirty || system_indicator_type != last_system_indicator_type;
+	int progress_changed = progress_snap.dirty;
     
     if (!notifications_changed && !indicator_changed && !progress_changed) {
         return;
@@ -472,9 +506,9 @@ void Notification_renderToLayer(int layer) {
     if (has_system_indicator) {
         render_system_indicator();
     }
-    if (has_progress_indicator) {
-        render_progress_indicator();
-    }
+	if (has_progress_indicator) {
+		render_progress_indicator(&progress_snap);
+	}
     if (has_notifications) {
         render_notification_stack();
     }
@@ -482,11 +516,16 @@ void Notification_renderToLayer(int layer) {
     // Set the notification surface for GL rendering
     PLAT_setNotificationSurface(gl_notification_surface, 0, 0);
     
-    render_dirty = 0;
-    last_notification_count = notification_count;
-    system_indicator_dirty = 0;
-    progress_state.dirty = 0;
-    last_system_indicator_type = system_indicator_type;
+	render_dirty = 0;
+	last_notification_count = notification_count;
+	system_indicator_dirty = 0;
+	last_system_indicator_type = system_indicator_type;
+	
+	// Clear dirty flag under lock — a background thread may have set it again
+	// since our snapshot, in which case we'll re-render next frame.
+	SDL_LockMutex(progress_mutex);
+	progress_state.dirty = 0;
+	SDL_UnlockMutex(progress_mutex);
 }
 
 bool Notification_isActive(void) {
@@ -494,12 +533,16 @@ bool Notification_isActive(void) {
 }
 
 void Notification_clear(void) {
-    notification_count = 0;
-    progress_state.active = 0;
-    progress_state.icon = NULL;
-    render_dirty = 1;
-    progress_state.dirty = 1;
-    PLAT_clearNotificationSurface();
+	notification_count = 0;
+	
+	SDL_LockMutex(progress_mutex);
+	progress_state.active = 0;
+	progress_state.icon = NULL;
+	progress_state.dirty = 1;
+	SDL_UnlockMutex(progress_mutex);
+	
+	render_dirty = 1;
+	PLAT_clearNotificationSurface();
     if (gl_notification_surface) {
         SDL_FreeSurface(gl_notification_surface);
         gl_notification_surface = NULL;
@@ -509,8 +552,12 @@ void Notification_clear(void) {
 void Notification_quit(void) {
     Notification_clear();
     system_indicator_type = SYSTEM_INDICATOR_NONE;
-    progress_state.active = 0;
     initialized = 0;
+    
+    if (progress_mutex) {
+        SDL_DestroyMutex(progress_mutex);
+        progress_mutex = NULL;
+    }
 }
 
 ///////////////////////////////
@@ -535,7 +582,8 @@ int Notification_getSystemIndicatorWidth(void) {
     if (!initialized || system_indicator_type == SYSTEM_INDICATOR_NONE) {
         return 0;
     }
-    return SCALE1(PILL_SIZE + SETTINGS_WIDTH + PADDING + SYS_INDICATOR_EXTRA_PAD);
+    // Must match GFX_blitHardwareIndicator width formula (10 = internal pill padding)
+    return SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + SYS_INDICATOR_EXTRA_PAD);
 }
 
 ///////////////////////////////
@@ -543,40 +591,51 @@ int Notification_getSystemIndicatorWidth(void) {
 ///////////////////////////////
 
 void Notification_showProgressIndicator(const char* title, const char* progress, SDL_Surface* icon) {
-    if (!initialized) return;
-    
-    // Check if RA notifications are enabled
-    if (!CFG_getRAShowNotifications()) return;
-    
-    // Copy the title and progress strings
-    strncpy(progress_state.title, title, PROGRESS_TITLE_MAX - 1);
-    progress_state.title[PROGRESS_TITLE_MAX - 1] = '\0';
-    
-    strncpy(progress_state.progress, progress, PROGRESS_STRING_MAX - 1);
-    progress_state.progress[PROGRESS_STRING_MAX - 1] = '\0';
-    
-    // Store icon reference (caller retains ownership)
-    progress_state.icon = icon;
-    
-    // Activate and reset timer
-    progress_state.active = 1;
-    progress_state.start_time = SDL_GetTicks();
-    progress_state.dirty = 1;
+	if (!initialized) return;
+	
+	// Check if RA notifications are enabled
+	if (!CFG_getRAShowNotifications()) return;
+	
+	// Called from background threads (sync engine, badge downloads)
+	SDL_LockMutex(progress_mutex);
+	
+	// Copy the title and progress strings
+	strncpy(progress_state.title, title, PROGRESS_TITLE_MAX - 1);
+	progress_state.title[PROGRESS_TITLE_MAX - 1] = '\0';
+	
+	strncpy(progress_state.progress, progress, PROGRESS_STRING_MAX - 1);
+	progress_state.progress[PROGRESS_STRING_MAX - 1] = '\0';
+	
+	// Store icon reference (caller retains ownership)
+	progress_state.icon = icon;
+	
+	// Activate and reset timer
+	progress_state.active = 1;
+	progress_state.start_time = SDL_GetTicks();
+	progress_state.dirty = 1;
+	
+	SDL_UnlockMutex(progress_mutex);
 }
 
 void Notification_hideProgressIndicator(void) {
-    if (!initialized) return;
-    
-    if (progress_state.active) {
-        progress_state.active = 0;
-        progress_state.persistent = 0;
-        progress_state.icon = NULL;
-        progress_state.dirty = 1;
-    }
+	if (!initialized) return;
+	
+	// Called from background threads (sync engine, badge downloads)
+	SDL_LockMutex(progress_mutex);
+	if (progress_state.active) {
+		progress_state.active = 0;
+		progress_state.persistent = 0;
+		progress_state.icon = NULL;
+		progress_state.dirty = 1;
+	}
+	SDL_UnlockMutex(progress_mutex);
 }
 
 void Notification_setProgressIndicatorPersistent(bool persistent) {
-    progress_state.persistent = persistent ? 1 : 0;
+	// Called from background threads
+	SDL_LockMutex(progress_mutex);
+	progress_state.persistent = persistent ? 1 : 0;
+	SDL_UnlockMutex(progress_mutex);
 }
 
 bool Notification_hasProgressIndicator(void) {
