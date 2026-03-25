@@ -162,8 +162,13 @@ static void sha256_hash(const void* data, size_t len, uint8_t digest[SHA256_DIGE
  *****************************************************************************/
 
 static bool ra_offline_initialized = false;
-static bool ra_offline_mode = false;
-static bool ra_sync_in_progress = false;
+static volatile bool ra_offline_mode = false;
+static volatile bool ra_sync_in_progress = false;
+
+/* Mutex protecting ledger file I/O, hash-chain state, and pending cache.
+ * Guards: ledger_append, ledgerCompact, ledgerGetPendingUnlocks,
+ *         and all pending-cache functions. */
+static SDL_mutex* ra_ledger_mutex = NULL;
 
 /* Base data directory (set during init) */
 static char ra_data_dir[512] = {0};
@@ -764,6 +769,8 @@ static uint32_t ledger_validate_and_load(void) {
  * Append a record to the ledger file.
  */
 static bool ledger_append(RA_LedgerRecord* rec) {
+	SDL_LockMutex(ra_ledger_mutex);
+
 	/* Set prev_hash from chain state */
 	memcpy(rec->prev_hash, ra_ledger_last_hash, SHA256_DIGEST_SIZE);
 
@@ -774,12 +781,14 @@ static bool ledger_append(RA_LedgerRecord* rec) {
 	FILE* f = fopen(ra_ledger_path, "ab");
 	if (!f) {
 		OFFLINE_LOG_ERROR("Failed to open ledger for append: %s\n", strerror(errno));
+		SDL_UnlockMutex(ra_ledger_mutex);
 		return false;
 	}
 
 	if (fwrite(rec, sizeof(RA_LedgerRecord), 1, f) != 1) {
 		OFFLINE_LOG_ERROR("Failed to write ledger record: %s\n", strerror(errno));
 		fclose(f);
+		SDL_UnlockMutex(ra_ledger_mutex);
 		return false;
 	}
 
@@ -791,6 +800,7 @@ static bool ledger_append(RA_LedgerRecord* rec) {
 	ledger_hash_record(rec, ra_ledger_last_hash);
 	ra_ledger_has_records = true;
 
+	SDL_UnlockMutex(ra_ledger_mutex);
 	return true;
 }
 
@@ -875,9 +885,12 @@ void RA_Offline_ledgerWriteSyncAck(uint32_t achievement_id, uint32_t game_id) {
 void RA_Offline_ledgerCompact(void) {
 	if (!ra_offline_initialized) return;
 
+	SDL_LockMutex(ra_ledger_mutex);
+
 	FILE* f = fopen(ra_ledger_path, "rb");
 	if (!f) {
 		OFFLINE_LOG_DEBUG("Compact: no ledger file to compact\n");
+		SDL_UnlockMutex(ra_ledger_mutex);
 		return;
 	}
 
@@ -892,6 +905,7 @@ void RA_Offline_ledgerCompact(void) {
 		unlink(ra_ledger_path);
 		memset(ra_ledger_last_hash, 0, SHA256_DIGEST_SIZE);
 		ra_ledger_has_records = false;
+		SDL_UnlockMutex(ra_ledger_mutex);
 		return;
 	}
 
@@ -900,6 +914,7 @@ void RA_Offline_ledgerCompact(void) {
 	if (!records) {
 		fclose(f);
 		OFFLINE_LOG_ERROR("Compact: failed to allocate for %u records\n", total_records);
+		SDL_UnlockMutex(ra_ledger_mutex);
 		return;
 	}
 
@@ -955,6 +970,7 @@ void RA_Offline_ledgerCompact(void) {
 				if (!kept) {
 					free(records);
 					OFFLINE_LOG_ERROR("Compact: allocation failure for kept records\n");
+					SDL_UnlockMutex(ra_ledger_mutex);
 					return;
 				}
 			}
@@ -977,6 +993,7 @@ void RA_Offline_ledgerCompact(void) {
 		}
 		memset(ra_ledger_last_hash, 0, SHA256_DIGEST_SIZE);
 		ra_ledger_has_records = false;
+		SDL_UnlockMutex(ra_ledger_mutex);
 		return;
 	}
 
@@ -992,6 +1009,7 @@ void RA_Offline_ledgerCompact(void) {
 	if (!out) {
 		OFFLINE_LOG_ERROR("Compact: failed to create temp file: %s\n", strerror(errno));
 		free(kept);
+		SDL_UnlockMutex(ra_ledger_mutex);
 		return;
 	}
 
@@ -1009,6 +1027,7 @@ void RA_Offline_ledgerCompact(void) {
 			fclose(out);
 			unlink(tmp_path);
 			free(kept);
+			SDL_UnlockMutex(ra_ledger_mutex);
 			return;
 		}
 
@@ -1025,6 +1044,7 @@ void RA_Offline_ledgerCompact(void) {
 		OFFLINE_LOG_ERROR("Compact: rename failed: %s\n", strerror(errno));
 		unlink(tmp_path);
 		free(kept);
+		SDL_UnlockMutex(ra_ledger_mutex);
 		return;
 	}
 
@@ -1034,17 +1054,23 @@ void RA_Offline_ledgerCompact(void) {
 
 	OFFLINE_LOG_INFO("Compact: rewrote ledger with %u records\n", kept_count);
 	free(kept);
+	SDL_UnlockMutex(ra_ledger_mutex);
 }
 
 bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
                                         uint32_t* out_count) {
 	if (!ra_offline_initialized || !out_unlocks || !out_count) return false;
 
+	SDL_LockMutex(ra_ledger_mutex);
+
 	*out_unlocks = NULL;
 	*out_count = 0;
 
 	FILE* f = fopen(ra_ledger_path, "rb");
-	if (!f) return true; /* No ledger = no pending unlocks (not an error) */
+	if (!f) {
+		SDL_UnlockMutex(ra_ledger_mutex);
+		return true; /* No ledger = no pending unlocks (not an error) */
+	}
 
 	/*
 	 * Strategy: Process records in sequential order. When we see an UNLOCK,
@@ -1059,6 +1085,7 @@ bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
 
 	if (file_size <= 0 || (file_size % sizeof(RA_LedgerRecord)) != 0) {
 		fclose(f);
+		SDL_UnlockMutex(ra_ledger_mutex);
 		return true;
 	}
 
@@ -1081,6 +1108,7 @@ bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
 				if (!tmp) {
 					free(unlocks);
 					fclose(f);
+					SDL_UnlockMutex(ra_ledger_mutex);
 					return false;
 				}
 				unlocks = tmp;
@@ -1112,12 +1140,14 @@ bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
 
 	if (unlock_count == 0) {
 		free(unlocks);
+		SDL_UnlockMutex(ra_ledger_mutex);
 		return true;
 	}
 
 	*out_unlocks = unlocks;
 	*out_count = unlock_count;
 	OFFLINE_LOG_DEBUG("Ledger: %u pending softcore unlocks\n", unlock_count);
+	SDL_UnlockMutex(ra_ledger_mutex);
 	return true;
 }
 
@@ -1170,6 +1200,12 @@ void RA_Offline_init(const char* data_dir) {
 	/* Validate and load ledger */
 	ledger_validate_and_load();
 
+	/* Create ledger mutex for thread-safe access */
+	ra_ledger_mutex = SDL_CreateMutex();
+	if (!ra_ledger_mutex) {
+		OFFLINE_LOG_ERROR("Failed to create ledger mutex: %s\n", SDL_GetError());
+	}
+
 	ra_offline_initialized = true;
 	OFFLINE_LOG_INFO("Initialized (cache: %s, ledger: %s)\n", ra_cache_dir, ra_ledger_path);
 }
@@ -1184,6 +1220,11 @@ void RA_Offline_shutdown(void) {
 	ra_pending_count = 0;
 	memset(ra_ledger_last_hash, 0, SHA256_DIGEST_SIZE);
 
+	if (ra_ledger_mutex) {
+		SDL_DestroyMutex(ra_ledger_mutex);
+		ra_ledger_mutex = NULL;
+	}
+
 	OFFLINE_LOG_INFO("Shut down\n");
 }
 
@@ -1192,42 +1233,66 @@ void RA_Offline_shutdown(void) {
  *****************************************************************************/
 
 void RA_Offline_refreshPendingCache(void) {
-	ra_pending_count = 0;
-
+	/* Read pending unlocks (ledgerGetPendingUnlocks locks internally) */
 	RA_PendingUnlock* unlocks = NULL;
 	uint32_t count = 0;
 	if (!RA_Offline_ledgerGetPendingUnlocks(&unlocks, &count) || count == 0) {
+		SDL_LockMutex(ra_ledger_mutex);
+		ra_pending_count = 0;
+		SDL_UnlockMutex(ra_ledger_mutex);
 		free(unlocks);
 		return;
 	}
 
+	SDL_LockMutex(ra_ledger_mutex);
 	uint32_t to_cache = count < RA_MAX_PENDING_CACHE ? count : RA_MAX_PENDING_CACHE;
+	if (count > RA_MAX_PENDING_CACHE) {
+		OFFLINE_LOG_WARN("Pending cache truncated: %u entries, max %u\n",
+		                 count, RA_MAX_PENDING_CACHE);
+	}
 	for (uint32_t i = 0; i < to_cache; i++) {
 		ra_pending_ids[i] = unlocks[i].achievement_id;
 	}
 	ra_pending_count = to_cache;
+	SDL_UnlockMutex(ra_ledger_mutex);
 	free(unlocks);
 
-	OFFLINE_LOG_DEBUG("Pending cache refreshed: %u entries\n", ra_pending_count);
+	OFFLINE_LOG_DEBUG("Pending cache refreshed: %u entries\n", to_cache);
 }
 
 bool RA_Offline_isUnlockPending(uint32_t achievement_id) {
+	SDL_LockMutex(ra_ledger_mutex);
+	bool found = false;
 	for (uint32_t i = 0; i < ra_pending_count; i++) {
-		if (ra_pending_ids[i] == achievement_id) return true;
+		if (ra_pending_ids[i] == achievement_id) {
+			found = true;
+			break;
+		}
 	}
-	return false;
+	SDL_UnlockMutex(ra_ledger_mutex);
+	return found;
 }
 
 void RA_Offline_addPendingCacheEntry(uint32_t achievement_id) {
+	SDL_LockMutex(ra_ledger_mutex);
 	/* Check for duplicates */
 	for (uint32_t i = 0; i < ra_pending_count; i++) {
-		if (ra_pending_ids[i] == achievement_id) return;
+		if (ra_pending_ids[i] == achievement_id) {
+			SDL_UnlockMutex(ra_ledger_mutex);
+			return;
+		}
 	}
 	if (ra_pending_count < RA_MAX_PENDING_CACHE) {
 		ra_pending_ids[ra_pending_count++] = achievement_id;
+	} else {
+		OFFLINE_LOG_WARN("Pending cache full (%u entries), achievement %u not cached for UI\n",
+		                 RA_MAX_PENDING_CACHE, achievement_id);
 	}
+	SDL_UnlockMutex(ra_ledger_mutex);
 }
 
 void RA_Offline_clearPendingCache(void) {
+	SDL_LockMutex(ra_ledger_mutex);
 	ra_pending_count = 0;
+	SDL_UnlockMutex(ra_ledger_mutex);
 }

@@ -201,8 +201,9 @@ void RA_Offline_setSyncing(bool syncing);
  *
  * Removes all UNLOCK records that have matching SYNC_ACK records, and
  * removes the SYNC_ACK records themselves. Keeps only truly pending
- * UNLOCK records and SESSION_START/SESSION_END records from the most
- * recent session. If nothing is pending, deletes the ledger file entirely.
+ * UNLOCK records. All other record types (SESSION_START, SESSION_END,
+ * SYNC_ACK) are dropped. If nothing is pending, deletes the ledger
+ * file entirely.
  *
  * Rebuilds the hash chain from scratch on the compacted records.
  * Thread-safety: call only from the sync thread after sync completes.

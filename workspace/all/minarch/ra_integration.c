@@ -99,6 +99,7 @@ static volatile bool ra_probe_running = false;
 static volatile bool ra_deferred_online_notification = false;
 static volatile bool ra_deferred_sync = false;
 static volatile bool ra_deferred_hardcore_enable = false;
+static volatile bool ra_deferred_hardcore_disable = false;
 
 // Track whether the user has seen an "offline mode" notification,
 // so we only show "Connected" if there was a visible offline state.
@@ -632,9 +633,13 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 		if (http_status == 200 && body_length > 0) {
 			RA_Offline_cacheResponse(data->url, data->post_data, body, body_length);
 			
-			// SYNC_ACK: when an online awardachievement succeeds, mark it in the ledger
-			// so the sync engine won't re-submit it after a crash
-			if (data->post_data && strstr(data->post_data, "r=awardachievement")) {
+		// SYNC_ACK: when an online awardachievement succeeds, mark it in the ledger
+		// so the sync engine won't re-submit it after a crash.
+		// Verify the response body indicates success — a 200 with "Success":false
+		// (e.g., rate limit, invalid achievement) must NOT generate a SYNC_ACK
+		// or the unlock would be silently dropped from the ledger.
+		if (data->post_data && strstr(data->post_data, "r=awardachievement") &&
+		    strstr(body, "\"Success\":true")) {
 				// Extract achievement_id ('a' param) from post_data
 				// Look for "&a=" (mid-string) or "a=" at start of post_data
 				const char* a_param = NULL;
@@ -1356,6 +1361,9 @@ static int ra_sync_thread_func(void* data) {
 	// so connectivity can be re-verified and sync retried
 	if (failed > 0) {
 		RA_Offline_setOffline(true);
+		ra_user_saw_offline = true;
+		ra_deferred_offline_notification = true;
+		ra_deferred_hardcore_disable = true;
 		ra_start_connectivity_probe();
 	}
 	
@@ -2140,6 +2148,13 @@ static void ra_process_deferred_flags(void) {
 		if (ra_client && CFG_getRAHardcoreMode()) {
 			rc_client_set_hardcore_enabled(ra_client, 1);
 			RA_LOG_INFO("Hardcore re-enabled after online transition\n");
+		}
+	}
+	if (ra_deferred_hardcore_disable) {
+		ra_deferred_hardcore_disable = false;
+		if (ra_client) {
+			rc_client_set_hardcore_enabled(ra_client, 0);
+			RA_LOG_INFO("Hardcore disabled after sync failure (offline mode)\n");
 		}
 	}
 	if (ra_deferred_sync) {

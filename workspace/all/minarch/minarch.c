@@ -9225,14 +9225,16 @@ int main(int argc , char* argv[]) {
 	PLAT_clearTurbo();
 
 	Menu_quit();
-	Notification_quit();
 	QuitSettings();
 
 finish:
 
-	// Unload game and shutdown RetroAchievements before Core_quit
+	// Unload game and shutdown RetroAchievements before Notification_quit —
+	// RA background threads (sync, badge downloads) may call notification
+	// APIs, so the notification mutex should outlive all RA threads.
 	RA_unloadGame();
 	RA_quit();
+	Notification_quit();
 	
 	Game_close();
 	Rewind_free();
