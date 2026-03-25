@@ -683,6 +683,11 @@ int PLAT_supportsDeepSleep(void);
 int PLAT_deepSleep(void);
 void PLAT_powerOff(int reboot);
 
+void Perf_setCPUMonitorEnabled(int enabled);
+int Perf_isCPUMonitorEnabled(void);
+int Perf_tryBeginCPUMonitor(void);
+void Perf_endCPUMonitor(void);
+
 void *PLAT_cpu_monitor(void *arg);
 void PLAT_setCPUSpeed(int speed); // enum
 void PLAT_setCustomCPUSpeed(int speed);
