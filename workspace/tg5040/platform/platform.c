@@ -244,6 +244,8 @@ static pthread_mutex_t currentcpuinfo;
 #define ROLLING_WINDOW 120  
 
 void *PLAT_cpu_monitor(void *arg) {
+    if (!Perf_tryBeginCPUMonitor()) return NULL;
+
     double prev_real_time = get_time_sec();
     double prev_cpu_time = get_process_cpu_time_sec();
 
@@ -251,7 +253,7 @@ void *PLAT_cpu_monitor(void *arg) {
     int history_index = 0;
     int history_count = 0;
 
-    while (true) {
+    while (Perf_isCPUMonitorEnabled()) {
         double curr_real_time = get_time_sec();
         double curr_cpu_time = get_process_cpu_time_sec();
 
@@ -278,6 +280,9 @@ void *PLAT_cpu_monitor(void *arg) {
         prev_cpu_time = curr_cpu_time;
         usleep(100000);
     }
+
+    Perf_endCPUMonitor();
+    return NULL;
 }
 
 void PLAT_setCustomCPUSpeed(int speed) {

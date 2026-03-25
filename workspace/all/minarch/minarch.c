@@ -2648,7 +2648,7 @@ static struct Config {
 			[FE_OPT_OVERCLOCK] = {
 				.key	= "minarch_cpu_speed",
 				.name	= "CPU Speed",
-				.desc	= "Select the CPU governor profile.\nAuto uses ondemand scaling, Performance\nallows max frequency, Powersave limits\nto a conservative midpoint.",
+				.desc	= "Choose how the CPU scales.\nAuto is recommended for most users.",
 				.default_value = 0,
 				.value = 0,
 				.count = 3,
@@ -3014,6 +3014,21 @@ static void run_governor_script(const char* script_name) {
 	if (ret != 0) LOG_info("WARNING: governor script '%s' exited with status %d\n", script_name, ret);
 }
 
+static void updateCPUMonitor(void) {
+    Perf_setCPUMonitorEnabled(show_debug);
+    if (!show_debug) return;
+
+    pthread_t cpucheckthread;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    if (pthread_create(&cpucheckthread, &attr, PLAT_cpu_monitor, NULL) != 0) {
+        LOG_info("WARNING: failed to start CPU monitor thread\n");
+        Perf_setCPUMonitorEnabled(0);
+    }
+    pthread_attr_destroy(&attr);
+}
+
 static void setOverclock(int i) {
 	overclock = i;
 	switch (i) {
@@ -3087,7 +3102,9 @@ static void Config_syncFrontend(char* key, int value) {
 		i = FE_OPT_OVERCLOCK;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_DEBUG].key)) {
-		show_debug = value;
+        int prev_show_debug = show_debug;
+        show_debug = value;
+        if (prev_show_debug != show_debug) updateCPUMonitor();
 		i = FE_OPT_DEBUG;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_MAXFF].key)) {
@@ -9025,13 +9042,6 @@ int main(int argc , char* argv[]) {
 	//else 
 	//	LOG_info("asoundrc does not exist at %s\n", asoundpath);
 
-	pthread_t cpucheckthread;
-	pthread_attr_t attr;
-	pthread_attr_init(&attr);
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    pthread_create(&cpucheckthread, &attr, PLAT_cpu_monitor, NULL);
-	pthread_attr_destroy(&attr);
-
 	if(argc < 2)
 		return EXIT_FAILURE;
 
@@ -9244,6 +9254,7 @@ int main(int argc , char* argv[]) {
 
 finish:
 
+    Perf_setCPUMonitorEnabled(0);
 	run_governor_script("auto_governor.sh"); // restore auto governor on return to menu
 
 	// Unload game and shutdown RetroAchievements before Notification_quit —
