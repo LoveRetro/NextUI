@@ -625,7 +625,7 @@ int main(int argc, char *argv[])
             });
         }
 
-        if(deviceInfo.hasMuteToggle() && deviceInfo.hasAnalogSticks()){
+        if(deviceInfo.hasMuteToggle() && !deviceInfo.hasAnalogSticks()){
             muteItems.push_back(
                 new MenuItem{ListItemType::Generic, "Dpad mode when toggled", "Dpad: default. Joystick: Dpad exclusively acts as analog stick.\nBoth: Dpad and Joystick inputs at the same time.", {0, 1, 2}, {"Dpad", "Joystick", "Both"}, []() -> std::any
                 {
@@ -883,7 +883,7 @@ int main(int argc, char *argv[])
                     SDL_Rect image_rect = {0, 0, ctx.screen->w, ctx.screen->h};
                     SDL_BlitSurface(bgbmp, NULL, ctx.screen, &image_rect);
                 } else {
-                    uint32_t bgc = CFG_getColor(7);
+                    uint32_t bgc = CFG_getColor(COLOR_BACKGROUND);
                     SDL_FillRect(ctx.screen, NULL, SDL_MapRGB(ctx.screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
                 }
 
