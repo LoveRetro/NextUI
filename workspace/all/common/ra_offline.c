@@ -662,9 +662,13 @@ bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
 	*out_len = len32;
 	OFFLINE_LOG_DEBUG("Cache hit for %s (%u bytes) from %s\n", req_type, len32, path);
 
-	/* For startsession responses served offline, patch in any pending ledger unlocks
-	 * so rcheevos shows offline-earned achievements as unlocked on restart */
-	if (ra_offline_mode && strcmp(req_type, "startsession") == 0) {
+	/* For startsession responses served from cache, patch in any pending ledger unlocks
+	 * so rcheevos shows offline-earned achievements as unlocked on restart.
+	 * Note: we intentionally do NOT gate on ra_offline_mode here — by the time this
+	 * function runs, the connectivity probe may have already flipped the flag to false
+	 * on its thread, but we still need to patch the cached response.  The underlying
+	 * patch_startsession_with_ledger() safely no-ops when there are no pending unlocks. */
+	if (strcmp(req_type, "startsession") == 0) {
 		char game_hash[64] = {0};
 		get_game_hash_param(url, post_data, game_hash, sizeof(game_hash));
 

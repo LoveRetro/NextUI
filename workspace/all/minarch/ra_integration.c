@@ -101,6 +101,14 @@ static volatile bool ra_deferred_sync = false;
 static volatile bool ra_deferred_hardcore_enable = false;
 static volatile bool ra_deferred_hardcore_disable = false;
 
+// Deferred sync-apply: after the sync thread confirms offline unlocks with the server,
+// it stores the achievement IDs here so the main thread can update rcheevos' internal
+// state (which isn't thread-safe to modify from the sync thread).
+#define RA_MAX_DEFERRED_SYNC_IDS 256
+static volatile bool ra_deferred_sync_apply = false;
+static uint32_t ra_deferred_sync_ids[RA_MAX_DEFERRED_SYNC_IDS];
+static volatile uint32_t ra_deferred_sync_count = 0;
+
 // Track whether the user has seen an "offline mode" notification,
 // so we only show "Connected" if there was a visible offline state.
 static volatile bool ra_user_saw_offline = false;
@@ -1015,6 +1023,36 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		if (CFG_getRAHardcoreMode()) {
 			rc_client_set_hardcore_enabled(client, 1);
 			RA_LOG_INFO("Hardcore re-enabled after reconnection\n");
+			
+			// Same as deferred hardcore enable: re-apply pending offline
+			// unlocks with both bits to survive the hardcore toggle
+			RA_PendingUnlock* pending = NULL;
+			uint32_t pending_count = 0;
+			if (RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count) &&
+			    pending_count > 0 && pending) {
+				uint32_t fixed = 0;
+				for (uint32_t i = 0; i < pending_count; i++) {
+					if (ra_game_hash[0] &&
+					    strcmp(pending[i].game_hash, ra_game_hash) == 0) {
+						const rc_client_achievement_t* ach =
+							rc_client_get_achievement_info(client,
+								pending[i].achievement_id);
+						if (ach && ach->state == RC_CLIENT_ACHIEVEMENT_STATE_ACTIVE) {
+							rc_client_achievement_t* m =
+								(rc_client_achievement_t*)ach;
+							m->unlocked |= RC_CLIENT_ACHIEVEMENT_UNLOCKED_BOTH;
+							m->unlock_time = (time_t)pending[i].timestamp;
+							m->state = RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED;
+							fixed++;
+						}
+					}
+				}
+				free(pending);
+				if (fixed > 0) {
+					RA_LOG_INFO("Re-applied %u offline unlock(s) after "
+					            "reconnect hardcore re-enable\n", fixed);
+				}
+			}
 		}
 		if (ra_user_saw_offline) {
 			ra_user_saw_offline = false;
@@ -1171,6 +1209,10 @@ static uint32_t ra_sync_random_delay(uint32_t min_ms, uint32_t max_ms) {
 static int ra_sync_thread_func(void* data) {
 	(void)data;
 	
+	// Reset deferred sync-apply state for this sync session
+	ra_deferred_sync_count = 0;
+	ra_deferred_sync_apply = false;
+	
 	RA_PendingUnlock* unlocks = NULL;
 	uint32_t count = 0;
 	
@@ -1306,6 +1348,13 @@ static int ra_sync_thread_func(void* data) {
 			synced++;
 			RA_LOG_INFO("Sync: achievement %u confirmed (%u/%u)\n",
 			            unlock->achievement_id, synced, count);
+			
+			// Store synced ID for deferred main-thread state update
+			uint32_t idx = ra_deferred_sync_count;
+			if (idx < RA_MAX_DEFERRED_SYNC_IDS) {
+				ra_deferred_sync_ids[idx] = unlock->achievement_id;
+				ra_deferred_sync_count = idx + 1;
+			}
 		}
 		
 		// Delay before next submission (skip delay after last item)
@@ -1354,6 +1403,11 @@ static int ra_sync_thread_func(void* data) {
 	}
 	
 	RA_LOG_INFO("Sync complete: %u synced, %u skipped, %u failed\n", synced, skipped, failed);
+	
+	// Signal main thread to update rcheevos unlock state for synced achievements
+	if (synced > 0 && ra_deferred_sync_count > 0) {
+		ra_deferred_sync_apply = true;
+	}
 	
 	// If sync failed, go back to offline mode and restart the probe
 	// so connectivity can be re-verified and sync retried
@@ -1620,6 +1674,38 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 			uint32_t display_unlocked = summary.num_unlocked_achievements;
 			uint32_t display_total = summary.num_core_achievements;
 			
+			// Augment unlocked count with pending offline unlocks that rcheevos
+			// may not know about yet (e.g., startsession patching was skipped due
+			// to timing, or hardcore re-enable cleared softcore-only unlock bits).
+			{
+				RA_PendingUnlock* pending = NULL;
+				uint32_t pending_count = 0;
+				if (RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count) &&
+				    pending_count > 0 && pending) {
+					uint32_t extra = 0;
+					for (uint32_t i = 0; i < pending_count; i++) {
+						if (game->hash && strcmp(pending[i].game_hash, game->hash) == 0) {
+							const rc_client_achievement_t* ach =
+								rc_client_get_achievement_info(client, pending[i].achievement_id);
+							if (ach && !(ach->unlocked &
+							    (rc_client_get_hardcore_enabled(client)
+							     ? RC_CLIENT_ACHIEVEMENT_UNLOCKED_HARDCORE
+							     : RC_CLIENT_ACHIEVEMENT_UNLOCKED_SOFTCORE))) {
+								extra++;
+							}
+						}
+					}
+				display_unlocked += extra;
+				if (display_unlocked > display_total) {
+					display_unlocked = display_total;  // Clamp to avoid showing e.g. 11/10
+				}
+				if (extra > 0) {
+					RA_LOG_INFO("Notification: added %u pending offline unlocks to count\n", extra);
+				}
+				free(pending);
+			}
+		}
+		
 			// Hide "Unknown Emulator" warning (ID 101000001) when hardcore mode is disabled.
 			// Note: We intentionally show "Unsupported Game Version" so users know to find a supported ROM.
 			if (!CFG_getRAHardcoreMode()) {
@@ -2141,6 +2227,39 @@ static void ra_process_deferred_flags(void) {
 		if (ra_client && CFG_getRAHardcoreMode()) {
 			rc_client_set_hardcore_enabled(ra_client, 1);
 			RA_LOG_INFO("Hardcore re-enabled after online transition\n");
+			
+			// rc_client_set_hardcore_enabled flips achievements to check the
+			// hardcore unlock bit. Offline achievements only have the softcore
+			// bit set (offline mode forces softcore), so they revert to ACTIVE
+			// (locked). Re-apply pending offline unlocks with both bits so
+			// they remain visible as unlocked while sync is in progress.
+			RA_PendingUnlock* pending = NULL;
+			uint32_t pending_count = 0;
+			if (RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count) &&
+			    pending_count > 0 && pending) {
+				uint32_t fixed = 0;
+				for (uint32_t i = 0; i < pending_count; i++) {
+					if (ra_game_hash[0] &&
+					    strcmp(pending[i].game_hash, ra_game_hash) == 0) {
+						const rc_client_achievement_t* ach =
+							rc_client_get_achievement_info(ra_client,
+								pending[i].achievement_id);
+						if (ach && ach->state == RC_CLIENT_ACHIEVEMENT_STATE_ACTIVE) {
+							rc_client_achievement_t* m =
+								(rc_client_achievement_t*)ach;
+							m->unlocked |= RC_CLIENT_ACHIEVEMENT_UNLOCKED_BOTH;
+							m->unlock_time = (time_t)pending[i].timestamp;
+							m->state = RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED;
+							fixed++;
+						}
+					}
+				}
+				free(pending);
+				if (fixed > 0) {
+					RA_LOG_INFO("Re-applied %u offline unlock(s) after "
+					            "hardcore re-enable\n", fixed);
+				}
+			}
 		}
 	}
 	if (ra_deferred_hardcore_disable) {
@@ -2153,6 +2272,43 @@ static void ra_process_deferred_flags(void) {
 	if (ra_deferred_sync) {
 		ra_deferred_sync = false;
 		ra_start_offline_sync();
+	}
+	
+	// Apply synced achievement unlock state to rcheevos.
+	// The sync thread confirmed these achievements with the RA server; now we
+	// update rcheevos' internal unlock bits so the achievement list and summary
+	// reflect the correct state without needing to restart the game.
+	if (ra_deferred_sync_apply) {
+		ra_deferred_sync_apply = false;
+		if (ra_client) {
+			uint32_t count = ra_deferred_sync_count;
+			uint32_t applied = 0;
+			uint8_t mode = rc_client_get_hardcore_enabled(ra_client)
+				? RC_CLIENT_ACHIEVEMENT_UNLOCKED_BOTH
+				: RC_CLIENT_ACHIEVEMENT_UNLOCKED_SOFTCORE;
+			
+			for (uint32_t i = 0; i < count; i++) {
+				const rc_client_achievement_t* ach =
+					rc_client_get_achievement_info(ra_client, ra_deferred_sync_ids[i]);
+				if (ach && !(ach->unlocked & mode)) {
+					// Cast away const — rc_client_get_achievement_info returns a const
+					// pointer to the internal struct, but we need to update unlock state.
+					// This is safe: the data is mutable and we're on the main thread.
+					rc_client_achievement_t* mutable_ach = (rc_client_achievement_t*)ach;
+					mutable_ach->unlocked |= mode;
+					mutable_ach->unlock_time = (time_t)time(NULL);
+					if (mutable_ach->state == RC_CLIENT_ACHIEVEMENT_STATE_ACTIVE) {
+						mutable_ach->state = RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED;
+					}
+					applied++;
+				}
+			}
+			
+			ra_deferred_sync_count = 0;
+			if (applied > 0) {
+				RA_LOG_INFO("Applied %u synced achievement unlocks to rcheevos state\n", applied);
+			}
+		}
 	}
 	
 	// Check for pending login retry
