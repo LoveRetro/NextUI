@@ -1002,7 +1002,6 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		// Force softcore when offline
 		rc_client_set_hardcore_enabled(client, 0);
 		ra_user_saw_offline = true;
-		Notification_push(NOTIFICATION_ACHIEVEMENT, "RetroAchievements: Offline mode", NULL);
 		// Start probe to detect when connectivity returns
 		ra_start_connectivity_probe();
 		break;
@@ -1019,7 +1018,6 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		}
 		if (ra_user_saw_offline) {
 			ra_user_saw_offline = false;
-			Notification_push(NOTIFICATION_ACHIEVEMENT, "RetroAchievements: Reconnected", NULL);
 		}
 		// Network is back — try syncing any ledger entries from prior offline sessions
 		ra_start_offline_sync();
@@ -2125,22 +2123,17 @@ void RA_unloadGame(void) {
  * and login retry scheduling.
  */
 static void ra_process_deferred_flags(void) {
-	// Push deferred offline notification (Notification_init() wasn't ready during RA_init())
+	// Process deferred offline flag (Notification_init() wasn't ready during RA_init())
 	if (ra_deferred_offline_notification) {
 		ra_deferred_offline_notification = false;
 		ra_user_saw_offline = true;
-		Notification_push(NOTIFICATION_ACHIEVEMENT, 
-		                  "RetroAchievements: Offline mode (softcore)", NULL);
 	}
 	
 	// Handle deferred online transition (set by connectivity probe thread)
 	if (ra_deferred_online_notification) {
 		ra_deferred_online_notification = false;
-		// Only show "Connected" if the user previously saw an offline notification
 		if (ra_user_saw_offline) {
 			ra_user_saw_offline = false;
-			Notification_push(NOTIFICATION_ACHIEVEMENT,
-			                  "RetroAchievements: Connected", NULL);
 		}
 	}
 	if (ra_deferred_hardcore_enable) {
