@@ -27,7 +27,7 @@ SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../
 # RA support
 ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355 desktop))
 # RA source files
-SOURCE += ../common/http.c ../common/ra_badges.c ../common/ra_offline.c ra_integration.c chd_reader.c
+SOURCE += ../common/http.c ../common/ra_badges.c ../common/ra_offline.c ../common/sha256.c ra_integration.c chd_reader.c
 endif
 
 CC = $(CROSS_COMPILE)gcc

@@ -36,7 +36,7 @@
 static rc_client_t* ra_client = NULL;
 static bool ra_game_loaded = false;
 static bool ra_logged_in = false;
-static bool ra_deferred_offline_notification = false;
+// (Deferred flags are in RADeferredState below)
 
 // Current game hash (for mute file path)
 static char ra_game_hash[64] = {0};
@@ -95,23 +95,24 @@ static RALoginRetry ra_login_retry = {0};
 static volatile bool ra_probe_abort = false;
 static volatile bool ra_probe_running = false;
 
-// Deferred state transition flags (set by probe thread, consumed by main thread in RA_idle)
-static volatile bool ra_deferred_online_notification = false;
-static volatile bool ra_deferred_sync = false;
-static volatile bool ra_deferred_hardcore_enable = false;
-static volatile bool ra_deferred_hardcore_disable = false;
-
-// Deferred sync-apply: after the sync thread confirms offline unlocks with the server,
-// it stores the achievement IDs here so the main thread can update rcheevos' internal
-// state (which isn't thread-safe to modify from the sync thread).
+// Deferred state: flags set by background threads (probe, sync), consumed
+// by the main thread in ra_process_deferred_flags().  Protected by
+// ra_deferred.mutex — all reads and writes must hold the lock.
 #define RA_MAX_DEFERRED_SYNC_IDS 256
-static volatile bool ra_deferred_sync_apply = false;
-static uint32_t ra_deferred_sync_ids[RA_MAX_DEFERRED_SYNC_IDS];
-static volatile uint32_t ra_deferred_sync_count = 0;
+typedef struct {
+	SDL_mutex* mutex;
+	bool offline_notification;
+	bool online_notification;
+	bool sync;
+	bool hardcore_enable;
+	bool hardcore_disable;
+	bool sync_apply;
+	uint32_t sync_ids[RA_MAX_DEFERRED_SYNC_IDS];
+	uint32_t sync_count;
+	bool user_saw_offline;
+} RADeferredState;
 
-// Track whether the user has seen an "offline mode" notification,
-// so we only show "Connected" if there was a visible offline state.
-static volatile bool ra_user_saw_offline = false;
+static RADeferredState ra_deferred = {0};
 
 /*****************************************************************************
  * Thread-safe response queue
@@ -142,6 +143,10 @@ static bool ra_queue_push(const char* body, size_t body_length, int http_status,
 static bool ra_queue_pop(RA_QueuedResponse* out);
 static void ra_process_queued_responses(void);
 
+// Forward declarations for deferred state lifecycle
+static void ra_deferred_init(void);
+static void ra_deferred_quit(void);
+
 // Forward declarations for helper functions
 static void ra_clear_pending_game(void);
 static void ra_do_load_game(const char* rom_path, const uint8_t* rom_data, size_t rom_size, const char* emu_tag);
@@ -155,6 +160,13 @@ static uint32_t ra_get_retry_delay_ms(int attempt);
 static void ra_login_callback(int result, const char* error_message, rc_client_t* client, void* userdata);
 static void ra_start_connectivity_probe(void);
 static void ra_stop_connectivity_probe(void);
+
+// Extracted helpers to reduce duplication
+static void ra_interruptible_sleep(uint32_t ms, volatile bool* abort_flag);
+static bool ra_get_post_param(const char* post_data, char param_key, char* buf, size_t buf_size);
+static bool ra_should_hide_achievement(const rc_client_achievement_t* ach);
+static uint32_t ra_reapply_pending_unlocks(rc_client_t* client, const char* game_hash);
+static void ra_show_game_summary(rc_client_t* client, const rc_client_game_t* game);
 
 /*****************************************************************************
  * CHD (compressed hunks of data) reader support for disc images
@@ -453,6 +465,37 @@ static void ra_process_queued_responses(void) {
 }
 
 /*****************************************************************************
+ * Deferred state lifecycle
+ *
+ * ra_deferred_init / ra_deferred_quit manage the mutex that protects the
+ * RADeferredState struct.  Called from RA_init / RA_quit alongside the
+ * response-queue lifecycle.
+ *****************************************************************************/
+
+static void ra_deferred_init(void) {
+	if (!ra_deferred.mutex) {
+		ra_deferred.mutex = SDL_CreateMutex();
+	}
+	// Zero all flags (struct is already zero-initialized, but be explicit
+	// in case RA_init is called more than once in the process lifetime).
+	ra_deferred.offline_notification = false;
+	ra_deferred.online_notification = false;
+	ra_deferred.sync = false;
+	ra_deferred.hardcore_enable = false;
+	ra_deferred.hardcore_disable = false;
+	ra_deferred.sync_apply = false;
+	ra_deferred.sync_count = 0;
+	ra_deferred.user_saw_offline = false;
+}
+
+static void ra_deferred_quit(void) {
+	if (ra_deferred.mutex) {
+		SDL_DestroyMutex(ra_deferred.mutex);
+		ra_deferred.mutex = NULL;
+	}
+}
+
+/*****************************************************************************
  * Helper: Muted achievements file path
  *****************************************************************************/
 static void ra_get_mute_file_path(char* path, size_t path_size) {
@@ -605,6 +648,150 @@ static uint32_t ra_read_memory(uint32_t address, uint8_t* buffer, uint32_t num_b
 }
 
 /*****************************************************************************
+ * Helpers: POST parameter extraction, achievement filtering
+ *****************************************************************************/
+
+/**
+ * Extract a single-character parameter value from URL-encoded POST data.
+ * For example, ra_get_post_param("r=login&u=foo", 'r', buf, 32) writes "login" to buf.
+ * Returns true if found, false otherwise.
+ */
+static bool ra_get_post_param(const char* post_data, char param_key,
+                              char* buf, size_t buf_size) {
+	if (!post_data || !buf || buf_size == 0) return false;
+	buf[0] = '\0';
+	
+	char needle[4] = { param_key, '=', '\0' };
+	const char* p = post_data;
+	while ((p = strstr(p, needle)) != NULL) {
+		if (p == post_data || *(p - 1) == '&') {
+			const char* val = p + 2;
+			const char* end = val;
+			while (*end && *end != '&') end++;
+			size_t len = (size_t)(end - val);
+			if (len >= buf_size) len = buf_size - 1;
+			memcpy(buf, val, len);
+			buf[len] = '\0';
+			return true;
+		}
+		p += 2;
+	}
+	return false;
+}
+
+/**
+ * Returns true if this achievement should be hidden from the user.
+ * Currently hides the "Unknown Emulator" warning (ID 101000001) when
+ * hardcore mode is disabled.
+ */
+static bool ra_should_hide_achievement(const rc_client_achievement_t* ach) {
+	return !CFG_getRAHardcoreMode() && ach->id == 101000001;
+}
+
+/**
+ * Re-apply pending offline unlock state to rcheevos' internal achievement data.
+ *
+ * When hardcore mode is re-enabled after an offline session, rcheevos clears
+ * achievements that only have the softcore unlock bit (which is all offline
+ * unlocks, since offline forces softcore). This function reads the pending
+ * unlock ledger, finds achievements matching the given game hash, and sets
+ * both the softcore and hardcore unlock bits so they remain visible as unlocked.
+ *
+ * Also useful at game-load time: if startsession patching missed some pending
+ * unlocks (e.g., due to a race with the connectivity probe), this ensures they
+ * are marked unlocked in rcheevos immediately.
+ *
+ * Returns the number of achievements whose state was changed.
+ */
+static uint32_t ra_reapply_pending_unlocks(rc_client_t* client, const char* game_hash) {
+	if (!client || !game_hash || !game_hash[0]) return 0;
+	
+	RA_PendingUnlock* pending = NULL;
+	uint32_t pending_count = 0;
+	if (!RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count) ||
+	    pending_count == 0 || !pending) {
+		return 0;
+	}
+	
+	uint32_t fixed = 0;
+	for (uint32_t i = 0; i < pending_count; i++) {
+		if (strcmp(pending[i].game_hash, game_hash) != 0) continue;
+		
+		const rc_client_achievement_t* ach =
+			rc_client_get_achievement_info(client, pending[i].achievement_id);
+		if (!ach) continue;
+		
+		// Only fix achievements that rcheevos thinks are still locked
+		if (ach->state == RC_CLIENT_ACHIEVEMENT_STATE_ACTIVE) {
+			// Cast away const — rc_client_get_achievement_info returns a const
+			// pointer to the internal struct, but we need to update unlock state.
+			// This is safe: the data is mutable and we're on the main thread.
+			rc_client_achievement_t* m = (rc_client_achievement_t*)ach;
+			m->unlocked |= RC_CLIENT_ACHIEVEMENT_UNLOCKED_BOTH;
+			m->unlock_time = (time_t)pending[i].timestamp;
+			m->state = RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED;
+			fixed++;
+		}
+	}
+	
+	free(pending);
+	return fixed;
+}
+
+/**
+ * Compute the game achievement summary (unlocked/total), augmented with
+ * pending offline unlocks and filtered to hide suppressed achievements,
+ * then push the result as a notification.
+ */
+static void ra_show_game_summary(rc_client_t* client, const rc_client_game_t* game) {
+	rc_client_user_game_summary_t summary;
+	rc_client_get_user_game_summary(client, &summary);
+	
+	uint32_t display_unlocked = summary.num_unlocked_achievements;
+	uint32_t display_total = summary.num_core_achievements;
+	
+	// Re-apply any pending offline unlocks that rcheevos may not know
+	// about yet (e.g., startsession patching was skipped due to timing,
+	// or hardcore re-enable cleared softcore-only unlock bits).
+	// This both fixes rcheevos' internal state and returns the count
+	// so we can augment the notification.
+	uint32_t extra = ra_reapply_pending_unlocks(client, game->hash);
+	display_unlocked += extra;
+	if (display_unlocked > display_total) {
+		display_unlocked = display_total;
+	}
+	if (extra > 0) {
+		RA_LOG_INFO("Notification: added %u pending offline unlocks to count\n", extra);
+	}
+
+	// Hide filtered achievements (e.g., "Unknown Emulator" in non-hardcore mode)
+	// from the summary counts.
+	// Note: We intentionally show "Unsupported Game Version" so users know to find a supported ROM.
+	{
+		rc_client_achievement_list_t* list = rc_client_create_achievement_list(
+			client, RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE,
+			RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_LOCK_STATE);
+		if (list) {
+			for (uint32_t b = 0; b < list->num_buckets; b++) {
+				for (uint32_t a = 0; a < list->buckets[b].num_achievements; a++) {
+					const rc_client_achievement_t* ach = list->buckets[b].achievements[a];
+					if (ra_should_hide_achievement(ach)) {
+						if (display_total > 0) display_total--;
+						if (ach->unlocked && display_unlocked > 0) display_unlocked--;
+					}
+				}
+			}
+			rc_client_destroy_achievement_list(list);
+		}
+	}
+	
+	char message[NOTIFICATION_MAX_MESSAGE];
+	snprintf(message, sizeof(message), "%s - %u/%u achievements",
+	         game->title, display_unlocked, display_total);
+	Notification_push(NOTIFICATION_ACHIEVEMENT, message, NULL);
+}
+
+/*****************************************************************************
  * Callback: Server call (HTTP)
  * 
  * rcheevos calls this for all server communication.
@@ -648,20 +835,9 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 		// or the unlock would be silently dropped from the ledger.
 		if (data->post_data && strstr(data->post_data, "r=awardachievement") &&
 		    strstr(body, "\"Success\":true")) {
-				// Extract achievement_id ('a' param) from post_data
-				// Look for "&a=" (mid-string) or "a=" at start of post_data
-				const char* a_param = NULL;
-				const char* search = data->post_data;
-				while ((search = strstr(search, "a=")) != NULL) {
-					// Verify this is the 'a' parameter (preceded by & or start of string)
-					if (search == data->post_data || *(search - 1) == '&') {
-						a_param = search + 2;  // skip 'a='
-						break;
-					}
-					search += 2;
-				}
-				if (a_param) {
-					uint32_t ach_id = (uint32_t)strtoul(a_param, NULL, 10);
+				char a_buf[16] = {0};
+				if (ra_get_post_param(data->post_data, 'a', a_buf, sizeof(a_buf))) {
+					uint32_t ach_id = (uint32_t)strtoul(a_buf, NULL, 10);
 					if (ach_id > 0) {
 						RA_Offline_ledgerWriteSyncAck(ach_id, 0);
 					}
@@ -671,21 +847,9 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 	} else {
 		// Error case — network failure, timeout, DNS error, etc.
 		// Extract request type only (don't log full post_data — it may contain API tokens)
-		const char* err_rtype = "unknown";
 		char err_rt_buf[32] = {0};
-		if (data->post_data) {
-			const char* rp = strstr(data->post_data, "r=");
-			if (rp && (rp == data->post_data || *(rp-1) == '&')) {
-				const char* rv = rp + 2;
-				const char* re = rv;
-				while (*re && *re != '&') re++;
-				size_t rl = (size_t)(re - rv);
-				if (rl >= sizeof(err_rt_buf)) rl = sizeof(err_rt_buf) - 1;
-				memcpy(err_rt_buf, rv, rl);
-				err_rt_buf[rl] = '\0';
-				err_rtype = err_rt_buf;
-			}
-		}
+		const char* err_rtype = ra_get_post_param(data->post_data, 'r', err_rt_buf, sizeof(err_rt_buf))
+		                        ? err_rt_buf : "unknown";
 		if (response && response->error) {
 			RA_LOG_ERROR("HTTP error for r=%s: %s\n", err_rtype, response->error);
 		} else {
@@ -709,22 +873,7 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 			
 			// Extract game hash from request params
 			char game_hash[64] = {0};
-			const char* m_param = strstr(data->post_data, "m=");
-			if (m_param) {
-				// Find start — ensure it's a real param (after & or at start)
-				while (m_param && m_param != data->post_data && *(m_param - 1) != '&') {
-					m_param = strstr(m_param + 2, "m=");
-				}
-				if (m_param) {
-					const char* val = m_param + 2;
-					const char* end = val;
-					while (*end && *end != '&') end++;
-					size_t vlen = (size_t)(end - val);
-					if (vlen >= sizeof(game_hash)) vlen = sizeof(game_hash) - 1;
-					memcpy(game_hash, val, vlen);
-					game_hash[vlen] = '\0';
-				}
-			}
+			ra_get_post_param(data->post_data, 'm', game_hash, sizeof(game_hash));
 			
 			if (game_hash[0] && RA_Offline_patchStartsessionResponse(
 			        patched_body, patched_length, game_hash,
@@ -767,21 +916,9 @@ static void ra_server_call(const rc_api_request_t* request,
 	// Offline mode: serve cached responses or return retryable errors
 	if (RA_Offline_isOffline()) {
 		// Extract request type for logging and decision-making
-		const char* req_type = NULL;
 		char rt_buf[32] = {0};
-		if (request->post_data) {
-			const char* rp = strstr(request->post_data, "r=");
-			if (rp && (rp == request->post_data || *(rp-1) == '&')) {
-				const char* rv = rp + 2;
-				const char* re = rv;
-				while (*re && *re != '&') re++;
-				size_t rl = (size_t)(re - rv);
-				if (rl >= sizeof(rt_buf)) rl = sizeof(rt_buf) - 1;
-				memcpy(rt_buf, rv, rl);
-				rt_buf[rl] = '\0';
-				req_type = rt_buf;
-			}
-		}
+		const char* req_type = ra_get_post_param(request->post_data, 'r', rt_buf, sizeof(rt_buf))
+		                       ? rt_buf : NULL;
 		
 		// Try cache first — this handles login, gameid, achievementsets, startsession, patch
 		char* cached_body = NULL;
@@ -891,9 +1028,8 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 	
 	switch (event->type) {
 	case RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED:
-		// Hide "Unknown Emulator" notification when hardcore mode is disabled
-		if (!CFG_getRAHardcoreMode() && event->achievement->id == 101000001) {
-			RA_LOG_DEBUG("Skipping Unknown Emulator notification (not in hardcore mode)\n");
+		if (ra_should_hide_achievement(event->achievement)) {
+			RA_LOG_DEBUG("Skipping hidden achievement notification\n");
 			break;
 		}
 		snprintf(message, sizeof(message), "Achievement Unlocked: %s",
@@ -1009,7 +1145,9 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		RA_Offline_setOffline(true);
 		// Force softcore when offline
 		rc_client_set_hardcore_enabled(client, 0);
-		ra_user_saw_offline = true;
+		SDL_LockMutex(ra_deferred.mutex);
+		ra_deferred.user_saw_offline = true;
+		SDL_UnlockMutex(ra_deferred.mutex);
 		// Start probe to detect when connectivity returns
 		ra_start_connectivity_probe();
 		break;
@@ -1023,40 +1161,15 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		if (CFG_getRAHardcoreMode()) {
 			rc_client_set_hardcore_enabled(client, 1);
 			RA_LOG_INFO("Hardcore re-enabled after reconnection\n");
-			
-			// Same as deferred hardcore enable: re-apply pending offline
-			// unlocks with both bits to survive the hardcore toggle
-			RA_PendingUnlock* pending = NULL;
-			uint32_t pending_count = 0;
-			if (RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count) &&
-			    pending_count > 0 && pending) {
-				uint32_t fixed = 0;
-				for (uint32_t i = 0; i < pending_count; i++) {
-					if (ra_game_hash[0] &&
-					    strcmp(pending[i].game_hash, ra_game_hash) == 0) {
-						const rc_client_achievement_t* ach =
-							rc_client_get_achievement_info(client,
-								pending[i].achievement_id);
-						if (ach && ach->state == RC_CLIENT_ACHIEVEMENT_STATE_ACTIVE) {
-							rc_client_achievement_t* m =
-								(rc_client_achievement_t*)ach;
-							m->unlocked |= RC_CLIENT_ACHIEVEMENT_UNLOCKED_BOTH;
-							m->unlock_time = (time_t)pending[i].timestamp;
-							m->state = RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED;
-							fixed++;
-						}
-					}
-				}
-				free(pending);
-				if (fixed > 0) {
-					RA_LOG_INFO("Re-applied %u offline unlock(s) after "
-					            "reconnect hardcore re-enable\n", fixed);
-				}
+			uint32_t fixed = ra_reapply_pending_unlocks(client, ra_game_hash);
+			if (fixed > 0) {
+				RA_LOG_INFO("Re-applied %u offline unlock(s) after "
+				            "reconnect hardcore re-enable\n", fixed);
 			}
 		}
-		if (ra_user_saw_offline) {
-			ra_user_saw_offline = false;
-		}
+		SDL_LockMutex(ra_deferred.mutex);
+		ra_deferred.user_saw_offline = false;
+		SDL_UnlockMutex(ra_deferred.mutex);
 		// Network is back — try syncing any ledger entries from prior offline sessions
 		ra_start_offline_sync();
 		break;
@@ -1189,6 +1302,19 @@ static SDL_Thread* ra_sync_thread = NULL;
 static volatile bool ra_sync_abort = false;
 
 /**
+ * Sleep for up to `ms` milliseconds, checking `*abort_flag` every 200ms.
+ * Returns early if the flag becomes true.
+ */
+static void ra_interruptible_sleep(uint32_t ms, volatile bool* abort_flag) {
+	uint32_t slept = 0;
+	while (slept < ms && !(*abort_flag)) {
+		uint32_t chunk = (ms - slept > 200) ? 200 : (ms - slept);
+		SDL_Delay(chunk);
+		slept += chunk;
+	}
+}
+
+/**
  * Generate a pseudo-random delay between min_ms and max_ms (inclusive).
  * Uses a simple LCG seeded from SDL_GetTicks + address of stack variable.
  */
@@ -1210,8 +1336,10 @@ static int ra_sync_thread_func(void* data) {
 	(void)data;
 	
 	// Reset deferred sync-apply state for this sync session
-	ra_deferred_sync_count = 0;
-	ra_deferred_sync_apply = false;
+	SDL_LockMutex(ra_deferred.mutex);
+	ra_deferred.sync_count = 0;
+	ra_deferred.sync_apply = false;
+	SDL_UnlockMutex(ra_deferred.mutex);
 	
 	RA_PendingUnlock* unlocks = NULL;
 	uint32_t count = 0;
@@ -1350,11 +1478,13 @@ static int ra_sync_thread_func(void* data) {
 			            unlock->achievement_id, synced, count);
 			
 			// Store synced ID for deferred main-thread state update
-			uint32_t idx = ra_deferred_sync_count;
+			SDL_LockMutex(ra_deferred.mutex);
+			uint32_t idx = ra_deferred.sync_count;
 			if (idx < RA_MAX_DEFERRED_SYNC_IDS) {
-				ra_deferred_sync_ids[idx] = unlock->achievement_id;
-				ra_deferred_sync_count = idx + 1;
+				ra_deferred.sync_ids[idx] = unlock->achievement_id;
+				ra_deferred.sync_count = idx + 1;
 			}
+			SDL_UnlockMutex(ra_deferred.mutex);
 		}
 		
 		// Delay before next submission (skip delay after last item)
@@ -1368,14 +1498,7 @@ static int ra_sync_thread_func(void* data) {
 				delay = ra_sync_random_delay(2000, 5000);
 			}
 			RA_LOG_DEBUG("Sync: waiting %ums before next submission\n", delay);
-			
-			// Sleep in small increments so we can respond to abort
-			uint32_t slept = 0;
-			while (slept < delay && !ra_sync_abort) {
-				uint32_t chunk = (delay - slept > 200) ? 200 : (delay - slept);
-				SDL_Delay(chunk);
-				slept += chunk;
-			}
+			ra_interruptible_sleep(delay, &ra_sync_abort);
 		}
 	}
 	
@@ -1405,17 +1528,21 @@ static int ra_sync_thread_func(void* data) {
 	RA_LOG_INFO("Sync complete: %u synced, %u skipped, %u failed\n", synced, skipped, failed);
 	
 	// Signal main thread to update rcheevos unlock state for synced achievements
-	if (synced > 0 && ra_deferred_sync_count > 0) {
-		ra_deferred_sync_apply = true;
+	SDL_LockMutex(ra_deferred.mutex);
+	if (synced > 0 && ra_deferred.sync_count > 0) {
+		ra_deferred.sync_apply = true;
 	}
+	SDL_UnlockMutex(ra_deferred.mutex);
 	
 	// If sync failed, go back to offline mode and restart the probe
 	// so connectivity can be re-verified and sync retried
 	if (failed > 0) {
 		RA_Offline_setOffline(true);
-		ra_user_saw_offline = true;
-		ra_deferred_offline_notification = true;
-		ra_deferred_hardcore_disable = true;
+		SDL_LockMutex(ra_deferred.mutex);
+		ra_deferred.user_saw_offline = true;
+		ra_deferred.offline_notification = true;
+		ra_deferred.hardcore_disable = true;
+		SDL_UnlockMutex(ra_deferred.mutex);
 		ra_start_connectivity_probe();
 	}
 	
@@ -1544,17 +1671,19 @@ static int ra_connectivity_probe_func(void* data) {
 				// If the offline notification hasn't been displayed yet
 				// (still deferred), cancel it — the user never saw "Offline"
 				// so showing "Connected" would also be meaningless noise.
-				if (ra_deferred_offline_notification) {
-					ra_deferred_offline_notification = false;
+				SDL_LockMutex(ra_deferred.mutex);
+				if (ra_deferred.offline_notification) {
+					ra_deferred.offline_notification = false;
 					RA_LOG_INFO("Probe: cancelled pending offline notification (connectivity arrived in time)\n");
-					// Don't set ra_deferred_online_notification — user never saw offline
+					// Don't set online_notification — user never saw offline
 				} else {
-					ra_deferred_online_notification = true;
+					ra_deferred.online_notification = true;
 				}
-				ra_deferred_sync = true;
+				ra_deferred.sync = true;
 				if (CFG_getRAHardcoreMode()) {
-					ra_deferred_hardcore_enable = true;
+					ra_deferred.hardcore_enable = true;
 				}
+				SDL_UnlockMutex(ra_deferred.mutex);
 				
 				success = true;
 				RA_LOG_INFO("Probe: login successful, transitioning to online mode\n");
@@ -1571,15 +1700,7 @@ static int ra_connectivity_probe_func(void* data) {
 		
 		if (success || ra_probe_abort) break;
 		
-		// Sleep RA_PROBE_INTERVAL_MS in small chunks for abort responsiveness
-		uint32_t slept = 0;
-		while (slept < RA_PROBE_INTERVAL_MS && !ra_probe_abort) {
-			uint32_t chunk = (RA_PROBE_INTERVAL_MS - slept > RA_PROBE_SLEEP_CHUNK_MS)
-			                 ? RA_PROBE_SLEEP_CHUNK_MS
-			                 : (RA_PROBE_INTERVAL_MS - slept);
-			SDL_Delay(chunk);
-			slept += chunk;
-		}
+		ra_interruptible_sleep(RA_PROBE_INTERVAL_MS, &ra_probe_abort);
 	}
 	
 	RA_LOG_INFO("Connectivity probe exiting\n");
@@ -1667,73 +1788,9 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 			RA_Badges_init();
 			ra_prefetch_badges(client);
 			
-			// Show achievement summary
-			rc_client_user_game_summary_t summary;
-			rc_client_get_user_game_summary(client, &summary);
-			
-			uint32_t display_unlocked = summary.num_unlocked_achievements;
-			uint32_t display_total = summary.num_core_achievements;
-			
-			// Augment unlocked count with pending offline unlocks that rcheevos
-			// may not know about yet (e.g., startsession patching was skipped due
-			// to timing, or hardcore re-enable cleared softcore-only unlock bits).
-			{
-				RA_PendingUnlock* pending = NULL;
-				uint32_t pending_count = 0;
-				if (RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count) &&
-				    pending_count > 0 && pending) {
-					uint32_t extra = 0;
-					for (uint32_t i = 0; i < pending_count; i++) {
-						if (game->hash && strcmp(pending[i].game_hash, game->hash) == 0) {
-							const rc_client_achievement_t* ach =
-								rc_client_get_achievement_info(client, pending[i].achievement_id);
-							if (ach && !(ach->unlocked &
-							    (rc_client_get_hardcore_enabled(client)
-							     ? RC_CLIENT_ACHIEVEMENT_UNLOCKED_HARDCORE
-							     : RC_CLIENT_ACHIEVEMENT_UNLOCKED_SOFTCORE))) {
-								extra++;
-							}
-						}
-					}
-				display_unlocked += extra;
-				if (display_unlocked > display_total) {
-					display_unlocked = display_total;  // Clamp to avoid showing e.g. 11/10
-				}
-				if (extra > 0) {
-					RA_LOG_INFO("Notification: added %u pending offline unlocks to count\n", extra);
-				}
-				free(pending);
-			}
-		}
-		
-			// Hide "Unknown Emulator" warning (ID 101000001) when hardcore mode is disabled.
-			// Note: We intentionally show "Unsupported Game Version" so users know to find a supported ROM.
-			if (!CFG_getRAHardcoreMode()) {
-				rc_client_achievement_list_t* list = rc_client_create_achievement_list(
-					client, RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE,
-					RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_LOCK_STATE);
-				if (list) {
-					bool found = false;
-					for (uint32_t b = 0; b < list->num_buckets && !found; b++) {
-						for (uint32_t a = 0; a < list->buckets[b].num_achievements && !found; a++) {
-							const rc_client_achievement_t* ach = list->buckets[b].achievements[a];
-							if (ach->id == 101000001) {
-								// Subtract from total
-								if (display_total > 0) display_total--;
-								// If it's unlocked, subtract from unlocked count too
-								if (ach->unlocked && display_unlocked > 0) display_unlocked--;
-								found = true;
-							}
-						}
-					}
-					rc_client_destroy_achievement_list(list);
-				}
-			}
-			
-			char message[NOTIFICATION_MAX_MESSAGE];
-			snprintf(message, sizeof(message), "%s - %u/%u achievements",
-			         game->title, display_unlocked, display_total);
-			Notification_push(NOTIFICATION_ACHIEVEMENT, message, NULL);
+			// Show achievement summary (includes offline unlock augmentation
+			// and filtered achievement hiding)
+			ra_show_game_summary(client, game);
 			
 			// Ledger: record session start
 			RA_Offline_ledgerWriteSessionStart(game->id, game->hash,
@@ -1838,12 +1895,16 @@ void RA_init(void) {
 	}
 	
 	RA_Offline_setOffline(start_offline);
-	ra_user_saw_offline = false;
+	
+	// Initialize the deferred state (must be before setting any flags)
+	ra_deferred_init();
 	
 	if (start_offline) {
 		RA_LOG_INFO("Initializing in offline mode (softcore only)...\n");
 		// Defer notification — Notification_init() hasn't been called yet at this point
-		ra_deferred_offline_notification = true;
+		SDL_LockMutex(ra_deferred.mutex);
+		ra_deferred.offline_notification = true;
+		SDL_UnlockMutex(ra_deferred.mutex);
 	} else {
 		RA_LOG_INFO("Initializing in online mode...\n");
 	}
@@ -1955,6 +2016,9 @@ void RA_quit(void) {
 	
 	// Clean up the response queue (after rc_client is destroyed)
 	ra_queue_quit();
+	
+	// Clean up deferred state mutex
+	ra_deferred_quit();
 	
 	// Shut down offline subsystem (after everything else)
 	RA_Offline_shutdown();
@@ -2209,68 +2273,82 @@ void RA_unloadGame(void) {
  * and login retry scheduling.
  */
 static void ra_process_deferred_flags(void) {
+	// --- Snapshot: copy all deferred flags under the lock, then reset them ---
+	bool snap_offline_notification = false;
+	bool snap_online_notification = false;
+	bool snap_sync = false;
+	bool snap_hardcore_enable = false;
+	bool snap_hardcore_disable = false;
+	bool snap_sync_apply = false;
+	bool snap_user_saw_offline = false;
+	uint32_t snap_sync_ids[RA_MAX_DEFERRED_SYNC_IDS];
+	uint32_t snap_sync_count = 0;
+	
+	SDL_LockMutex(ra_deferred.mutex);
+	
+	snap_offline_notification = ra_deferred.offline_notification;
+	snap_online_notification = ra_deferred.online_notification;
+	snap_sync = ra_deferred.sync;
+	snap_hardcore_enable = ra_deferred.hardcore_enable;
+	snap_hardcore_disable = ra_deferred.hardcore_disable;
+	snap_sync_apply = ra_deferred.sync_apply;
+	snap_user_saw_offline = ra_deferred.user_saw_offline;
+	snap_sync_count = ra_deferred.sync_count;
+	if (snap_sync_apply && snap_sync_count > 0) {
+		memcpy(snap_sync_ids, ra_deferred.sync_ids,
+		       snap_sync_count * sizeof(uint32_t));
+	}
+	
+	// Reset all consumed flags while still holding the lock
+	ra_deferred.offline_notification = false;
+	ra_deferred.online_notification = false;
+	ra_deferred.sync = false;
+	ra_deferred.hardcore_enable = false;
+	ra_deferred.hardcore_disable = false;
+	ra_deferred.sync_apply = false;
+	if (snap_sync_apply) {
+		ra_deferred.sync_count = 0;
+	}
+	// Update user_saw_offline based on the transitions we're about to process
+	if (snap_offline_notification) {
+		ra_deferred.user_saw_offline = true;
+	}
+	if (snap_online_notification && snap_user_saw_offline) {
+		ra_deferred.user_saw_offline = false;
+	}
+	
+	SDL_UnlockMutex(ra_deferred.mutex);
+	
+	// --- Process the snapshot without holding the lock ---
+	
 	// Process deferred offline flag (Notification_init() wasn't ready during RA_init())
-	if (ra_deferred_offline_notification) {
-		ra_deferred_offline_notification = false;
-		ra_user_saw_offline = true;
+	if (snap_offline_notification) {
+		// user_saw_offline was already set inside the lock above
 	}
 	
 	// Handle deferred online transition (set by connectivity probe thread)
-	if (ra_deferred_online_notification) {
-		ra_deferred_online_notification = false;
-		if (ra_user_saw_offline) {
-			ra_user_saw_offline = false;
-		}
+	if (snap_online_notification) {
+		// user_saw_offline was already cleared inside the lock above
 	}
-	if (ra_deferred_hardcore_enable) {
-		ra_deferred_hardcore_enable = false;
+	
+	if (snap_hardcore_enable) {
 		if (ra_client && CFG_getRAHardcoreMode()) {
 			rc_client_set_hardcore_enabled(ra_client, 1);
 			RA_LOG_INFO("Hardcore re-enabled after online transition\n");
-			
-			// rc_client_set_hardcore_enabled flips achievements to check the
-			// hardcore unlock bit. Offline achievements only have the softcore
-			// bit set (offline mode forces softcore), so they revert to ACTIVE
-			// (locked). Re-apply pending offline unlocks with both bits so
-			// they remain visible as unlocked while sync is in progress.
-			RA_PendingUnlock* pending = NULL;
-			uint32_t pending_count = 0;
-			if (RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count) &&
-			    pending_count > 0 && pending) {
-				uint32_t fixed = 0;
-				for (uint32_t i = 0; i < pending_count; i++) {
-					if (ra_game_hash[0] &&
-					    strcmp(pending[i].game_hash, ra_game_hash) == 0) {
-						const rc_client_achievement_t* ach =
-							rc_client_get_achievement_info(ra_client,
-								pending[i].achievement_id);
-						if (ach && ach->state == RC_CLIENT_ACHIEVEMENT_STATE_ACTIVE) {
-							rc_client_achievement_t* m =
-								(rc_client_achievement_t*)ach;
-							m->unlocked |= RC_CLIENT_ACHIEVEMENT_UNLOCKED_BOTH;
-							m->unlock_time = (time_t)pending[i].timestamp;
-							m->state = RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED;
-							fixed++;
-						}
-					}
-				}
-				free(pending);
-				if (fixed > 0) {
-					RA_LOG_INFO("Re-applied %u offline unlock(s) after "
-					            "hardcore re-enable\n", fixed);
-				}
+			uint32_t fixed = ra_reapply_pending_unlocks(ra_client, ra_game_hash);
+			if (fixed > 0) {
+				RA_LOG_INFO("Re-applied %u offline unlock(s) after "
+				            "hardcore re-enable\n", fixed);
 			}
 		}
 	}
-	if (ra_deferred_hardcore_disable) {
-		ra_deferred_hardcore_disable = false;
+	if (snap_hardcore_disable) {
 		if (ra_client) {
 			rc_client_set_hardcore_enabled(ra_client, 0);
 			RA_LOG_INFO("Hardcore disabled after sync failure (offline mode)\n");
 		}
 	}
-	if (ra_deferred_sync) {
-		ra_deferred_sync = false;
+	if (snap_sync) {
 		ra_start_offline_sync();
 	}
 	
@@ -2278,18 +2356,16 @@ static void ra_process_deferred_flags(void) {
 	// The sync thread confirmed these achievements with the RA server; now we
 	// update rcheevos' internal unlock bits so the achievement list and summary
 	// reflect the correct state without needing to restart the game.
-	if (ra_deferred_sync_apply) {
-		ra_deferred_sync_apply = false;
+	if (snap_sync_apply) {
 		if (ra_client) {
-			uint32_t count = ra_deferred_sync_count;
 			uint32_t applied = 0;
 			uint8_t mode = rc_client_get_hardcore_enabled(ra_client)
 				? RC_CLIENT_ACHIEVEMENT_UNLOCKED_BOTH
 				: RC_CLIENT_ACHIEVEMENT_UNLOCKED_SOFTCORE;
 			
-			for (uint32_t i = 0; i < count; i++) {
+			for (uint32_t i = 0; i < snap_sync_count; i++) {
 				const rc_client_achievement_t* ach =
-					rc_client_get_achievement_info(ra_client, ra_deferred_sync_ids[i]);
+					rc_client_get_achievement_info(ra_client, snap_sync_ids[i]);
 				if (ach && !(ach->unlocked & mode)) {
 					// Cast away const — rc_client_get_achievement_info returns a const
 					// pointer to the internal struct, but we need to update unlock state.
@@ -2304,7 +2380,6 @@ static void ra_process_deferred_flags(void) {
 				}
 			}
 			
-			ra_deferred_sync_count = 0;
 			if (applied > 0) {
 				RA_LOG_INFO("Applied %u synced achievement unlocks to rcheevos state\n", applied);
 			}
@@ -2410,13 +2485,10 @@ void RA_getAchievementSummary(uint32_t* unlocked, uint32_t* total) {
 	uint32_t total_count = 0;
 	
 	if (list) {
-		bool hide_unknown_emulator = !CFG_getRAHardcoreMode();
-		
 		for (uint32_t b = 0; b < list->num_buckets; b++) {
 			for (uint32_t a = 0; a < list->buckets[b].num_achievements; a++) {
 				const rc_client_achievement_t* ach = list->buckets[b].achievements[a];
-				// Skip "Unknown Emulator" warning when hardcore mode is disabled
-				if (hide_unknown_emulator && ach->id == 101000001) {
+				if (ra_should_hide_achievement(ach)) {
 					continue;
 				}
 				total_count++;

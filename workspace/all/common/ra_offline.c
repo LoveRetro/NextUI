@@ -1,4 +1,5 @@
 #include "ra_offline.h"
+#include "sha256.h"
 #include "defines.h"
 #include "api.h"
 
@@ -15,147 +16,6 @@
 #define OFFLINE_LOG_INFO(fmt, ...)  LOG_info("[RA_OFFLINE] " fmt, ##__VA_ARGS__)
 #define OFFLINE_LOG_WARN(fmt, ...)  LOG_warn("[RA_OFFLINE] " fmt, ##__VA_ARGS__)
 #define OFFLINE_LOG_ERROR(fmt, ...) LOG_error("[RA_OFFLINE] " fmt, ##__VA_ARGS__)
-
-/*****************************************************************************
- * SHA-256 implementation (self-contained, no external dependencies)
- *
- * Based on FIPS 180-4. Public domain reference style.
- *****************************************************************************/
-
-#define SHA256_BLOCK_SIZE 64
-#define SHA256_DIGEST_SIZE 32
-
-typedef struct {
-	uint32_t state[8];
-	uint64_t count;
-	uint8_t  buffer[SHA256_BLOCK_SIZE];
-} SHA256_CTX;
-
-static const uint32_t sha256_k[64] = {
-	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
-	0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-	0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-	0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
-	0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-	0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-	0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-	0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-	0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-	0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
-	0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-	0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
-	0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-	0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-};
-
-#define ROTR(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
-#define CH(x, y, z)  (((x) & (y)) ^ (~(x) & (z)))
-#define MAJ(x, y, z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
-#define EP0(x)  (ROTR(x, 2) ^ ROTR(x, 13) ^ ROTR(x, 22))
-#define EP1(x)  (ROTR(x, 6) ^ ROTR(x, 11) ^ ROTR(x, 25))
-#define SIG0(x) (ROTR(x, 7) ^ ROTR(x, 18) ^ ((x) >> 3))
-#define SIG1(x) (ROTR(x, 17) ^ ROTR(x, 19) ^ ((x) >> 10))
-
-static void sha256_transform(SHA256_CTX* ctx, const uint8_t* data) {
-	uint32_t a, b, c, d, e, f, g, h, t1, t2, w[64];
-	int i;
-
-	for (i = 0; i < 16; i++) {
-		w[i] = ((uint32_t)data[i * 4] << 24) |
-		       ((uint32_t)data[i * 4 + 1] << 16) |
-		       ((uint32_t)data[i * 4 + 2] << 8) |
-		       ((uint32_t)data[i * 4 + 3]);
-	}
-	for (i = 16; i < 64; i++) {
-		w[i] = SIG1(w[i - 2]) + w[i - 7] + SIG0(w[i - 15]) + w[i - 16];
-	}
-
-	a = ctx->state[0]; b = ctx->state[1]; c = ctx->state[2]; d = ctx->state[3];
-	e = ctx->state[4]; f = ctx->state[5]; g = ctx->state[6]; h = ctx->state[7];
-
-	for (i = 0; i < 64; i++) {
-		t1 = h + EP1(e) + CH(e, f, g) + sha256_k[i] + w[i];
-		t2 = EP0(a) + MAJ(a, b, c);
-		h = g; g = f; f = e; e = d + t1;
-		d = c; c = b; b = a; a = t1 + t2;
-	}
-
-	ctx->state[0] += a; ctx->state[1] += b; ctx->state[2] += c; ctx->state[3] += d;
-	ctx->state[4] += e; ctx->state[5] += f; ctx->state[6] += g; ctx->state[7] += h;
-}
-
-static void sha256_init(SHA256_CTX* ctx) {
-	ctx->state[0] = 0x6a09e667; ctx->state[1] = 0xbb67ae85;
-	ctx->state[2] = 0x3c6ef372; ctx->state[3] = 0xa54ff53a;
-	ctx->state[4] = 0x510e527f; ctx->state[5] = 0x9b05688c;
-	ctx->state[6] = 0x1f83d9ab; ctx->state[7] = 0x5be0cd19;
-	ctx->count = 0;
-}
-
-static void sha256_update(SHA256_CTX* ctx, const void* data, size_t len) {
-	const uint8_t* p = (const uint8_t*)data;
-	size_t fill = (size_t)(ctx->count & 0x3f);
-	ctx->count += len;
-
-	if (fill) {
-		size_t avail = SHA256_BLOCK_SIZE - fill;
-		if (len < avail) {
-			memcpy(ctx->buffer + fill, p, len);
-			return;
-		}
-		memcpy(ctx->buffer + fill, p, avail);
-		sha256_transform(ctx, ctx->buffer);
-		p += avail;
-		len -= avail;
-	}
-	while (len >= SHA256_BLOCK_SIZE) {
-		sha256_transform(ctx, p);
-		p += SHA256_BLOCK_SIZE;
-		len -= SHA256_BLOCK_SIZE;
-	}
-	if (len) {
-		memcpy(ctx->buffer, p, len);
-	}
-}
-
-static void sha256_final(SHA256_CTX* ctx, uint8_t digest[SHA256_DIGEST_SIZE]) {
-	uint64_t bits = ctx->count * 8;
-	size_t fill = (size_t)(ctx->count & 0x3f);
-	int i;
-
-	/* Padding */
-	ctx->buffer[fill++] = 0x80;
-	if (fill > 56) {
-		memset(ctx->buffer + fill, 0, SHA256_BLOCK_SIZE - fill);
-		sha256_transform(ctx, ctx->buffer);
-		fill = 0;
-	}
-	memset(ctx->buffer + fill, 0, 56 - fill);
-
-	/* Length in bits, big-endian */
-	for (i = 0; i < 8; i++) {
-		ctx->buffer[56 + i] = (uint8_t)(bits >> (56 - i * 8));
-	}
-	sha256_transform(ctx, ctx->buffer);
-
-	/* Output */
-	for (i = 0; i < 8; i++) {
-		digest[i * 4]     = (uint8_t)(ctx->state[i] >> 24);
-		digest[i * 4 + 1] = (uint8_t)(ctx->state[i] >> 16);
-		digest[i * 4 + 2] = (uint8_t)(ctx->state[i] >> 8);
-		digest[i * 4 + 3] = (uint8_t)(ctx->state[i]);
-	}
-}
-
-/* Convenience: hash a buffer in one shot */
-static void sha256_hash(const void* data, size_t len, uint8_t digest[SHA256_DIGEST_SIZE]) {
-	SHA256_CTX ctx;
-	sha256_init(&ctx);
-	sha256_update(&ctx, data, len);
-	sha256_final(&ctx, digest);
-}
 
 /*****************************************************************************
  * Static state
@@ -257,16 +117,15 @@ static bool extract_param(const char* str, const char* key, char* buf, size_t bu
  * Get the request type from URL or post_data.
  * Returns pointer to static string or NULL.
  */
-static const char* get_request_type(const char* url, const char* post_data) {
-	static char type_buf[32];
-
+static const char* get_request_type(const char* url, const char* post_data,
+                                    char* buf, size_t buf_size) {
 	/* Try URL first (GET requests have ?r=... in URL) */
-	if (url && extract_param(url, "r", type_buf, sizeof(type_buf))) {
-		return type_buf;
+	if (url && extract_param(url, "r", buf, buf_size)) {
+		return buf;
 	}
 	/* Try POST data */
-	if (post_data && extract_param(post_data, "r", type_buf, sizeof(type_buf))) {
-		return type_buf;
+	if (post_data && extract_param(post_data, "r", buf, buf_size)) {
+		return buf;
 	}
 	return NULL;
 }
@@ -331,7 +190,8 @@ void RA_Offline_cacheResponse(const char* url, const char* post_data,
                               const char* response_body, size_t response_len) {
 	if (!ra_offline_initialized || !response_body || response_len == 0) return;
 
-	const char* req_type = get_request_type(url, post_data);
+	char type_buf[32];
+	const char* req_type = get_request_type(url, post_data, type_buf, sizeof(type_buf));
 	if (!is_cacheable_request(req_type)) return;
 
 	char path[512];
@@ -386,20 +246,17 @@ void RA_Offline_cacheResponse(const char* url, const char* post_data,
 static bool patch_startsession_with_ledger(char* body, size_t body_len,
                                            const char* game_hash,
                                            char** out_body, size_t* out_len) {
-	/* Get pending unlocks from ledger */
 	RA_PendingUnlock* pending = NULL;
-	uint32_t pending_count = 0;
-	if (!RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count)) {
-		*out_body = body;
-		*out_len = body_len;
-		return true;
-	}
+	bool* need_inject = NULL;
+	char* inject_buf = NULL;
 
-	if (pending_count == 0 || !pending) {
-		*out_body = body;
-		*out_len = body_len;
-		return true;
-	}
+	/* Get pending unlocks from ledger */
+	uint32_t pending_count = 0;
+	if (!RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count))
+		goto passthrough;
+
+	if (pending_count == 0 || !pending)
+		goto passthrough;
 
 	/* Filter to only unlocks for this game hash */
 	uint32_t game_count = 0;
@@ -409,12 +266,8 @@ static bool patch_startsession_with_ledger(char* body, size_t body_len,
 		}
 	}
 
-	if (game_count == 0) {
-		free(pending);
-		*out_body = body;
-		*out_len = body_len;
-		return true;
-	}
+	if (game_count == 0)
+		goto passthrough;
 
 	/*
 	 * Parse existing Unlocks array to avoid duplicates.
@@ -425,42 +278,26 @@ static bool patch_startsession_with_ledger(char* body, size_t body_len,
 	if (!unlocks_pos) {
 		/* No Unlocks field — very unusual, just return as-is */
 		OFFLINE_LOG_WARN("startsession response has no Unlocks field\n");
-		free(pending);
-		*out_body = body;
-		*out_len = body_len;
-		return true;
+		goto passthrough;
 	}
 
 	/* Find the '[' after "Unlocks" */
 	char* arr_start = strchr(unlocks_pos + strlen(unlocks_key), '[');
-	if (!arr_start) {
-		free(pending);
-		*out_body = body;
-		*out_len = body_len;
-		return true;
-	}
+	if (!arr_start)
+		goto passthrough;
 
 	/* Find the matching ']' */
 	char* arr_end = strchr(arr_start, ']');
-	if (!arr_end) {
-		free(pending);
-		*out_body = body;
-		*out_len = body_len;
-		return true;
-	}
+	if (!arr_end)
+		goto passthrough;
 
 	/* Check which pending achievement IDs are already in the Unlocks array */
 	/* Simple approach: search for "ID":NNNN in the existing array text */
-	bool* need_inject = (bool*)calloc(pending_count, sizeof(bool));
-	if (!need_inject) {
-		free(pending);
-		*out_body = body;
-		*out_len = body_len;
-		return true;
-	}
+	need_inject = (bool*)calloc(pending_count, sizeof(bool));
+	if (!need_inject)
+		goto passthrough;
 
 	uint32_t inject_count = 0;
-	size_t arr_text_len = (size_t)(arr_end - arr_start);
 	for (uint32_t i = 0; i < pending_count; i++) {
 		if (!game_hash || strcmp(pending[i].game_hash, game_hash) != 0) {
 			continue;
@@ -482,13 +319,8 @@ static bool patch_startsession_with_ledger(char* body, size_t body_len,
 		}
 	}
 
-	if (inject_count == 0) {
-		free(need_inject);
-		free(pending);
-		*out_body = body;
-		*out_len = body_len;
-		return true;
-	}
+	if (inject_count == 0)
+		goto passthrough;
 
 	OFFLINE_LOG_DEBUG("Patching startsession: injecting %u ledger unlocks into Unlocks array\n",
 	                 inject_count);
@@ -499,14 +331,9 @@ static bool patch_startsession_with_ledger(char* body, size_t body_len,
 	 * Max per entry: ~40 chars. Allocate generously.
 	 */
 	size_t inject_buf_size = inject_count * 48 + 1;
-	char* inject_buf = (char*)malloc(inject_buf_size);
-	if (!inject_buf) {
-		free(need_inject);
-		free(pending);
-		*out_body = body;
-		*out_len = body_len;
-		return true;
-	}
+	inject_buf = (char*)malloc(inject_buf_size);
+	if (!inject_buf)
+		goto passthrough;
 
 	size_t inject_len = 0;
 	bool existing_entries = (arr_end - arr_start > 1); /* true if array is non-empty */
@@ -525,7 +352,9 @@ static bool patch_startsession_with_ledger(char* body, size_t body_len,
 		if (written > 0) inject_len += (size_t)written;
 	}
 	free(need_inject);
+	need_inject = NULL;
 	free(pending);
+	pending = NULL;
 
 	/* Build the new body: prefix + inject + suffix */
 	/* Insert just before the ']' of the Unlocks array */
@@ -553,6 +382,14 @@ static bool patch_startsession_with_ledger(char* body, size_t body_len,
 	*out_body = new_body;
 	*out_len = new_len;
 	return true;
+
+passthrough:
+	free(inject_buf);
+	free(need_inject);
+	free(pending);
+	*out_body = body;
+	*out_len = body_len;
+	return true;
 }
 
 bool RA_Offline_patchStartsessionResponse(char* body, size_t body_len,
@@ -560,28 +397,9 @@ bool RA_Offline_patchStartsessionResponse(char* body, size_t body_len,
                                           char** out_body, size_t* out_len) {
 	if (!ra_offline_initialized || !body || body_len == 0) return false;
 
-	/* Check if there are any pending unlocks for this game before doing work */
-	RA_PendingUnlock* pending = NULL;
-	uint32_t pending_count = 0;
-	if (!RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count) ||
-	    pending_count == 0) {
-		free(pending);
-		return false;
-	}
-
-	/* Check if any pending unlocks match this game hash */
-	bool has_match = false;
-	for (uint32_t i = 0; i < pending_count; i++) {
-		if (game_hash && strcmp(pending[i].game_hash, game_hash) == 0) {
-			has_match = true;
-			break;
-		}
-	}
-	free(pending);
-
-	if (!has_match) return false;
-
-	/* Delegate to the internal patching function */
+	/* Delegate to the internal patching function, which reads the ledger
+	 * once internally. No need to pre-check — the function is a no-op
+	 * when there are no matching pending unlocks. */
 	char* orig_body = body;
 	if (!patch_startsession_with_ledger(body, body_len, game_hash, out_body, out_len)) {
 		return false;
@@ -596,7 +414,8 @@ bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
                                   char** out_body, size_t* out_len) {
 	if (!ra_offline_initialized || !out_body || !out_len) return false;
 
-	const char* req_type = get_request_type(url, post_data);
+	char type_buf[32];
+	const char* req_type = get_request_type(url, post_data, type_buf, sizeof(type_buf));
 	if (!req_type) return false;
 
 	char path[512];
@@ -808,20 +627,27 @@ static bool ledger_append(RA_LedgerRecord* rec) {
 	return true;
 }
 
+/* Initialize a ledger record with common fields zeroed and set */
+static void ledger_record_init(RA_LedgerRecord* rec, uint8_t type,
+                               uint32_t game_id, uint32_t achievement_id,
+                               uint8_t hardcore, const char* game_hash) {
+	memset(rec, 0, sizeof(*rec));
+	rec->type = type;
+	rec->timestamp = (uint32_t)time(NULL);
+	rec->game_id = game_id;
+	rec->achievement_id = achievement_id;
+	rec->hardcore = hardcore;
+	if (game_hash) {
+		strncpy(rec->game_hash, game_hash, sizeof(rec->game_hash) - 1);
+	}
+}
+
 void RA_Offline_ledgerWriteSessionStart(uint32_t game_id, const char* game_hash,
                                         uint8_t hardcore) {
 	if (!ra_offline_initialized) return;
 
 	RA_LedgerRecord rec;
-	memset(&rec, 0, sizeof(rec));
-	rec.type = RA_LEDGER_SESSION_START;
-	rec.timestamp = (uint32_t)time(NULL);
-	rec.game_id = game_id;
-	rec.achievement_id = 0;
-	rec.hardcore = hardcore;
-	if (game_hash) {
-		strncpy(rec.game_hash, game_hash, sizeof(rec.game_hash) - 1);
-	}
+	ledger_record_init(&rec, RA_LEDGER_SESSION_START, game_id, 0, hardcore, game_hash);
 
 	if (ledger_append(&rec)) {
 		OFFLINE_LOG_DEBUG("Ledger: SESSION_START game=%u hash=%s\n", game_id,
@@ -833,20 +659,20 @@ void RA_Offline_ledgerWriteUnlock(uint32_t game_id, uint32_t achievement_id,
                                   const char* game_hash, uint8_t hardcore) {
 	if (!ra_offline_initialized) return;
 
-	RA_LedgerRecord rec;
-	memset(&rec, 0, sizeof(rec));
-	rec.type = RA_LEDGER_ACHIEVEMENT_UNLOCK;
-	rec.timestamp = (uint32_t)time(NULL);
-	rec.game_id = game_id;
-	rec.achievement_id = achievement_id;
-	rec.hardcore = hardcore;
-	if (game_hash) {
-		strncpy(rec.game_hash, game_hash, sizeof(rec.game_hash) - 1);
+	/* Hardcore unlocks are never written to the offline ledger — they cannot
+	 * be synced retroactively and would persist forever after compaction. */
+	if (hardcore) {
+		OFFLINE_LOG_DEBUG("Ledger: skipping hardcore UNLOCK achievement=%u game=%u\n",
+		                  achievement_id, game_id);
+		return;
 	}
 
+	RA_LedgerRecord rec;
+	ledger_record_init(&rec, RA_LEDGER_ACHIEVEMENT_UNLOCK, game_id, achievement_id, 0, game_hash);
+
 	if (ledger_append(&rec)) {
-		OFFLINE_LOG_INFO("Ledger: UNLOCK achievement=%u game=%u hardcore=%d\n",
-		                 achievement_id, game_id, hardcore);
+		OFFLINE_LOG_INFO("Ledger: UNLOCK achievement=%u game=%u\n",
+		                 achievement_id, game_id);
 	}
 }
 
@@ -854,15 +680,7 @@ void RA_Offline_ledgerWriteSessionEnd(uint32_t game_id, const char* game_hash) {
 	if (!ra_offline_initialized) return;
 
 	RA_LedgerRecord rec;
-	memset(&rec, 0, sizeof(rec));
-	rec.type = RA_LEDGER_SESSION_END;
-	rec.timestamp = (uint32_t)time(NULL);
-	rec.game_id = game_id;
-	rec.achievement_id = 0;
-	rec.hardcore = 0;
-	if (game_hash) {
-		strncpy(rec.game_hash, game_hash, sizeof(rec.game_hash) - 1);
-	}
+	ledger_record_init(&rec, RA_LEDGER_SESSION_END, game_id, 0, 0, game_hash);
 
 	if (ledger_append(&rec)) {
 		OFFLINE_LOG_DEBUG("Ledger: SESSION_END game=%u\n", game_id);
@@ -873,12 +691,7 @@ void RA_Offline_ledgerWriteSyncAck(uint32_t achievement_id, uint32_t game_id) {
 	if (!ra_offline_initialized) return;
 
 	RA_LedgerRecord rec;
-	memset(&rec, 0, sizeof(rec));
-	rec.type = RA_LEDGER_SYNC_ACK;
-	rec.timestamp = (uint32_t)time(NULL);
-	rec.game_id = game_id;
-	rec.achievement_id = achievement_id;
-	rec.hardcore = 0;
+	ledger_record_init(&rec, RA_LEDGER_SYNC_ACK, game_id, achievement_id, 0, NULL);
 
 	if (ledger_append(&rec)) {
 		OFFLINE_LOG_DEBUG("Ledger: SYNC_ACK achievement=%u game=%u\n",
@@ -886,115 +699,125 @@ void RA_Offline_ledgerWriteSyncAck(uint32_t achievement_id, uint32_t game_id) {
 	}
 }
 
-void RA_Offline_ledgerCompact(void) {
-	if (!ra_offline_initialized) return;
-
-	SDL_LockMutex(ra_ledger_mutex);
+/*
+ * Read the ledger and return only the pending (un-cancelled) softcore UNLOCK records.
+ * Implements order-aware SYNC_ACK matching: each SYNC_ACK cancels the earliest
+ * preceding unmatched UNLOCK with the same achievement ID.
+ *
+ * Caller MUST hold ra_ledger_mutex.
+ *
+ * On success: returns true, *out_records and *out_count are set.
+ *             Caller must free(*out_records) when done.
+ *             *out_count == 0 is a valid success (no pending records).
+ * On failure: returns false (allocation error).
+ */
+static bool ledger_read_pending_records(RA_LedgerRecord** out_records,
+                                        uint32_t* out_count) {
+	*out_records = NULL;
+	*out_count = 0;
 
 	FILE* f = fopen(ra_ledger_path, "rb");
-	if (!f) {
-		OFFLINE_LOG_DEBUG("Compact: no ledger file to compact\n");
-		SDL_UnlockMutex(ra_ledger_mutex);
-		return;
-	}
+	if (!f) return true; /* No ledger = no pending records (not an error) */
 
-	/* Read all records (ignoring chain integrity — we just want the data) */
 	fseek(f, 0, SEEK_END);
 	long file_size = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
 	if (file_size <= 0 || (file_size % sizeof(RA_LedgerRecord)) != 0) {
 		fclose(f);
-		OFFLINE_LOG_WARN("Compact: ledger file has invalid size %ld, deleting\n", file_size);
-		unlink(ra_ledger_path);
-		memset(ra_ledger_last_hash, 0, SHA256_DIGEST_SIZE);
-		ra_ledger_has_records = false;
-		SDL_UnlockMutex(ra_ledger_mutex);
-		return;
+		return true;
 	}
 
 	uint32_t total_records = (uint32_t)(file_size / (long)sizeof(RA_LedgerRecord));
 	RA_LedgerRecord* records = (RA_LedgerRecord*)malloc(total_records * sizeof(RA_LedgerRecord));
 	if (!records) {
 		fclose(f);
-		OFFLINE_LOG_ERROR("Compact: failed to allocate for %u records\n", total_records);
-		SDL_UnlockMutex(ra_ledger_mutex);
-		return;
+		return false;
 	}
 
 	uint32_t read_count = (uint32_t)fread(records, sizeof(RA_LedgerRecord), total_records, f);
 	fclose(f);
 
 	if (read_count < total_records) {
-		OFFLINE_LOG_WARN("Compact: read only %u of %u records\n", read_count, total_records);
 		total_records = read_count;
 	}
 
-	/* Order-aware SYNC_ACK matching:
-	 * For each SYNC_ACK, find and mark the EARLIEST preceding unmatched UNLOCK
-	 * with the same achievement ID. This ensures that a re-unlock AFTER a
-	 * SYNC_ACK remains pending. We use the prev_hash field as a scratch "marked"
-	 * flag — it will be rebuilt when we rewrite the chain anyway.
-	 *
-	 * We repurpose prev_hash[0] as a "cancelled" flag:
-	 *   0xFF = this UNLOCK has been cancelled by a later SYNC_ACK
-	 */
-
-	/* First, clear all cancel marks */
-	for (uint32_t i = 0; i < total_records; i++) {
-		if (records[i].type == RA_LEDGER_ACHIEVEMENT_UNLOCK) {
-			records[i].prev_hash[0] = 0x00; /* not cancelled */
-		}
+	if (total_records == 0) {
+		free(records);
+		return true;
 	}
 
-	/* For each SYNC_ACK, cancel the earliest un-cancelled UNLOCK before it */
+	/* Order-aware SYNC_ACK matching using a separate boolean array */
+	bool* cancelled = (bool*)calloc(total_records, sizeof(bool));
+	if (!cancelled) {
+		free(records);
+		return false;
+	}
+
 	for (uint32_t i = 0; i < total_records; i++) {
 		if (records[i].type == RA_LEDGER_SYNC_ACK) {
 			for (uint32_t j = 0; j < i; j++) {
 				if (records[j].type == RA_LEDGER_ACHIEVEMENT_UNLOCK &&
 				    records[j].achievement_id == records[i].achievement_id &&
-				    records[j].prev_hash[0] != 0xFF) {
-					records[j].prev_hash[0] = 0xFF; /* mark cancelled */
+				    !cancelled[j]) {
+					cancelled[j] = true;
 					break; /* only cancel ONE unlock per SYNC_ACK */
 				}
 			}
 		}
 	}
 
-	/* Keep only UNLOCK records that were NOT cancelled */
-	RA_LedgerRecord* kept = NULL;
-	uint32_t kept_count = 0;
-
-	for (uint32_t i = 0; i < total_records; i++) {
-		if (records[i].type == RA_LEDGER_ACHIEVEMENT_UNLOCK &&
-		    records[i].prev_hash[0] != 0xFF) {
-			/* Still pending — keep it */
-			if (!kept) {
-				kept = (RA_LedgerRecord*)malloc(total_records * sizeof(RA_LedgerRecord));
-				if (!kept) {
-					free(records);
-					OFFLINE_LOG_ERROR("Compact: allocation failure for kept records\n");
-					SDL_UnlockMutex(ra_ledger_mutex);
-					return;
-				}
-			}
-			kept[kept_count++] = records[i];
-		}
-		/* All other record types (SESSION_START, SESSION_END, SYNC_ACK,
-		 * and cancelled UNLOCKs) are dropped */
+	/* Collect pending softcore UNLOCK records */
+	RA_LedgerRecord* pending = (RA_LedgerRecord*)malloc(total_records * sizeof(RA_LedgerRecord));
+	if (!pending) {
+		free(cancelled);
+		free(records);
+		return false;
 	}
 
+	uint32_t pending_count = 0;
+	for (uint32_t i = 0; i < total_records; i++) {
+		if (records[i].type == RA_LEDGER_ACHIEVEMENT_UNLOCK &&
+		    records[i].hardcore == 0 &&
+		    !cancelled[i]) {
+			pending[pending_count++] = records[i];
+		}
+	}
+
+	free(cancelled);
 	free(records);
 
+	if (pending_count == 0) {
+		free(pending);
+		return true;
+	}
+
+	*out_records = pending;
+	*out_count = pending_count;
+	return true;
+}
+
+void RA_Offline_ledgerCompact(void) {
+	if (!ra_offline_initialized) return;
+
+	SDL_LockMutex(ra_ledger_mutex);
+
+	/* Read pending records using the shared matching logic */
+	RA_LedgerRecord* kept = NULL;
+	uint32_t kept_count = 0;
+	if (!ledger_read_pending_records(&kept, &kept_count)) {
+		OFFLINE_LOG_ERROR("Compact: failed to read pending records\n");
+		SDL_UnlockMutex(ra_ledger_mutex);
+		return;
+	}
+
 	if (kept_count == 0) {
-		/* Everything was acked — delete the ledger entirely */
+		/* Everything was acked (or no ledger) — delete the ledger */
 		free(kept);
 		if (unlink(ra_ledger_path) == 0) {
-			OFFLINE_LOG_INFO("Compact: ledger fully synced, deleted (%u records removed)\n",
-			                 total_records);
-		} else {
-			OFFLINE_LOG_WARN("Compact: failed to delete ledger: %s\n", strerror(errno));
+			OFFLINE_LOG_INFO("Compact: ledger fully synced, deleted\n");
 		}
+		/* If unlink fails, the file may not exist — that's fine */
 		memset(ra_ledger_last_hash, 0, SHA256_DIGEST_SIZE);
 		ra_ledger_has_records = false;
 		SDL_UnlockMutex(ra_ledger_mutex);
@@ -1002,8 +825,7 @@ void RA_Offline_ledgerCompact(void) {
 	}
 
 	/* Rewrite the ledger with only the kept records, rebuilding the hash chain */
-	OFFLINE_LOG_INFO("Compact: keeping %u pending records, dropping %u\n",
-	                 kept_count, total_records - kept_count);
+	OFFLINE_LOG_INFO("Compact: keeping %u pending records\n", kept_count);
 
 	/* Write to a temp file, then rename for atomicity */
 	char tmp_path[512];
@@ -1070,87 +892,39 @@ bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
 	*out_unlocks = NULL;
 	*out_count = 0;
 
-	FILE* f = fopen(ra_ledger_path, "rb");
-	if (!f) {
+	/* Use the shared matching logic to get pending records */
+	RA_LedgerRecord* records = NULL;
+	uint32_t record_count = 0;
+	if (!ledger_read_pending_records(&records, &record_count)) {
 		SDL_UnlockMutex(ra_ledger_mutex);
-		return true; /* No ledger = no pending unlocks (not an error) */
+		return false;
 	}
 
-	/*
-	 * Strategy: Process records in sequential order. When we see an UNLOCK,
-	 * add it to the pending list. When we see a SYNC_ACK, remove the EARLIEST
-	 * pending UNLOCK with that achievement ID. This ensures a SYNC_ACK only
-	 * cancels UNLOCKs that came BEFORE it, not ones added AFTER.
-	 */
-
-	fseek(f, 0, SEEK_END);
-	long file_size = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	if (file_size <= 0 || (file_size % sizeof(RA_LedgerRecord)) != 0) {
-		fclose(f);
+	if (record_count == 0) {
 		SDL_UnlockMutex(ra_ledger_mutex);
 		return true;
 	}
 
-	uint32_t total_records = (uint32_t)(file_size / (long)sizeof(RA_LedgerRecord));
-
-	RA_PendingUnlock* unlocks = NULL;
-	uint32_t unlock_count = 0;
-	uint32_t unlock_capacity = 0;
-
-	RA_LedgerRecord rec;
-	for (uint32_t i = 0; i < total_records; i++) {
-		if (fread(&rec, sizeof(rec), 1, f) != 1) break;
-
-		if (rec.type == RA_LEDGER_ACHIEVEMENT_UNLOCK && rec.hardcore == 0) {
-			/* Softcore unlock — add to pending list */
-			if (unlock_count >= unlock_capacity) {
-				unlock_capacity = unlock_capacity == 0 ? 64 : unlock_capacity * 2;
-				RA_PendingUnlock* tmp = (RA_PendingUnlock*)realloc(unlocks,
-					unlock_capacity * sizeof(RA_PendingUnlock));
-				if (!tmp) {
-					free(unlocks);
-					fclose(f);
-					SDL_UnlockMutex(ra_ledger_mutex);
-					return false;
-				}
-				unlocks = tmp;
-			}
-			unlocks[unlock_count].achievement_id = rec.achievement_id;
-			unlocks[unlock_count].game_id = rec.game_id;
-			unlocks[unlock_count].timestamp = rec.timestamp;
-			unlocks[unlock_count].hardcore = 0;
-			memcpy(unlocks[unlock_count].game_hash, rec.game_hash, sizeof(rec.game_hash));
-			unlock_count++;
-		} else if (rec.type == RA_LEDGER_SYNC_ACK) {
-			/* Cancel the EARLIEST pending unlock with this achievement ID.
-			 * This is order-aware: only UNLOCKs already in the list (i.e.
-			 * that appeared before this SYNC_ACK) can be cancelled. */
-			for (uint32_t j = 0; j < unlock_count; j++) {
-				if (unlocks[j].achievement_id == rec.achievement_id) {
-					/* Remove by shifting remaining entries down */
-					if (j + 1 < unlock_count) {
-						memmove(&unlocks[j], &unlocks[j + 1],
-						        (unlock_count - j - 1) * sizeof(RA_PendingUnlock));
-					}
-					unlock_count--;
-					break; /* Only cancel ONE unlock per SYNC_ACK */
-				}
-			}
-		}
-	}
-	fclose(f);
-
-	if (unlock_count == 0) {
-		free(unlocks);
+	/* Convert RA_LedgerRecord to RA_PendingUnlock */
+	RA_PendingUnlock* unlocks = (RA_PendingUnlock*)malloc(record_count * sizeof(RA_PendingUnlock));
+	if (!unlocks) {
+		free(records);
 		SDL_UnlockMutex(ra_ledger_mutex);
-		return true;
+		return false;
 	}
+
+	for (uint32_t i = 0; i < record_count; i++) {
+		unlocks[i].achievement_id = records[i].achievement_id;
+		unlocks[i].game_id = records[i].game_id;
+		unlocks[i].timestamp = records[i].timestamp;
+		unlocks[i].hardcore = 0;
+		memcpy(unlocks[i].game_hash, records[i].game_hash, sizeof(records[i].game_hash));
+	}
+	free(records);
 
 	*out_unlocks = unlocks;
-	*out_count = unlock_count;
-	OFFLINE_LOG_DEBUG("Ledger: %u pending softcore unlocks\n", unlock_count);
+	*out_count = record_count;
+	OFFLINE_LOG_DEBUG("Ledger: %u pending softcore unlocks\n", record_count);
 	SDL_UnlockMutex(ra_ledger_mutex);
 	return true;
 }
