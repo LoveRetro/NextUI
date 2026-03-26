@@ -34,17 +34,6 @@
 static int reloadShaderTextures = 1;
 static int shaderResetRequested = 0;
 
-static SDL_BlendMode getPremultipliedBlendMode(void) {
-	return SDL_ComposeCustomBlendMode(
-		SDL_BLENDFACTOR_ONE,
-		SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-		SDL_BLENDOPERATION_ADD,
-		SDL_BLENDFACTOR_ONE,
-		SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-		SDL_BLENDOPERATION_ADD
-	);
-}
-
 // shader stuff
 
 typedef struct ShaderProgram {
@@ -133,13 +122,12 @@ static struct VID_Context {
 	SDL_Texture* overlay;
 	SDL_Surface* screen;
 	SDL_GLContext gl_context;
-
+	
 	GFX_Renderer* blit; // yeesh
 	int width;
 	int height;
 	int pitch;
 	int sharpness;
-	uint32_t clear_color;
 } vid;
 
 static int device_width;
@@ -272,7 +260,7 @@ GLuint link_program(GLuint vertex_shader, GLuint fragment_shader, const char* ca
     void* binary = malloc(binaryLength);
     glGetProgramBinary(program, binaryLength, NULL, &binaryFormat, binary);
 
-    mkdir(SDCARD_PATH "/.shadercache", 0755);
+    mkdir(SDCARD_PATH "/.shadercache", 0755); 
     f = fopen(cache_path, "wb");
     if (f) {
         fwrite(&binaryFormat, sizeof(GLenum), 1, f);
@@ -616,7 +604,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	//SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
-
+	
 //	SDL_version compiled;
 //	SDL_version linked;
 //	SDL_VERSION(&compiled);
@@ -643,7 +631,7 @@ SDL_Surface* PLAT_initVideo(void) {
 //	}
 //	SDL_GetCurrentDisplayMode(0, &mode);
 //	LOG_info("Current display mode: %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
-
+	
 	int w = FIXED_WIDTH;
 	int h = FIXED_HEIGHT;
 	int p = FIXED_PITCH;
@@ -685,37 +673,31 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.target_layer3 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	vid.target_layer4 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
 	vid.target_layer5 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET , w,h);
-
+	
 	vid.target	= NULL; // only needed for non-native sizes
-
+	
 	vid.screen = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
 
-	SDL_BlendMode premult = getPremultipliedBlendMode();
 	SDL_SetSurfaceBlendMode(vid.screen, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureBlendMode(vid.stream_layer1, premult);
-	SDL_SetTextureBlendMode(vid.target_layer2, premult);
-	SDL_SetTextureBlendMode(vid.target_layer3, SDL_BLENDMODE_BLEND); // straight alpha game art
-	SDL_SetTextureBlendMode(vid.target_layer4, premult);
+	SDL_SetTextureBlendMode(vid.stream_layer1, SDL_BLENDMODE_BLEND);
+	SDL_SetTextureBlendMode(vid.target_layer2, SDL_BLENDMODE_BLEND);
+	SDL_SetTextureBlendMode(vid.target_layer3, SDL_BLENDMODE_BLEND);
+	SDL_SetTextureBlendMode(vid.target_layer4, SDL_BLENDMODE_BLEND);
 	SDL_SetTextureBlendMode(vid.target_layer5, SDL_BLENDMODE_BLEND);
-
+	
 	vid.width	= w;
 	vid.height	= h;
 	vid.pitch	= p;
-
+	
 	SDL_transparentBlack = SDL_MapRGBA(vid.screen->format, 0, 0, 0, 0);
-	PLAT_setClearColor(SDL_transparentBlack);
-
+	
 	device_width	= w;
 	device_height	= h;
 	device_pitch	= p;
-
+	
 	vid.sharpness = SHARPNESS_SOFT;
-
+	
 	return vid.screen;
-}
-
-void PLAT_setClearColor(uint32_t color) {
-	vid.clear_color = color;
 }
 
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *srctype) {
@@ -760,7 +742,7 @@ void PLAT_setShaders(int nr) {
 static void clearVideo(void) {
 	for (int i=0; i<3; i++) {
 		SDL_RenderClear(vid.renderer);
-		SDL_FillRect(vid.screen, NULL, vid.clear_color);
+		SDL_FillRect(vid.screen, NULL, SDL_transparentBlack);
 		SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
 		SDL_RenderPresent(vid.renderer);
 	}
@@ -811,7 +793,7 @@ void PLAT_clearVideo(SDL_Surface* screen) {
 	SDL_FillRect(screen, NULL, SDL_transparentBlack);
 }
 void PLAT_clearAll(void) {
-	// ok honestely mixing SDL and OpenGL is really bad, but hey it works just got to sometimes clear gpu stuff and pull context back to SDL
+	// ok honestely mixing SDL and OpenGL is really bad, but hey it works just got to sometimes clear gpu stuff and pull context back to SDL 
 	// so yeah clear all layers and pull a flip() to make it switch back to SDL before clearing
 	PLAT_clearLayers(0);
 	PLAT_flip(vid.screen,0);
@@ -819,8 +801,8 @@ void PLAT_clearAll(void) {
 	PLAT_flip(vid.screen,0);
 
 	// then do normal SDL clearing stuff
-	PLAT_clearVideo(vid.screen);
-	SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
+	PLAT_clearVideo(vid.screen); 
+	SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0); 
 	SDL_RenderClear(vid.renderer);
 }
 
@@ -849,9 +831,9 @@ static int hard_scale = 4; // TODO: base src size, eg. 160x144 can be 4
 
 static void resizeVideo(int w, int h, int p) {
 	if (w==vid.width && h==vid.height && p==vid.pitch) return;
-
+	
 	// TODO: minarch disables crisp (and nn upscale before linear downscale) when native, is this true?
-
+	
 	if (w>=device_width && h>=device_height) hard_scale = 1;
 	// else if (h>=160) hard_scale = 2; // limits gba and up to 2x (seems sufficient for 640x480)
 	else hard_scale = 4;
@@ -860,11 +842,11 @@ static void resizeVideo(int w, int h, int p) {
 
 	SDL_DestroyTexture(vid.stream_layer1);
 	if (vid.target) SDL_DestroyTexture(vid.target);
-
+	
 	// SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, vid.sharpness==SHARPNESS_SOFT?"1":"0", SDL_HINT_OVERRIDE);
 	vid.stream_layer1 = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w,h);
-	SDL_SetTextureBlendMode(vid.stream_layer1, getPremultipliedBlendMode());
-
+	SDL_SetTextureBlendMode(vid.stream_layer1, SDL_BLENDMODE_BLEND);
+	
 	if (vid.sharpness==SHARPNESS_CRISP) {
 		// SDL_SetHintWithPriority(SDL_HINT_RENDER_SCALE_QUALITY, "1", SDL_HINT_OVERRIDE);
 		vid.target = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w * hard_scale,h * hard_scale);
@@ -872,7 +854,7 @@ static void resizeVideo(int w, int h, int p) {
 	else {
 		vid.target = NULL;
 	}
-
+	
 
 	vid.width	= w;
 	vid.height	= h;
@@ -940,9 +922,9 @@ static void updateEffect(void) {
 	int curr_type = effect.type;
 	int curr_color = effect.color;
 	pthread_mutex_unlock(&video_prep_mutex);
-
+	
 	if (next_scale==curr_scale && next_type==curr_type && next_color==curr_color) return; // unchanged
-
+	
 	// Update effect state with mutex protection
 	pthread_mutex_lock(&video_prep_mutex);
 	int live_scale = effect.scale;
@@ -955,10 +937,10 @@ static void updateEffect(void) {
 	int effect_color = effect.color;
 	int live_type = effect.live_type;
 	pthread_mutex_unlock(&video_prep_mutex);
-
+	
 	if (effect_type==EFFECT_NONE) return; // disabled
 	if (effect_type==live_type && effect_scale==live_scale && effect_color==live_color) return; // already loaded
-
+	
 	int opacity = 128; // 1 - 1/2 = 50%
 	if (effect_type==EFFECT_LINE) {
 		if (effect_scale<3) {
@@ -1012,7 +994,7 @@ static void updateEffect(void) {
 		}
 	}
 	effectUpdated = 1;
-
+	
 }
 int screenx = 0;
 int screeny = 0;
@@ -1023,7 +1005,7 @@ void PLAT_setOffsetX(int x) {
 }
 void PLAT_setOffsetY(int y) {
     if (y < 0 || y > 128) return;
-    screeny = y - 64;
+    screeny = y - 64; 
 	LOG_info("screeny: %i %i\n",screeny,y);
 }
 static int overlayUpdated=0;
@@ -1036,7 +1018,7 @@ void PLAT_setOverlay(const char* filename, const char* tag) {
 		free(overlay_path);
 		overlay_path = NULL;
 	}
-
+	
 	pthread_mutex_lock(&video_prep_mutex);
 	overlayUpdated=1;
 	pthread_mutex_unlock(&video_prep_mutex);
@@ -1069,7 +1051,7 @@ void applyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius) {
 	SDL_Rect target = {0, 0, surface->w, surface->h};
 	if (rect)
 		target = *rect;
-
+    
     Uint32 transparent_black = SDL_MapRGBA(fmt, 0, 0, 0, 0);  // Fully transparent black
 
 	const int xBeg = target.x;
@@ -1090,12 +1072,9 @@ void applyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius) {
 
 void PLAT_clearLayers(int layer) {
 	if(layer==0 || layer==1) {
-		uint32_t bg = vid.clear_color;
 		SDL_SetRenderTarget(vid.renderer, vid.target_layer1);
-		SDL_SetRenderDrawColor(vid.renderer, (bg >> 16) & 0xFF, (bg >> 8) & 0xFF, bg & 0xFF, 255);
 		SDL_RenderClear(vid.renderer);
 	}
-	SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
 	if(layer==0 || layer==2) {
 		SDL_SetRenderTarget(vid.renderer, vid.target_layer2);
 		SDL_RenderClear(vid.renderer);
@@ -1117,12 +1096,12 @@ void PLAT_clearLayers(int layer) {
 }
 
 void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, float brightness, bool maintainAspectRatio,int layer) {
-    if (!inputSurface || !vid.target_layer1 || !vid.renderer) return;
+    if (!inputSurface || !vid.target_layer1 || !vid.renderer) return; 
 
     SDL_Texture* tempTexture = SDL_CreateTexture(vid.renderer,
-                                                 SDL_PIXELFORMAT_ARGB8888,
-                                                 SDL_TEXTUREACCESS_TARGET,
-                                                 inputSurface->w, inputSurface->h);
+                                                 SDL_PIXELFORMAT_ARGB8888, 
+                                                 SDL_TEXTUREACCESS_TARGET,  
+                                                 inputSurface->w, inputSurface->h); 
 
     if (!tempTexture) {
         LOG_error("Failed to create temporary texture: %s\n", SDL_GetError());
@@ -1163,12 +1142,12 @@ void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, flo
     SDL_SetTextureColorMod(tempTexture, r, g, b);
 
     // Aspect ratio handling
-    SDL_Rect srcRect = { 0, 0, inputSurface->w, inputSurface->h };
-    SDL_Rect dstRect = { x, y, w, h };
+    SDL_Rect srcRect = { 0, 0, inputSurface->w, inputSurface->h }; 
+    SDL_Rect dstRect = { x, y, w, h };  
 
     if (maintainAspectRatio) {
         float aspectRatio = (float)inputSurface->w / (float)inputSurface->h;
-
+    
         if (w / (float)h > aspectRatio) {
             dstRect.w = (int)(h * aspectRatio);
         } else {
@@ -1230,7 +1209,7 @@ void PLAT_animateSurface(
 		else
 			SDL_SetRenderTarget(vid.renderer, vid.target_layer4);
 
-		SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0);
+		SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 0); 
 		SDL_RenderClear(vid.renderer);
 
 		SDL_Rect srcRect = { 0, 0, inputSurface->w, inputSurface->h };
@@ -1249,7 +1228,7 @@ int PLAT_textShouldScroll(TTF_Font* font, const char* in_name,int max_width, SDL
 	if (fontMutex) SDL_LockMutex(fontMutex);
 	TTF_SizeUTF8(font, in_name, &text_width, NULL);
 	if (fontMutex) SDL_UnlockMutex(fontMutex);
-
+	
 	if (text_width <= max_width) {
 		return 0;
 	} else {
@@ -1365,7 +1344,7 @@ void PLAT_animateSurfaceOpacity(
 	}
 
 	SDL_UpdateTexture(tempTexture, NULL, inputSurface->pixels, inputSurface->pitch);
-	SDL_SetTextureBlendMode(tempTexture, SDL_BLENDMODE_BLEND);
+	SDL_SetTextureBlendMode(tempTexture, SDL_BLENDMODE_BLEND); 
 
 	const int fps = 60;
 	const int frame_delay = 1000 / fps;
@@ -1621,12 +1600,12 @@ void PLAT_flipHidden() {
 
 void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 	// dont think we need this here tbh
-	// SDL_RenderClear(vid.renderer);
+	// SDL_RenderClear(vid.renderer);    
 	if (!vid.blit) {
         resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
         SDL_UpdateTexture(vid.stream_layer1, NULL, vid.screen->pixels, vid.screen->pitch);
 		SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
-		SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
+        SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL);
         SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
 		SDL_RenderCopy(vid.renderer, vid.target_layer3, NULL, NULL);
 		SDL_RenderCopy(vid.renderer, vid.target_layer4, NULL, NULL);
@@ -1634,7 +1613,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
         SDL_RenderPresent(vid.renderer);
         return;
     }
-
+    
     // Safety check: ensure texture dimensions match blit buffer dimensions
     if (vid.width != vid.blit->true_w || vid.height != vid.blit->true_h) {
         // Texture size doesn't match buffer, clear blit and use screen buffer instead
@@ -1650,7 +1629,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
         SDL_RenderPresent(vid.renderer);
         return;
     }
-
+    
     SDL_UpdateTexture(vid.stream_layer1, NULL, vid.blit->src, vid.blit->src_p);
 
     SDL_Texture* target = vid.stream_layer1;
@@ -1659,7 +1638,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
     int w = vid.blit->src_w;
     int h = vid.blit->src_h;
     if (vid.sharpness == SHARPNESS_CRISP) {
-
+		
         SDL_SetRenderTarget(vid.renderer, vid.target);
         SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL);
         SDL_SetRenderTarget(vid.renderer, NULL);
@@ -1674,7 +1653,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
     SDL_Rect* dst_rect = &(SDL_Rect){0, 0, device_width, device_height};
 
     setRectToAspectRatio(dst_rect);
-
+	
     SDL_RenderCopy(vid.renderer, target, src_rect, dst_rect);
 
     SDL_RenderPresent(vid.renderer);
@@ -1811,7 +1790,7 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 			// }
 			if(*target_texture==0)
 				glGenTextures(1, target_texture);
-			glActiveTexture(GL_TEXTURE0);
+			glActiveTexture(GL_TEXTURE0);	
 			glBindTexture(GL_TEXTURE_2D, *target_texture);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, next_filter);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, next_filter);
@@ -1823,7 +1802,7 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		if (fbo == 0) {
 			glGenFramebuffers(1, &fbo);
 		}
-
+		
         // Always bind before attaching to avoid stale state after swaps
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
@@ -1839,7 +1818,7 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
         if (status != GL_FRAMEBUFFER_COMPLETE) {
             LOG_error("Framebuffer incomplete: 0x%X\n", status);
         }
-
+		
     } else {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
@@ -1894,7 +1873,7 @@ int prepareFrameThread(void *data) {
 		pthread_mutex_lock(&video_prep_mutex);
 		int effect_updated = effectUpdated;
 		pthread_mutex_unlock(&video_prep_mutex);
-
+		
         if (effect_updated) {
 			LOG_info("effect updated %s\n",effect_path);
 			if(effect_path) {
@@ -1904,7 +1883,7 @@ int prepareFrameThread(void *data) {
 					converted = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA32, 0);
 					SDL_FreeSurface(tmp);
 				}
-
+				
 				pthread_mutex_lock(&video_prep_mutex);
 				frame_prep.loaded_effect = converted;
 				effectUpdated = 0;
@@ -1918,13 +1897,13 @@ int prepareFrameThread(void *data) {
 				pthread_mutex_unlock(&video_prep_mutex);
 			}
         }
-
+		
 		// Check if effect is disabled
 		pthread_mutex_lock(&video_prep_mutex);
 		int effect_type = effect.type;
 		SDL_Surface* loaded_effect = frame_prep.loaded_effect;
 		pthread_mutex_unlock(&video_prep_mutex);
-
+		
 		if(effect_type == EFFECT_NONE && loaded_effect != 0) {
 			pthread_mutex_lock(&video_prep_mutex);
 			frame_prep.loaded_effect = 0;
@@ -1936,7 +1915,7 @@ int prepareFrameThread(void *data) {
 		pthread_mutex_lock(&video_prep_mutex);
 		int overlay_updated = overlayUpdated;
 		pthread_mutex_unlock(&video_prep_mutex);
-
+		
         if (overlay_updated) {
 
 			LOG_info("overlay updated\n");
@@ -1947,7 +1926,7 @@ int prepareFrameThread(void *data) {
 					converted = SDL_ConvertSurfaceFormat(tmp, SDL_PIXELFORMAT_RGBA32, 0);
 					SDL_FreeSurface(tmp);
 				}
-
+				
 				pthread_mutex_lock(&video_prep_mutex);
 				frame_prep.loaded_overlay = converted;
 				frame_prep.overlay_ready = 1;
@@ -1962,7 +1941,7 @@ int prepareFrameThread(void *data) {
 			}
         }
 
-        SDL_Delay(120);
+        SDL_Delay(120); 
     }
     return 0;
 }
@@ -1979,7 +1958,7 @@ void PLAT_GL_Swap() {
 
         if (prepare_thread == NULL) {
             LOG_error("Error creating background thread: %s\n", SDL_GetError());
-            return;
+            return; 
         }
     }
 
@@ -2012,9 +1991,9 @@ void PLAT_GL_Swap() {
 		if (orig_texture) { glDeleteTextures(1, &orig_texture); orig_texture = 0; }
 		src_w_last = src_h_last = 0;
 		last_w = last_h = 0;
-		if (effect_tex) {
-			glDeleteTextures(1, &effect_tex);
-			effect_tex = 0;
+		if (effect_tex) { 
+			glDeleteTextures(1, &effect_tex); 
+			effect_tex = 0; 
 			effect_w = effect_h = 0;
 			// Force reload by marking as ready again if effect is active
 			pthread_mutex_lock(&video_prep_mutex);
@@ -2023,9 +2002,9 @@ void PLAT_GL_Swap() {
 			}
 			pthread_mutex_unlock(&video_prep_mutex);
 		}
-		if (overlay_tex) {
-			glDeleteTextures(1, &overlay_tex);
-			overlay_tex = 0;
+		if (overlay_tex) { 
+			glDeleteTextures(1, &overlay_tex); 
+			overlay_tex = 0; 
 			overlay_w = overlay_h = 0;
 			// Force reload if we had an overlay
 			pthread_mutex_lock(&video_prep_mutex);
@@ -2042,7 +2021,7 @@ void PLAT_GL_Swap() {
 	int effect_ready = frame_prep.effect_ready;
 	SDL_Surface* loaded_effect = frame_prep.loaded_effect;
 	pthread_mutex_unlock(&video_prep_mutex);
-
+	
 	if (effect_ready) {
 		if(loaded_effect) {
 			if(!effect_tex) glGenTextures(1, &effect_tex);
@@ -2072,7 +2051,7 @@ void PLAT_GL_Swap() {
 	int overlay_ready = frame_prep.overlay_ready;
 	SDL_Surface* loaded_overlay = frame_prep.loaded_overlay;
 	pthread_mutex_unlock(&video_prep_mutex);
-
+	
 	if (overlay_ready) {
 		if(loaded_overlay) {
 			if(!overlay_tex) glGenTextures(1, &overlay_tex);
@@ -2225,7 +2204,7 @@ void PLAT_GL_Swap() {
 		s_pass_notif.srch = s_pass_notif.texh = notif.tex_h;
 		notif.dirty = 0;
     }
-
+    
     if (notif.tex && notif.surface) {
 		runShaderPass(
 			&s_pass_overlay, notif.tex, NULL,
@@ -2282,7 +2261,7 @@ unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight) {
     glViewport(0, 0, device_width, device_height);
     GLint viewport[4];
     glGetIntegerv(GL_VIEWPORT, viewport);
-
+	
     int width = viewport[2];
     int height = viewport[3];
 
