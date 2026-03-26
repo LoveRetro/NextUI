@@ -7291,9 +7291,18 @@ static int OptionAchievements_showDetail(MenuList* list, int i) {
 			
 			// Muted status below other info with gap before title
 			if (is_muted) {
-				SDL_Surface* mute_text = TTF_RenderUTF8_Blended(font.tiny, "MUTED: Will not show in notifications", COLOR_LIGHT_TEXT);
+				SDL_Surface* mute_text = TTF_RenderUTF8_Blended(font.tiny, "Muted - progress notifications silenced", COLOR_LIGHT_TEXT);
+				int mute_icon_w = SCALE1(10);
+				int mute_icon_h = SCALE1(12);
+				int total_w = mute_icon_w + SCALE1(4) + mute_text->w;
+				int icon_x = center_x - total_w / 2;
+				int text_x = icon_x + mute_icon_w + SCALE1(4);
+				int icon_y = content_y + SCALE1(4) + (mute_text->h - mute_icon_h) / 2;
+				SDL_Rect mute_src = {0, SCALE1(4), SCALE1(10), SCALE1(12)};
+				GFX_blitAssetColor(ASSET_VOLUME_MUTE, &mute_src, screen,
+				                   &(SDL_Rect){icon_x, icon_y}, 0xCCCCCC);
 				SDL_BlitSurface(mute_text, NULL, screen, &(SDL_Rect){
-					center_x - mute_text->w / 2, content_y + SCALE1(4)
+					text_x, content_y + SCALE1(4)
 				});
 				SDL_FreeSurface(mute_text);
 			}
@@ -7566,20 +7575,19 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 
 				if (is_selected) {
 					// White pill for the text area with icon (like MENU_FIXED selected text pill)
-					// Calculate width needed for: badge + spacing + [wifi icon] + title + indicators + padding
+					// Calculate width needed for: badge + spacing + [mute icon] + [wifi icon] + title + padding
 					int badge_display_size = SCALE1(BUTTON_SIZE - 4);  // Badge sized to fit in row
 					int title_width = 0;
 					TTF_SizeUTF8(font.small, ach->title, &title_width, NULL);
 					int mute_width = 0;
 					if (is_muted) {
-						TTF_SizeUTF8(font.tiny, "[M]", &mute_width, NULL);
-						mute_width += SCALE1(4);  // spacing
+						mute_width = SCALE1(10) + SCALE1(4);  // volume-mute icon + gap
 					}
 					int offline_width = 0;
 					if (is_offline_pending) {
 						offline_width = SCALE1(12) + SCALE1(4);  // wifi-off icon + gap
 					}
-					int pill_width = opt_pad + badge_display_size + SCALE1(6) + offline_width + title_width + mute_width + opt_pad;
+					int pill_width = opt_pad + badge_display_size + SCALE1(6) + mute_width + offline_width + title_width + opt_pad;
 					
 					GFX_blitPillDark(ASSET_BUTTON, screen, &(SDL_Rect){
 						ox, oy + SCALE1(row * BUTTON_SIZE), pill_width, row_height
@@ -7600,6 +7608,16 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 
 					int text_x = ox + opt_pad + badge_display_size + SCALE1(6);
 
+					// Mute icon prefix (volume-mute icon, cropped to match text height)
+					if (is_muted) {
+						int mute_icon_h = SCALE1(12);
+						int mute_y = oy + SCALE1(row * BUTTON_SIZE) + (row_height - mute_icon_h) / 2;
+						SDL_Rect mute_src = {0, SCALE1(4), SCALE1(10), SCALE1(12)};
+						GFX_blitAssetColor(ASSET_VOLUME_MUTE, &mute_src, screen,
+						                   &(SDL_Rect){text_x, mute_y}, THEME_COLOR5_255);
+						text_x += mute_width;
+					}
+
 					// Offline pending icon prefix (wifi-off icon before title)
 					if (is_offline_pending) {
 						int wifi_size = SCALE1(12);
@@ -7616,16 +7634,6 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 						oy + SCALE1((row * BUTTON_SIZE) + 1)
 					});
 					SDL_FreeSurface(title_text);
-
-					// Mute indicator inside the pill
-					if (is_muted) {
-						SDL_Surface* mute_text = TTF_RenderUTF8_Blended(font.tiny, "[M]", text_color);
-						SDL_BlitSurface(mute_text, NULL, screen, &(SDL_Rect){
-							text_x + title_width + SCALE1(4),
-							oy + SCALE1((row * BUTTON_SIZE) + 3)
-						});
-						SDL_FreeSurface(mute_text);
-					}
 				} else {
 					// Unselected row - just badge + title + indicators, no pills
 					int badge_display_size = SCALE1(BUTTON_SIZE - 4);
@@ -7644,6 +7652,16 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 
 					int text_x = ox + opt_pad + badge_display_size + SCALE1(6);
 
+					// Mute icon prefix (volume-mute icon, cropped to match text height)
+					if (is_muted) {
+						int mute_icon_h = SCALE1(12);
+						int mute_y = oy + SCALE1(row * BUTTON_SIZE) + (row_height - mute_icon_h) / 2;
+						SDL_Rect mute_src = {0, SCALE1(4), SCALE1(10), SCALE1(12)};
+						GFX_blitAssetColor(ASSET_VOLUME_MUTE, &mute_src, screen,
+						                   &(SDL_Rect){text_x, mute_y}, RGB_WHITE);
+						text_x += SCALE1(10) + SCALE1(4);
+					}
+
 					// Offline pending icon prefix (wifi-off icon before title)
 					if (is_offline_pending) {
 						int wifi_size = SCALE1(12);
@@ -7660,23 +7678,12 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 						oy + SCALE1((row * BUTTON_SIZE) + 1)
 					});
 					SDL_FreeSurface(title_text);
-
-					// Mute indicator
-					if (is_muted) {
-						int title_width = 0;
-						TTF_SizeUTF8(font.small, ach->title, &title_width, NULL);
-						SDL_Surface* mute_text = TTF_RenderUTF8_Blended(font.tiny, "[M]", COLOR_WHITE);
-						SDL_BlitSurface(mute_text, NULL, screen, &(SDL_Rect){
-							text_x + title_width + SCALE1(4),
-							oy + SCALE1((row * BUTTON_SIZE) + 3)
-						});
-						SDL_FreeSurface(mute_text);
-					}
 				}
 			}
 
-			// Button hints at bottom with dynamic Y button text
-			char* hints[] = {"Y", ach_filter_locked_only ? "SHOW ALL" : "SHOW LOCKED", "X", "MUTE", NULL};
+			// Button hints at bottom with dynamic Y and X button text
+			int selected_muted = (filtered_count > 0) ? RA_isAchievementMuted(filtered[selected]->id) : 0;
+			char* hints[] = {"Y", ach_filter_locked_only ? "SHOW ALL" : "SHOW LOCKED", "X", selected_muted ? "UNMUTE" : "MUTE", NULL};
 			GFX_blitButtonGroup(hints, 0, screen, 1);
 
 			GFX_flip(screen);
