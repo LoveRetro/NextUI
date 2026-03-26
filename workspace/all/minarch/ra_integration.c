@@ -2349,7 +2349,18 @@ static void ra_process_deferred_flags(void) {
 		}
 	}
 	if (snap_sync) {
-		ra_start_offline_sync();
+		// Don't start sync until the game is loaded — the sync thread will
+		// compact the ledger when done, which removes pending records needed
+		// by startsession patching and ra_reapply_pending_unlocks. If we sync
+		// before the game loads, those records are gone before rcheevos can
+		// use them, causing the just-synced achievement to appear locked.
+		if (!ra_game_loaded) {
+			SDL_LockMutex(ra_deferred.mutex);
+			ra_deferred.sync = true;  // Put it back for next cycle
+			SDL_UnlockMutex(ra_deferred.mutex);
+		} else {
+			ra_start_offline_sync();
+		}
 	}
 	
 	// Apply synced achievement unlock state to rcheevos.
@@ -2357,7 +2368,16 @@ static void ra_process_deferred_flags(void) {
 	// update rcheevos' internal unlock bits so the achievement list and summary
 	// reflect the correct state without needing to restart the game.
 	if (snap_sync_apply) {
-		if (ra_client) {
+		// If the game isn't loaded yet, rcheevos doesn't have achievement data
+		// so we can't update unlock bits. Put the flags back for next cycle.
+		if (!ra_game_loaded) {
+			SDL_LockMutex(ra_deferred.mutex);
+			ra_deferred.sync_apply = true;
+			ra_deferred.sync_count = snap_sync_count;
+			memcpy(ra_deferred.sync_ids, snap_sync_ids,
+			       snap_sync_count * sizeof(uint32_t));
+			SDL_UnlockMutex(ra_deferred.mutex);
+		} else if (ra_client) {
 			uint32_t applied = 0;
 			uint8_t mode = rc_client_get_hardcore_enabled(ra_client)
 				? RC_CLIENT_ACHIEVEMENT_UNLOCKED_BOTH
