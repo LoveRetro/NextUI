@@ -327,6 +327,10 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 		if (parse_result == 1) {
 			/* Success — write SYNC_ACK to ledger */
 			RA_Offline_ledgerWriteSyncAck(unlock->achievement_id, unlock->game_id);
+			/* Patch cached startsession to include this unlock so the next
+			   offline-first launch doesn't re-trigger it */
+			RA_Offline_patchStartsessionCacheWithUnlock(
+				unlock->game_hash, unlock->achievement_id, unlock->timestamp);
 			result.synced++;
 		} else if (parse_result == 0) {
 			/* Server rejected — skip and continue */
@@ -368,10 +372,6 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 		if (result.synced > 0) {
 			RA_Offline_clearPendingCache();
 			RA_Offline_ledgerCompact();
-			/* Invalidate cached startsession responses so the next
-			   offline-first startup doesn't serve a stale response
-			   that's missing the newly-synced unlocks. */
-			RA_Offline_invalidateStartsessionCache();
 		}
 	} else {
 		/* Partial sync (failure or cancel) — refresh cache to reflect

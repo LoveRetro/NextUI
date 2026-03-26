@@ -244,12 +244,21 @@ void RA_Offline_removePendingCacheEntry(uint32_t achievement_id);
 void RA_Offline_clearPendingCache(void);
 
 /**
- * Invalidate (delete) all cached startsession response files.
+ * Patch a cached startsession file to inject a newly-confirmed unlock.
  *
- * Call after a successful sync to prevent stale cached startsession
- * responses (which lack the newly-synced unlocks) from being served
- * on the next offline-first startup.
+ * Reads the cache file for the given game_hash, injects the achievement
+ * into the "Unlocks" JSON array if not already present, and rewrites the
+ * file with an updated SHA-256 digest.
+ *
+ * No-op if the cache file is absent, corrupt, or already contains the
+ * achievement. Thread-safe: operates on a single file atomically.
+ *
+ * @param game_hash      Game hash (used to locate startsession_<hash>.bin)
+ * @param achievement_id Achievement ID to inject
+ * @param timestamp      Unix timestamp for the "When" field
  */
-void RA_Offline_invalidateStartsessionCache(void);
+void RA_Offline_patchStartsessionCacheWithUnlock(const char* game_hash,
+                                                  uint32_t achievement_id,
+                                                  uint32_t timestamp);
 
 #endif /* __RA_OFFLINE_H__ */

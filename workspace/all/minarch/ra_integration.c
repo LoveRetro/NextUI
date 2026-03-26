@@ -807,6 +807,7 @@ typedef struct {
 	void* callback_data;
 	char* url;        /* Owned copy for write-through caching */
 	char* post_data;  /* Owned copy for write-through caching (may be NULL) */
+	char game_hash[33]; /* Snapshot of ra_game_hash at request time (thread-safe) */
 } RA_ServerCallData;
 
 static void ra_http_callback(HTTP_Response* response, void* userdata) {
@@ -841,10 +842,12 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 					if (ach_id > 0) {
 						RA_Offline_ledgerWriteSyncAck(ach_id, 0);
 						RA_Offline_removePendingCacheEntry(ach_id);
-						// Invalidate cached startsession so the next
-						// offline-first launch sees this unlock in the
-						// server's fresh response instead of a stale cache.
-						RA_Offline_invalidateStartsessionCache();
+						// Patch the cached startsession file to include
+						// this newly-confirmed unlock, so the next
+						// offline-first launch sees it as already earned
+						// instead of re-triggering it.
+						RA_Offline_patchStartsessionCacheWithUnlock(
+							data->game_hash, ach_id, (uint32_t)time(NULL));
 					}
 				}
 			}
@@ -1001,6 +1004,9 @@ static void ra_server_call(const rc_api_request_t* request,
 	data->callback_data = callback_data;
 	data->url = request->url ? strdup(request->url) : NULL;
 	data->post_data = request->post_data ? strdup(request->post_data) : NULL;
+	/* Snapshot game hash on main thread for safe use in worker callback */
+	strncpy(data->game_hash, ra_game_hash, sizeof(data->game_hash) - 1);
+	data->game_hash[sizeof(data->game_hash) - 1] = '\0';
 	
 	// Make async HTTP request
 	if (request->post_data && strlen(request->post_data) > 0) {

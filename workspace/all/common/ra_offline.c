@@ -10,7 +10,6 @@
 #include <errno.h>
 #include <time.h>
 #include <unistd.h>
-#include <dirent.h>
 
 /* Logging macros using NextUI's LOG_* infrastructure */
 #define OFFLINE_LOG_DEBUG(fmt, ...) LOG_debug("[RA_OFFLINE] " fmt, ##__VA_ARGS__)
@@ -1091,32 +1090,150 @@ void RA_Offline_clearPendingCache(void) {
 	SDL_UnlockMutex(ra_ledger_mutex);
 }
 
-void RA_Offline_invalidateStartsessionCache(void) {
-	if (!ra_offline_initialized || ra_cache_dir[0] == '\0') return;
+void RA_Offline_patchStartsessionCacheWithUnlock(const char* game_hash,
+                                                  uint32_t achievement_id,
+                                                  uint32_t timestamp) {
+	if (!ra_offline_initialized || !game_hash || game_hash[0] == '\0') return;
 
-	DIR* dir = opendir(ra_cache_dir);
-	if (!dir) return;
+	/* Build cache file path: <cache_dir>/startsession_<hash>.bin */
+	char path[512];
+	snprintf(path, sizeof(path), "%s/startsession_%s.bin", ra_cache_dir, game_hash);
 
-	struct dirent* entry;
-	int removed = 0;
+	/* Read existing cache file: [uint32_t len][body][SHA-256] */
+	FILE* f = fopen(path, "rb");
+	if (!f) {
+		/* No cached startsession for this game — nothing to patch */
+		return;
+	}
 
-	while ((entry = readdir(dir)) != NULL) {
-		/* Match filenames like "startsession_<hash>.bin" */
-		if (strncmp(entry->d_name, "startsession_", 13) == 0) {
-			char path[512];
-			snprintf(path, sizeof(path), "%s/%s", ra_cache_dir, entry->d_name);
-			if (unlink(path) == 0) {
-				removed++;
-			} else {
-				OFFLINE_LOG_WARN("Failed to remove cached startsession: %s: %s\n",
-				                 path, strerror(errno));
-			}
+	uint32_t len32;
+	if (fread(&len32, sizeof(len32), 1, f) != 1 || len32 > 8 * 1024 * 1024) {
+		fclose(f);
+		return;
+	}
+
+	char* body = (char*)malloc(len32 + 1);
+	if (!body) {
+		fclose(f);
+		return;
+	}
+
+	if (fread(body, 1, len32, f) != len32) {
+		free(body);
+		fclose(f);
+		return;
+	}
+	body[len32] = '\0';
+
+	uint8_t stored_digest[SHA256_DIGEST_SIZE];
+	if (fread(stored_digest, SHA256_DIGEST_SIZE, 1, f) != 1) {
+		free(body);
+		fclose(f);
+		return;
+	}
+	fclose(f);
+
+	/* Verify SHA-256 integrity */
+	uint8_t computed_digest[SHA256_DIGEST_SIZE];
+	sha256_hash(body, len32, computed_digest);
+	if (memcmp(stored_digest, computed_digest, SHA256_DIGEST_SIZE) != 0) {
+		OFFLINE_LOG_WARN("patchCache: SHA-256 mismatch for %s, skipping\n", path);
+		free(body);
+		return;
+	}
+
+	/* Find the "Unlocks" array */
+	const char* unlocks_key = "\"Unlocks\"";
+	char* unlocks_pos = strstr(body, unlocks_key);
+	if (!unlocks_pos) {
+		free(body);
+		return;
+	}
+
+	char* arr_start = strchr(unlocks_pos + strlen(unlocks_key), '[');
+	if (!arr_start) {
+		free(body);
+		return;
+	}
+
+	char* arr_end = strchr(arr_start, ']');
+	if (!arr_end) {
+		free(body);
+		return;
+	}
+
+	/* Check if this achievement ID is already in the Unlocks array */
+	char id_pattern[32];
+	snprintf(id_pattern, sizeof(id_pattern), "\"ID\":%u", achievement_id);
+	for (char* p = arr_start; p < arr_end; p++) {
+		if (strncmp(p, id_pattern, strlen(id_pattern)) == 0) {
+			/* Already present — no-op */
+			free(body);
+			return;
 		}
 	}
 
-	closedir(dir);
-
-	if (removed > 0) {
-		OFFLINE_LOG_INFO("Invalidated %d cached startsession response(s)\n", removed);
+	/* Build injection string */
+	char inject[64];
+	int inject_len;
+	bool existing_entries = (arr_end - arr_start > 1);
+	if (existing_entries) {
+		inject_len = snprintf(inject, sizeof(inject),
+		                      ",{\"ID\":%u,\"When\":%u}", achievement_id, timestamp);
+	} else {
+		inject_len = snprintf(inject, sizeof(inject),
+		                      "{\"ID\":%u,\"When\":%u}", achievement_id, timestamp);
 	}
+
+	/* Build new body: everything before ']' + inject + ']' and rest */
+	size_t prefix_len = (size_t)(arr_end - body);
+	size_t suffix_len = len32 - prefix_len; /* includes ']' and everything after */
+	size_t new_len = prefix_len + (size_t)inject_len + suffix_len;
+
+	char* new_body = (char*)malloc(new_len + 1);
+	if (!new_body) {
+		free(body);
+		return;
+	}
+
+	memcpy(new_body, body, prefix_len);
+	memcpy(new_body + prefix_len, inject, (size_t)inject_len);
+	memcpy(new_body + prefix_len + (size_t)inject_len, arr_end, suffix_len);
+	new_body[new_len] = '\0';
+	free(body);
+
+	/* Rewrite cache file with updated body and new SHA-256 */
+	uint8_t new_digest[SHA256_DIGEST_SIZE];
+	sha256_hash(new_body, new_len, new_digest);
+
+	f = fopen(path, "wb");
+	if (!f) {
+		OFFLINE_LOG_ERROR("patchCache: failed to open %s for rewrite: %s\n",
+		                  path, strerror(errno));
+		free(new_body);
+		return;
+	}
+
+	uint32_t new_len32 = (uint32_t)new_len;
+	size_t written = 0;
+	written += fwrite(&new_len32, sizeof(new_len32), 1, f);
+	written += fwrite(new_body, 1, new_len, f) > 0 ? 1 : 0;
+	written += fwrite(new_digest, SHA256_DIGEST_SIZE, 1, f);
+
+	if (written < 3) {
+		OFFLINE_LOG_ERROR("patchCache: write failed for %s\n", path);
+		fclose(f);
+		unlink(path);
+		free(new_body);
+		return;
+	}
+
+	fflush(f);
+	fsync(fileno(f));
+	fclose(f);
+	free(new_body);
+
+	OFFLINE_LOG_INFO("patchCache: injected achievement %u into %s\n",
+	                 achievement_id, path);
 }
+
