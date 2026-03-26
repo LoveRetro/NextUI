@@ -739,7 +739,17 @@ int main(int argc, char *argv[])
             []() -> std::any { return CFG_getRAAchievementSortOrder(); },
             [](const std::any &value) { CFG_setRAAchievementSortOrder(std::any_cast<int>(value)); },
             []() { CFG_setRAAchievementSortOrder(CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER);}},
-            new MenuItem{ListItemType::Button, "Sync Offline Unlocks", "Submit pending offline unlocks to server",
+            new MenuItem{ListItemType::Button, "Sync Offline Unlocks",
+            []() -> std::string {
+                uint32_t count = 0;
+                RA_Sync_hasPendingUnlocks(&count);
+                if (count > 0) {
+                    char buf[64];
+                    snprintf(buf, sizeof(buf), "%u pending \u2014 submit to server", count);
+                    return std::string(buf);
+                }
+                return std::string("No pending unlocks");
+            }(),
             [](AbstractMenuItem &item) -> InputReactionHint {
                 // Check authentication
                 if (!CFG_getRAAuthenticated() || strlen(CFG_getRAToken()) == 0) {
