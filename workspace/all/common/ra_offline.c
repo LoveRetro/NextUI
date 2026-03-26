@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <time.h>
 #include <unistd.h>
+#include <dirent.h>
 
 /* Logging macros using NextUI's LOG_* infrastructure */
 #define OFFLINE_LOG_DEBUG(fmt, ...) LOG_debug("[RA_OFFLINE] " fmt, ##__VA_ARGS__)
@@ -1088,4 +1089,34 @@ void RA_Offline_clearPendingCache(void) {
 	SDL_LockMutex(ra_ledger_mutex);
 	ra_pending_count = 0;
 	SDL_UnlockMutex(ra_ledger_mutex);
+}
+
+void RA_Offline_invalidateStartsessionCache(void) {
+	if (!ra_offline_initialized || ra_cache_dir[0] == '\0') return;
+
+	DIR* dir = opendir(ra_cache_dir);
+	if (!dir) return;
+
+	struct dirent* entry;
+	int removed = 0;
+
+	while ((entry = readdir(dir)) != NULL) {
+		/* Match filenames like "startsession_<hash>.bin" */
+		if (strncmp(entry->d_name, "startsession_", 13) == 0) {
+			char path[512];
+			snprintf(path, sizeof(path), "%s/%s", ra_cache_dir, entry->d_name);
+			if (unlink(path) == 0) {
+				removed++;
+			} else {
+				OFFLINE_LOG_WARN("Failed to remove cached startsession: %s: %s\n",
+				                 path, strerror(errno));
+			}
+		}
+	}
+
+	closedir(dir);
+
+	if (removed > 0) {
+		OFFLINE_LOG_INFO("Invalidated %d cached startsession response(s)\n", removed);
+	}
 }

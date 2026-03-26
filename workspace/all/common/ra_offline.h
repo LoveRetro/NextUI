@@ -243,4 +243,13 @@ void RA_Offline_removePendingCacheEntry(uint32_t achievement_id);
  */
 void RA_Offline_clearPendingCache(void);
 
+/**
+ * Invalidate (delete) all cached startsession response files.
+ *
+ * Call after a successful sync to prevent stale cached startsession
+ * responses (which lack the newly-synced unlocks) from being served
+ * on the next offline-first startup.
+ */
+void RA_Offline_invalidateStartsessionCache(void);
+
 #endif /* __RA_OFFLINE_H__ */

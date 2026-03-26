@@ -6,12 +6,16 @@ extern "C"
 #include "api.h"
 #include "utils.h"
 #include "ra_auth.h"
+#include "ra_sync.h"
 }
 
 #include <csignal>
 #include <fstream>
 #include <sstream>
 #include <regex>
+#include <thread>
+#include <atomic>
+#include <mutex>
 #include "wifimenu.hpp"
 #include "btmenu.hpp"
 #include "keyboardprompt.hpp"
@@ -735,6 +739,110 @@ int main(int argc, char *argv[])
             []() -> std::any { return CFG_getRAAchievementSortOrder(); },
             [](const std::any &value) { CFG_setRAAchievementSortOrder(std::any_cast<int>(value)); },
             []() { CFG_setRAAchievementSortOrder(CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER);}},
+            new MenuItem{ListItemType::Button, "Sync Offline Unlocks", "Submit pending offline unlocks to server",
+            [](AbstractMenuItem &item) -> InputReactionHint {
+                // Check authentication
+                if (!CFG_getRAAuthenticated() || strlen(CFG_getRAToken()) == 0) {
+                    item.setDesc("Not authenticated");
+                    return NoOp;
+                }
+
+                // Check for pending unlocks
+                uint32_t pending = 0;
+                if (!RA_Sync_hasPendingUnlocks(&pending) || pending == 0) {
+                    item.setDesc("No pending unlocks");
+                    return NoOp;
+                }
+
+                // Show initial overlay with cancel hint
+                char msg[128];
+                snprintf(msg, sizeof(msg), "Syncing %u achievement%s...\n\n(0/%u)",
+                         pending, pending == 1 ? "" : "s", pending);
+                MenuList::showOverlay(msg, OverlayDismissMode::None);
+
+                // Shared state between sync thread and main thread
+                volatile bool cancel = false;
+                std::atomic<bool> done{false};
+                std::mutex progress_mutex;
+                std::string progress_msg;
+                std::atomic<bool> progress_dirty{false};
+                RA_SyncResult sync_result = {0, 0, 0, 0};
+
+                // Progress callback updates shared message string
+                struct ProgressCtx {
+                    std::mutex* mutex;
+                    std::atomic<bool>* dirty;
+                    std::string* msg;
+                    uint32_t total;
+                };
+                ProgressCtx pctx = {&progress_mutex, &progress_dirty, &progress_msg, pending};
+
+                // Launch sync on background thread (game_id=0 for all games, NULL config for interactive defaults)
+                std::thread sync_thread([&]() {
+                    sync_result = RA_Sync_syncAll(0, NULL, &cancel,
+                        [](uint32_t current, uint32_t total, bool success, void* userdata) {
+                            auto* ctx = static_cast<ProgressCtx*>(userdata);
+                            char buf[128];
+                            snprintf(buf, sizeof(buf), "Syncing achievements...\n\n(%u/%u)",
+                                     current, ctx->total);
+                            {
+                                std::lock_guard<std::mutex> lock(*ctx->mutex);
+                                *ctx->msg = buf;
+                            }
+                            ctx->dirty->store(true);
+                        }, &pctx);
+                    done.store(true);
+                });
+
+                // Main thread: poll for B-button cancel and update overlay
+                while (!done.load()) {
+                    GFX_startFrame();
+                    PAD_poll();
+
+                    if (PAD_justPressed(BTN_B)) {
+                        cancel = true;
+                        MenuList::showOverlay("Cancelling sync...", OverlayDismissMode::None);
+                    }
+
+                    // Update overlay if progress changed
+                    if (progress_dirty.exchange(false)) {
+                        std::string current_msg;
+                        {
+                            std::lock_guard<std::mutex> lock(progress_mutex);
+                            current_msg = progress_msg;
+                        }
+                        if (!cancel) {
+                            MenuList::showOverlay(current_msg, OverlayDismissMode::None);
+                        }
+                    }
+
+                    GFX_sync();
+                }
+
+                sync_thread.join();
+                MenuList::hideOverlay();
+
+                // Update button description with result
+                if (cancel && sync_result.synced == 0) {
+                    item.setDesc("Sync cancelled");
+                } else if (cancel && sync_result.synced > 0) {
+                    snprintf(msg, sizeof(msg), "Cancelled: %u of %u synced",
+                             sync_result.synced, sync_result.total);
+                    item.setDesc(msg);
+                } else if (sync_result.failed > 0) {
+                    snprintf(msg, sizeof(msg), "Incomplete: %u synced, retry later",
+                             sync_result.synced);
+                    item.setDesc(msg);
+                } else if (sync_result.synced > 0) {
+                    snprintf(msg, sizeof(msg), "Synced %u achievement%s",
+                             sync_result.synced, sync_result.synced == 1 ? "" : "s");
+                    item.setDesc(msg);
+                } else {
+                    item.setDesc("No pending unlocks");
+                }
+
+                return NoOp;
+            }},
             new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
         });
 

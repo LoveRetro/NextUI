@@ -6,6 +6,7 @@
 #include "notification.h"
 #include "ra_badges.h"
 #include "ra_offline.h"
+#include "ra_sync.h"
 #include "defines.h"
 #include "api.h"
 
@@ -20,7 +21,6 @@
 #include <rcheevos/rc_client.h>
 #include <rcheevos/rc_libretro.h>
 #include <rcheevos/rc_hash.h>
-#include <rcheevos/rc_api_runtime.h>
 #include <rcheevos/rc_api_user.h>
 
 // Logging macros - use NextUI log levels
@@ -155,7 +155,7 @@ static void ra_save_muted_achievements(void);
 static void ra_clear_muted_achievements(void);
 static void ra_reset_login_state(void);
 static void ra_start_login(void);
-static void ra_start_offline_sync(void);
+static void ra_start_offline_sync(uint32_t game_id);
 static uint32_t ra_get_retry_delay_ms(int attempt);
 static void ra_login_callback(int result, const char* error_message, rc_client_t* client, void* userdata);
 static void ra_start_connectivity_probe(void);
@@ -1171,8 +1171,11 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		SDL_LockMutex(ra_deferred.mutex);
 		ra_deferred.user_saw_offline = false;
 		SDL_UnlockMutex(ra_deferred.mutex);
-		// Network is back — try syncing any ledger entries from prior offline sessions
-		ra_start_offline_sync();
+		// Network is back — try syncing current game's ledger entries
+		{
+			const rc_client_game_t* g = rc_client_get_game_info(client);
+			ra_start_offline_sync(g ? g->id : 0);
+		}
 		break;
 		
 	default:
@@ -1301,10 +1304,11 @@ static void ra_prefetch_badges(rc_client_t* client) {
 
 static SDL_Thread* ra_sync_thread = NULL;
 static volatile bool ra_sync_abort = false;
+static uint32_t ra_sync_game_id = 0;
 
 /**
- * Sleep for up to `ms` milliseconds, checking `*abort_flag` every 200ms.
- * Returns early if the flag becomes true.
+ * Background-thread–safe interruptible sleep.
+ * Uses SDL_Delay in small chunks, checking the abort flag between each.
  */
 static void ra_interruptible_sleep(uint32_t ms, volatile bool* abort_flag) {
 	uint32_t slept = 0;
@@ -1315,23 +1319,10 @@ static void ra_interruptible_sleep(uint32_t ms, volatile bool* abort_flag) {
 	}
 }
 
-/**
- * Generate a pseudo-random delay between min_ms and max_ms (inclusive).
- * Uses a simple LCG seeded from SDL_GetTicks + address of stack variable.
- */
-static uint32_t ra_sync_random_delay(uint32_t min_ms, uint32_t max_ms) {
-	static uint32_t seed = 0;
-	if (seed == 0) {
-		uint32_t stack_val;
-		seed = SDL_GetTicks() ^ (uint32_t)(uintptr_t)&stack_val;
-	}
-	seed = seed * 1103515245 + 12345;
-	uint32_t range = max_ms - min_ms + 1;
-	return min_ms + (seed % range);
-}
 
 /**
- * Background thread function: replay pending offline unlocks.
+ * Background thread function: replay pending offline unlocks using
+ * the shared sync engine (ra_sync.c).
  */
 static int ra_sync_thread_func(void* data) {
 	(void)data;
@@ -1342,183 +1333,79 @@ static int ra_sync_thread_func(void* data) {
 	ra_deferred.sync_apply = false;
 	SDL_UnlockMutex(ra_deferred.mutex);
 	
-	RA_PendingUnlock* unlocks = NULL;
-	uint32_t count = 0;
-	
-	if (!RA_Offline_ledgerGetPendingUnlocks(&unlocks, &count)) {
-		RA_LOG_ERROR("Sync: failed to read pending unlocks from ledger\n");
-		RA_Offline_setSyncing(false);
-		return 1;
-	}
-	
-	if (count == 0 || !unlocks) {
-		RA_LOG_DEBUG("Sync: no pending unlocks to replay\n");
-		RA_Offline_setSyncing(false);
-		return 0;
-	}
-	
-	RA_LOG_INFO("Sync: replaying %u pending offline unlocks\n", count);
+	// Snapshot achievement IDs that are pending BEFORE sync, so we can
+	// tell the main thread which ones were synced (after sync, the ledger
+	// may have been compacted and the records are gone).
+	RA_PendingUnlock* pre_unlocks = NULL;
+	uint32_t pre_count = 0;
+	RA_Offline_ledgerGetPendingUnlocks(&pre_unlocks, &pre_count);
 	
 	// Show sync progress in top-left (same area as badge download notifications)
-	{
+	if (pre_count > 0) {
 		char msg[NOTIFICATION_MAX_MESSAGE];
 		snprintf(msg, sizeof(msg), "Syncing %u offline achievement%s...",
-		         count, count == 1 ? "" : "s");
+		         pre_count, pre_count == 1 ? "" : "s");
 		Notification_setProgressIndicatorPersistent(true);
 		Notification_showProgressIndicator(msg, "", NULL);
 	}
 	
-	// Get credentials (these are config values, safe to read from any thread)
-	const char* username = CFG_getRAUsername();
-	const char* token = CFG_getRAToken();
+	// Run the shared sync engine with background timing
+	RA_SyncConfig config = RA_SYNC_CONFIG_BACKGROUND;
+	RA_SyncResult result = RA_Sync_syncAll(ra_sync_game_id, &config,
+	                                       &ra_sync_abort, NULL, NULL);
 	
-	if (!username || !token || strlen(username) == 0 || strlen(token) == 0) {
-		RA_LOG_ERROR("Sync: no credentials available\n");
-		free(unlocks);
-		RA_Offline_setSyncing(false);
-		return 1;
+	RA_LOG_INFO("Sync complete: %u synced, %u skipped, %u failed (of %u)\n",
+	            result.synced, result.skipped, result.failed, result.total);
+	
+	// Store synced achievement IDs for deferred main-thread state update.
+	// We know that RA_Sync_syncAll processes unlocks in order from the
+	// pending list, and synced + skipped + failed <= total. The first
+	// (synced + skipped) entries in our pre-snapshot were processed.
+	// We collect the IDs that match the game filter and were successfully
+	// synced so the main thread can update rcheevos unlock bits.
+	if (result.synced > 0 && pre_unlocks && pre_count > 0) {
+		SDL_LockMutex(ra_deferred.mutex);
+		uint32_t idx = 0;
+		uint32_t processed = 0;
+		for (uint32_t i = 0; i < pre_count && idx < RA_MAX_DEFERRED_SYNC_IDS; i++) {
+			// Skip entries that don't match the game filter
+			if (ra_sync_game_id != 0 && pre_unlocks[i].game_id != ra_sync_game_id)
+				continue;
+			// Skip hardcore (not synced)
+			if (pre_unlocks[i].hardcore)
+				continue;
+			// The sync processes in order: synced entries come first,
+			// then skipped, then failed (which stops the loop).
+			// We can't distinguish synced vs skipped by position alone,
+			// but we know exactly result.synced were successful.
+			// Since the sync thread writes SYNC_ACK for each success,
+			// just store all IDs up to result.synced count.
+			processed++;
+			if (processed <= result.synced) {
+				ra_deferred.sync_ids[idx++] = pre_unlocks[i].achievement_id;
+			}
+		}
+		ra_deferred.sync_count = idx;
+		ra_deferred.sync_apply = true;
+		SDL_UnlockMutex(ra_deferred.mutex);
 	}
 	
-	uint32_t synced = 0;
-	uint32_t skipped = 0;
-	uint32_t failed = 0;
-	time_t now = time(NULL);
-	
-	for (uint32_t i = 0; i < count && !ra_sync_abort; i++) {
-		RA_PendingUnlock* unlock = &unlocks[i];
-		
-		// Skip hardcore unlocks (softcore only, should already be filtered)
-		if (unlock->hardcore) {
-			RA_LOG_DEBUG("Sync: skipping hardcore unlock %u (not permitted)\n",
-			             unlock->achievement_id);
-			skipped++;
-			continue;
-		}
-		
-		// Compute seconds since unlock
-		uint32_t seconds_since = 0;
-		if ((time_t)unlock->timestamp < now) {
-			seconds_since = (uint32_t)(now - (time_t)unlock->timestamp);
-		}
-		
-		// Build award request using rcheevos API (handles MD5 signature)
-		rc_api_award_achievement_request_t api_params;
-		memset(&api_params, 0, sizeof(api_params));
-		api_params.username = username;
-		api_params.api_token = token;
-		api_params.achievement_id = unlock->achievement_id;
-		api_params.hardcore = 0;  // Always softcore
-		api_params.game_hash = unlock->game_hash;
-		api_params.seconds_since_unlock = seconds_since;
-		
-		rc_api_request_t request;
-		memset(&request, 0, sizeof(request));
-		
-		int rc = rc_api_init_award_achievement_request(&request, &api_params);
-		if (rc != RC_OK) {
-			RA_LOG_ERROR("Sync: failed to build award request for achievement %u (rc=%d)\n",
-			             unlock->achievement_id, rc);
-			skipped++;
-			rc_api_destroy_request(&request);
-			continue;
-		}
-		
-		RA_LOG_INFO("Sync: submitting achievement %u (game %u, %us ago) [%u/%u]\n",
-		            unlock->achievement_id, unlock->game_id, seconds_since, i + 1, count);
-		
-		// Synchronous HTTP POST (we're on a background thread)
-		HTTP_Response* http_resp = HTTP_post(request.url, request.post_data,
-		                                     request.content_type);
-		rc_api_destroy_request(&request);
-		
-		if (!http_resp || http_resp->http_status != 200 || !http_resp->data) {
-			RA_LOG_WARN("Sync: HTTP error for achievement %u (status=%d) - stopping sync\n",
-			            unlock->achievement_id,
-			            http_resp ? http_resp->http_status : -1);
-			if (http_resp) HTTP_freeResponse(http_resp);
-			failed++;
-			break;  // Network error: stop sync, will retry next game load
-		}
-		
-		// Parse server response
-		rc_api_award_achievement_response_t award_resp;
-		rc_api_server_response_t server_resp;
-		memset(&server_resp, 0, sizeof(server_resp));
-		server_resp.body = http_resp->data;
-		server_resp.body_length = http_resp->size;
-		server_resp.http_status_code = http_resp->http_status;
-		
-		rc = rc_api_process_award_achievement_server_response(&award_resp, &server_resp);
-		HTTP_freeResponse(http_resp);
-		
-		bool success = false;
-		if (rc == RC_OK && award_resp.response.succeeded) {
-			success = true;
-		} else if (award_resp.response.error_message &&
-		           strstr(award_resp.response.error_message, "User already has") != NULL) {
-			// Already unlocked on server — treat as success
-			RA_LOG_INFO("Sync: achievement %u already unlocked on server\n",
-			            unlock->achievement_id);
-			success = true;
-		} else {
-			// Genuine rejection (invalid achievement, etc.) — skip and continue
-			RA_LOG_WARN("Sync: server rejected achievement %u: %s\n",
-			            unlock->achievement_id,
-			            award_resp.response.error_message ?
-			            award_resp.response.error_message : "unknown error");
-			skipped++;
-		}
-		
-		rc_api_destroy_award_achievement_response(&award_resp);
-		
-		if (success) {
-			// Write SYNC_ACK to ledger
-			RA_Offline_ledgerWriteSyncAck(unlock->achievement_id, unlock->game_id);
-			synced++;
-			RA_LOG_INFO("Sync: achievement %u confirmed (%u/%u)\n",
-			            unlock->achievement_id, synced, count);
-			
-			// Store synced ID for deferred main-thread state update
-			SDL_LockMutex(ra_deferred.mutex);
-			uint32_t idx = ra_deferred.sync_count;
-			if (idx < RA_MAX_DEFERRED_SYNC_IDS) {
-				ra_deferred.sync_ids[idx] = unlock->achievement_id;
-				ra_deferred.sync_count = idx + 1;
-			}
-			SDL_UnlockMutex(ra_deferred.mutex);
-		}
-		
-		// Delay before next submission (skip delay after last item)
-		if (i + 1 < count && !ra_sync_abort) {
-			uint32_t delay;
-			if ((i + 1) % 5 == 0) {
-				// Longer pause every 5 unlocks
-				delay = ra_sync_random_delay(5000, 10000);
-			} else {
-				// Normal 2-5 second delay
-				delay = ra_sync_random_delay(2000, 5000);
-			}
-			RA_LOG_DEBUG("Sync: waiting %ums before next submission\n", delay);
-			ra_interruptible_sleep(delay, &ra_sync_abort);
-		}
-	}
-	
-	free(unlocks);
+	free(pre_unlocks);
 	
 	// Show completion in top-left progress area, then auto-hide
 	{
 		char msg[NOTIFICATION_MAX_MESSAGE];
-		if (failed > 0) {
-			snprintf(msg, sizeof(msg), "Sync incomplete: %u synced, will retry later", synced);
-		} else if (synced > 0) {
+		if (result.failed > 0) {
+			snprintf(msg, sizeof(msg), "Sync incomplete: %u synced, will retry later",
+			         result.synced);
+		} else if (result.synced > 0) {
 			snprintf(msg, sizeof(msg), "Synced %u offline achievement%s",
-			         synced, synced == 1 ? "" : "s");
-		} else if (skipped > 0) {
+			         result.synced, result.synced == 1 ? "" : "s");
+		} else if (result.skipped > 0) {
 			snprintf(msg, sizeof(msg), "Sync: %u achievement%s skipped",
-			         skipped, skipped == 1 ? "" : "s");
+			         result.skipped, result.skipped == 1 ? "" : "s");
 		}
-		// Only show if something happened
-		if (synced > 0 || failed > 0 || skipped > 0) {
+		if (result.synced > 0 || result.failed > 0 || result.skipped > 0) {
 			Notification_setProgressIndicatorPersistent(false);
 			Notification_showProgressIndicator(msg, "", NULL);
 		} else {
@@ -1526,18 +1413,9 @@ static int ra_sync_thread_func(void* data) {
 		}
 	}
 	
-	RA_LOG_INFO("Sync complete: %u synced, %u skipped, %u failed\n", synced, skipped, failed);
-	
-	// Signal main thread to update rcheevos unlock state for synced achievements
-	SDL_LockMutex(ra_deferred.mutex);
-	if (synced > 0 && ra_deferred.sync_count > 0) {
-		ra_deferred.sync_apply = true;
-	}
-	SDL_UnlockMutex(ra_deferred.mutex);
-	
 	// If sync failed, go back to offline mode and restart the probe
 	// so connectivity can be re-verified and sync retried
-	if (failed > 0) {
+	if (result.failed > 0) {
 		RA_Offline_setOffline(true);
 		SDL_LockMutex(ra_deferred.mutex);
 		ra_deferred.user_saw_offline = true;
@@ -1547,26 +1425,17 @@ static int ra_sync_thread_func(void* data) {
 		ra_start_connectivity_probe();
 	}
 	
-	// Clear pending cache since synced achievements are now server-confirmed
-	if (failed == 0) {
-		RA_Offline_clearPendingCache();
-		// Compact the ledger: remove synced UNLOCK+SYNC_ACK pairs so
-		// stale records don't accumulate across sessions
-		RA_Offline_ledgerCompact();
-	} else {
-		// Partial sync — refresh cache to only keep truly pending ones
-		RA_Offline_refreshPendingCache();
-	}
-	
 	RA_Offline_setSyncing(false);
 	return 0;
 }
 
 /**
  * Start offline sync if we're online and have pending unlocks.
- * Called after successful online game load.
+ * Called after successful online game load or connectivity restoration.
+ * 
+ * @param game_id  Game to sync (0 = sync all games).
  */
-static void ra_start_offline_sync(void) {
+static void ra_start_offline_sync(uint32_t game_id) {
 	if (RA_Offline_isOffline()) {
 		RA_LOG_DEBUG("Sync: skipped (offline mode active)\n");
 		return;
@@ -1577,18 +1446,17 @@ static void ra_start_offline_sync(void) {
 	}
 	
 	// Quick check: any pending unlocks?
-	RA_PendingUnlock* unlocks = NULL;
 	uint32_t count = 0;
-	if (!RA_Offline_ledgerGetPendingUnlocks(&unlocks, &count) || count == 0) {
+	if (!RA_Sync_hasPendingUnlocks(&count) || count == 0) {
 		RA_LOG_DEBUG("Sync: no pending unlocks found in ledger\n");
-		free(unlocks);
 		return;
 	}
-	free(unlocks);
 	
 	// Start sync on background thread
-	RA_LOG_INFO("Starting offline sync (%u pending unlocks)\n", count);
+	RA_LOG_INFO("Starting offline sync (%u pending unlocks, game_id=%u)\n",
+	            count, game_id);
 	ra_sync_abort = false;
+	ra_sync_game_id = game_id;
 	RA_Offline_setSyncing(true);
 	ra_sync_thread = SDL_CreateThread(ra_sync_thread_func, "ra_sync", NULL);
 	if (!ra_sync_thread) {
@@ -1599,6 +1467,7 @@ static void ra_start_offline_sync(void) {
 		ra_sync_thread = NULL;
 	}
 }
+
 
 /*****************************************************************************
  * Connectivity probe
@@ -1797,20 +1666,20 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 			RA_Offline_ledgerWriteSessionStart(game->id, game->hash,
 			                                   rc_client_get_hardcore_enabled(client) ? 1 : 0);
 			
-			// Sync any pending offline unlocks (runs in background)
-			ra_start_offline_sync();
+			// Sync pending offline unlocks for this game (runs in background)
+			ra_start_offline_sync(game->id);
 		} else {
 			RA_LOG_WARN("Game not recognized by RetroAchievements\n");
 			// Still try to sync — game may not be recognized but we may have
 			// pending unlocks from a prior offline session with a different game
-			ra_start_offline_sync();
+			ra_start_offline_sync(0);
 		}
 	} else {
 		ra_game_loaded = false;
 		RA_LOG_ERROR("Game load failed: %s\n", error_message ? error_message : "unknown error");
 		// Try to sync even on load failure — we're online (or partially) and may
 		// have pending unlocks from prior offline sessions
-		ra_start_offline_sync();
+		ra_start_offline_sync(0);
 	}
 }
 
@@ -2360,7 +2229,8 @@ static void ra_process_deferred_flags(void) {
 			ra_deferred.sync = true;  // Put it back for next cycle
 			SDL_UnlockMutex(ra_deferred.mutex);
 		} else {
-			ra_start_offline_sync();
+			const rc_client_game_t* g = rc_client_get_game_info(ra_client);
+			ra_start_offline_sync(g ? g->id : 0);
 		}
 	}
 	

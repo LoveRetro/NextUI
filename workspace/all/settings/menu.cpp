@@ -900,6 +900,10 @@ void MenuList::showOverlay(const std::string& message, OverlayDismissMode dismis
     // We want to force a draw right now since usually we are about to block
     WriteLock w(overlayLock);
     if (overlaySurface) {
+        // Clear the surface first to prevent text ghosting from previous
+        // overlay frames (the semi-transparent shadow doesn't fully obscure
+        // old content, causing overlap when updated repeatedly in a loop)
+        SDL_FillRect(overlaySurface, NULL, SDL_MapRGB(overlaySurface->format, 0, 0, 0));
         drawOverlayLocal(overlaySurface);
         GFX_flip(overlaySurface);
     }
