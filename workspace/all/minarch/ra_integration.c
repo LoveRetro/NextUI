@@ -841,6 +841,10 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 					if (ach_id > 0) {
 						RA_Offline_ledgerWriteSyncAck(ach_id, 0);
 						RA_Offline_removePendingCacheEntry(ach_id);
+						// Invalidate cached startsession so the next
+						// offline-first launch sees this unlock in the
+						// server's fresh response instead of a stale cache.
+						RA_Offline_invalidateStartsessionCache();
 					}
 				}
 			}
