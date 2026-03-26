@@ -234,6 +234,11 @@ bool RA_Offline_isUnlockPending(uint32_t achievement_id);
 void RA_Offline_addPendingCacheEntry(uint32_t achievement_id);
 
 /**
+ * Remove an achievement ID from the pending cache (after server confirms unlock).
+ */
+void RA_Offline_removePendingCacheEntry(uint32_t achievement_id);
+
+/**
  * Clear the pending cache (after successful sync).
  */
 void RA_Offline_clearPendingCache(void);

@@ -1069,6 +1069,21 @@ void RA_Offline_addPendingCacheEntry(uint32_t achievement_id) {
 	SDL_UnlockMutex(ra_ledger_mutex);
 }
 
+void RA_Offline_removePendingCacheEntry(uint32_t achievement_id) {
+	SDL_LockMutex(ra_ledger_mutex);
+	for (uint32_t i = 0; i < ra_pending_count; i++) {
+		if (ra_pending_ids[i] == achievement_id) {
+			/* Shift remaining elements down */
+			for (uint32_t j = i; j < ra_pending_count - 1; j++) {
+				ra_pending_ids[j] = ra_pending_ids[j + 1];
+			}
+			ra_pending_count--;
+			break;
+		}
+	}
+	SDL_UnlockMutex(ra_ledger_mutex);
+}
+
 void RA_Offline_clearPendingCache(void) {
 	SDL_LockMutex(ra_ledger_mutex);
 	ra_pending_count = 0;

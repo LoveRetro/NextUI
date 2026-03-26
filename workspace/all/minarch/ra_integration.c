@@ -840,6 +840,7 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 					uint32_t ach_id = (uint32_t)strtoul(a_buf, NULL, 10);
 					if (ach_id > 0) {
 						RA_Offline_ledgerWriteSyncAck(ach_id, 0);
+						RA_Offline_removePendingCacheEntry(ach_id);
 					}
 				}
 			}
