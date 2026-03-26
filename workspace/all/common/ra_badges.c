@@ -271,8 +271,6 @@ static void badge_download_callback(HTTP_Response* response, void* userdata) {
 	
 	bool success = false;
 	
-	// Just save to disk - don't load into memory during prefetch
-	// Images will be loaded lazily when actually needed for display
 	if (response && response->data && response->http_status == 200 && !response->error) {
 		success = save_to_cache(ctx->cache_path, response->data, response->size);
 		if (!success) {
@@ -285,7 +283,18 @@ static void badge_download_callback(HTTP_Response* response, void* userdata) {
 		          response && response->error ? response->error : "HTTP error");
 	}
 	
-	// Only hold mutex briefly to update state
+	// Decode the image and pre-scale it here on the worker thread so the main
+	// thread never has to do IMG_Load or scale_surface at achievement-trigger time.
+	SDL_Surface* surface = NULL;
+	SDL_Surface* surface_scaled = NULL;
+	if (success) {
+		surface = load_from_cache(ctx->cache_path);
+		if (surface) {
+			surface_scaled = scale_surface(surface, RA_BADGE_NOTIFY_SIZE);
+		}
+	}
+	
+	// Hold mutex only long enough to update the cache entry state + surfaces
 	if (badge_mutex) SDL_LockMutex(badge_mutex);
 	
 	download_queue.active--;
@@ -296,8 +305,18 @@ static void badge_download_callback(HTTP_Response* response, void* userdata) {
 	
 	BadgeCacheEntry* entry = find_or_create_entry(ctx->badge_name, ctx->locked);
 	if (entry) {
-		// Mark as cached (on disk) - surfaces will be loaded lazily
 		entry->state = success ? RA_BADGE_STATE_CACHED : RA_BADGE_STATE_FAILED;
+		if (surface) {
+			// Free any previously-loaded surfaces (shouldn't happen, but be safe)
+			if (entry->surface) SDL_FreeSurface(entry->surface);
+			if (entry->surface_scaled) SDL_FreeSurface(entry->surface_scaled);
+			entry->surface        = surface;
+			entry->surface_scaled = surface_scaled;
+		}
+	} else {
+		// Entry couldn't be created — discard decoded surfaces
+		if (surface)        SDL_FreeSurface(surface);
+		if (surface_scaled) SDL_FreeSurface(surface_scaled);
 	}
 	
 	// Start next queued download(s)
@@ -445,16 +464,31 @@ SDL_Surface* RA_Badges_get(const char* badge_name, bool locked) {
 	
 	if (entry) {
 		if (entry->state == RA_BADGE_STATE_CACHED) {
-			// Lazy load from disk if not in memory
 			if (!entry->surface) {
+				// Release mutex during disk I/O so we don't stall other threads.
+				// Re-check entry->surface after re-acquiring in case another thread
+				// raced us and loaded it first.
 				char cache_path[MAX_PATH];
 				RA_Badges_getCachePath(badge_name, locked, cache_path, sizeof(cache_path));
-				entry->surface = load_from_cache(cache_path);
-				if (entry->surface) {
-					entry->surface_scaled = scale_surface(entry->surface, RA_BADGE_NOTIFY_SIZE);
+				if (badge_mutex) SDL_UnlockMutex(badge_mutex);
+
+				SDL_Surface* surface = load_from_cache(cache_path);
+				SDL_Surface* surface_scaled = surface
+					? scale_surface(surface, RA_BADGE_NOTIFY_SIZE) : NULL;
+
+				if (badge_mutex) SDL_LockMutex(badge_mutex);
+				// Re-find entry: cache may have been modified while mutex was dropped
+				entry = find_or_create_entry(badge_name, locked);
+				if (entry && !entry->surface) {
+					entry->surface        = surface;
+					entry->surface_scaled = surface_scaled;
+				} else {
+					// Lost the race — discard what we loaded
+					if (surface)        SDL_FreeSurface(surface);
+					if (surface_scaled) SDL_FreeSurface(surface_scaled);
 				}
 			}
-			result = entry->surface;
+			result = entry ? entry->surface : NULL;
 		} else if (entry->state == RA_BADGE_STATE_UNKNOWN) {
 			// Trigger download
 			start_download(badge_name, locked);
@@ -476,16 +510,27 @@ SDL_Surface* RA_Badges_getNotificationSize(const char* badge_name, bool locked) 
 	
 	if (entry) {
 		if (entry->state == RA_BADGE_STATE_CACHED) {
-			// Lazy load from disk if not in memory
 			if (!entry->surface_scaled) {
+				// Release mutex during disk I/O so we don't stall other threads.
 				char cache_path[MAX_PATH];
 				RA_Badges_getCachePath(badge_name, locked, cache_path, sizeof(cache_path));
-				entry->surface = load_from_cache(cache_path);
-				if (entry->surface) {
-					entry->surface_scaled = scale_surface(entry->surface, RA_BADGE_NOTIFY_SIZE);
+				if (badge_mutex) SDL_UnlockMutex(badge_mutex);
+
+				SDL_Surface* surface = load_from_cache(cache_path);
+				SDL_Surface* surface_scaled = surface
+					? scale_surface(surface, RA_BADGE_NOTIFY_SIZE) : NULL;
+
+				if (badge_mutex) SDL_LockMutex(badge_mutex);
+				entry = find_or_create_entry(badge_name, locked);
+				if (entry && !entry->surface_scaled) {
+					entry->surface        = surface;
+					entry->surface_scaled = surface_scaled;
+				} else {
+					if (surface)        SDL_FreeSurface(surface);
+					if (surface_scaled) SDL_FreeSurface(surface_scaled);
 				}
 			}
-			result = entry->surface_scaled;
+			result = entry ? entry->surface_scaled : NULL;
 		} else if (entry->state == RA_BADGE_STATE_UNKNOWN) {
 			// Trigger download
 			start_download(badge_name, locked);

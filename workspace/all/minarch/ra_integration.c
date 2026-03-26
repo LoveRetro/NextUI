@@ -133,6 +133,8 @@ typedef struct {
 #define RA_RESPONSE_QUEUE_SIZE 16
 static RA_QueuedResponse ra_response_queue[RA_RESPONSE_QUEUE_SIZE];
 static volatile int ra_response_queue_count = 0;
+static int ra_response_queue_head = 0;  /* next slot to read  (main thread) */
+static int ra_response_queue_tail = 0;  /* next slot to write (worker threads) */
 static SDL_mutex* ra_queue_mutex = NULL;
 
 // Forward declarations for queue functions
@@ -347,6 +349,8 @@ static void ra_queue_init(void) {
 		ra_queue_mutex = SDL_CreateMutex();
 	}
 	ra_response_queue_count = 0;
+	ra_response_queue_head  = 0;
+	ra_response_queue_tail  = 0;
 	memset(ra_response_queue, 0, sizeof(ra_response_queue));
 }
 
@@ -354,11 +358,12 @@ static void ra_queue_quit(void) {
 	// Drain any pending responses
 	if (ra_queue_mutex) {
 		SDL_LockMutex(ra_queue_mutex);
-		for (int i = 0; i < ra_response_queue_count; i++) {
-			free(ra_response_queue[i].body);
-			ra_response_queue[i].body = NULL;
+		while (ra_response_queue_count > 0) {
+			free(ra_response_queue[ra_response_queue_head].body);
+			ra_response_queue[ra_response_queue_head].body = NULL;
+			ra_response_queue_head = (ra_response_queue_head + 1) % RA_RESPONSE_QUEUE_SIZE;
+			ra_response_queue_count--;
 		}
-		ra_response_queue_count = 0;
 		SDL_UnlockMutex(ra_queue_mutex);
 		
 		SDL_DestroyMutex(ra_queue_mutex);
@@ -377,7 +382,7 @@ static bool ra_queue_push(const char* body, size_t body_length, int http_status,
 	SDL_LockMutex(ra_queue_mutex);
 	
 	if (ra_response_queue_count < RA_RESPONSE_QUEUE_SIZE) {
-		RA_QueuedResponse* resp = &ra_response_queue[ra_response_queue_count];
+		RA_QueuedResponse* resp = &ra_response_queue[ra_response_queue_tail];
 		
 		// Copy the body data (caller will free original)
 		if (body && body_length > 0) {
@@ -387,6 +392,7 @@ static bool ra_queue_push(const char* body, size_t body_length, int http_status,
 				resp->body[body_length] = '\0';
 				resp->body_length = body_length;
 			} else {
+				resp->body = NULL;
 				resp->body_length = 0;
 			}
 		} else {
@@ -398,6 +404,7 @@ static bool ra_queue_push(const char* body, size_t body_length, int http_status,
 		resp->callback = callback;
 		resp->callback_data = callback_data;
 		
+		ra_response_queue_tail = (ra_response_queue_tail + 1) % RA_RESPONSE_QUEUE_SIZE;
 		ra_response_queue_count++;
 		success = true;
 	} else {
@@ -418,18 +425,9 @@ static bool ra_queue_pop(RA_QueuedResponse* out) {
 	SDL_LockMutex(ra_queue_mutex);
 	
 	if (ra_response_queue_count > 0) {
-		// Copy first item to output
-		*out = ra_response_queue[0];
-		
-		// Shift remaining items down
-		for (int i = 0; i < ra_response_queue_count - 1; i++) {
-			ra_response_queue[i] = ra_response_queue[i + 1];
-		}
+		*out = ra_response_queue[ra_response_queue_head];
+		ra_response_queue_head = (ra_response_queue_head + 1) % RA_RESPONSE_QUEUE_SIZE;
 		ra_response_queue_count--;
-		
-		// Clear the last slot
-		memset(&ra_response_queue[ra_response_queue_count], 0, sizeof(RA_QueuedResponse));
-		
 		has_item = true;
 	}
 	

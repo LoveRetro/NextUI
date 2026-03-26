@@ -537,7 +537,10 @@ void Notification_clear(void) {
 	
 	SDL_LockMutex(progress_mutex);
 	progress_state.active = 0;
-	progress_state.icon = NULL;
+	if (progress_state.icon) {
+		SDL_FreeSurface(progress_state.icon);
+		progress_state.icon = NULL;
+	}
 	progress_state.dirty = 1;
 	SDL_UnlockMutex(progress_mutex);
 	
@@ -606,8 +609,11 @@ void Notification_showProgressIndicator(const char* title, const char* progress,
 	strncpy(progress_state.progress, progress, PROGRESS_STRING_MAX - 1);
 	progress_state.progress[PROGRESS_STRING_MAX - 1] = '\0';
 	
-	// Store icon reference (caller retains ownership)
-	progress_state.icon = icon;
+	// Duplicate the icon so progress_state owns its copy and the badge cache
+	// can free its surfaces (e.g. on game unload) without causing a use-after-free.
+	SDL_Surface* prev_icon = progress_state.icon;
+	progress_state.icon = icon ? SDL_DuplicateSurface(icon) : NULL;
+	if (prev_icon) SDL_FreeSurface(prev_icon);
 	
 	// Activate and reset timer
 	progress_state.active = 1;
@@ -625,7 +631,10 @@ void Notification_hideProgressIndicator(void) {
 	if (progress_state.active) {
 		progress_state.active = 0;
 		progress_state.persistent = 0;
-		progress_state.icon = NULL;
+		if (progress_state.icon) {
+			SDL_FreeSurface(progress_state.icon);
+			progress_state.icon = NULL;
+		}
 		progress_state.dirty = 1;
 	}
 	SDL_UnlockMutex(progress_mutex);

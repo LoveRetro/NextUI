@@ -25,9 +25,9 @@ static bool ra_offline_initialized = false;
 static volatile bool ra_offline_mode = false;
 static volatile bool ra_sync_in_progress = false;
 
-/* Mutex protecting ledger file I/O, hash-chain state, and pending cache.
- * Guards: ledger_append, ledgerCompact, ledgerGetPendingUnlocks,
- *         and all pending-cache functions. */
+/* Mutex protecting hash-chain state, pending cache, and the write queue.
+ * Guards: ledger_append (hash chain + enqueue), ledgerCompact,
+ *         ledgerGetPendingUnlocks, and all pending-cache functions. */
 static SDL_mutex* ra_ledger_mutex = NULL;
 
 /* Base data directory (set during init) */
@@ -43,6 +43,33 @@ static bool ra_ledger_has_records = false;
 #define RA_MAX_PENDING_CACHE 512
 static uint32_t ra_pending_ids[RA_MAX_PENDING_CACHE];
 static uint32_t ra_pending_count = 0;
+
+/*****************************************************************************
+ * Async ledger write queue
+ *
+ * Ledger writes (fopen/fwrite/fsync/fclose) are handed off to a background
+ * thread so that the main game loop is never stalled by SD-card I/O.
+ *
+ * The hash chain (prev_hash / record_hash computation) is still finalized
+ * synchronously under ra_ledger_mutex before the record is enqueued — this
+ * preserves strict ordering without blocking on disk.
+ *****************************************************************************/
+
+#define RA_LEDGER_WRITE_QUEUE_SIZE 32  /* more than enough for any burst */
+
+typedef struct {
+	RA_LedgerRecord records[RA_LEDGER_WRITE_QUEUE_SIZE];
+	int head;         /* next slot to read  (writer thread) */
+	int tail;         /* next slot to write (producers)     */
+	int count;
+	SDL_mutex*  mutex;
+	SDL_cond*   cond_nonempty;  /* signalled when a record is enqueued */
+	SDL_cond*   cond_empty;     /* signalled when queue drains to zero  */
+	SDL_Thread* thread;
+	volatile bool running;
+} LedgerWriteQueue;
+
+static LedgerWriteQueue ra_ledger_wq = {0};
 
 /*****************************************************************************
  * Helpers: Directory creation
@@ -589,42 +616,140 @@ static uint32_t ledger_validate_and_load(void) {
 }
 
 /**
- * Append a record to the ledger file.
+ * Background thread: drains the ledger write queue, writing each record to
+ * disk with fsync so data survives a crash.  All blocking I/O happens here,
+ * never on the main thread.
+ */
+static int ledger_writer_thread(void* userdata) {
+	(void)userdata;
+	LedgerWriteQueue* wq = &ra_ledger_wq;
+
+	while (1) {
+		SDL_LockMutex(wq->mutex);
+
+		/* Wait until there is work to do or we're asked to stop */
+		while (wq->count == 0 && wq->running) {
+			SDL_CondWait(wq->cond_nonempty, wq->mutex);
+		}
+
+		if (wq->count == 0 && !wq->running) {
+			/* Shutdown signal and queue is empty — exit cleanly */
+			SDL_UnlockMutex(wq->mutex);
+			break;
+		}
+
+		/* Dequeue one record */
+		RA_LedgerRecord rec = wq->records[wq->head];
+		wq->head = (wq->head + 1) % RA_LEDGER_WRITE_QUEUE_SIZE;
+		wq->count--;
+
+		SDL_UnlockMutex(wq->mutex);
+
+		/* Write to disk — blocking I/O, safe on background thread */
+		FILE* f = fopen(ra_ledger_path, "ab");
+		if (!f) {
+			OFFLINE_LOG_ERROR("Ledger writer: failed to open ledger: %s\n",
+			                  strerror(errno));
+		} else {
+			if (fwrite(&rec, sizeof(RA_LedgerRecord), 1, f) != 1) {
+				OFFLINE_LOG_ERROR("Ledger writer: fwrite failed: %s\n",
+				                  strerror(errno));
+			}
+			fflush(f);
+			fsync(fileno(f));
+			fclose(f);
+		}
+
+		/* Signal any thread waiting for the queue to drain (e.g. shutdown) */
+		SDL_LockMutex(wq->mutex);
+		if (wq->count == 0) {
+			SDL_CondSignal(wq->cond_empty);
+		}
+		SDL_UnlockMutex(wq->mutex);
+	}
+
+	return 0;
+}
+
+/**
+ * Start the ledger background writer thread.
+ */
+static void ledger_writer_start(void) {
+	LedgerWriteQueue* wq = &ra_ledger_wq;
+	memset(wq, 0, sizeof(*wq));
+	wq->mutex         = SDL_CreateMutex();
+	wq->cond_nonempty = SDL_CreateCond();
+	wq->cond_empty    = SDL_CreateCond();
+	wq->running       = true;
+	wq->thread        = SDL_CreateThread(ledger_writer_thread, "ra_ledger_writer", NULL);
+	if (!wq->thread) {
+		OFFLINE_LOG_ERROR("Failed to create ledger writer thread: %s\n", SDL_GetError());
+	}
+}
+
+/**
+ * Stop the ledger background writer thread, flushing any queued records first.
+ */
+static void ledger_writer_stop(void) {
+	LedgerWriteQueue* wq = &ra_ledger_wq;
+	if (!wq->thread) return;
+
+	/* Wait for queue to drain, then signal shutdown */
+	SDL_LockMutex(wq->mutex);
+	while (wq->count > 0) {
+		SDL_CondWait(wq->cond_empty, wq->mutex);
+	}
+	wq->running = false;
+	SDL_CondSignal(wq->cond_nonempty);  /* wake thread so it can exit */
+	SDL_UnlockMutex(wq->mutex);
+
+	SDL_WaitThread(wq->thread, NULL);
+	wq->thread = NULL;
+
+	SDL_DestroyCond(wq->cond_empty);
+	SDL_DestroyCond(wq->cond_nonempty);
+	SDL_DestroyMutex(wq->mutex);
+	wq->mutex         = NULL;
+	wq->cond_empty    = NULL;
+	wq->cond_nonempty = NULL;
+}
+
+/**
+ * Append a record to the ledger.
+ *
+ * The hash chain is finalized synchronously under ra_ledger_mutex (preserving
+ * strict ordering), then the completed record is handed off to the background
+ * writer thread.  The main thread never blocks on disk I/O.
  */
 static bool ledger_append(RA_LedgerRecord* rec) {
 	SDL_LockMutex(ra_ledger_mutex);
 
-	/* Set prev_hash from chain state */
+	/* Finalize hash chain — must be done in order, under the mutex */
 	memcpy(rec->prev_hash, ra_ledger_last_hash, SHA256_DIGEST_SIZE);
-
-	/* Compute record_hash */
 	ledger_compute_record_hash(rec);
 
-	/* Open for append */
-	FILE* f = fopen(ra_ledger_path, "ab");
-	if (!f) {
-		OFFLINE_LOG_ERROR("Failed to open ledger for append: %s\n", strerror(errno));
-		SDL_UnlockMutex(ra_ledger_mutex);
-		return false;
-	}
-
-	if (fwrite(rec, sizeof(RA_LedgerRecord), 1, f) != 1) {
-		OFFLINE_LOG_ERROR("Failed to write ledger record: %s\n", strerror(errno));
-		fclose(f);
-		SDL_UnlockMutex(ra_ledger_mutex);
-		return false;
-	}
-
-	fflush(f);
-	fsync(fileno(f));
-	fclose(f);
-
-	/* Update chain state */
+	/* Update in-memory chain state immediately so the next enqueue sees it */
 	ledger_hash_record(rec, ra_ledger_last_hash);
 	ra_ledger_has_records = true;
 
+	/* Enqueue for async disk write */
+	LedgerWriteQueue* wq = &ra_ledger_wq;
+	bool enqueued = false;
+
+	SDL_LockMutex(wq->mutex);
+	if (wq->count < RA_LEDGER_WRITE_QUEUE_SIZE) {
+		wq->records[wq->tail] = *rec;
+		wq->tail = (wq->tail + 1) % RA_LEDGER_WRITE_QUEUE_SIZE;
+		wq->count++;
+		SDL_CondSignal(wq->cond_nonempty);
+		enqueued = true;
+	} else {
+		OFFLINE_LOG_ERROR("Ledger write queue full — record dropped!\n");
+	}
+	SDL_UnlockMutex(wq->mutex);
+
 	SDL_UnlockMutex(ra_ledger_mutex);
-	return true;
+	return enqueued;
 }
 
 /* Initialize a ledger record with common fields zeroed and set */
@@ -984,12 +1109,18 @@ void RA_Offline_init(const char* data_dir) {
 		OFFLINE_LOG_ERROR("Failed to create ledger mutex: %s\n", SDL_GetError());
 	}
 
+	/* Start the background ledger writer thread */
+	ledger_writer_start();
+
 	ra_offline_initialized = true;
 	OFFLINE_LOG_INFO("Initialized (cache: %s, ledger: %s)\n", ra_cache_dir, ra_ledger_path);
 }
 
 void RA_Offline_shutdown(void) {
 	if (!ra_offline_initialized) return;
+
+	/* Stop the background writer first — flushes any queued records to disk */
+	ledger_writer_stop();
 
 	ra_offline_initialized = false;
 	ra_offline_mode = false;
