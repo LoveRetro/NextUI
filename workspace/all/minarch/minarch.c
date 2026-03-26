@@ -7239,8 +7239,15 @@ static int OptionAchievements_showDetail(MenuList* list, int i) {
 			// Offline pending indicator
 			if (is_offline_pending) {
 				SDL_Surface* offline_text = TTF_RenderUTF8_Blended(font.tiny, "Unlocked offline - pending sync", COLOR_LIGHT_TEXT);
+				int wifi_size = SCALE1(12);
+				int total_w = wifi_size + SCALE1(4) + offline_text->w;
+				int icon_x = center_x - total_w / 2;
+				int text_x = icon_x + wifi_size + SCALE1(4);
+				int wifi_y = content_y + (offline_text->h - wifi_size) / 2;
+				GFX_blitAssetColor(ASSET_WIFI_OFF, NULL, screen,
+				                   &(SDL_Rect){icon_x, wifi_y}, 0xCCCCCC);
 				SDL_BlitSurface(offline_text, NULL, screen, &(SDL_Rect){
-					center_x - offline_text->w / 2, content_y
+					text_x, content_y
 				});
 				content_y += offline_text->h + SCALE1(2);
 				SDL_FreeSurface(offline_text);
@@ -7559,7 +7566,7 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 
 				if (is_selected) {
 					// White pill for the text area with icon (like MENU_FIXED selected text pill)
-					// Calculate width needed for: badge + spacing + title + indicators + padding
+					// Calculate width needed for: badge + spacing + [wifi icon] + title + indicators + padding
 					int badge_display_size = SCALE1(BUTTON_SIZE - 4);  // Badge sized to fit in row
 					int title_width = 0;
 					TTF_SizeUTF8(font.small, ach->title, &title_width, NULL);
@@ -7570,10 +7577,9 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 					}
 					int offline_width = 0;
 					if (is_offline_pending) {
-						TTF_SizeUTF8(font.tiny, "[O]", &offline_width, NULL);
-						offline_width += SCALE1(4);  // spacing
+						offline_width = SCALE1(12) + SCALE1(4);  // wifi-off icon + gap
 					}
-					int pill_width = opt_pad + badge_display_size + SCALE1(6) + title_width + mute_width + offline_width + opt_pad;
+					int pill_width = opt_pad + badge_display_size + SCALE1(6) + offline_width + title_width + mute_width + opt_pad;
 					
 					GFX_blitPillDark(ASSET_BUTTON, screen, &(SDL_Rect){
 						ox, oy + SCALE1(row * BUTTON_SIZE), pill_width, row_height
@@ -7592,10 +7598,21 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 						SDL_BlitScaled(badge, &badge_src, screen, &badge_dst);
 					}
 
+					int text_x = ox + opt_pad + badge_display_size + SCALE1(6);
+
+					// Offline pending icon prefix (wifi-off icon before title)
+					if (is_offline_pending) {
+						int wifi_size = SCALE1(12);
+						int wifi_y = oy + SCALE1(row * BUTTON_SIZE) + (row_height - wifi_size) / 2;
+						GFX_blitAssetColor(ASSET_WIFI_OFF, NULL, screen,
+						                   &(SDL_Rect){text_x, wifi_y}, THEME_COLOR5_255);
+						text_x += offline_width;
+					}
+
 					// Title text
 					SDL_Surface* title_text = TTF_RenderUTF8_Blended(font.small, ach->title, text_color);
 					SDL_BlitSurface(title_text, NULL, screen, &(SDL_Rect){
-						ox + opt_pad + badge_display_size + SCALE1(6),
+						text_x,
 						oy + SCALE1((row * BUTTON_SIZE) + 1)
 					});
 					SDL_FreeSurface(title_text);
@@ -7604,23 +7621,13 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 					if (is_muted) {
 						SDL_Surface* mute_text = TTF_RenderUTF8_Blended(font.tiny, "[M]", text_color);
 						SDL_BlitSurface(mute_text, NULL, screen, &(SDL_Rect){
-							ox + opt_pad + badge_display_size + SCALE1(6) + title_width + SCALE1(4),
+							text_x + title_width + SCALE1(4),
 							oy + SCALE1((row * BUTTON_SIZE) + 3)
 						});
 						SDL_FreeSurface(mute_text);
 					}
-
-					// Offline pending indicator inside the pill
-					if (is_offline_pending) {
-						SDL_Surface* offline_text = TTF_RenderUTF8_Blended(font.tiny, "[O]", text_color);
-						SDL_BlitSurface(offline_text, NULL, screen, &(SDL_Rect){
-							ox + opt_pad + badge_display_size + SCALE1(6) + title_width + mute_width + SCALE1(4),
-							oy + SCALE1((row * BUTTON_SIZE) + 3)
-						});
-						SDL_FreeSurface(offline_text);
-					}
 				} else {
-					// Unselected row - just badge + title + mute indicator, no pills
+					// Unselected row - just badge + title + indicators, no pills
 					int badge_display_size = SCALE1(BUTTON_SIZE - 4);
 					
 					// Badge icon
@@ -7635,41 +7642,35 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 						SDL_BlitScaled(badge, &badge_src, screen, &badge_dst);
 					}
 
-					// Title text (theme color for unselected)
+					int text_x = ox + opt_pad + badge_display_size + SCALE1(6);
+
+					// Offline pending icon prefix (wifi-off icon before title)
+					if (is_offline_pending) {
+						int wifi_size = SCALE1(12);
+						int wifi_y = oy + SCALE1(row * BUTTON_SIZE) + (row_height - wifi_size) / 2;
+						GFX_blitAssetColor(ASSET_WIFI_OFF, NULL, screen,
+						                   &(SDL_Rect){text_x, wifi_y}, RGB_WHITE);
+						text_x += wifi_size + SCALE1(4);
+					}
+
+					// Title text (white for unselected)
 					SDL_Surface* title_text = TTF_RenderUTF8_Blended(font.small, ach->title, COLOR_WHITE);
 					SDL_BlitSurface(title_text, NULL, screen, &(SDL_Rect){
-						ox + opt_pad + badge_display_size + SCALE1(6),
+						text_x,
 						oy + SCALE1((row * BUTTON_SIZE) + 1)
 					});
 					SDL_FreeSurface(title_text);
 
 					// Mute indicator
 					if (is_muted) {
-						SDL_Surface* mute_text = TTF_RenderUTF8_Blended(font.tiny, "[M]", COLOR_WHITE);
 						int title_width = 0;
 						TTF_SizeUTF8(font.small, ach->title, &title_width, NULL);
+						SDL_Surface* mute_text = TTF_RenderUTF8_Blended(font.tiny, "[M]", COLOR_WHITE);
 						SDL_BlitSurface(mute_text, NULL, screen, &(SDL_Rect){
-							ox + opt_pad + badge_display_size + SCALE1(6) + title_width + SCALE1(4),
+							text_x + title_width + SCALE1(4),
 							oy + SCALE1((row * BUTTON_SIZE) + 3)
 						});
 						SDL_FreeSurface(mute_text);
-					}
-
-					// Offline pending indicator
-					if (is_offline_pending) {
-						int title_width = 0;
-						TTF_SizeUTF8(font.small, ach->title, &title_width, NULL);
-						int mute_width = 0;
-						if (is_muted) {
-							TTF_SizeUTF8(font.tiny, "[M]", &mute_width, NULL);
-							mute_width += SCALE1(4);
-						}
-						SDL_Surface* offline_text = TTF_RenderUTF8_Blended(font.tiny, "[O]", COLOR_WHITE);
-						SDL_BlitSurface(offline_text, NULL, screen, &(SDL_Rect){
-							ox + opt_pad + badge_display_size + SCALE1(6) + title_width + mute_width + SCALE1(4),
-							oy + SCALE1((row * BUTTON_SIZE) + 3)
-						});
-						SDL_FreeSurface(offline_text);
 					}
 				}
 			}

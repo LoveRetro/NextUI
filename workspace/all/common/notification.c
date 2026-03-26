@@ -182,7 +182,7 @@ void Notification_push(NotificationType type, const char* message, SDL_Surface* 
     }
     
     // Check if notifications are enabled for this type
-    if (type == NOTIFICATION_ACHIEVEMENT && !CFG_getRAShowNotifications()) {
+    if ((type == NOTIFICATION_ACHIEVEMENT || type == NOTIFICATION_OFFLINE_ACHIEVEMENT) && !CFG_getRAShowNotifications()) {
         return;
     }
     
@@ -200,7 +200,7 @@ void Notification_push(NotificationType type, const char* message, SDL_Surface* 
     n->start_time = SDL_GetTicks();
     
     // Use RA-specific duration for achievement notifications
-    if (type == NOTIFICATION_ACHIEVEMENT) {
+    if (type == NOTIFICATION_ACHIEVEMENT || type == NOTIFICATION_OFFLINE_ACHIEVEMENT) {
         n->duration_ms = CFG_getRANotificationDuration() * 1000;
     } else {
         n->duration_ms = CFG_getNotifyDuration() * 1000;
@@ -368,7 +368,13 @@ static void render_notification_pill(Notification* n, int x, int y, SDL_Color te
         icon_total_w = icon_w + notif_icon_gap;
     }
     
-    int pill_w = icon_total_w + text_w + (notif_padding_x * 2);
+    // Wifi-off indicator for offline achievement notifications
+    int wifi_icon_w = 0;
+    if (n->type == NOTIFICATION_OFFLINE_ACHIEVEMENT) {
+        wifi_icon_w = SCALE1(12) + notif_icon_gap;  // icon natural size + gap
+    }
+    
+    int pill_w = icon_total_w + wifi_icon_w + text_w + (notif_padding_x * 2);
     int pill_h = text_h + (notif_padding_y * 2);
     int corner_radius = pill_h / 2;
     
@@ -388,6 +394,15 @@ static void render_notification_pill(Notification* n, int x, int y, SDL_Color te
         SDL_SetSurfaceBlendMode(n->icon, SDL_BLENDMODE_BLEND);
         SDL_BlitScaled(n->icon, NULL, notif_surface, &icon_dst);
         content_x += icon_total_w;
+    }
+    
+    // Blit wifi-off icon between badge and text for offline achievements
+    if (n->type == NOTIFICATION_OFFLINE_ACHIEVEMENT) {
+        int wifi_size = SCALE1(12);
+        int wifi_y = notif_padding_y + (text_h - wifi_size) / 2;
+        GFX_blitAssetColor(ASSET_WIFI_OFF, NULL, notif_surface,
+                           &(SDL_Rect){content_x, wifi_y}, THEME_COLOR1_255);
+        content_x += wifi_size + notif_icon_gap;
     }
     
     SDL_Surface* text_surf = TTF_RenderUTF8_Blended(font.tiny, n->message, text_color);

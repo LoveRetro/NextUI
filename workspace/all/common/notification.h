@@ -21,7 +21,8 @@ typedef enum {
     NOTIFICATION_SAVE_STATE,
     NOTIFICATION_LOAD_STATE,
     NOTIFICATION_SETTING,       // volume/brightness/colortemp adjustments
-    NOTIFICATION_ACHIEVEMENT,   // RetroAchievements unlocks
+    NOTIFICATION_ACHIEVEMENT,           // RetroAchievements unlocks
+    NOTIFICATION_OFFLINE_ACHIEVEMENT,   // Offline RA unlocks (shows wifi-off icon)
 } NotificationType;
 
 typedef enum {

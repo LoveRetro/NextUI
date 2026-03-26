@@ -1045,7 +1045,8 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		         event->achievement->title);
 		// Get the unlocked badge icon (not locked)
 		badge_icon = RA_Badges_getNotificationSize(event->achievement->badge_name, false);
-		Notification_push(NOTIFICATION_ACHIEVEMENT, message, badge_icon);
+		Notification_push(RA_Offline_isOffline() ? NOTIFICATION_OFFLINE_ACHIEVEMENT : NOTIFICATION_ACHIEVEMENT,
+		                  message, badge_icon);
 		RA_LOG_INFO("Achievement unlocked: %s (%d points)\n",
 		       event->achievement->title, event->achievement->points);
 		
