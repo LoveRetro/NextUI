@@ -2760,7 +2760,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 		pthread_mutex_unlock(&audio_mutex);
 
 		total_consumed_frames += written_frames;
-		// No need to free - using static buffers
+		free(resampled.frames);
 	}
 
 	return total_consumed_frames;
