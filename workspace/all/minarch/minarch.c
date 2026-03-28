@@ -4514,6 +4514,11 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		if (message) LOG_info("%s\n", message->msg);
 		break;
 	}
+	case RETRO_ENVIRONMENT_SHUTDOWN: { /* 7 */
+		LOG_info("Core requested shutdown\n");
+		quit = 1;
+		break;
+	}
 	case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: { /* 8 */
 		// puts("RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL");
 		// TODO: used by fceumm at least
