@@ -245,7 +245,24 @@ static void Directory_index(Directory* self) {
 
     Hash* map = NULL;
     char map_path[256];
-    sprintf(map_path, "%s/map.txt", is_collection ? COLLECTIONS_PATH : self->path);
+	char base_path[256];
+
+	strcpy(base_path, self->path);
+	char* tmp = strrchr(base_path, '/') + 1;
+	tmp[0] = '\0';
+
+    sprintf(map_path, "%s/map.txt", is_collection ? COLLECTIONS_PATH : self->path); // previous logic
+	
+	if (is_collection && CFG_getUseCollectionsNestedMap()){
+		if(suffixMatch(".txt", self->path)){
+			sprintf(map_path, "%smap.txt", base_path);
+		} else {
+			sprintf(map_path, "%s/map.txt", self->path);
+		}
+
+		if (!exists(map_path))
+			sprintf(map_path, "%s/map.txt", COLLECTIONS_PATH);
+	}
 
     if (exists(map_path)) {
         FILE* file = fopen(map_path, "r");
@@ -294,7 +311,7 @@ static void Directory_index(Directory* self) {
                 Array_free(self->entries);
                 self->entries = entries;
             }
-            if (resort) EntryArray_sort(self->entries);
+			if ((resort && !is_collection) || (resort && is_collection && CFG_getSortCollectionsEntries())) EntryArray_sort(self->entries);
         }
     }
 
@@ -371,7 +388,7 @@ static Directory* Directory_new(char* path, int selected) {
 		self->entries = getRecents();
 	}
 	else if (exactMatch(path, ROMS_PATH)) {
-		self->entries = getRoms();
+		self->entries = getRoot();
 	}
 	else if (!exactMatch(path, COLLECTIONS_PATH) && prefixMatch(COLLECTIONS_PATH, path) && suffixMatch(".txt", path)) {
 		self->entries = getCollection(path);
@@ -815,7 +832,8 @@ static Array* getQuickEntries(void) {
 		Array_push(entries, Entry_new(COLLECTIONS_PATH, ENTRY_DIR));
 
 	// Not sure we need this, its just a button press away (B)
-	Array_push(entries, Entry_newNamed(ROMS_PATH, ENTRY_DIR, "Games"));
+	if(CFG_getShowQuickswitcherUIGames())
+		Array_push(entries, Entry_newNamed(ROMS_PATH, ENTRY_DIR, "Games"));
 
 	// Add tools if applicable
     if (hasTools() && !simple_mode) {
@@ -861,7 +879,7 @@ static Array* getRoot(void) {
 
 	// Handle collections
 	if (hasCollections() && CFG_getShowCollections()) {
-        if (entries->count) {
+        if (entries->count || !CFG_getShowCollectionsPromotion()) {
             Array_push(root, Entry_new(COLLECTIONS_PATH, ENTRY_DIR));
         } else { // No visible systems, promote collections to root
 			Array *collections = getCollections();

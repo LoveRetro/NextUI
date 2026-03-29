@@ -112,10 +112,14 @@ typedef struct
 	bool showRecents;
 	bool showTools;
 	bool showCollections;
+	bool showCollectionsPromotion;
+	bool sortCollectionsEntries;
+	bool useCollectionsNestedMap;
 	bool showGameArt;
 	bool showFolderNamesAtRoot;
 	bool romsUseFolderBackground;
 	bool showQuickSwitcherUi;
+	bool showQuickSwitcherUiGames;
 	int defaultView;
 
 	// Mute switch
@@ -187,6 +191,9 @@ typedef struct
 #define CFG_DEFAULT_SHOWMENUTRANSITIONS true
 #define CFG_DEFAULT_SHOWRECENTS true
 #define CFG_DEFAULT_SHOWCOLLECTIONS true
+#define CFG_DEFAULT_SHOWCOLLECTIONSPROMOTION true
+#define CFG_DEFAULT_SORTCOLLECTIONSENTRIES true
+#define CFG_DEFAULT_USECOLLECTIONSNESTEDMAP false
 #define CFG_DEFAULT_SHOWGAMEART true
 #define CFG_DEFAULT_SHOWFOLDERNAMESATROOT true
 #define CFG_DEFAULT_GAMESWITCHERSCALING GFX_SCALE_FULLSCREEN
@@ -203,6 +210,7 @@ typedef struct
 #define CFG_DEFAULT_WIFI false
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
 #define CFG_DEFAULT_SHOWQUICKWITCHERUI true
+#define CFG_DEFAULT_SHOWQUICKWITCHERUIGAMES true
 #define CFG_DEFAULT_WIFI_DIAG false
 #define CFG_DEFAULT_SHOWTOOLS true
 #define CFG_DEFAULT_BLUETOOTH false
@@ -282,6 +290,15 @@ void CFG_setShowTools(bool show);
 // Show/hide collections in the main menu.
 bool CFG_getShowCollections(void);
 void CFG_setShowCollections(bool show);
+// Show/hide collections promotion in the main menu.
+bool CFG_getShowCollectionsPromotion(void);
+void CFG_setShowCollectionsPromotion(bool show);
+// Sort collections entries for roms.
+bool CFG_getSortCollectionsEntries(void);
+void CFG_setSortCollectionsEntries(bool show);
+// Use Nested Collections map.txt for roms.
+bool CFG_getUseCollectionsNestedMap(void);
+void CFG_setUseCollectionsNestedMap(bool show);
 // Show/hide game art in the main menu.
 bool CFG_getShowGameArt(void);
 void CFG_setShowGameArt(bool show);
@@ -325,6 +342,9 @@ void CFG_setDefaultView(int view);
 // Quick switcher UI painting on/off
 bool CFG_getShowQuickswitcherUI(void);
 void CFG_setShowQuickswitcherUI(bool on);
+// Quick switcher UI Games painting on/off
+bool CFG_getShowQuickswitcherUIGames(void);
+void CFG_setShowQuickswitcherUIGames(bool on);
 // WiFi diagnostic logging on/off
 bool CFG_getWifiDiagnostics(void);
 void CFG_setWifiDiagnostics(bool on);

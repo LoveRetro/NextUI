@@ -345,6 +345,18 @@ int main(int argc, char *argv[])
                 []() -> std::any { return CFG_getShowCollections(); },
                 [](const std::any &value) { CFG_setShowCollections(std::any_cast<bool>(value)); },
                 []() { CFG_setShowCollections(CFG_DEFAULT_SHOWCOLLECTIONS);}},
+                new MenuItem{ListItemType::Generic, "Show Collections Promotion", "Show \"Collections\" menu entries in root game list\nOnly occurs when all Game folders are hidden.", {false, true}, on_off, 
+                []() -> std::any { return CFG_getShowCollectionsPromotion(); },
+                [](const std::any &value) { CFG_setShowCollectionsPromotion(std::any_cast<bool>(value)); },
+                []() { CFG_setShowCollectionsPromotion(CFG_DEFAULT_SHOWCOLLECTIONSPROMOTION);}},
+                new MenuItem{ListItemType::Generic, "Sort Collections Entries", "Sort \"Collections\" entries alphabetically.\nOtherwise uses order listed in Collection file.", {false, true}, on_off, 
+                []() -> std::any { return CFG_getSortCollectionsEntries(); },
+                [](const std::any &value) { CFG_setSortCollectionsEntries(std::any_cast<bool>(value)); },
+                []() { CFG_setSortCollectionsEntries(CFG_DEFAULT_SORTCOLLECTIONSENTRIES);}},
+                new MenuItem{ListItemType::Generic, "Use Collections Nested Map", "Use map.txt contained within \"Collections\" subfolders.\nFalls back to map.txt in root Collections folder if not found.", {false, true}, on_off, 
+                []() -> std::any { return CFG_getUseCollectionsNestedMap(); },
+                [](const std::any &value) { CFG_setUseCollectionsNestedMap(std::any_cast<bool>(value)); },
+                []() { CFG_setUseCollectionsNestedMap(CFG_DEFAULT_USECOLLECTIONSNESTEDMAP);}},
                 new MenuItem{ListItemType::Generic, "Show game art", "Show game artwork in the main menu", {false, true}, on_off, []() -> std::any
                 { return CFG_getShowGameArt(); },
                 [](const std::any &value)
@@ -359,6 +371,10 @@ int main(int argc, char *argv[])
                 []() -> std::any{ return CFG_getShowQuickswitcherUI(); },
                 [](const std::any &value){ CFG_setShowQuickswitcherUI(std::any_cast<bool>(value)); },
                 []() { CFG_setShowQuickswitcherUI(CFG_DEFAULT_SHOWQUICKWITCHERUI);}},
+                new MenuItem{ListItemType::Generic, "Show Quickswitcher UI Games Icon", "Show/hide Quickswitcher UI Games Icon.\nWhen hidden, the Games Icon won't display.", {false, true}, on_off, 
+                []() -> std::any{ return CFG_getShowQuickswitcherUIGames(); },
+                [](const std::any &value){ CFG_setShowQuickswitcherUIGames(std::any_cast<bool>(value)); },
+                []() { CFG_setShowQuickswitcherUIGames(CFG_DEFAULT_SHOWQUICKWITCHERUIGAMES);}},
                 // not needed anymore
                 // new MenuItem{ListItemType::Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
                 // { return CFG_getGameSwitcherScaling(); },
