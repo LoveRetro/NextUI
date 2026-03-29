@@ -720,7 +720,7 @@ void PLAT_setClearColor(uint32_t color) {
 
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *srctype) {
 
-    if (i < 0) {
+    if (i < 0 || i >= MAXSHADERS) {
         return;
     }
     ShaderPass* shader_pass = &shaders[i];
