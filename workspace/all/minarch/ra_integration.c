@@ -1349,11 +1349,24 @@ static int ra_sync_thread_func(void* data) {
 	uint32_t pre_count = 0;
 	RA_Offline_ledgerGetPendingUnlocks(&pre_unlocks, &pre_count);
 	
+	// Compute game-filtered count for the notification — when syncing a
+	// specific game we should only show the count for that game, not the
+	// total across all games.
+	uint32_t display_count = pre_count;
+	if (ra_sync_game_id != 0 && pre_unlocks && pre_count > 0) {
+		uint32_t game_count = 0;
+		for (uint32_t i = 0; i < pre_count; i++) {
+			if (pre_unlocks[i].game_id == ra_sync_game_id)
+				game_count++;
+		}
+		display_count = game_count;
+	}
+
 	// Show sync progress in top-left (same area as badge download notifications)
-	if (pre_count > 0) {
+	if (display_count > 0) {
 		char msg[NOTIFICATION_MAX_MESSAGE];
 		snprintf(msg, sizeof(msg), "Syncing %u offline achievement%s...",
-		         pre_count, pre_count == 1 ? "" : "s");
+		         display_count, display_count == 1 ? "" : "s");
 		Notification_setProgressIndicatorPersistent(true);
 		Notification_showProgressIndicator(msg, "", NULL);
 	}
