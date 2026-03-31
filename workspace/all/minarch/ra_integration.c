@@ -108,6 +108,7 @@ typedef struct {
 	bool hardcore_disable;
 	bool sync_apply;
 	uint32_t sync_ids[RA_MAX_DEFERRED_SYNC_IDS];
+	uint32_t sync_timestamps[RA_MAX_DEFERRED_SYNC_IDS]; /* ledger unlock epoch */
 	uint32_t sync_count;
 	bool user_saw_offline;
 } RADeferredState;
@@ -1404,7 +1405,9 @@ static int ra_sync_thread_func(void* data) {
 			// just store all IDs up to result.synced count.
 			processed++;
 			if (processed <= result.synced) {
-				ra_deferred.sync_ids[idx++] = pre_unlocks[i].achievement_id;
+				ra_deferred.sync_ids[idx] = pre_unlocks[i].achievement_id;
+				ra_deferred.sync_timestamps[idx] = pre_unlocks[i].timestamp;
+				idx++;
 			}
 		}
 		ra_deferred.sync_count = idx;
@@ -2174,6 +2177,7 @@ static void ra_process_deferred_flags(void) {
 	bool snap_sync_apply = false;
 	bool snap_user_saw_offline = false;
 	uint32_t snap_sync_ids[RA_MAX_DEFERRED_SYNC_IDS];
+	uint32_t snap_sync_timestamps[RA_MAX_DEFERRED_SYNC_IDS];
 	uint32_t snap_sync_count = 0;
 	
 	SDL_LockMutex(ra_deferred.mutex);
@@ -2188,6 +2192,8 @@ static void ra_process_deferred_flags(void) {
 	snap_sync_count = ra_deferred.sync_count;
 	if (snap_sync_apply && snap_sync_count > 0) {
 		memcpy(snap_sync_ids, ra_deferred.sync_ids,
+		       snap_sync_count * sizeof(uint32_t));
+		memcpy(snap_sync_timestamps, ra_deferred.sync_timestamps,
 		       snap_sync_count * sizeof(uint32_t));
 	}
 	
@@ -2227,6 +2233,16 @@ static void ra_process_deferred_flags(void) {
 		if (ra_client && CFG_getRAHardcoreMode()) {
 			rc_client_set_hardcore_enabled(ra_client, 1);
 			RA_LOG_INFO("Hardcore re-enabled after online transition\n");
+			// rc_client_set_hardcore_enabled() sets waiting_for_reset=1 which
+			// blocks rc_client_do_frame() from processing any achievements.
+			// We must call rc_client_reset() to acknowledge the reset and
+			// clear the flag.  This also resets all active triggers to their
+			// initial state, which is fine because ra_reapply_pending_unlocks
+			// (below) will re-mark pending achievements as UNLOCKED and set
+			// their triggers to TRIGGERED, preventing re-fire.
+			RA_LOG_INFO("Calling rc_client_reset to clear waiting_for_reset\n");
+			rc_client_reset(ra_client);
+			RA_LOG_INFO("rc_client_reset complete\n");
 			uint32_t fixed = ra_reapply_pending_unlocks(ra_client, ra_game_hash);
 			if (fixed > 0) {
 				RA_LOG_INFO("Re-applied %u offline unlock(s) after "
@@ -2269,6 +2285,8 @@ static void ra_process_deferred_flags(void) {
 			ra_deferred.sync_count = snap_sync_count;
 			memcpy(ra_deferred.sync_ids, snap_sync_ids,
 			       snap_sync_count * sizeof(uint32_t));
+			memcpy(ra_deferred.sync_timestamps, snap_sync_timestamps,
+			       snap_sync_count * sizeof(uint32_t));
 			SDL_UnlockMutex(ra_deferred.mutex);
 		} else if (ra_client) {
 			uint32_t applied = 0;
@@ -2285,7 +2303,10 @@ static void ra_process_deferred_flags(void) {
 					// This is safe: the data is mutable and we're on the main thread.
 					rc_client_achievement_t* mutable_ach = (rc_client_achievement_t*)ach;
 					mutable_ach->unlocked |= mode;
-					mutable_ach->unlock_time = (time_t)time(NULL);
+					time_t old_unlock_time = mutable_ach->unlock_time;
+					mutable_ach->unlock_time = (time_t)snap_sync_timestamps[i];
+					RA_LOG_INFO("Deferred sync-apply: ach %u old_unlock_time=%lld new_unlock_time(ledger)=%lld\n",
+					            snap_sync_ids[i], (long long)old_unlock_time, (long long)mutable_ach->unlock_time);
 					if (mutable_ach->state == RC_CLIENT_ACHIEVEMENT_STATE_ACTIVE) {
 						mutable_ach->state = RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED;
 					}

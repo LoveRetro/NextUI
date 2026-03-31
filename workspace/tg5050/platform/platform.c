@@ -907,7 +907,17 @@ void PLAT_setCurrentTimezone(const char* tz) {
 	free(tz_path);
 
 	// apply timezone to RTC and kernel
-	system("hwclock -u -w && hwclock --systz -u");
+	{
+		time_t before = time(NULL);
+		system("hwclock -u -w && hwclock --systz -u");
+		time_t after = time(NULL);
+		long long delta = (long long)(after - before);
+		LOG_info("[PLATFORM] setCurrentTimezone(%s): hwclock time before=%lld after=%lld delta=%lld sec\n",
+		         tz, (long long)before, (long long)after, delta);
+		if (delta > 2 || delta < -2) {
+			LOG_warn("[PLATFORM] hwclock --systz shifted time(NULL) by %lld seconds!\n", delta);
+		}
+	}
 }
 
 bool PLAT_getNetworkTimeSync(void) {

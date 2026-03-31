@@ -15,12 +15,18 @@
 #include "md5.h"
 #include "config.h"
 #include "defines.h"
+#include "api.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
+/* Logging macros using NextUI's LOG_* infrastructure */
+#define SYNC_LOG_INFO(fmt, ...)  LOG_info("[RA_SYNC] " fmt, ##__VA_ARGS__)
+#define SYNC_LOG_WARN(fmt, ...)  LOG_warn("[RA_SYNC] " fmt, ##__VA_ARGS__)
+#define SYNC_LOG_ERROR(fmt, ...) LOG_error("[RA_SYNC] " fmt, ##__VA_ARGS__)
 
 #define RA_API_URL "https://retroachievements.org/dorequest.php"
 
@@ -278,6 +284,9 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 
 	result.total = count;
 
+	SYNC_LOG_INFO("Starting sync: %u pending unlocks, game_id=%u, time_now=%lld\n",
+	              count, game_id, (long long)time(NULL));
+
 	/* Process each pending unlock */
 	for (uint32_t i = 0; i < count; i++) {
 		/* Check cancel before starting each submission */
@@ -303,6 +312,18 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 			seconds_since = (uint32_t)(now - (time_t)unlock->timestamp);
 		}
 
+		/* Diagnostic logging: capture all values used in the seconds_since
+		 * computation so we can identify clock drift / timezone warp issues.
+		 * If timestamp >= now, seconds_since stays 0 and &o= is omitted,
+		 * causing the server to use its own time instead of the unlock time. */
+		SYNC_LOG_INFO("ach=%u: ledger_timestamp=%u time_now=%lld diff=%lld seconds_since=%u%s\n",
+		              unlock->achievement_id,
+		              unlock->timestamp,
+		              (long long)now,
+		              (long long)(now - (time_t)unlock->timestamp),
+		              seconds_since,
+		              seconds_since == 0 ? " [WARNING: &o= will be omitted, server uses own time]" : "");
+
 		/* Build request */
 		char* post_data = sync_build_post_data(username, token,
 		                                       unlock->achievement_id,
@@ -310,6 +331,7 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 		                                       unlock->game_hash,
 		                                       seconds_since);
 		if (!post_data) {
+			SYNC_LOG_ERROR("ach=%u: failed to build POST data\n", unlock->achievement_id);
 			result.skipped++;
 			if (progress_cb) {
 				progress_cb(i + 1, count, false, userdata);
@@ -317,15 +339,52 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 			continue;
 		}
 
+		/* Log the POST body for diagnostics.  Redact the token (&t=...) to
+		 * avoid leaking credentials, but keep everything else so we can
+		 * verify &o= is present and the signature is correct. */
+		{
+			/* Find &t= and the next & after it */
+			const char* t_start = strstr(post_data, "&t=");
+			if (t_start) {
+				const char* t_end = strchr(t_start + 3, '&');
+				SYNC_LOG_INFO("ach=%u: POST %.*s&t=***%s\n",
+				              unlock->achievement_id,
+				              (int)(t_start - post_data), post_data,
+				              t_end ? t_end : "");
+			} else {
+				SYNC_LOG_INFO("ach=%u: POST %s\n",
+				              unlock->achievement_id, post_data);
+			}
+		}
+
 		/* Submit to server */
 		HTTP_Response* http_resp = HTTP_post(RA_API_URL, post_data, NULL);
 		free(post_data);
+
+		/* Log raw server response before parsing */
+		if (http_resp && http_resp->data && http_resp->size > 0) {
+			/* Truncate at 512 chars to avoid flooding logs */
+			int log_len = (int)http_resp->size;
+			if (log_len > 512) log_len = 512;
+			SYNC_LOG_INFO("ach=%u: server response (status=%d): %.*s\n",
+			              unlock->achievement_id,
+			              http_resp->http_status,
+			              log_len, http_resp->data);
+		} else if (http_resp) {
+			SYNC_LOG_WARN("ach=%u: server response empty (status=%d)\n",
+			              unlock->achievement_id, http_resp->http_status);
+		} else {
+			SYNC_LOG_WARN("ach=%u: no HTTP response (network failure?)\n",
+			              unlock->achievement_id);
+		}
 
 		int parse_result = sync_parse_response(http_resp);
 		if (http_resp) HTTP_freeResponse(http_resp);
 
 		if (parse_result == 1) {
 			/* Success — write SYNC_ACK to ledger */
+			SYNC_LOG_INFO("ach=%u: server accepted (seconds_since=%u)\n",
+			              unlock->achievement_id, seconds_since);
 			RA_Offline_ledgerWriteSyncAck(unlock->achievement_id, unlock->game_id);
 			/* Patch cached startsession to include this unlock so the next
 			   offline-first launch doesn't re-trigger it */
@@ -334,9 +393,11 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 			result.synced++;
 		} else if (parse_result == 0) {
 			/* Server rejected — skip and continue */
+			SYNC_LOG_WARN("ach=%u: server rejected\n", unlock->achievement_id);
 			result.skipped++;
 		} else {
 			/* Network error — stop sync, remaining unlocks stay pending */
+			SYNC_LOG_ERROR("ach=%u: network error, stopping sync\n", unlock->achievement_id);
 			result.failed++;
 			if (progress_cb) {
 				progress_cb(i + 1, count, false, userdata);
