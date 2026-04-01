@@ -1695,16 +1695,14 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 			ra_start_offline_sync(game->id);
 		} else {
 			RA_LOG_WARN("Game not recognized by RetroAchievements\n");
-			// Still try to sync — game may not be recognized but we may have
-			// pending unlocks from a prior offline session with a different game
-			ra_start_offline_sync(0);
+			Notification_push(NOTIFICATION_ACHIEVEMENT,
+			                  "No achievements found for this game", NULL);
 		}
 	} else {
 		ra_game_loaded = false;
 		RA_LOG_ERROR("Game load failed: %s\n", error_message ? error_message : "unknown error");
-		// Try to sync even on load failure — we're online (or partially) and may
-		// have pending unlocks from prior offline sessions
-		ra_start_offline_sync(0);
+		Notification_push(NOTIFICATION_ACHIEVEMENT,
+		                  "No achievements found for this game", NULL);
 	}
 }
 
