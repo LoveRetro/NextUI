@@ -3,6 +3,8 @@
 #include <stdarg.h>
 #include <msettings.h>
 
+#define MINARCH_BUILD_VERSION 2
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <dlfcn.h>
@@ -9008,7 +9010,7 @@ void onAudioSinkChanged(int device, int watch_event)
 }
 
 int main(int argc , char* argv[]) {
-	LOG_info("MinArch\n");
+	LOG_info("MinArch (build %d)\n", MINARCH_BUILD_VERSION);
 
 	//static char asoundpath[MAX_PATH];
 	//sprintf(asoundpath, "%s/.asoundrc", getenv("HOME"));

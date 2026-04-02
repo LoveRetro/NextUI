@@ -839,6 +839,25 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 				if (ra_get_post_param(data->post_data, 'a', a_buf, sizeof(a_buf))) {
 					uint32_t ach_id = (uint32_t)strtoul(a_buf, NULL, 10);
 					if (ach_id > 0) {
+						// Look up ledger timestamp BEFORE removing from cache
+						// (RA_Offline_isUnlockPending() checks the cache, so we must
+						// query the ledger directly before cache removal)
+						uint32_t unlock_timestamp = (uint32_t)time(NULL);
+						{
+							RA_PendingUnlock* pending = NULL;
+							uint32_t pending_count = 0;
+							if (RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count)) {
+								for (uint32_t i = 0; i < pending_count; i++) {
+									if (pending[i].achievement_id == ach_id) {
+										unlock_timestamp = pending[i].timestamp;
+										RA_LOG_INFO("Using ledger timestamp %u for ach=%u (was time(NULL))\n",
+										            unlock_timestamp, ach_id);
+										break;
+									}
+								}
+								free(pending);
+							}
+						}
 						RA_Offline_ledgerWriteSyncAck(ach_id, 0);
 						RA_Offline_removePendingCacheEntry(ach_id);
 						// Patch the cached startsession file to include
@@ -846,7 +865,7 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 						// offline-first launch sees it as already earned
 						// instead of re-triggering it.
 						RA_Offline_patchStartsessionCacheWithUnlock(
-							data->game_hash, ach_id, (uint32_t)time(NULL));
+							data->game_hash, ach_id, unlock_timestamp);
 					}
 				}
 			}
@@ -988,6 +1007,28 @@ static void ra_server_call(const rc_api_request_t* request,
 	}
 	
 	// Online mode: make real HTTP request
+	
+	// Check if this is an awardachievement request for a pending unlock
+	// If so, block it — our sync engine will submit with the correct &o= timestamp
+	char rt_buf[32] = {0};
+	const char* req_type = ra_get_post_param(request->post_data, 'r', rt_buf, sizeof(rt_buf))
+	                       ? rt_buf : NULL;
+	if (req_type && strcmp(req_type, "awardachievement") == 0) {
+		char a_buf[16] = {0};
+		if (ra_get_post_param(request->post_data, 'a', a_buf, sizeof(a_buf))) {
+			uint32_t ach_id = (uint32_t)strtoul(a_buf, NULL, 10);
+			if (ach_id > 0 && RA_Offline_isUnlockPending(ach_id)) {
+				RA_LOG_INFO("Blocking rcheevos award for pending ach=%u — letting sync engine handle\n", ach_id);
+				RA_Offline_removePendingCacheEntry(ach_id);
+				static const char* synthetic_success = "{\"Success\":true}";
+				if (!ra_queue_push(synthetic_success, strlen(synthetic_success), 200, callback, callback_data)) {
+					RA_LOG_WARN("Failed to queue synthetic success for blocked ach=%u\n", ach_id);
+				}
+				return;
+			}
+		}
+	}
+	
 	// Allocate data structure to pass through to callback
 	RA_ServerCallData* data = (RA_ServerCallData*)malloc(sizeof(RA_ServerCallData));
 	if (!data) {
