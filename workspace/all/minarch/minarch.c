@@ -3,7 +3,7 @@
 #include <stdarg.h>
 #include <msettings.h>
 
-#define MINARCH_BUILD_VERSION 2
+#define MINARCH_BUILD_VERSION 3
 
 #include <unistd.h>
 #include <fcntl.h>

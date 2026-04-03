@@ -839,10 +839,15 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 				if (ra_get_post_param(data->post_data, 'a', a_buf, sizeof(a_buf))) {
 					uint32_t ach_id = (uint32_t)strtoul(a_buf, NULL, 10);
 					if (ach_id > 0) {
-						// Look up ledger timestamp BEFORE removing from cache
-						// (RA_Offline_isUnlockPending() checks the cache, so we must
-						// query the ledger directly before cache removal)
-						uint32_t unlock_timestamp = (uint32_t)time(NULL);
+						RA_LOG_INFO("[AWARD_HTTP] awardachievement SUCCESS for ach=%u\n", ach_id);
+						
+						// Look up ledger timestamp BEFORE removing from cache.
+						// If the ledger still has this entry, use its timestamp.
+						// If the ledger was already compacted (sync engine finished),
+						// skip the cache patch entirely — the sync engine already
+						// patched the cache with the correct timestamp.
+						uint32_t unlock_timestamp = 0;  // 0 = "not found"
+						bool found_in_ledger = false;
 						{
 							RA_PendingUnlock* pending = NULL;
 							uint32_t pending_count = 0;
@@ -850,22 +855,37 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 								for (uint32_t i = 0; i < pending_count; i++) {
 									if (pending[i].achievement_id == ach_id) {
 										unlock_timestamp = pending[i].timestamp;
-										RA_LOG_INFO("Using ledger timestamp %u for ach=%u (was time(NULL))\n",
-										            unlock_timestamp, ach_id);
+										found_in_ledger = true;
+										RA_LOG_INFO("[AWARD_HTTP] ach=%u: found in ledger, "
+										            "timestamp=%u\n", ach_id, unlock_timestamp);
 										break;
 									}
 								}
 								free(pending);
 							}
 						}
+						
 						RA_Offline_ledgerWriteSyncAck(ach_id, 0);
 						RA_Offline_removePendingCacheEntry(ach_id);
-						// Patch the cached startsession file to include
-						// this newly-confirmed unlock, so the next
-						// offline-first launch sees it as already earned
-						// instead of re-triggering it.
-						RA_Offline_patchStartsessionCacheWithUnlock(
-							data->game_hash, ach_id, unlock_timestamp);
+						
+						if (found_in_ledger && unlock_timestamp > 0) {
+							// Ledger entry found — patch the startsession cache
+							// with the correct original unlock timestamp.
+							RA_LOG_INFO("[AWARD_HTTP] ach=%u: patching startsession cache "
+							            "with ledger timestamp=%u\n", ach_id, unlock_timestamp);
+							RA_Offline_patchStartsessionCacheWithUnlock(
+								data->game_hash, ach_id, unlock_timestamp);
+						} else {
+							// Ledger already compacted (sync engine handled it) OR
+							// this was a genuinely online unlock (no ledger entry).
+							// Either way, skip cache patching here — the sync engine
+							// already patched with the correct timestamp, and using
+							// time(NULL) here would corrupt it.
+							RA_LOG_INFO("[AWARD_HTTP] ach=%u: NOT patching cache "
+							            "(found_in_ledger=%d) — sync engine already "
+							            "handled or genuinely online unlock\n",
+							            ach_id, found_in_ledger);
+						}
 					}
 				}
 			}
@@ -995,6 +1015,16 @@ static void ra_server_call(const rc_api_request_t* request,
 			// so rcheevos keeps the request in its retry queue
 			RA_LOG_DEBUG("Offline cache miss (non-cacheable): %s — returning retryable error\n",
 			             req_type ? req_type : "unknown");
+			
+			// Extra logging for awardachievement in offline mode
+			if (req_type && strcmp(req_type, "awardachievement") == 0) {
+				char offline_a_buf[16] = {0};
+				if (ra_get_post_param(request->post_data, 'a', offline_a_buf, sizeof(offline_a_buf))) {
+					RA_LOG_INFO("[AWARD_GATE] OFFLINE retryable for ach=%s — "
+					            "rcheevos will retry when online\n", offline_a_buf);
+				}
+			}
+			
 			rc_api_server_response_t error_response;
 			memset(&error_response, 0, sizeof(error_response));
 			error_response.http_status_code = RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
@@ -1008,8 +1038,15 @@ static void ra_server_call(const rc_api_request_t* request,
 	
 	// Online mode: make real HTTP request
 	
-	// Check if this is an awardachievement request for a pending unlock
-	// If so, block it — our sync engine will submit with the correct &o= timestamp
+	// Check if this is an awardachievement request that should be blocked.
+	// When the sync engine is handling offline unlocks, rcheevos may also retry
+	// its own awardachievement calls (queued during offline mode). These use
+	// CLOCK_MONOTONIC for &o= which doesn't advance during device sleep,
+	// producing wrong timestamps. Block rcheevos' attempts when:
+	//   1. The achievement is still in the pending cache (sync hasn't started it yet), OR
+	//   2. The sync engine is actively running (covers the window after pending cache
+	//      entry was consumed but before sync finishes and compacts the ledger)
+	// In both cases, return a synthetic success so rcheevos clears its retry state.
 	char rt_buf[32] = {0};
 	const char* req_type = ra_get_post_param(request->post_data, 'r', rt_buf, sizeof(rt_buf))
 	                       ? rt_buf : NULL;
@@ -1017,15 +1054,32 @@ static void ra_server_call(const rc_api_request_t* request,
 		char a_buf[16] = {0};
 		if (ra_get_post_param(request->post_data, 'a', a_buf, sizeof(a_buf))) {
 			uint32_t ach_id = (uint32_t)strtoul(a_buf, NULL, 10);
-			if (ach_id > 0 && RA_Offline_isUnlockPending(ach_id)) {
-				RA_LOG_INFO("Blocking rcheevos award for pending ach=%u — letting sync engine handle\n", ach_id);
-				RA_Offline_removePendingCacheEntry(ach_id);
+			bool is_pending = (ach_id > 0) && RA_Offline_isUnlockPending(ach_id);
+			bool is_syncing = RA_Offline_isSyncing();
+			
+			RA_LOG_INFO("[AWARD_GATE] ra_server_call: awardachievement ach=%u "
+			            "is_pending=%d is_syncing=%d\n",
+			            ach_id, is_pending, is_syncing);
+			
+			if (ach_id > 0 && (is_pending || is_syncing)) {
+				RA_LOG_INFO("[AWARD_GATE] BLOCKED rcheevos award for ach=%u "
+				            "(pending=%d, syncing=%d) — sync engine handles submission\n",
+				            ach_id, is_pending, is_syncing);
+				// Do NOT remove pending cache entry here — that's the sync engine's job.
+				// Removing it prematurely would open a window where a subsequent
+				// rcheevos retry slips through the is_pending check.
 				static const char* synthetic_success = "{\"Success\":true}";
 				if (!ra_queue_push(synthetic_success, strlen(synthetic_success), 200, callback, callback_data)) {
-					RA_LOG_WARN("Failed to queue synthetic success for blocked ach=%u\n", ach_id);
+					RA_LOG_WARN("[AWARD_GATE] Failed to queue synthetic success for blocked ach=%u\n", ach_id);
 				}
 				return;
 			}
+			
+			// Not blocked — this is either a genuinely online unlock or a retry
+			// after sync completed. Let it through to the real HTTP path.
+			RA_LOG_INFO("[AWARD_GATE] ALLOWED rcheevos award for ach=%u "
+			            "(pending=%d, syncing=%d) — sending to server\n",
+			            ach_id, is_pending, is_syncing);
 		}
 	}
 	
@@ -1089,8 +1143,12 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		badge_icon = RA_Badges_getNotificationSize(event->achievement->badge_name, false);
 		Notification_push(RA_Offline_isOffline() ? NOTIFICATION_OFFLINE_ACHIEVEMENT : NOTIFICATION_ACHIEVEMENT,
 		                  message, badge_icon);
-		RA_LOG_INFO("Achievement unlocked: %s (%d points)\n",
-		       event->achievement->title, event->achievement->points);
+		RA_LOG_INFO("[AWARD_TRIGGER] Achievement unlocked: %s (id=%u, points=%d, "
+		            "offline=%d, syncing=%d, time_now=%lld)\n",
+		       event->achievement->title, event->achievement->id,
+		       event->achievement->points,
+		       RA_Offline_isOffline(), RA_Offline_isSyncing(),
+		       (long long)time(NULL));
 		
 		// Write-ahead log: persist unlock to ledger (survives app crash)
 		{
@@ -1193,7 +1251,8 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		break;
 		
 	case RC_CLIENT_EVENT_DISCONNECTED:
-		RA_LOG_WARN("Disconnected - switching to offline mode\n");
+		RA_LOG_WARN("[CONNECTIVITY] DISCONNECTED — switching to offline mode "
+		            "(time_now=%lld)\n", (long long)time(NULL));
 		RA_Offline_setOffline(true);
 		// Force softcore when offline
 		rc_client_set_hardcore_enabled(client, 0);
@@ -1205,7 +1264,8 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		break;
 		
 	case RC_CLIENT_EVENT_RECONNECTED:
-		RA_LOG_INFO("Reconnected - switching to online mode\n");
+		RA_LOG_INFO("[CONNECTIVITY] RECONNECTED — switching to online mode "
+		            "(time_now=%lld)\n", (long long)time(NULL));
 		// Stop probe (redundant — rcheevos already confirmed connectivity)
 		ra_stop_connectivity_probe();
 		RA_Offline_setOffline(false);
@@ -1378,6 +1438,9 @@ static void ra_interruptible_sleep(uint32_t ms, volatile bool* abort_flag) {
 static int ra_sync_thread_func(void* data) {
 	(void)data;
 	
+	RA_LOG_INFO("[SYNC_THREAD] Starting sync thread (game_id=%u, time_now=%lld)\n",
+	            ra_sync_game_id, (long long)time(NULL));
+	
 	// Reset deferred sync-apply state for this sync session
 	SDL_LockMutex(ra_deferred.mutex);
 	ra_deferred.sync_count = 0;
@@ -1390,6 +1453,13 @@ static int ra_sync_thread_func(void* data) {
 	RA_PendingUnlock* pre_unlocks = NULL;
 	uint32_t pre_count = 0;
 	RA_Offline_ledgerGetPendingUnlocks(&pre_unlocks, &pre_count);
+	
+	RA_LOG_INFO("[SYNC_THREAD] Pre-sync snapshot: %u total pending unlocks\n", pre_count);
+	for (uint32_t i = 0; i < pre_count; i++) {
+		RA_LOG_INFO("[SYNC_THREAD]   pending[%u]: ach=%u game=%u timestamp=%u hash=%.8s\n",
+		            i, pre_unlocks[i].achievement_id, pre_unlocks[i].game_id,
+		            pre_unlocks[i].timestamp, pre_unlocks[i].game_hash);
+	}
 	
 	// Compute game-filtered count for the notification — when syncing a
 	// specific game we should only show the count for that game, not the
@@ -1418,8 +1488,10 @@ static int ra_sync_thread_func(void* data) {
 	RA_SyncResult result = RA_Sync_syncAll(ra_sync_game_id, &config,
 	                                       &ra_sync_abort, NULL, NULL);
 	
-	RA_LOG_INFO("Sync complete: %u synced, %u skipped, %u failed (of %u)\n",
-	            result.synced, result.skipped, result.failed, result.total);
+	RA_LOG_INFO("[SYNC_THREAD] Sync complete: %u synced, %u skipped, %u failed (of %u) "
+	            "(time_now=%lld)\n",
+	            result.synced, result.skipped, result.failed, result.total,
+	            (long long)time(NULL));
 	
 	// Store synced achievement IDs for deferred main-thread state update.
 	// We know that RA_Sync_syncAll processes unlocks in order from the
@@ -1492,6 +1564,8 @@ static int ra_sync_thread_func(void* data) {
 	}
 	
 	RA_Offline_setSyncing(false);
+	RA_LOG_INFO("[SYNC_THREAD] Sync thread exiting, isSyncing=false (time_now=%lld)\n",
+	            (long long)time(NULL));
 	return 0;
 }
 
@@ -1502,6 +1576,11 @@ static int ra_sync_thread_func(void* data) {
  * @param game_id  Game to sync (0 = sync all games).
  */
 static void ra_start_offline_sync(uint32_t game_id) {
+	RA_LOG_INFO("[SYNC_START] ra_start_offline_sync called: game_id=%u, "
+	            "offline=%d, syncing=%d, time_now=%lld\n",
+	            game_id, RA_Offline_isOffline(), RA_Offline_isSyncing(),
+	            (long long)time(NULL));
+	
 	if (RA_Offline_isOffline()) {
 		RA_LOG_DEBUG("Sync: skipped (offline mode active)\n");
 		return;
@@ -1602,6 +1681,10 @@ static int ra_connectivity_probe_func(void* data) {
 				
 				// Flip to online mode
 				RA_Offline_setOffline(false);
+				
+				RA_LOG_INFO("[CONNECTIVITY] Probe: connectivity restored, "
+				            "flipping to online (time_now=%lld)\n",
+				            (long long)time(NULL));
 				
 				// Set deferred flags for main thread to handle.
 				// If the offline notification hasn't been displayed yet
@@ -2296,6 +2379,8 @@ static void ra_process_deferred_flags(void) {
 		}
 	}
 	if (snap_sync) {
+		RA_LOG_INFO("[DEFERRED] snap_sync=true, game_loaded=%d, time_now=%lld\n",
+		            ra_game_loaded, (long long)time(NULL));
 		// Don't start sync until the game is loaded — the sync thread will
 		// compact the ledger when done, which removes pending records needed
 		// by startsession patching and ra_reapply_pending_unlocks. If we sync
