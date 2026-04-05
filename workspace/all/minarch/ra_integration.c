@@ -111,6 +111,7 @@ typedef struct {
 	uint32_t sync_timestamps[RA_MAX_DEFERRED_SYNC_IDS]; /* ledger unlock epoch */
 	uint32_t sync_count;
 	bool user_saw_offline;
+	bool game_load_retry;  /* set when game load fails while offline — retry on connectivity */
 } RADeferredState;
 
 static RADeferredState ra_deferred = {0};
@@ -983,37 +984,40 @@ static void ra_server_call(const rc_api_request_t* request,
 		}
 		
 		// Cache miss — behavior depends on request type.
-		// For non-cacheable requests (awardachievement, ping, submitlbentry, etc.),
-		// return a retryable error so rcheevos keeps them in its retry queue.
-		// This prevents false RECONNECTED events when rcheevos retries succeed
-		// against our synthetic responses while the network is still down.
-		// The connectivity probe handles the real reconnection detection.
 		//
-		// For cacheable request types without a cache entry (e.g., startsession
-		// for a never-before-played game while offline), we still synthesize
-		// {"Success":true} so rcheevos can proceed with the game load.
-		bool is_cacheable_type = false;
+		// "Synthesizable" types (login2, startsession): their response format
+		// is simple enough that {"Success":true} is a valid stub. Synthesize
+		// a minimal success so rcheevos can proceed.
+		//
+		// "Non-synthesizable" cacheable types (gameid, achievementsets, patch):
+		// these responses contain structured data (GameId, achievement lists,
+		// memory maps, etc.) that cannot be faked. A synthetic {"Success":true}
+		// causes rcheevos to fail with RC_MISSING_VALUE. Return a retryable
+		// error instead — the game load will fail, and we'll retry when
+		// connectivity is restored via the game_load_retry deferred flag.
+		//
+		// Non-cacheable types (awardachievement, ping, submitlbentry, etc.):
+		// return a retryable error so rcheevos keeps them in its retry queue.
+		bool is_synthesizable = false;
 		if (req_type) {
-			is_cacheable_type = (strcmp(req_type, "login2") == 0 ||
-			                     strcmp(req_type, "gameid") == 0 ||
-			                     strcmp(req_type, "achievementsets") == 0 ||
-			                     strcmp(req_type, "startsession") == 0 ||
-			                     strcmp(req_type, "patch") == 0);
+			is_synthesizable = (strcmp(req_type, "login2") == 0 ||
+			                    strcmp(req_type, "startsession") == 0);
 		}
 		
-		if (is_cacheable_type) {
-			// Cacheable type with cache miss — synthesize minimal success
-			// so rcheevos can proceed with game load
-			RA_LOG_DEBUG("Offline cache miss (cacheable): %s — returning synthetic success\n",
+		if (is_synthesizable) {
+			// Simple response format — safe to synthesize
+			RA_LOG_DEBUG("Offline cache miss (synthesizable): %s — returning synthetic success\n",
 			             req_type);
 			static const char* empty_success = "{\"Success\":true}";
 			if (!ra_queue_push(empty_success, strlen(empty_success), 200, callback, callback_data)) {
 				RA_LOG_WARN("Failed to queue synthetic offline response\n");
 			}
 		} else {
-			// Non-cacheable type (awardachievement, ping, etc.) — return retryable error
-			// so rcheevos keeps the request in its retry queue
-			RA_LOG_DEBUG("Offline cache miss (non-cacheable): %s — returning retryable error\n",
+			// Non-synthesizable type — return retryable error.
+			// This covers both game-data requests (gameid, achievementsets, patch)
+			// whose responses can't be faked, and non-cacheable requests
+			// (awardachievement, ping, etc.) that need real server interaction.
+			RA_LOG_DEBUG("Offline cache miss (non-synthesizable): %s — returning retryable error\n",
 			             req_type ? req_type : "unknown");
 			
 			// Extra logging for awardachievement in offline mode
@@ -1321,7 +1325,9 @@ static void ra_login_callback(int result, const char* error_message,
 			RA_LOG_DEBUG("Processing deferred game load: %s\n", ra_pending_load.rom_path);
 			ra_do_load_game(ra_pending_load.rom_path, ra_pending_load.rom_data, 
 			                ra_pending_load.rom_size, ra_pending_load.emu_tag);
-			ra_clear_pending_game();
+			// Don't clear pending game yet — cleared on successful load in
+			// ra_game_loaded_callback.  If the load fails (e.g., offline cache
+			// miss), the pending info is preserved for retry.
 		}
 	} else {
 		// Failure - attempt retry or give up
@@ -1785,6 +1791,10 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 		const rc_client_game_t* game = rc_client_get_game_info(client);
 		ra_game_loaded = true;
 		
+		// Game loaded successfully — clear pending load info (no longer needed
+		// for retry).  Must happen before any early returns below.
+		ra_clear_pending_game();
+		
 		if (game && game->id != 0) {
 			RA_LOG_INFO("Game loaded: %s (ID: %u)\n", game->title, game->id);
 			
@@ -1825,8 +1835,19 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 	} else {
 		ra_game_loaded = false;
 		RA_LOG_ERROR("Game load failed: %s\n", error_message ? error_message : "unknown error");
-		Notification_push(NOTIFICATION_ACHIEVEMENT,
-		                  "No achievements found for this game", NULL);
+		
+		// If we're offline, the failure is likely a cache miss for game data
+		// (gameid/achievementsets/patch). Schedule a retry when connectivity
+		// is restored — don't show "no achievements" since it's transient.
+		if (RA_Offline_isOffline()) {
+			SDL_LockMutex(ra_deferred.mutex);
+			ra_deferred.game_load_retry = true;
+			SDL_UnlockMutex(ra_deferred.mutex);
+			RA_LOG_INFO("Game load failed while offline — will retry on connectivity restore\n");
+		} else {
+			Notification_push(NOTIFICATION_ACHIEVEMENT,
+			                  "No achievements found for this game", NULL);
+		}
 	}
 }
 
@@ -2281,6 +2302,14 @@ void RA_unloadGame(void) {
 		rc_client_unload_game(ra_client);
 		ra_game_loaded = false;
 	}
+	
+	// Clear any pending game load retry and pending load data.
+	// If the user exits the game while a retry is pending, we must not
+	// retry loading a game that's no longer active.
+	ra_clear_pending_game();
+	SDL_LockMutex(ra_deferred.mutex);
+	ra_deferred.game_load_retry = false;
+	SDL_UnlockMutex(ra_deferred.mutex);
 }
 
 /**
@@ -2298,6 +2327,7 @@ static void ra_process_deferred_flags(void) {
 	bool snap_hardcore_disable = false;
 	bool snap_sync_apply = false;
 	bool snap_user_saw_offline = false;
+	bool snap_game_load_retry = false;
 	uint32_t snap_sync_ids[RA_MAX_DEFERRED_SYNC_IDS];
 	uint32_t snap_sync_timestamps[RA_MAX_DEFERRED_SYNC_IDS];
 	uint32_t snap_sync_count = 0;
@@ -2311,6 +2341,7 @@ static void ra_process_deferred_flags(void) {
 	snap_hardcore_disable = ra_deferred.hardcore_disable;
 	snap_sync_apply = ra_deferred.sync_apply;
 	snap_user_saw_offline = ra_deferred.user_saw_offline;
+	snap_game_load_retry = ra_deferred.game_load_retry;
 	snap_sync_count = ra_deferred.sync_count;
 	if (snap_sync_apply && snap_sync_count > 0) {
 		memcpy(snap_sync_ids, ra_deferred.sync_ids,
@@ -2326,6 +2357,7 @@ static void ra_process_deferred_flags(void) {
 	ra_deferred.hardcore_enable = false;
 	ra_deferred.hardcore_disable = false;
 	ra_deferred.sync_apply = false;
+	ra_deferred.game_load_retry = false;
 	if (snap_sync_apply) {
 		ra_deferred.sync_count = 0;
 	}
@@ -2448,6 +2480,29 @@ static void ra_process_deferred_flags(void) {
 	if (ra_client && ra_login_retry.pending && SDL_GetTicks() >= ra_login_retry.next_time) {
 		ra_login_retry.pending = false;
 		ra_start_login();
+	}
+	
+	// Retry game load after connectivity is restored.
+	// The game load may have failed due to an offline cache miss for game data
+	// requests (gameid, achievementsets, patch). Now that we're online, retry
+	// with the preserved pending load info.
+	if (snap_game_load_retry) {
+		if (RA_Offline_isOffline()) {
+			// Still offline — put it back for next cycle
+			SDL_LockMutex(ra_deferred.mutex);
+			ra_deferred.game_load_retry = true;
+			SDL_UnlockMutex(ra_deferred.mutex);
+		} else if (ra_pending_load.active && ra_client) {
+			RA_LOG_INFO("Retrying game load after connectivity restored: %s\n",
+			            ra_pending_load.rom_path);
+			ra_do_load_game(ra_pending_load.rom_path, ra_pending_load.rom_data,
+			                ra_pending_load.rom_size, ra_pending_load.emu_tag);
+			// ra_clear_pending_game() is called in ra_game_loaded_callback on success.
+			// If it fails again (unlikely now that we're online), the callback
+			// won't set game_load_retry again (only set when offline).
+		} else {
+			RA_LOG_WARN("game_load_retry set but no pending load or no client\n");
+		}
 	}
 }
 
