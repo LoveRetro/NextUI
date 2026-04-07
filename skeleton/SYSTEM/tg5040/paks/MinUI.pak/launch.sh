@@ -151,7 +151,28 @@ if [ -f "$AUTO_PATH" ]; then
 	"$AUTO_PATH"
 fi
 
+# Composable boot hooks (run after auto.sh for backward compatibility)
+"$SYSTEM_PATH/bin/run_hooks.sh" boot.d
+
 cd $(dirname "$0")
+
+#######################################
+# Hook system
+
+parse_hook_cmd() {
+	HOOK_CMD="$1"
+	HOOK_EMU_PATH=$(echo "$HOOK_CMD" | sed "s/^'\\([^']*\\)'.*/\\1/")
+	_remainder=$(echo "$HOOK_CMD" | sed "s/^'[^']*'//")
+	if echo "$_remainder" | grep -q "'"; then
+		HOOK_TYPE="rom"
+		HOOK_ROM_PATH=$(echo "$_remainder" | sed "s/.*'\\([^']*\\)'.*/\\1/")
+	else
+		HOOK_TYPE="pak"
+		HOOK_ROM_PATH=""
+	fi
+	[ -f /tmp/last.txt ] && HOOK_LAST=$(cat /tmp/last.txt) || HOOK_LAST=""
+	export HOOK_CMD HOOK_EMU_PATH HOOK_TYPE HOOK_ROM_PATH HOOK_LAST
+}
 
 #######################################
 
@@ -167,7 +188,10 @@ while [ -f $EXEC_PATH ]; do
 	
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
+		parse_hook_cmd "$CMD"
+		"$SYSTEM_PATH/bin/run_hooks.sh" pre-launch.d
 		eval $CMD
+		"$SYSTEM_PATH/bin/run_hooks.sh" post-launch.d
 		rm -f $NEXT_PATH
 		echo $CPU_SPEED_PERF > $CPU_PATH
 	fi
