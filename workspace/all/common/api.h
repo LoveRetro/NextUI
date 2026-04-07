@@ -113,8 +113,6 @@ extern int currentshaderdsth;
 extern int currentshadertexw;
 extern int currentshadertexh;
 extern int should_rotate;
-extern volatile int useAutoCpu;
-
 enum {
 	ASSET_WHITE_PILL,
 	ASSET_BLACK_PILL,
@@ -678,6 +676,11 @@ void PLAT_enableBacklight(int enable);
 int PLAT_supportsDeepSleep(void);
 int PLAT_deepSleep(void);
 void PLAT_powerOff(int reboot);
+
+void Perf_setCPUMonitorEnabled(int enabled);
+int Perf_isCPUMonitorEnabled(void);
+int Perf_tryBeginCPUMonitor(void);
+void Perf_endCPUMonitor(void);
 
 void *PLAT_cpu_monitor(void *arg);
 void PLAT_setCPUSpeed(int speed); // enum

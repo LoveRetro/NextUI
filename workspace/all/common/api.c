@@ -215,6 +215,49 @@ int currentshadertexh = 0;
 
 int should_rotate = 0;
 
+static pthread_mutex_t perf_cpu_monitor_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int perf_cpu_monitor_enabled = 0;
+static int perf_cpu_monitor_running = 0;
+
+void Perf_setCPUMonitorEnabled(int enabled)
+{
+    pthread_mutex_lock(&perf_cpu_monitor_mutex);
+    perf_cpu_monitor_enabled = enabled;
+    pthread_mutex_unlock(&perf_cpu_monitor_mutex);
+}
+
+int Perf_isCPUMonitorEnabled(void)
+{
+    int enabled;
+
+    pthread_mutex_lock(&perf_cpu_monitor_mutex);
+    enabled = perf_cpu_monitor_enabled;
+    pthread_mutex_unlock(&perf_cpu_monitor_mutex);
+
+    return enabled;
+}
+
+int Perf_tryBeginCPUMonitor(void)
+{
+    int should_run = 0;
+
+    pthread_mutex_lock(&perf_cpu_monitor_mutex);
+    if (perf_cpu_monitor_enabled && !perf_cpu_monitor_running) {
+        perf_cpu_monitor_running = 1;
+        should_run = 1;
+    }
+    pthread_mutex_unlock(&perf_cpu_monitor_mutex);
+
+    return should_run;
+}
+
+void Perf_endCPUMonitor(void)
+{
+    pthread_mutex_lock(&perf_cpu_monitor_mutex);
+    perf_cpu_monitor_running = 0;
+    pthread_mutex_unlock(&perf_cpu_monitor_mutex);
+}
+
 FALLBACK_IMPLEMENTATION void PLAT_pinToCores(int core_type)
 {
 	// no-op

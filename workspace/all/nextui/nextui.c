@@ -2269,11 +2269,6 @@ int main (int argc, char *argv[]) {
     int had_bt = PLAT_btIsConnected();
 	int had_sink = GetAudioSink();
 
-	pthread_t cpucheckthread = 0;
-	if (pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL) == 0) {
-		pthread_detach(cpucheckthread);
-	}
-
 	int selected_row = top->selected - top->start;
 	float targetY;
 	float previousY;
