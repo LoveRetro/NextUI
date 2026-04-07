@@ -6943,7 +6943,7 @@ static int OptionPragmas_openMenu(MenuList* list, int i) {
 		totalcount += config.shaderpragmas[y].count;
 	}
 	PragmasOptions_menu.items = calloc(totalcount + 1, sizeof(MenuItem));
-	for (int y=0; y < SH_NROFSHADERS; y++) {
+	for (int y=0; y < config.shaders.options[SH_NROFSHADERS].value; y++) {
 		for (int j = 0; j < config.shaderpragmas[y].count; j++) {
 			MenuItem* item = &PragmasOptions_menu.items[progressCount];
 			Option* configitem = &config.shaderpragmas[y].options[j];
