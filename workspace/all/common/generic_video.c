@@ -633,7 +633,7 @@ ShaderParam* PLAT_getShaderPragmas(int i) {
 
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *srctype) {
 
-    if (i < 0 || i >= nrofshaders) {
+    if (i < 0 || i >= MAXSHADERS) {
         return;
     }
     Shader* shader = shaders[i];

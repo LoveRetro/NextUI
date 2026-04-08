@@ -4516,6 +4516,11 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		if (message) LOG_info("%s\n", message->msg);
 		break;
 	}
+	case RETRO_ENVIRONMENT_SHUTDOWN: { /* 7 */
+		LOG_info("Core requested shutdown\n");
+		quit = 1;
+		break;
+	}
 	case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: { /* 8 */
 		// puts("RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL");
 		// TODO: used by fceumm at least
@@ -6940,7 +6945,7 @@ static int OptionPragmas_openMenu(MenuList* list, int i) {
 		totalcount += config.shaderpragmas[y].count;
 	}
 	PragmasOptions_menu.items = calloc(totalcount + 1, sizeof(MenuItem));
-	for (int y=0; y < SH_NROFSHADERS; y++) {
+	for (int y=0; y < config.shaders.options[SH_NROFSHADERS].value; y++) {
 		for (int j = 0; j < config.shaderpragmas[y].count; j++) {
 			MenuItem* item = &PragmasOptions_menu.items[progressCount];
 			Option* configitem = &config.shaderpragmas[y].options[j];

@@ -45,7 +45,7 @@ KeyboardPrompt::KeyboardPrompt(const std::string &title, MenuListCallback on_con
 
 KeyboardPrompt::~KeyboardPrompt() {}
 
-void KeyboardPrompt::drawCustom(SDL_Surface *surface, const SDL_Rect &dst)
+void KeyboardPrompt::drawCustom(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle)
 {
     drawKeyboard(surface, state);
 
