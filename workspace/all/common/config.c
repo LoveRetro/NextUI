@@ -372,9 +372,9 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 CFG_setRAToken(value);
                 continue;
             }
-            if (strncmp(line, "raServerUsername=", 16) == 0)
+            if (strncmp(line, "raServerUsername=", 17) == 0)
             {
-                char *value = line + 16;
+                char *value = line + 17;
                 value[strcspn(value, "\n")] = 0;
                 CFG_setRAServerUsername(value);
                 continue;
@@ -983,6 +983,22 @@ void CFG_setRAServerUsername(const char* username)
         settings.raServerUsername[0] = '\0';
     }
     CFG_sync();
+}
+
+void CFG_setRAServerUsernameFromAvatarUrl(const char* str)
+{
+    if (!str) return;
+    const char* marker = strstr(str, "/UserPic/");
+    if (!marker) return;
+    marker += 9; /* skip past "/UserPic/" */
+    const char* dot = strstr(marker, ".png");
+    if (!dot || dot <= marker) return;
+    size_t len = (size_t)(dot - marker);
+    if (len == 0 || len >= sizeof(settings.raServerUsername)) return;
+    char username[64];
+    memcpy(username, marker, len);
+    username[len] = '\0';
+    CFG_setRAServerUsername(username);
 }
 
 bool CFG_getRAAuthenticated(void)

@@ -857,7 +857,7 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 									if (pending[i].achievement_id == ach_id) {
 										unlock_timestamp = pending[i].timestamp;
 										found_in_ledger = true;
-										RA_LOG_INFO("[AWARD_HTTP] ach=%u: found in ledger, "
+										RA_LOG_DEBUG("[AWARD_HTTP] ach=%u: found in ledger, "
 										            "timestamp=%u\n", ach_id, unlock_timestamp);
 										break;
 									}
@@ -872,7 +872,7 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 						if (found_in_ledger && unlock_timestamp > 0) {
 							// Ledger entry found — patch the startsession cache
 							// with the correct original unlock timestamp.
-							RA_LOG_INFO("[AWARD_HTTP] ach=%u: patching startsession cache "
+							RA_LOG_DEBUG("[AWARD_HTTP] ach=%u: patching startsession cache "
 							            "with ledger timestamp=%u\n", ach_id, unlock_timestamp);
 							RA_Offline_patchStartsessionCacheWithUnlock(
 								data->game_hash, ach_id, unlock_timestamp);
@@ -882,7 +882,7 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 							// Either way, skip cache patching here — the sync engine
 							// already patched with the correct timestamp, and using
 							// time(NULL) here would corrupt it.
-							RA_LOG_INFO("[AWARD_HTTP] ach=%u: NOT patching cache "
+							RA_LOG_DEBUG("[AWARD_HTTP] ach=%u: NOT patching cache "
 							            "(found_in_ledger=%d) — sync engine already "
 							            "handled or genuinely online unlock\n",
 							            ach_id, found_in_ledger);
@@ -1061,7 +1061,7 @@ static void ra_server_call(const rc_api_request_t* request,
 			bool is_pending = (ach_id > 0) && RA_Offline_isUnlockPending(ach_id);
 			bool is_syncing = RA_Offline_isSyncing();
 			
-			RA_LOG_INFO("[AWARD_GATE] ra_server_call: awardachievement ach=%u "
+			RA_LOG_DEBUG("[AWARD_GATE] ra_server_call: awardachievement ach=%u "
 			            "is_pending=%d is_syncing=%d\n",
 			            ach_id, is_pending, is_syncing);
 			
@@ -1081,7 +1081,7 @@ static void ra_server_call(const rc_api_request_t* request,
 			
 			// Not blocked — this is either a genuinely online unlock or a retry
 			// after sync completed. Let it through to the real HTTP path.
-			RA_LOG_INFO("[AWARD_GATE] ALLOWED rcheevos award for ach=%u "
+			RA_LOG_DEBUG("[AWARD_GATE] ALLOWED rcheevos award for ach=%u "
 			            "(pending=%d, syncing=%d) — sending to server\n",
 			            ach_id, is_pending, is_syncing);
 		}
@@ -1277,6 +1277,12 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		if (CFG_getRAHardcoreMode()) {
 			rc_client_set_hardcore_enabled(client, 1);
 			RA_LOG_INFO("Hardcore re-enabled after reconnection\n");
+			// rc_client_set_hardcore_enabled() sets waiting_for_reset=1 which
+			// blocks rc_client_do_frame() from processing any achievements.
+			// We must call rc_client_reset() to acknowledge the reset and
+			// clear the flag.
+			rc_client_reset(client);
+			RA_LOG_DEBUG("rc_client_reset complete (cleared waiting_for_reset)\n");
 			uint32_t fixed = ra_reapply_pending_unlocks(client, ra_game_hash);
 			if (fixed > 0) {
 				RA_LOG_INFO("Re-applied %u offline unlock(s) after "
@@ -1324,24 +1330,12 @@ static void ra_login_callback(int result, const char* error_message,
 		// The RA server builds avatar_url from the internal username field
 		// (e.g. "/UserPic/SammySwagz.png"), which may differ from
 		// display_name if the user has renamed their account.
-		// The sync engine needs the internal username for hash validation.
 		if (user && user->avatar_url) {
-			const char* marker = strstr(user->avatar_url, "/UserPic/");
-			if (marker) {
-				marker += 9; // skip past "/UserPic/"
-				const char* dot = strstr(marker, ".png");
-				if (dot && dot > marker) {
-					size_t len = (size_t)(dot - marker);
-					if (len < 64) {
-						char server_username[64];
-						memcpy(server_username, marker, len);
-						server_username[len] = '\0';
-						CFG_setRAServerUsername(server_username);
-						RA_LOG_INFO("Extracted server username from avatar_url: '%s' "
-						            "(display_name: '%s')\n",
-						            server_username, user->display_name);
-					}
-				}
+			CFG_setRAServerUsernameFromAvatarUrl(user->avatar_url);
+			if (strlen(CFG_getRAServerUsername()) > 0) {
+				RA_LOG_INFO("Extracted server username from avatar_url: '%s' "
+				            "(display_name: '%s')\n",
+				            CFG_getRAServerUsername(), user->display_name);
 			}
 		}
 		
@@ -1707,26 +1701,10 @@ static int ra_connectivity_probe_func(void* data) {
 			// Check for "Success":true in response
 			if (strstr(http_resp->data, "\"Success\":true")) {
 				// Extract server username from AvatarUrl in JSON response.
-				// Format: "AvatarUrl":"..../UserPic/USERNAME.png"
-				const char* av_key = strstr(http_resp->data, "\"AvatarUrl\":\"");
-				if (av_key) {
-					av_key += 13; // skip past "AvatarUrl":"
-					const char* av_marker = strstr(av_key, "/UserPic/");
-					if (av_marker) {
-						av_marker += 9; // skip past "/UserPic/"
-						const char* av_dot = strstr(av_marker, ".png");
-						if (av_dot && av_dot > av_marker) {
-							size_t av_len = (size_t)(av_dot - av_marker);
-							if (av_len < 64) {
-								char sv_username[64];
-								memcpy(sv_username, av_marker, av_len);
-								sv_username[av_len] = '\0';
-								CFG_setRAServerUsername(sv_username);
-								RA_LOG_INFO("Probe: extracted server username "
-								            "from AvatarUrl: '%s'\n", sv_username);
-							}
-						}
-					}
+				CFG_setRAServerUsernameFromAvatarUrl(http_resp->data);
+				if (strlen(CFG_getRAServerUsername()) > 0) {
+					RA_LOG_INFO("Probe: extracted server username "
+					            "from AvatarUrl: '%s'\n", CFG_getRAServerUsername());
 				}
 				
 				// Cache the login response (write-through)
@@ -2442,9 +2420,8 @@ static void ra_process_deferred_flags(void) {
 			// initial state, which is fine because ra_reapply_pending_unlocks
 			// (below) will re-mark pending achievements as UNLOCKED and set
 			// their triggers to TRIGGERED, preventing re-fire.
-			RA_LOG_INFO("Calling rc_client_reset to clear waiting_for_reset\n");
 			rc_client_reset(ra_client);
-			RA_LOG_INFO("rc_client_reset complete\n");
+			RA_LOG_DEBUG("rc_client_reset complete (cleared waiting_for_reset)\n");
 			uint32_t fixed = ra_reapply_pending_unlocks(ra_client, ra_game_hash);
 			if (fixed > 0) {
 				RA_LOG_INFO("Re-applied %u offline unlock(s) after "

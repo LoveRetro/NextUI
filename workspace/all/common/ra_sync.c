@@ -47,6 +47,50 @@ static void sync_ensure_init(void) {
 }
 
 /**
+ * If raServerUsername is not yet populated, do a lightweight token-based
+ * login to the RA server and extract the internal username from the
+ * AvatarUrl field.  This covers the case where the user updates to the
+ * fix and syncs from Settings before minarch has had a chance to log in.
+ *
+ * Returns the server username (from config — either pre-existing or
+ * freshly fetched).  Returns NULL/empty on failure.
+ */
+static const char* sync_resolve_server_username(void) {
+	const char* cached = CFG_getRAServerUsername();
+	if (cached && strlen(cached) > 0)
+		return cached;
+
+	const char* username = CFG_getRAUsername();
+	const char* token = CFG_getRAToken();
+	if (!username || !token || strlen(username) == 0 || strlen(token) == 0)
+		return NULL;
+
+	SYNC_LOG_INFO("raServerUsername empty — performing login to resolve\n");
+
+	/* Build token-based login request: r=login&u=<user>&t=<token> */
+	char post_data[512];
+	snprintf(post_data, sizeof(post_data), "r=login&u=%s&t=%s", username, token);
+
+	HTTP_Response* resp = HTTP_post(RA_API_URL, post_data, NULL);
+	if (!resp || resp->http_status != 200 || !resp->data || resp->size == 0) {
+		SYNC_LOG_WARN("Login for server username failed (status=%d)\n",
+		              resp ? resp->http_status : -1);
+		if (resp) HTTP_freeResponse(resp);
+		return NULL;
+	}
+
+	/* Extract server username from AvatarUrl in login response */
+	CFG_setRAServerUsernameFromAvatarUrl(resp->data);
+	const char* resolved = CFG_getRAServerUsername();
+	if (resolved && strlen(resolved) > 0) {
+		SYNC_LOG_INFO("Resolved server username: '%s'\n", resolved);
+	}
+
+	HTTP_freeResponse(resp);
+	return CFG_getRAServerUsername();
+}
+
+/**
  * Generate a random delay in [min_ms, max_ms].
  */
 static uint32_t sync_random_delay(uint32_t min_ms, uint32_t max_ms) {
@@ -228,9 +272,10 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 	 * For the username used in hash validation, prefer the server (internal)
 	 * username extracted from the AvatarUrl during login.  This may differ
 	 * from the display_name / locally-configured username if the user has
-	 * renamed their account.  Fall back to the locally-configured username
-	 * if the server username hasn't been captured yet (first boot). */
-	const char* server_username = CFG_getRAServerUsername();
+	 * renamed their account.  If the server username isn't cached yet
+	 * (e.g. first sync after a firmware update), do a lightweight login
+	 * to resolve it on the fly. */
+	const char* server_username = sync_resolve_server_username();
 	const char* username = (server_username && strlen(server_username) > 0)
 	                        ? server_username
 	                        : CFG_getRAUsername();

@@ -1,5 +1,6 @@
 #include "ra_auth.h"
 #include "http.h"
+#include "config.h"
 #include "defines.h"
 
 #include <stdio.h>
@@ -76,6 +77,17 @@ static void parse_login_response(const char* json, RA_AuthResponse* response) {
         
         // Extract User (display name)
         find_json_string(json, "User", response->display_name, sizeof(response->display_name));
+        
+        // Extract internal (server) username from AvatarUrl.
+        // The RA server builds AvatarUrl from the internal username field
+        // (e.g. "/UserPic/SammySwagz.png"), which may differ from the
+        // display_name if the user has renamed their account.
+        {
+            char avatar_url[256] = {0};
+            if (find_json_string(json, "AvatarUrl", avatar_url, sizeof(avatar_url))) {
+                CFG_setRAServerUsernameFromAvatarUrl(avatar_url);
+            }
+        }
         
         if (strlen(response->token) == 0) {
             // Token missing in success response - shouldn't happen but handle it
