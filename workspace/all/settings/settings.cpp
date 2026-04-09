@@ -782,7 +782,7 @@ int main(int argc, char *argv[])
                 RA_Sync_hasPendingUnlocks(&count);
                 if (count > 0) {
                     char buf[64];
-                    snprintf(buf, sizeof(buf), "%u pending \u2014 submit to server", count);
+                    snprintf(buf, sizeof(buf), "%u pending \u2014 send to RA server", count);
                     return std::string(buf);
                 }
                 return std::string("No pending unlocks");
