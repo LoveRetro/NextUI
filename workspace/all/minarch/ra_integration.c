@@ -1320,6 +1320,31 @@ static void ra_login_callback(int result, const char* error_message,
 		       user ? user->display_name : "unknown",
 		       user ? user->score : 0);
 		
+		// Extract internal (server) username from avatar_url.
+		// The RA server builds avatar_url from the internal username field
+		// (e.g. "/UserPic/SammySwagz.png"), which may differ from
+		// display_name if the user has renamed their account.
+		// The sync engine needs the internal username for hash validation.
+		if (user && user->avatar_url) {
+			const char* marker = strstr(user->avatar_url, "/UserPic/");
+			if (marker) {
+				marker += 9; // skip past "/UserPic/"
+				const char* dot = strstr(marker, ".png");
+				if (dot && dot > marker) {
+					size_t len = (size_t)(dot - marker);
+					if (len < 64) {
+						char server_username[64];
+						memcpy(server_username, marker, len);
+						server_username[len] = '\0';
+						CFG_setRAServerUsername(server_username);
+						RA_LOG_INFO("Extracted server username from avatar_url: '%s' "
+						            "(display_name: '%s')\n",
+						            server_username, user->display_name);
+					}
+				}
+			}
+		}
+		
 		// Check if we have a pending game to load
 		if (ra_pending_load.active) {
 			RA_LOG_DEBUG("Processing deferred game load: %s\n", ra_pending_load.rom_path);
@@ -1681,6 +1706,29 @@ static int ra_connectivity_probe_func(void* data) {
 		    http_resp->data && http_resp->size > 0) {
 			// Check for "Success":true in response
 			if (strstr(http_resp->data, "\"Success\":true")) {
+				// Extract server username from AvatarUrl in JSON response.
+				// Format: "AvatarUrl":"..../UserPic/USERNAME.png"
+				const char* av_key = strstr(http_resp->data, "\"AvatarUrl\":\"");
+				if (av_key) {
+					av_key += 13; // skip past "AvatarUrl":"
+					const char* av_marker = strstr(av_key, "/UserPic/");
+					if (av_marker) {
+						av_marker += 9; // skip past "/UserPic/"
+						const char* av_dot = strstr(av_marker, ".png");
+						if (av_dot && av_dot > av_marker) {
+							size_t av_len = (size_t)(av_dot - av_marker);
+							if (av_len < 64) {
+								char sv_username[64];
+								memcpy(sv_username, av_marker, av_len);
+								sv_username[av_len] = '\0';
+								CFG_setRAServerUsername(sv_username);
+								RA_LOG_INFO("Probe: extracted server username "
+								            "from AvatarUrl: '%s'\n", sv_username);
+							}
+						}
+					}
+				}
+				
 				// Cache the login response (write-through)
 				RA_Offline_cacheResponse(request.url, request.post_data,
 				                         http_resp->data, http_resp->size);

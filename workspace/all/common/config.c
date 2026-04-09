@@ -86,6 +86,7 @@ void CFG_defaults(NextUISettings *cfg)
         .raPassword = CFG_DEFAULT_RA_PASSWORD,
         .raHardcoreMode = CFG_DEFAULT_RA_HARDCOREMODE,
         .raToken = CFG_DEFAULT_RA_TOKEN,
+        .raServerUsername = CFG_DEFAULT_RA_SERVER_USERNAME,
         .raAuthenticated = CFG_DEFAULT_RA_AUTHENTICATED,
         .raShowNotifications = CFG_DEFAULT_RA_SHOW_NOTIFICATIONS,
         .raNotificationDuration = CFG_DEFAULT_RA_NOTIFICATION_DURATION,
@@ -369,6 +370,13 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 char *value = line + 8;
                 value[strcspn(value, "\n")] = 0;
                 CFG_setRAToken(value);
+                continue;
+            }
+            if (strncmp(line, "raServerUsername=", 16) == 0)
+            {
+                char *value = line + 16;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setRAServerUsername(value);
                 continue;
             }
             if (sscanf(line, "raAuthenticated=%i", &temp_value) == 1)
@@ -961,6 +969,22 @@ void CFG_setRAToken(const char* token)
     CFG_sync();
 }
 
+const char* CFG_getRAServerUsername(void)
+{
+    return settings.raServerUsername;
+}
+
+void CFG_setRAServerUsername(const char* username)
+{
+    if (username) {
+        strncpy(settings.raServerUsername, username, sizeof(settings.raServerUsername) - 1);
+        settings.raServerUsername[sizeof(settings.raServerUsername) - 1] = '\0';
+    } else {
+        settings.raServerUsername[0] = '\0';
+    }
+    CFG_sync();
+}
+
 bool CFG_getRAAuthenticated(void)
 {
     return settings.raAuthenticated;
@@ -1253,6 +1277,7 @@ void CFG_sync(void)
     fprintf(file, "raPassword=%s\n", settings.raPassword);
     fprintf(file, "raHardcoreMode=%i\n", settings.raHardcoreMode);
     fprintf(file, "raToken=%s\n", settings.raToken);
+    fprintf(file, "raServerUsername=%s\n", settings.raServerUsername);
     fprintf(file, "raAuthenticated=%i\n", settings.raAuthenticated);
     fprintf(file, "raShowNotifications=%i\n", settings.raShowNotifications);
     fprintf(file, "raNotificationDuration=%i\n", settings.raNotificationDuration);

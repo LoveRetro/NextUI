@@ -224,9 +224,23 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 	/* Seed RNG for random delays */
 	srand((unsigned)time(NULL));
 
-	/* Get credentials */
-	const char* username = CFG_getRAUsername();
+	/* Get credentials.
+	 * For the username used in hash validation, prefer the server (internal)
+	 * username extracted from the AvatarUrl during login.  This may differ
+	 * from the display_name / locally-configured username if the user has
+	 * renamed their account.  Fall back to the locally-configured username
+	 * if the server username hasn't been captured yet (first boot). */
+	const char* server_username = CFG_getRAServerUsername();
+	const char* username = (server_username && strlen(server_username) > 0)
+	                        ? server_username
+	                        : CFG_getRAUsername();
 	const char* token = CFG_getRAToken();
+
+	SYNC_LOG_INFO("Using username '%s' for sync hash computation "
+	              "(server_username='%s', config_username='%s')\n",
+	              username,
+	              server_username ? server_username : "(null)",
+	              CFG_getRAUsername() ? CFG_getRAUsername() : "(null)");
 
 	if (!username || !token || strlen(username) == 0 || strlen(token) == 0) {
 		return result;
