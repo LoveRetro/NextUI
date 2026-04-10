@@ -1,4 +1,5 @@
 #include "ra_offline.h"
+#include "ra_util.h"
 #include "sha256.h"
 #include "defines.h"
 #include "api.h"
@@ -21,7 +22,7 @@
  * Static state
  *****************************************************************************/
 
-static bool ra_offline_initialized = false;
+static volatile bool ra_offline_initialized = false;
 static volatile bool ra_offline_mode = false;
 static volatile bool ra_sync_in_progress = false;
 
@@ -29,6 +30,12 @@ static volatile bool ra_sync_in_progress = false;
  * Guards: ledger_append (hash chain + enqueue), ledgerCompact,
  *         ledgerGetPendingUnlocks, and all pending-cache functions. */
 static SDL_mutex* ra_ledger_mutex = NULL;
+
+/* Mutex serializing cache file read-modify-write operations.
+ * Guards: patchStartsessionCacheWithUnlock (called from HTTP worker threads
+ * and the sync thread — concurrent patches on the same game file would
+ * otherwise lose updates). */
+static SDL_mutex* ra_cache_mutex = NULL;
 
 /* Base data directory (set during init) */
 static char ra_data_dir[512] = {0};
@@ -71,75 +78,6 @@ typedef struct {
 
 static LedgerWriteQueue ra_ledger_wq = {0};
 
-/*****************************************************************************
- * Helpers: Directory creation
- *****************************************************************************/
-
-static int mkdirs(const char* path) {
-	char tmp[512];
-	char* p;
-	size_t len;
-
-	snprintf(tmp, sizeof(tmp), "%s", path);
-	len = strlen(tmp);
-	if (len > 0 && tmp[len - 1] == '/') {
-		tmp[len - 1] = '\0';
-	}
-
-	for (p = tmp + 1; *p; p++) {
-		if (*p == '/') {
-			*p = '\0';
-			if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
-				return -1;
-			}
-			*p = '/';
-		}
-	}
-	return mkdir(tmp, 0755) != 0 && errno != EEXIST ? -1 : 0;
-}
-
-/*****************************************************************************
- * Helpers: URL parameter extraction
- *
- * rcheevos URLs use query parameters like ?r=login2, ?r=patch, etc.
- * POST data also contains parameters like r=awardachievement&u=...
- *****************************************************************************/
-
-/**
- * Extract the value of parameter 'key' from a URL query string or POST body.
- * Writes into buf (max buf_size). Returns true if found.
- */
-static bool extract_param(const char* str, const char* key, char* buf, size_t buf_size) {
-	if (!str || !key || !buf || buf_size == 0) return false;
-
-	size_t key_len = strlen(key);
-	const char* p = str;
-
-	while ((p = strstr(p, key)) != NULL) {
-		/* Ensure this is a parameter start (beginning of string, after ? or &) */
-		if (p != str) {
-			char before = *(p - 1);
-			if (before != '?' && before != '&') {
-				p += key_len;
-				continue;
-			}
-		}
-		/* Check for '=' after key */
-		if (p[key_len] == '=') {
-			const char* val = p + key_len + 1;
-			const char* end = val;
-			while (*end && *end != '&' && *end != '#' && *end != ' ') end++;
-			size_t vlen = (size_t)(end - val);
-			if (vlen >= buf_size) vlen = buf_size - 1;
-			memcpy(buf, val, vlen);
-			buf[vlen] = '\0';
-			return true;
-		}
-		p += key_len;
-	}
-	return false;
-}
-
 /**
  * Get the request type from URL or post_data.
  * Returns pointer to static string or NULL.
@@ -147,11 +85,11 @@ static bool extract_param(const char* str, const char* key, char* buf, size_t bu
 static const char* get_request_type(const char* url, const char* post_data,
                                     char* buf, size_t buf_size) {
 	/* Try URL first (GET requests have ?r=... in URL) */
-	if (url && extract_param(url, "r", buf, buf_size)) {
+	if (url && ra_extract_param(url, "r", buf, buf_size)) {
 		return buf;
 	}
 	/* Try POST data */
-	if (post_data && extract_param(post_data, "r", buf, buf_size)) {
+	if (post_data && ra_extract_param(post_data, "r", buf, buf_size)) {
 		return buf;
 	}
 	return NULL;
@@ -163,12 +101,12 @@ static const char* get_request_type(const char* url, const char* post_data,
 static bool get_game_hash_param(const char* url, const char* post_data, char* buf, size_t buf_size) {
 	/* rcheevos sends game hash as 'm' parameter in some requests, or 'h' */
 	if (post_data) {
-		if (extract_param(post_data, "m", buf, buf_size)) return true;
-		if (extract_param(post_data, "h", buf, buf_size)) return true;
+		if (ra_extract_param(post_data, "m", buf, buf_size)) return true;
+		if (ra_extract_param(post_data, "h", buf, buf_size)) return true;
 	}
 	if (url) {
-		if (extract_param(url, "m", buf, buf_size)) return true;
-		if (extract_param(url, "h", buf, buf_size)) return true;
+		if (ra_extract_param(url, "m", buf, buf_size)) return true;
+		if (ra_extract_param(url, "h", buf, buf_size)) return true;
 	}
 	return false;
 }
@@ -213,6 +151,113 @@ static bool is_cacheable_request(const char* request_type) {
 	        strcmp(request_type, "startsession") == 0);
 }
 
+/*****************************************************************************
+ * Cache file I/O helpers
+ *
+ * Cache file format:  [uint32_t body_len][body bytes][SHA-256 digest]
+ *
+ * The SHA-256 is over the body bytes only and serves as an integrity check
+ * against SD-card corruption or partial writes.
+ *****************************************************************************/
+
+/**
+ * Read a cache file and verify its SHA-256 digest.
+ *
+ * @param path      Absolute path to the cache file.
+ * @param out_body  Output: heap-allocated, NUL-terminated body. Caller must free().
+ * @param out_len   Output: body length in bytes (excluding NUL terminator).
+ * @return true on success, false on miss / corrupt / I/O error.
+ *         On failure, *out_body is not modified.
+ */
+static bool cache_read_file(const char* path, char** out_body, size_t* out_len) {
+	FILE* f = fopen(path, "rb");
+	if (!f) return false;
+
+	uint32_t len32;
+	if (fread(&len32, sizeof(len32), 1, f) != 1 || len32 > 8 * 1024 * 1024) {
+		OFFLINE_LOG_WARN("Cache file corrupt or too large: %s\n", path);
+		fclose(f);
+		return false;
+	}
+
+	char* body = (char*)malloc(len32 + 1);
+	if (!body) {
+		OFFLINE_LOG_ERROR("Failed to allocate %u bytes for cache read: %s\n", len32, path);
+		fclose(f);
+		return false;
+	}
+	if (fread(body, 1, len32, f) != len32) {
+		OFFLINE_LOG_WARN("Cache file truncated: %s\n", path);
+		free(body);
+		fclose(f);
+		return false;
+	}
+	body[len32] = '\0';
+
+	uint8_t stored_digest[SHA256_DIGEST_SIZE];
+	if (fread(stored_digest, SHA256_DIGEST_SIZE, 1, f) != 1) {
+		OFFLINE_LOG_WARN("Cache file missing digest: %s\n", path);
+		free(body);
+		fclose(f);
+		return false;
+	}
+	fclose(f);
+
+	uint8_t computed_digest[SHA256_DIGEST_SIZE];
+	sha256_hash(body, len32, computed_digest);
+	if (memcmp(stored_digest, computed_digest, SHA256_DIGEST_SIZE) != 0) {
+		OFFLINE_LOG_WARN("Cache file SHA-256 mismatch (corrupt): %s\n", path);
+		free(body);
+		unlink(path);
+		return false;
+	}
+
+	*out_body = body;
+	*out_len = (size_t)len32;
+	return true;
+}
+
+/**
+ * Write a cache file with length prefix and SHA-256 digest.
+ *
+ * Writes atomically with fflush+fsync. On partial-write failure the file is
+ * unlinked. The caller retains ownership of @p body.
+ *
+ * @param path  Absolute path to the cache file.
+ * @param body  Body bytes to write.
+ * @param len   Length of body in bytes.
+ * @return true on success, false on I/O error.
+ */
+static bool cache_write_file(const char* path, const char* body, size_t len) {
+	uint8_t digest[SHA256_DIGEST_SIZE];
+	sha256_hash(body, len, digest);
+
+	FILE* f = fopen(path, "wb");
+	if (!f) {
+		OFFLINE_LOG_ERROR("Failed to open cache file for writing: %s (%s)\n",
+		                  path, strerror(errno));
+		return false;
+	}
+
+	uint32_t len32 = (uint32_t)len;
+	size_t written = 0;
+	written += fwrite(&len32, sizeof(len32), 1, f);
+	written += (fwrite(body, 1, len, f) == len) ? 1 : 0;
+	written += fwrite(digest, SHA256_DIGEST_SIZE, 1, f);
+
+	if (written < 3) {
+		OFFLINE_LOG_ERROR("Failed to write cache file: %s\n", path);
+		fclose(f);
+		unlink(path);
+		return false;
+	}
+
+	fflush(f);
+	fsync(fileno(f));
+	fclose(f);
+	return true;
+}
+
 void RA_Offline_cacheResponse(const char* url, const char* post_data,
                               const char* response_body, size_t response_len) {
 	if (!ra_offline_initialized || !response_body || response_len == 0) return;
@@ -225,34 +270,10 @@ void RA_Offline_cacheResponse(const char* url, const char* post_data,
 	cache_file_path(req_type, url, post_data, path, sizeof(path));
 	if (path[0] == '\0') return;
 
-	/* Compute SHA-256 of body */
-	uint8_t digest[SHA256_DIGEST_SIZE];
-	sha256_hash(response_body, response_len, digest);
-
-	FILE* f = fopen(path, "wb");
-	if (!f) {
-		OFFLINE_LOG_ERROR("Failed to open cache file for writing: %s (%s)\n", path, strerror(errno));
-		return;
+	if (cache_write_file(path, response_body, response_len)) {
+		OFFLINE_LOG_DEBUG("Cached %s response (%zu bytes) to %s\n",
+		                  req_type, response_len, path);
 	}
-
-	uint32_t len32 = (uint32_t)response_len;
-	size_t written = 0;
-	written += fwrite(&len32, sizeof(len32), 1, f);
-	written += fwrite(response_body, 1, response_len, f) > 0 ? 1 : 0;
-	written += fwrite(digest, SHA256_DIGEST_SIZE, 1, f);
-
-	if (written < 3) {
-		OFFLINE_LOG_ERROR("Failed to write cache file: %s\n", path);
-		fclose(f);
-		unlink(path);
-		return;
-	}
-
-	fflush(f);
-	fsync(fileno(f));
-	fclose(f);
-
-	OFFLINE_LOG_DEBUG("Cached %s response (%u bytes) to %s\n", req_type, len32, path);
 }
 
 /**
@@ -406,24 +427,13 @@ static uint32_t inject_unlocks_into_array(const char* body, size_t body_len,
 static bool patch_startsession_with_ledger(char* body, size_t body_len,
                                            const char* game_hash,
                                            char** out_body, size_t* out_len) {
-	/* Get pending unlocks from ledger */
+	/* Get pending unlocks from ledger, pre-filtered by game hash */
 	RA_PendingUnlock* pending = NULL;
 	uint32_t pending_count = 0;
-	if (!RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count))
+	if (!RA_Offline_ledgerGetPendingByGameHash(game_hash, &pending, &pending_count))
 		goto passthrough;
 
 	if (pending_count == 0 || !pending)
-		goto passthrough;
-
-	/* Filter to only unlocks for this game hash */
-	uint32_t game_count = 0;
-	for (uint32_t i = 0; i < pending_count; i++) {
-		if (game_hash && strcmp(pending[i].game_hash, game_hash) == 0) {
-			game_count++;
-		}
-	}
-
-	if (game_count == 0)
 		goto passthrough;
 
 	/*
@@ -532,64 +542,13 @@ bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
 	cache_file_path(req_type, url, post_data, path, sizeof(path));
 	if (path[0] == '\0') return false;
 
-	FILE* f = fopen(path, "rb");
-	if (!f) {
+	if (!cache_read_file(path, out_body, out_len)) {
 		OFFLINE_LOG_DEBUG("Cache miss for %s: %s\n", req_type, path);
 		return false;
 	}
 
-	/* Read length */
-	uint32_t len32;
-	if (fread(&len32, sizeof(len32), 1, f) != 1) {
-		OFFLINE_LOG_WARN("Cache file corrupt (no length): %s\n", path);
-		fclose(f);
-		return false;
-	}
-
-	/* Sanity check (max 8MB, same as HTTP_MAX_RESPONSE_SIZE) */
-	if (len32 > 8 * 1024 * 1024) {
-		OFFLINE_LOG_WARN("Cache file body too large (%u): %s\n", len32, path);
-		fclose(f);
-		return false;
-	}
-
-	/* Read body */
-	char* body = (char*)malloc(len32 + 1);
-	if (!body) {
-		OFFLINE_LOG_ERROR("Failed to allocate %u bytes for cache read\n", len32);
-		fclose(f);
-		return false;
-	}
-	if (fread(body, 1, len32, f) != len32) {
-		OFFLINE_LOG_WARN("Cache file truncated: %s\n", path);
-		free(body);
-		fclose(f);
-		return false;
-	}
-	body[len32] = '\0';
-
-	/* Read and verify SHA-256 */
-	uint8_t stored_digest[SHA256_DIGEST_SIZE];
-	if (fread(stored_digest, SHA256_DIGEST_SIZE, 1, f) != 1) {
-		OFFLINE_LOG_WARN("Cache file missing digest: %s\n", path);
-		free(body);
-		fclose(f);
-		return false;
-	}
-	fclose(f);
-
-	uint8_t computed_digest[SHA256_DIGEST_SIZE];
-	sha256_hash(body, len32, computed_digest);
-	if (memcmp(stored_digest, computed_digest, SHA256_DIGEST_SIZE) != 0) {
-		OFFLINE_LOG_WARN("Cache file SHA-256 mismatch (corrupt): %s\n", path);
-		free(body);
-		unlink(path);  /* Remove corrupt cache */
-		return false;
-	}
-
-	*out_body = body;
-	*out_len = len32;
-	OFFLINE_LOG_DEBUG("Cache hit for %s (%u bytes) from %s\n", req_type, len32, path);
+	OFFLINE_LOG_DEBUG("Cache hit for %s (%zu bytes) from %s\n",
+	                  req_type, *out_len, path);
 
 	/* For startsession responses served from cache, patch in any pending ledger unlocks
 	 * so rcheevos shows offline-earned achievements as unlocked on restart.
@@ -606,8 +565,8 @@ bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
 		                                    out_body, out_len)) {
 			OFFLINE_LOG_WARN("Failed to patch startsession with ledger data\n");
 		} else if (*out_body != pre_patch_body) {
-			OFFLINE_LOG_INFO("Patched offline startsession (%u -> %u bytes)\n",
-			                 len32, (unsigned)*out_len);
+			OFFLINE_LOG_INFO("Patched offline startsession (%zu -> %zu bytes)\n",
+			                 (size_t)(pre_patch_body ? strlen(pre_patch_body) : 0), *out_len);
 		}
 	}
 
@@ -743,11 +702,9 @@ static int ledger_writer_thread(void* userdata) {
 			fclose(f);
 		}
 
-		/* Signal any thread waiting for the queue to drain (e.g. shutdown) */
+		/* Signal any thread waiting for a free slot or for the queue to drain */
 		SDL_LockMutex(wq->mutex);
-		if (wq->count == 0) {
-			SDL_CondSignal(wq->cond_empty);
-		}
+		SDL_CondSignal(wq->cond_empty);
 		SDL_UnlockMutex(wq->mutex);
 	}
 
@@ -815,11 +772,17 @@ static bool ledger_append(RA_LedgerRecord* rec) {
 	ledger_hash_record(rec, ra_ledger_last_hash);
 	ra_ledger_has_records = true;
 
-	/* Enqueue for async disk write */
+	/* Enqueue for async disk write.  If the queue is full, wait up to 5s
+	 * for the writer thread to drain a slot rather than silently dropping
+	 * an achievement unlock record. */
 	LedgerWriteQueue* wq = &ra_ledger_wq;
 	bool enqueued = false;
 
 	SDL_LockMutex(wq->mutex);
+	if (wq->count >= RA_LEDGER_WRITE_QUEUE_SIZE) {
+		OFFLINE_LOG_WARN("Ledger write queue full — waiting for drain\n");
+		SDL_CondWaitTimeout(wq->cond_empty, wq->mutex, 5000);
+	}
 	if (wq->count < RA_LEDGER_WRITE_QUEUE_SIZE) {
 		wq->records[wq->tail] = *rec;
 		wq->tail = (wq->tail + 1) % RA_LEDGER_WRITE_QUEUE_SIZE;
@@ -827,7 +790,7 @@ static bool ledger_append(RA_LedgerRecord* rec) {
 		SDL_CondSignal(wq->cond_nonempty);
 		enqueued = true;
 	} else {
-		OFFLINE_LOG_ERROR("Ledger write queue full — record dropped!\n");
+		OFFLINE_LOG_ERROR("Ledger write queue still full after 5s — record dropped!\n");
 	}
 	SDL_UnlockMutex(wq->mutex);
 
@@ -1137,6 +1100,147 @@ bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
 	return true;
 }
 
+bool RA_Offline_ledgerGetPendingCount(uint32_t* out_count) {
+	if (!out_count) return false;
+	*out_count = 0;
+	if (!ra_offline_initialized) return false;
+
+	SDL_LockMutex(ra_ledger_mutex);
+	RA_LedgerRecord* records = NULL;
+	uint32_t record_count = 0;
+	if (!ledger_read_pending_records(&records, &record_count)) {
+		SDL_UnlockMutex(ra_ledger_mutex);
+		return false;
+	}
+	free(records);
+	SDL_UnlockMutex(ra_ledger_mutex);
+
+	*out_count = record_count;
+	return true;
+}
+
+bool RA_Offline_ledgerGetPendingByGameHash(const char* game_hash,
+                                           RA_PendingUnlock** out_unlocks,
+                                           uint32_t* out_count) {
+	if (!game_hash || !out_unlocks || !out_count) return false;
+
+	RA_PendingUnlock* all = NULL;
+	uint32_t all_count = 0;
+	if (!RA_Offline_ledgerGetPendingUnlocks(&all, &all_count))
+		return false;
+
+	if (all_count == 0) {
+		*out_unlocks = NULL;
+		*out_count = 0;
+		return true;
+	}
+
+	/* Count matches */
+	uint32_t match_count = 0;
+	for (uint32_t i = 0; i < all_count; i++) {
+		if (strcmp(all[i].game_hash, game_hash) == 0)
+			match_count++;
+	}
+
+	if (match_count == 0) {
+		free(all);
+		*out_unlocks = NULL;
+		*out_count = 0;
+		return true;
+	}
+
+	RA_PendingUnlock* filtered = (RA_PendingUnlock*)malloc(
+		match_count * sizeof(RA_PendingUnlock));
+	if (!filtered) {
+		free(all);
+		return false;
+	}
+
+	uint32_t j = 0;
+	for (uint32_t i = 0; i < all_count; i++) {
+		if (strcmp(all[i].game_hash, game_hash) == 0)
+			filtered[j++] = all[i];
+	}
+	free(all);
+
+	*out_unlocks = filtered;
+	*out_count = match_count;
+	return true;
+}
+
+bool RA_Offline_ledgerGetPendingByGameId(uint32_t game_id,
+                                         RA_PendingUnlock** out_unlocks,
+                                         uint32_t* out_count) {
+	if (!out_unlocks || !out_count) return false;
+
+	/* game_id == 0 means "all games" — just delegate to unfiltered API */
+	if (game_id == 0)
+		return RA_Offline_ledgerGetPendingUnlocks(out_unlocks, out_count);
+
+	RA_PendingUnlock* all = NULL;
+	uint32_t all_count = 0;
+	if (!RA_Offline_ledgerGetPendingUnlocks(&all, &all_count))
+		return false;
+
+	if (all_count == 0) {
+		*out_unlocks = NULL;
+		*out_count = 0;
+		return true;
+	}
+
+	uint32_t match_count = 0;
+	for (uint32_t i = 0; i < all_count; i++) {
+		if (all[i].game_id == game_id)
+			match_count++;
+	}
+
+	if (match_count == 0) {
+		free(all);
+		*out_unlocks = NULL;
+		*out_count = 0;
+		return true;
+	}
+
+	RA_PendingUnlock* filtered = (RA_PendingUnlock*)malloc(
+		match_count * sizeof(RA_PendingUnlock));
+	if (!filtered) {
+		free(all);
+		return false;
+	}
+
+	uint32_t j = 0;
+	for (uint32_t i = 0; i < all_count; i++) {
+		if (all[i].game_id == game_id)
+			filtered[j++] = all[i];
+	}
+	free(all);
+
+	*out_unlocks = filtered;
+	*out_count = match_count;
+	return true;
+}
+
+bool RA_Offline_ledgerFindPendingUnlock(uint32_t achievement_id,
+                                        RA_PendingUnlock* out) {
+	if (!out) return false;
+
+	RA_PendingUnlock* all = NULL;
+	uint32_t all_count = 0;
+	if (!RA_Offline_ledgerGetPendingUnlocks(&all, &all_count))
+		return false;
+
+	for (uint32_t i = 0; i < all_count; i++) {
+		if (all[i].achievement_id == achievement_id) {
+			*out = all[i];
+			free(all);
+			return true;
+		}
+	}
+
+	free(all);
+	return false;
+}
+
 /*****************************************************************************
  * Offline mode state
  *****************************************************************************/
@@ -1177,7 +1281,7 @@ void RA_Offline_init(const char* data_dir) {
 	snprintf(ra_ledger_path, sizeof(ra_ledger_path), "%s%s", data_dir, RA_LEDGER_FILE);
 
 	/* Create directories */
-	if (mkdirs(ra_cache_dir) != 0) {
+	if (ra_mkdirs(ra_cache_dir) != 0) {
 		OFFLINE_LOG_ERROR("Failed to create cache directory: %s (%s)\n",
 		                  ra_cache_dir, strerror(errno));
 		/* Continue anyway - caching will fail gracefully */
@@ -1190,6 +1294,12 @@ void RA_Offline_init(const char* data_dir) {
 	ra_ledger_mutex = SDL_CreateMutex();
 	if (!ra_ledger_mutex) {
 		OFFLINE_LOG_ERROR("Failed to create ledger mutex: %s\n", SDL_GetError());
+	}
+
+	/* Create cache mutex for serializing cache file read-modify-write */
+	ra_cache_mutex = SDL_CreateMutex();
+	if (!ra_cache_mutex) {
+		OFFLINE_LOG_ERROR("Failed to create cache mutex: %s\n", SDL_GetError());
 	}
 
 	/* Start the background ledger writer thread */
@@ -1215,6 +1325,11 @@ void RA_Offline_shutdown(void) {
 	if (ra_ledger_mutex) {
 		SDL_DestroyMutex(ra_ledger_mutex);
 		ra_ledger_mutex = NULL;
+	}
+
+	if (ra_cache_mutex) {
+		SDL_DestroyMutex(ra_cache_mutex);
+		ra_cache_mutex = NULL;
 	}
 
 	OFFLINE_LOG_INFO("Shut down\n");
@@ -1309,51 +1424,20 @@ void RA_Offline_patchStartsessionCacheWithUnlock(const char* game_hash,
                                                   uint32_t timestamp) {
 	if (!ra_offline_initialized || !game_hash || game_hash[0] == '\0') return;
 
+	/* Serialize the entire read-modify-write to prevent lost updates when
+	 * HTTP worker threads and the sync thread patch the same game file. */
+	SDL_LockMutex(ra_cache_mutex);
+
 	/* Build cache file path: <cache_dir>/startsession_<hash>.bin */
 	char path[512];
 	snprintf(path, sizeof(path), "%s/startsession_%s.bin", ra_cache_dir, game_hash);
 
-	/* Read existing cache file: [uint32_t len][body][SHA-256] */
-	FILE* f = fopen(path, "rb");
-	if (!f) {
-		/* No cached startsession for this game — nothing to patch */
-		return;
-	}
-
-	uint32_t len32;
-	if (fread(&len32, sizeof(len32), 1, f) != 1 || len32 > 8 * 1024 * 1024) {
-		fclose(f);
-		return;
-	}
-
-	char* body = (char*)malloc(len32 + 1);
-	if (!body) {
-		fclose(f);
-		return;
-	}
-
-	if (fread(body, 1, len32, f) != len32) {
-		free(body);
-		fclose(f);
-		return;
-	}
-	body[len32] = '\0';
-
-	uint8_t stored_digest[SHA256_DIGEST_SIZE];
-	if (fread(stored_digest, SHA256_DIGEST_SIZE, 1, f) != 1) {
-		free(body);
-		fclose(f);
-		return;
-	}
-	fclose(f);
-
-	/* Verify SHA-256 integrity */
-	uint8_t computed_digest[SHA256_DIGEST_SIZE];
-	sha256_hash(body, len32, computed_digest);
-	if (memcmp(stored_digest, computed_digest, SHA256_DIGEST_SIZE) != 0) {
-		OFFLINE_LOG_WARN("patchCache: SHA-256 mismatch for %s, skipping\n", path);
-		free(body);
-		return;
+	/* Read existing cache file */
+	char* body = NULL;
+	size_t body_len = 0;
+	if (!cache_read_file(path, &body, &body_len)) {
+		/* No cached startsession for this game, or corrupt — nothing to patch */
+		goto done;
 	}
 
 	/* Find the "Unlocks" array */
@@ -1361,19 +1445,19 @@ void RA_Offline_patchStartsessionCacheWithUnlock(const char* game_hash,
 	char* unlocks_pos = strstr(body, unlocks_key);
 	if (!unlocks_pos) {
 		free(body);
-		return;
+		goto done;
 	}
 
 	char* arr_start = strchr(unlocks_pos + strlen(unlocks_key), '[');
 	if (!arr_start) {
 		free(body);
-		return;
+		goto done;
 	}
 
 	char* arr_end = strchr(arr_start, ']');
 	if (!arr_end) {
 		free(body);
-		return;
+		goto done;
 	}
 
 	/* Check if this achievement ID is already in the Unlocks array */
@@ -1409,7 +1493,7 @@ void RA_Offline_patchStartsessionCacheWithUnlock(const char* game_hash,
 	if (already_in_softcore && already_in_hardcore) {
 		/* Already present in both arrays — no-op */
 		free(body);
-		return;
+		goto done;
 	}
 
 	/*
@@ -1427,7 +1511,7 @@ void RA_Offline_patchStartsessionCacheWithUnlock(const char* game_hash,
 	single.game_hash[0] = '\0';
 
 	char* current_body = body;
-	size_t current_len = (size_t)len32;
+	size_t current_len = body_len;
 	bool body_replaced = false;
 
 	/* Inject into "Unlocks" if not already present */
@@ -1465,7 +1549,7 @@ void RA_Offline_patchStartsessionCacheWithUnlock(const char* game_hash,
 	if (!body_replaced) {
 		/* Nothing was injected (shouldn't happen given the checks above) */
 		free(body);
-		return;
+		goto done;
 	}
 
 	/* Free the original body (if not already freed via body_replaced logic) */
@@ -1474,37 +1558,13 @@ void RA_Offline_patchStartsessionCacheWithUnlock(const char* game_hash,
 	}
 
 	/* Rewrite cache file with updated body and new SHA-256 */
-	uint8_t new_digest[SHA256_DIGEST_SIZE];
-	sha256_hash(current_body, current_len, new_digest);
-
-	f = fopen(path, "wb");
-	if (!f) {
-		OFFLINE_LOG_ERROR("patchCache: failed to open %s for rewrite: %s\n",
-		                  path, strerror(errno));
-		free(current_body);
-		return;
+	if (cache_write_file(path, current_body, current_len)) {
+		OFFLINE_LOG_INFO("patchCache: injected achievement %u into %s\n",
+		                 achievement_id, path);
 	}
-
-	uint32_t new_len32 = (uint32_t)current_len;
-	size_t written = 0;
-	written += fwrite(&new_len32, sizeof(new_len32), 1, f);
-	written += fwrite(current_body, 1, current_len, f) > 0 ? 1 : 0;
-	written += fwrite(new_digest, SHA256_DIGEST_SIZE, 1, f);
-
-	if (written < 3) {
-		OFFLINE_LOG_ERROR("patchCache: write failed for %s\n", path);
-		fclose(f);
-		unlink(path);
-		free(current_body);
-		return;
-	}
-
-	fflush(f);
-	fsync(fileno(f));
-	fclose(f);
 	free(current_body);
 
-	OFFLINE_LOG_INFO("patchCache: injected achievement %u into %s\n",
-	                 achievement_id, path);
+done:
+	SDL_UnlockMutex(ra_cache_mutex);
 }
 

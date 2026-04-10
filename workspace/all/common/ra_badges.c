@@ -1,4 +1,5 @@
 #include "ra_badges.h"
+#include "ra_util.h"
 #include "http.h"
 #include "defines.h"
 #include "api.h"
@@ -102,14 +103,7 @@ static BadgeCacheEntry* find_or_create_entry(const char* badge_name, bool locked
 
 // Create cache directory if it doesn't exist
 static void ensure_cache_dir(void) {
-	char path[MAX_PATH];
-	
-	// Create .ra directory
-	snprintf(path, sizeof(path), SHARED_USERDATA_PATH "/.ra");
-	mkdir(path, 0755);
-	
-	// Create .ra/badges directory
-	mkdir(RA_BADGE_CACHE_DIR, 0755);
+	ra_mkdirs(RA_BADGE_CACHE_DIR);
 }
 
 // Check if cache file exists

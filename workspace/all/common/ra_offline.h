@@ -181,6 +181,48 @@ void RA_Offline_ledgerWriteSyncAck(uint32_t achievement_id, uint32_t game_id);
 bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
                                         uint32_t* out_count);
 
+/**
+ * Get the count of pending (unsynced) softcore unlocks without allocating.
+ *
+ * @param out_count Output: number of pending unlocks
+ * @return true on success
+ */
+bool RA_Offline_ledgerGetPendingCount(uint32_t* out_count);
+
+/**
+ * Get pending unlocks filtered by game hash.
+ *
+ * @param game_hash  Game hash to filter by
+ * @param out_unlocks Output: allocated array (caller must free); NULL if count is 0
+ * @param out_count   Output: number of matching entries
+ * @return true on success
+ */
+bool RA_Offline_ledgerGetPendingByGameHash(const char* game_hash,
+                                           RA_PendingUnlock** out_unlocks,
+                                           uint32_t* out_count);
+
+/**
+ * Get pending unlocks filtered by game ID.
+ *
+ * @param game_id     RA game ID to filter by (0 returns all)
+ * @param out_unlocks Output: allocated array (caller must free); NULL if count is 0
+ * @param out_count   Output: number of matching entries
+ * @return true on success
+ */
+bool RA_Offline_ledgerGetPendingByGameId(uint32_t game_id,
+                                         RA_PendingUnlock** out_unlocks,
+                                         uint32_t* out_count);
+
+/**
+ * Look up a single pending unlock by achievement ID.
+ *
+ * @param achievement_id Achievement ID to search for
+ * @param out            Output: matching entry (only written on success)
+ * @return true if found, false if not found or error
+ */
+bool RA_Offline_ledgerFindPendingUnlock(uint32_t achievement_id,
+                                        RA_PendingUnlock* out);
+
 /*****************************************************************************
  * Sync engine
  *****************************************************************************/
@@ -251,7 +293,7 @@ void RA_Offline_clearPendingCache(void);
  * file with an updated SHA-256 digest.
  *
  * No-op if the cache file is absent, corrupt, or already contains the
- * achievement. Thread-safe: operates on a single file atomically.
+ * achievement. Thread-safe: read-modify-write serialized by ra_cache_mutex.
  *
  * @param game_hash      Game hash (used to locate startsession_<hash>.bin)
  * @param achievement_id Achievement ID to inject

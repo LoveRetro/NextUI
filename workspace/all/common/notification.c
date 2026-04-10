@@ -663,5 +663,9 @@ void Notification_setProgressIndicatorPersistent(bool persistent) {
 }
 
 bool Notification_hasProgressIndicator(void) {
-    return initialized && progress_state.active;
+    if (!initialized) return false;
+    SDL_LockMutex(progress_mutex);
+    bool active = progress_state.active;
+    SDL_UnlockMutex(progress_mutex);
+    return active;
 }

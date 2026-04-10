@@ -10,6 +10,10 @@
 #include "defines.h"
 #include "api.h"
 
+#define RA_UTIL_NEED_SDL
+#include "ra_util.h"
+#include "ra_fsm.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,13 +34,64 @@
 #define RA_LOG_ERROR(fmt, ...) LOG_error("[RA] " fmt, ##__VA_ARGS__)
 
 /*****************************************************************************
+ * State machine enums (SM-1 / SM-4)
+ *
+ * The codebase has 4 state machines.  For connectivity and sync the enums
+ * are derived (computed from underlying flags on each query).  For login
+ * and game-load the enum variable IS the authoritative state — every
+ * transition is an explicit assignment.  Background threads communicate
+ * exclusively through the FSM event queue (ra_fsm.h); the main thread
+ * drains the queue in ra_process_deferred_flags() and updates the state
+ * variables / deferred-action bools.
+ *****************************************************************************/
+
+/* Connectivity: is the device online or offline (with/without probe)? */
+typedef enum {
+	CONN_ONLINE,                  /* !isOffline && !probe_running            */
+	CONN_OFFLINE_NO_PROBE,        /* isOffline && !probe_running             */
+	CONN_OFFLINE_PROBING,         /* isOffline && probe_running && !abort    */
+	CONN_OFFLINE_PROBE_STOPPING   /* isOffline && probe_running && abort     */
+} RAConnState;
+
+/* Login: lifecycle of the rc_client login attempt (authoritative). */
+typedef enum {
+	LOGIN_IDLE,              /* no credentials or not yet attempted          */
+	LOGIN_IN_PROGRESS,       /* attempt in flight (async rc_client call)    */
+	LOGIN_RETRY_WAITING,     /* failed, timer running before next retry     */
+	LOGIN_LOGGED_IN,         /* authenticated                               */
+	LOGIN_FAILED             /* all retries exhausted                       */
+} RALoginState;
+
+/* Game load: lifecycle of a game load through rcheevos (authoritative). */
+typedef enum {
+	GAME_NONE,               /* no game                                     */
+	GAME_PENDING_LOGIN,      /* waiting for login to complete               */
+	GAME_LOADING,            /* rc_client_begin_identify_and_load_game sent */
+	GAME_LOADED,             /* game active, achievements available         */
+	GAME_LOAD_RETRY_PENDING  /* load failed offline, retry on connectivity  */
+} RAGameState;
+
+/* Sync: lifecycle of the offline-unlock sync engine (derived). */
+typedef enum {
+	SYNC_IDLE,               /* nothing happening                           */
+	SYNC_DEFERRED,           /* waiting for game load before starting       */
+	SYNC_RUNNING,            /* sync thread active                          */
+	SYNC_ABORTING,           /* abort requested, waiting for thread exit    */
+	SYNC_APPLY_PENDING       /* results ready for main thread               */
+} RASyncState;
+
+/*****************************************************************************
  * Static state
  *****************************************************************************/
 
 static rc_client_t* ra_client = NULL;
-static bool ra_game_loaded = false;
-static bool ra_logged_in = false;
-// (Deferred flags are in RADeferredState below)
+
+// Authoritative sub-FSM state (SM-4).  These replace the old boolean flags
+// (ra_game_loaded, ra_logged_in) — every transition is an explicit enum
+// assignment visible in one place.  Forward-declared; enum definitions are
+// in the "State machine enums" section below.
+static RALoginState ra_login_state = LOGIN_IDLE;
+static RAGameState  ra_game_state  = GAME_NONE;
 
 // Current game hash (for mute file path)
 static char ra_game_hash[64] = {0};
@@ -67,7 +122,7 @@ typedef struct {
 	uint8_t* rom_data;
 	size_t rom_size;
 	char emu_tag[16];
-	bool active;
+	bool active;      // data-validity flag (struct holds valid ROM info)
 } RAPendingLoad;
 
 static RAPendingLoad ra_pending_load = {0};
@@ -77,7 +132,6 @@ static RAPendingLoad ra_pending_load = {0};
 typedef struct {
 	int count;
 	uint32_t next_time;           // SDL_GetTicks() timestamp for next retry
-	bool pending;
 	bool notified_connecting;     // Track if we showed "Connecting..." notification
 } RALoginRetry;
 
@@ -94,27 +148,30 @@ static RALoginRetry ra_login_retry = {0};
 // Connectivity probe state (background thread polls RA login endpoint)
 static volatile bool ra_probe_abort = false;
 static volatile bool ra_probe_running = false;
+static SDL_Thread* ra_probe_thread = NULL;
 
-// Deferred state: flags set by background threads (probe, sync), consumed
-// by the main thread in ra_process_deferred_flags().  Protected by
-// ra_deferred.mutex — all reads and writes must hold the lock.
-#define RA_MAX_DEFERRED_SYNC_IDS 256
-typedef struct {
-	SDL_mutex* mutex;
-	bool offline_notification;
-	bool online_notification;
-	bool sync;
-	bool hardcore_enable;
-	bool hardcore_disable;
-	bool sync_apply;
-	uint32_t sync_ids[RA_MAX_DEFERRED_SYNC_IDS];
-	uint32_t sync_timestamps[RA_MAX_DEFERRED_SYNC_IDS]; /* ledger unlock epoch */
-	uint32_t sync_count;
-	bool user_saw_offline;
-	bool game_load_retry;  /* set when game load fails while offline — retry on connectivity */
-} RADeferredState;
+// Offline sync state (background thread replays pending unlocks)
+static SDL_Thread* ra_sync_thread = NULL;
+static volatile bool ra_sync_abort = false;
+static uint32_t ra_sync_game_id = 0;
 
-static RADeferredState ra_deferred = {0};
+// Deferred state: simple main-thread-only flags.  Background threads
+// communicate exclusively through the FSM event queue (ra_fsm.h).
+// These flags are read and written only on the main thread — no mutex needed.
+// Note: game_load_retry is now encoded as ra_game_state == GAME_LOAD_RETRY_PENDING.
+static bool ra_deferred_offline_notification = false; /* show "Offline" toast when Notification_init is ready */
+static bool ra_deferred_sync_pending = false;         /* sync should start when game is loaded */
+static bool ra_user_saw_offline = false;              /* user has seen the "Offline" notification */
+static bool ra_sync_apply_pending = false;            /* sync results waiting to be applied */
+static uint32_t ra_sync_apply_ids[RA_FSM_MAX_SYNC_IDS];
+static uint32_t ra_sync_apply_timestamps[RA_FSM_MAX_SYNC_IDS];
+static uint32_t ra_sync_apply_count = 0;
+
+// Probe lifecycle mutex — protects ra_probe_running check-and-set.
+// Separate from the FSM event queue mutex.  Held only briefly for the
+// atomic read-modify-write in ra_start/stop_connectivity_probe and
+// at probe thread exit.  Must NOT be held across SDL_WaitThread.
+static SDL_mutex* ra_probe_mutex = NULL;
 
 /*****************************************************************************
  * Thread-safe response queue
@@ -157,7 +214,7 @@ static void ra_do_load_game(const char* rom_path, const uint8_t* rom_data, size_
 static void ra_load_muted_achievements(void);
 static void ra_save_muted_achievements(void);
 static void ra_clear_muted_achievements(void);
-static void ra_reset_login_state(void);
+static void ra_reset_login_retry(void);
 static void ra_start_login(void);
 static void ra_start_offline_sync(uint32_t game_id);
 static uint32_t ra_get_retry_delay_ms(int attempt);
@@ -166,8 +223,6 @@ static void ra_start_connectivity_probe(void);
 static void ra_stop_connectivity_probe(void);
 
 // Extracted helpers to reduce duplication
-static void ra_interruptible_sleep(uint32_t ms, volatile bool* abort_flag);
-static bool ra_get_post_param(const char* post_data, char param_key, char* buf, size_t buf_size);
 static bool ra_should_hide_achievement(const rc_client_achievement_t* ach);
 static uint32_t ra_reapply_pending_unlocks(rc_client_t* client, const char* game_hash);
 static void ra_show_game_summary(rc_client_t* client, const rc_client_game_t* game);
@@ -319,19 +374,108 @@ static uint32_t ra_get_retry_delay_ms(int attempt) {
 }
 
 /*****************************************************************************
- * Helper: Reset login retry state
+ * Helper: Reset login retry context (timer/counter data)
  *****************************************************************************/
-static void ra_reset_login_state(void) {
+static void ra_reset_login_retry(void) {
 	ra_login_retry.count = 0;
-	ra_login_retry.pending = false;
 	ra_login_retry.next_time = 0;
 	ra_login_retry.notified_connecting = false;
+}
+
+/*****************************************************************************
+ * State accessor functions
+ *
+ * ra_get_conn_state() and ra_get_sync_state() are derived — they compute
+ * the current state from underlying flags on each call.
+ *
+ * ra_get_login_state() and ra_get_game_state() return the authoritative
+ * state variable directly (SM-4).
+ *
+ * Note: ra_get_conn_state() reads ra_probe_running which is protected by
+ * ra_probe_mutex, but the accessor is called from the main thread where
+ * a momentary stale read is harmless (the flags are re-checked under the
+ * lock when an actual transition is made).
+ *****************************************************************************/
+
+static RAConnState ra_get_conn_state(void) {
+	if (!RA_Offline_isOffline())
+		return CONN_ONLINE;
+	if (!ra_probe_running)
+		return CONN_OFFLINE_NO_PROBE;
+	if (ra_probe_abort)
+		return CONN_OFFLINE_PROBE_STOPPING;
+	return CONN_OFFLINE_PROBING;
+}
+
+static RALoginState ra_get_login_state(void) {
+	return ra_login_state;
+}
+
+static RAGameState ra_get_game_state(void) {
+	return ra_game_state;
+}
+
+static RASyncState ra_get_sync_state(void) {
+	if (RA_Offline_isSyncing()) {
+		if (ra_sync_abort)
+			return SYNC_ABORTING;
+		return SYNC_RUNNING;
+	}
+	/* sync results waiting for main thread to apply */
+	if (ra_sync_apply_pending)
+		return SYNC_APPLY_PENDING;
+	/* sync trigger deferred — waiting for game load */
+	if (ra_deferred_sync_pending)
+		return SYNC_DEFERRED;
+	return SYNC_IDLE;
+}
+
+/* Diagnostic: state → string for logging */
+static const char* ra_conn_state_str(RAConnState s) {
+	switch (s) {
+	case CONN_ONLINE:                return "CONN_ONLINE";
+	case CONN_OFFLINE_NO_PROBE:      return "CONN_OFFLINE_NO_PROBE";
+	case CONN_OFFLINE_PROBING:       return "CONN_OFFLINE_PROBING";
+	case CONN_OFFLINE_PROBE_STOPPING:return "CONN_OFFLINE_PROBE_STOPPING";
+	}
+	return "CONN_?";
+}
+static const char* ra_login_state_str(RALoginState s) {
+	switch (s) {
+	case LOGIN_IDLE:           return "LOGIN_IDLE";
+	case LOGIN_IN_PROGRESS:    return "LOGIN_IN_PROGRESS";
+	case LOGIN_RETRY_WAITING:  return "LOGIN_RETRY_WAITING";
+	case LOGIN_LOGGED_IN:      return "LOGIN_LOGGED_IN";
+	case LOGIN_FAILED:         return "LOGIN_FAILED";
+	}
+	return "LOGIN_?";
+}
+static const char* ra_game_state_str(RAGameState s) {
+	switch (s) {
+	case GAME_NONE:               return "GAME_NONE";
+	case GAME_PENDING_LOGIN:      return "GAME_PENDING_LOGIN";
+	case GAME_LOADING:            return "GAME_LOADING";
+	case GAME_LOADED:             return "GAME_LOADED";
+	case GAME_LOAD_RETRY_PENDING: return "GAME_LOAD_RETRY_PENDING";
+	}
+	return "GAME_?";
+}
+static const char* ra_sync_state_str(RASyncState s) {
+	switch (s) {
+	case SYNC_IDLE:          return "SYNC_IDLE";
+	case SYNC_DEFERRED:      return "SYNC_DEFERRED";
+	case SYNC_RUNNING:       return "SYNC_RUNNING";
+	case SYNC_ABORTING:      return "SYNC_ABORTING";
+	case SYNC_APPLY_PENDING: return "SYNC_APPLY_PENDING";
+	}
+	return "SYNC_?";
 }
 
 /*****************************************************************************
  * Helper: Start a login attempt
  *****************************************************************************/
 static void ra_start_login(void) {
+	ra_login_state = LOGIN_IN_PROGRESS;
 	RA_LOG_DEBUG("Attempting login (attempt %d/%d)...\n", 
 	       ra_login_retry.count + 1, RA_LOGIN_MAX_RETRIES);
 	rc_client_begin_login_with_token(ra_client,
@@ -467,31 +611,28 @@ static void ra_process_queued_responses(void) {
 /*****************************************************************************
  * Deferred state lifecycle
  *
- * ra_deferred_init / ra_deferred_quit manage the mutex that protects the
- * RADeferredState struct.  Called from RA_init / RA_quit alongside the
+ * ra_deferred_init / ra_deferred_quit manage the probe mutex and reset
+ * main-thread-only flags.  Called from RA_init / RA_quit alongside the
  * response-queue lifecycle.
  *****************************************************************************/
 
 static void ra_deferred_init(void) {
-	if (!ra_deferred.mutex) {
-		ra_deferred.mutex = SDL_CreateMutex();
+	if (!ra_probe_mutex) {
+		ra_probe_mutex = SDL_CreateMutex();
 	}
-	// Zero all flags (struct is already zero-initialized, but be explicit
-	// in case RA_init is called more than once in the process lifetime).
-	ra_deferred.offline_notification = false;
-	ra_deferred.online_notification = false;
-	ra_deferred.sync = false;
-	ra_deferred.hardcore_enable = false;
-	ra_deferred.hardcore_disable = false;
-	ra_deferred.sync_apply = false;
-	ra_deferred.sync_count = 0;
-	ra_deferred.user_saw_offline = false;
+	// Zero all main-thread-only flags (be explicit in case RA_init is
+	// called more than once in the process lifetime).
+	ra_deferred_offline_notification = false;
+	ra_deferred_sync_pending = false;
+	ra_user_saw_offline = false;
+	ra_sync_apply_pending = false;
+	ra_sync_apply_count = 0;
 }
 
 static void ra_deferred_quit(void) {
-	if (ra_deferred.mutex) {
-		SDL_DestroyMutex(ra_deferred.mutex);
-		ra_deferred.mutex = NULL;
+	if (ra_probe_mutex) {
+		SDL_DestroyMutex(ra_probe_mutex);
+		ra_probe_mutex = NULL;
 	}
 }
 
@@ -507,10 +648,8 @@ static void ra_get_mute_file_path(char* path, size_t path_size) {
  *****************************************************************************/
 static void ra_ensure_mute_dir(void) {
 	char dir_path[512];
-	snprintf(dir_path, sizeof(dir_path), SHARED_USERDATA_PATH "/.ra");
-	mkdir(dir_path, 0755);
 	snprintf(dir_path, sizeof(dir_path), SHARED_USERDATA_PATH "/.ra/muted");
-	mkdir(dir_path, 0755);
+	ra_mkdirs(dir_path);
 }
 
 /*****************************************************************************
@@ -648,36 +787,8 @@ static uint32_t ra_read_memory(uint32_t address, uint8_t* buffer, uint32_t num_b
 }
 
 /*****************************************************************************
- * Helpers: POST parameter extraction, achievement filtering
+ * Helpers: achievement filtering
  *****************************************************************************/
-
-/**
- * Extract a single-character parameter value from URL-encoded POST data.
- * For example, ra_get_post_param("r=login&u=foo", 'r', buf, 32) writes "login" to buf.
- * Returns true if found, false otherwise.
- */
-static bool ra_get_post_param(const char* post_data, char param_key,
-                              char* buf, size_t buf_size) {
-	if (!post_data || !buf || buf_size == 0) return false;
-	buf[0] = '\0';
-	
-	char needle[4] = { param_key, '=', '\0' };
-	const char* p = post_data;
-	while ((p = strstr(p, needle)) != NULL) {
-		if (p == post_data || *(p - 1) == '&') {
-			const char* val = p + 2;
-			const char* end = val;
-			while (*end && *end != '&') end++;
-			size_t len = (size_t)(end - val);
-			if (len >= buf_size) len = buf_size - 1;
-			memcpy(buf, val, len);
-			buf[len] = '\0';
-			return true;
-		}
-		p += 2;
-	}
-	return false;
-}
 
 /**
  * Returns true if this achievement should be hidden from the user.
@@ -708,15 +819,13 @@ static uint32_t ra_reapply_pending_unlocks(rc_client_t* client, const char* game
 	
 	RA_PendingUnlock* pending = NULL;
 	uint32_t pending_count = 0;
-	if (!RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count) ||
+	if (!RA_Offline_ledgerGetPendingByGameHash(game_hash, &pending, &pending_count) ||
 	    pending_count == 0 || !pending) {
 		return 0;
 	}
 	
 	uint32_t fixed = 0;
 	for (uint32_t i = 0; i < pending_count; i++) {
-		if (strcmp(pending[i].game_hash, game_hash) != 0) continue;
-		
 		const rc_client_achievement_t* ach =
 			rc_client_get_achievement_info(client, pending[i].achievement_id);
 		if (!ach) continue;
@@ -835,9 +944,9 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 		// (e.g., rate limit, invalid achievement) must NOT generate a SYNC_ACK
 		// or the unlock would be silently dropped from the ledger.
 		if (data->post_data && strstr(data->post_data, "r=awardachievement") &&
-		    strstr(body, "\"Success\":true")) {
+		    ra_find_json_bool(body, "Success") == 1) {
 				char a_buf[16] = {0};
-				if (ra_get_post_param(data->post_data, 'a', a_buf, sizeof(a_buf))) {
+				if (ra_extract_param(data->post_data, "a", a_buf, sizeof(a_buf))) {
 					uint32_t ach_id = (uint32_t)strtoul(a_buf, NULL, 10);
 					if (ach_id > 0) {
 						RA_LOG_INFO("[AWARD_HTTP] awardachievement SUCCESS for ach=%u\n", ach_id);
@@ -850,19 +959,12 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 						uint32_t unlock_timestamp = 0;  // 0 = "not found"
 						bool found_in_ledger = false;
 						{
-							RA_PendingUnlock* pending = NULL;
-							uint32_t pending_count = 0;
-							if (RA_Offline_ledgerGetPendingUnlocks(&pending, &pending_count)) {
-								for (uint32_t i = 0; i < pending_count; i++) {
-									if (pending[i].achievement_id == ach_id) {
-										unlock_timestamp = pending[i].timestamp;
-										found_in_ledger = true;
-										RA_LOG_DEBUG("[AWARD_HTTP] ach=%u: found in ledger, "
-										            "timestamp=%u\n", ach_id, unlock_timestamp);
-										break;
-									}
-								}
-								free(pending);
+							RA_PendingUnlock entry;
+							if (RA_Offline_ledgerFindPendingUnlock(ach_id, &entry)) {
+								unlock_timestamp = entry.timestamp;
+								found_in_ledger = true;
+								RA_LOG_DEBUG("[AWARD_HTTP] ach=%u: found in ledger, "
+								            "timestamp=%u\n", ach_id, unlock_timestamp);
 							}
 						}
 						
@@ -895,7 +997,7 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 		// Error case — network failure, timeout, DNS error, etc.
 		// Extract request type only (don't log full post_data — it may contain API tokens)
 		char err_rt_buf[32] = {0};
-		const char* err_rtype = ra_get_post_param(data->post_data, 'r', err_rt_buf, sizeof(err_rt_buf))
+		const char* err_rtype = ra_extract_param(data->post_data, "r", err_rt_buf, sizeof(err_rt_buf))
 		                        ? err_rt_buf : "unknown";
 		if (response && response->error) {
 			RA_LOG_ERROR("HTTP error for r=%s: %s\n", err_rtype, response->error);
@@ -920,7 +1022,7 @@ static void ra_http_callback(HTTP_Response* response, void* userdata) {
 			
 			// Extract game hash from request params
 			char game_hash[64] = {0};
-			ra_get_post_param(data->post_data, 'm', game_hash, sizeof(game_hash));
+			ra_extract_param(data->post_data, "m", game_hash, sizeof(game_hash));
 			
 			if (game_hash[0] && RA_Offline_patchStartsessionResponse(
 			        patched_body, patched_length, game_hash,
@@ -961,10 +1063,10 @@ static void ra_server_call(const rc_api_request_t* request,
 	(void)client; // unused
 	
 	// Offline mode: serve cached responses or return retryable errors
-	if (RA_Offline_isOffline()) {
+	if (ra_get_conn_state() != CONN_ONLINE) {
 		// Extract request type for logging and decision-making
 		char rt_buf[32] = {0};
-		const char* req_type = ra_get_post_param(request->post_data, 'r', rt_buf, sizeof(rt_buf))
+		const char* req_type = ra_extract_param(request->post_data, "r", rt_buf, sizeof(rt_buf))
 		                       ? rt_buf : NULL;
 		
 		// Try cache first — this handles login, gameid, achievementsets, startsession, patch
@@ -1023,7 +1125,7 @@ static void ra_server_call(const rc_api_request_t* request,
 			// Extra logging for awardachievement in offline mode
 			if (req_type && strcmp(req_type, "awardachievement") == 0) {
 				char offline_a_buf[16] = {0};
-				if (ra_get_post_param(request->post_data, 'a', offline_a_buf, sizeof(offline_a_buf))) {
+				if (ra_extract_param(request->post_data, "a", offline_a_buf, sizeof(offline_a_buf))) {
 					RA_LOG_INFO("[AWARD_GATE] OFFLINE retryable for ach=%s — "
 					            "rcheevos will retry when online\n", offline_a_buf);
 				}
@@ -1052,23 +1154,23 @@ static void ra_server_call(const rc_api_request_t* request,
 	//      entry was consumed but before sync finishes and compacts the ledger)
 	// In both cases, return a synthetic success so rcheevos clears its retry state.
 	char rt_buf[32] = {0};
-	const char* req_type = ra_get_post_param(request->post_data, 'r', rt_buf, sizeof(rt_buf))
+	const char* req_type = ra_extract_param(request->post_data, "r", rt_buf, sizeof(rt_buf))
 	                       ? rt_buf : NULL;
 	if (req_type && strcmp(req_type, "awardachievement") == 0) {
 		char a_buf[16] = {0};
-		if (ra_get_post_param(request->post_data, 'a', a_buf, sizeof(a_buf))) {
+		if (ra_extract_param(request->post_data, "a", a_buf, sizeof(a_buf))) {
 			uint32_t ach_id = (uint32_t)strtoul(a_buf, NULL, 10);
 			bool is_pending = (ach_id > 0) && RA_Offline_isUnlockPending(ach_id);
-			bool is_syncing = RA_Offline_isSyncing();
+			RASyncState sync = ra_get_sync_state();
 			
 			RA_LOG_DEBUG("[AWARD_GATE] ra_server_call: awardachievement ach=%u "
-			            "is_pending=%d is_syncing=%d\n",
-			            ach_id, is_pending, is_syncing);
+			            "is_pending=%d sync=%s\n",
+			            ach_id, is_pending, ra_sync_state_str(sync));
 			
-			if (ach_id > 0 && (is_pending || is_syncing)) {
+			if (ach_id > 0 && (is_pending || sync == SYNC_RUNNING || sync == SYNC_ABORTING)) {
 				RA_LOG_INFO("[AWARD_GATE] BLOCKED rcheevos award for ach=%u "
-				            "(pending=%d, syncing=%d) — sync engine handles submission\n",
-				            ach_id, is_pending, is_syncing);
+				            "(pending=%d, sync=%s) — sync engine handles submission\n",
+				            ach_id, is_pending, ra_sync_state_str(sync));
 				// Do NOT remove pending cache entry here — that's the sync engine's job.
 				// Removing it prematurely would open a window where a subsequent
 				// rcheevos retry slips through the is_pending check.
@@ -1082,8 +1184,8 @@ static void ra_server_call(const rc_api_request_t* request,
 			// Not blocked — this is either a genuinely online unlock or a retry
 			// after sync completed. Let it through to the real HTTP path.
 			RA_LOG_DEBUG("[AWARD_GATE] ALLOWED rcheevos award for ach=%u "
-			            "(pending=%d, syncing=%d) — sending to server\n",
-			            ach_id, is_pending, is_syncing);
+			            "(pending=%d, sync=%s) — sending to server\n",
+			            ach_id, is_pending, ra_sync_state_str(sync));
 		}
 	}
 	
@@ -1145,7 +1247,7 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		         event->achievement->title);
 		// Get the unlocked badge icon (not locked)
 		badge_icon = RA_Badges_getNotificationSize(event->achievement->badge_name, false);
-		Notification_push(RA_Offline_isOffline() ? NOTIFICATION_OFFLINE_ACHIEVEMENT : NOTIFICATION_ACHIEVEMENT,
+		Notification_push(ra_get_conn_state() != CONN_ONLINE ? NOTIFICATION_OFFLINE_ACHIEVEMENT : NOTIFICATION_ACHIEVEMENT,
 		                  message, badge_icon);
 		RA_LOG_INFO("[AWARD_TRIGGER] Achievement unlocked: %s (id=%u, points=%d, "
 		            "offline=%d, syncing=%d, time_now=%lld)\n",
@@ -1260,9 +1362,7 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		RA_Offline_setOffline(true);
 		// Force softcore when offline
 		rc_client_set_hardcore_enabled(client, 0);
-		SDL_LockMutex(ra_deferred.mutex);
-		ra_deferred.user_saw_offline = true;
-		SDL_UnlockMutex(ra_deferred.mutex);
+		ra_user_saw_offline = true;
 		// Start probe to detect when connectivity returns
 		ra_start_connectivity_probe();
 		break;
@@ -1289,9 +1389,7 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 				            "reconnect hardcore re-enable\n", fixed);
 			}
 		}
-		SDL_LockMutex(ra_deferred.mutex);
-		ra_deferred.user_saw_offline = false;
-		SDL_UnlockMutex(ra_deferred.mutex);
+		ra_user_saw_offline = false;
 		// Network is back — try syncing current game's ledger entries
 		{
 			const rc_client_game_t* g = rc_client_get_game_info(client);
@@ -1317,9 +1415,10 @@ static void ra_login_callback(int result, const char* error_message,
 	            error_message ? error_message : "(none)");
 	
 	if (result == RC_OK) {
-		// Success - reset retry state
-		ra_reset_login_state();
-		ra_logged_in = true;
+		// Success — transition to LOGGED_IN
+		ra_reset_login_retry();
+		ra_login_state = LOGIN_LOGGED_IN;
+		RA_LOG_DEBUG("[SM] Login: → %s\n", ra_login_state_str(ra_get_login_state()));
 		
 		const rc_client_user_t* user = rc_client_get_user_info(client);
 		RA_LOG_INFO("Logged in as %s (score: %u)\n",
@@ -1339,9 +1438,10 @@ static void ra_login_callback(int result, const char* error_message,
 			}
 		}
 		
-		// Check if we have a pending game to load
-		if (ra_pending_load.active) {
+		// Trigger deferred game load if one is pending
+		if (ra_game_state == GAME_PENDING_LOGIN) {
 			RA_LOG_DEBUG("Processing deferred game load: %s\n", ra_pending_load.rom_path);
+			ra_game_state = GAME_LOADING;
 			ra_do_load_game(ra_pending_load.rom_path, ra_pending_load.rom_data, 
 			                ra_pending_load.rom_size, ra_pending_load.emu_tag);
 			// Don't clear pending game yet — cleared on successful load in
@@ -1349,18 +1449,18 @@ static void ra_login_callback(int result, const char* error_message,
 			// miss), the pending info is preserved for retry.
 		}
 	} else {
-		// Failure - attempt retry or give up
-		ra_logged_in = false;
+		// Failure — schedule retry or give up
 		RA_LOG_ERROR("Login failed: %s\n", error_message ? error_message : "unknown error");
 		
 		if (ra_login_retry.count < RA_LOGIN_MAX_RETRIES) {
-			// Schedule retry
+			// Schedule retry — transition to RETRY_WAITING
 			uint32_t delay = ra_get_retry_delay_ms(ra_login_retry.count);
 			ra_login_retry.next_time = SDL_GetTicks() + delay;
-			ra_login_retry.pending = true;
 			ra_login_retry.count++;
+			ra_login_state = LOGIN_RETRY_WAITING;
 			
-			RA_LOG_DEBUG("Scheduling retry %d/%d in %ums\n", 
+			RA_LOG_DEBUG("[SM] Login: → %s (retry %d/%d in %ums)\n",
+			       ra_login_state_str(ra_get_login_state()),
 			       ra_login_retry.count, RA_LOGIN_MAX_RETRIES, delay);
 			
 			// Show "Connecting..." notification on first retry only
@@ -1370,12 +1470,16 @@ static void ra_login_callback(int result, const char* error_message,
 				                  "Connecting to RetroAchievements...", NULL);
 			}
 		} else {
-			// All retries exhausted
+			// All retries exhausted — transition to FAILED
+			ra_login_state = LOGIN_FAILED;
 			RA_LOG_ERROR("All login retries exhausted\n");
 			Notification_push(NOTIFICATION_ACHIEVEMENT, 
 			                  "RetroAchievements: Connection failed", NULL);
-			ra_reset_login_state();
-			ra_clear_pending_game();
+			ra_reset_login_retry();
+			if (ra_game_state == GAME_PENDING_LOGIN) {
+				ra_game_state = GAME_NONE;
+				ra_clear_pending_game();
+			}
 		}
 	}
 }
@@ -1436,24 +1540,11 @@ static void ra_prefetch_badges(rc_client_t* client) {
  * When online, replays pending offline achievement unlocks to the server.
  * Runs on a background thread with realistic timing between submissions
  * to avoid looking automated.
+ *
+ * State variables (ra_sync_thread, ra_sync_abort, ra_sync_game_id) are
+ * declared in the "Static state" section at the top of this file so that
+ * ra_get_sync_state() can reference them.
  *****************************************************************************/
-
-static SDL_Thread* ra_sync_thread = NULL;
-static volatile bool ra_sync_abort = false;
-static uint32_t ra_sync_game_id = 0;
-
-/**
- * Background-thread–safe interruptible sleep.
- * Uses SDL_Delay in small chunks, checking the abort flag between each.
- */
-static void ra_interruptible_sleep(uint32_t ms, volatile bool* abort_flag) {
-	uint32_t slept = 0;
-	while (slept < ms && !(*abort_flag)) {
-		uint32_t chunk = (ms - slept > 200) ? 200 : (ms - slept);
-		SDL_Delay(chunk);
-		slept += chunk;
-	}
-}
 
 
 /**
@@ -1466,38 +1557,26 @@ static int ra_sync_thread_func(void* data) {
 	RA_LOG_INFO("[SYNC_THREAD] Starting sync thread (game_id=%u, time_now=%lld)\n",
 	            ra_sync_game_id, (long long)time(NULL));
 	
-	// Reset deferred sync-apply state for this sync session
-	SDL_LockMutex(ra_deferred.mutex);
-	ra_deferred.sync_count = 0;
-	ra_deferred.sync_apply = false;
-	SDL_UnlockMutex(ra_deferred.mutex);
-	
 	// Snapshot achievement IDs that are pending BEFORE sync, so we can
 	// tell the main thread which ones were synced (after sync, the ledger
 	// may have been compacted and the records are gone).
+	// Snapshot pending unlocks filtered to the sync game (or all if game_id=0).
+	// This serves two purposes: (a) display_count for the notification, and
+	// (b) a pre-sync snapshot for post-sync diff to identify which achievements
+	// were synced.
 	RA_PendingUnlock* pre_unlocks = NULL;
 	uint32_t pre_count = 0;
-	RA_Offline_ledgerGetPendingUnlocks(&pre_unlocks, &pre_count);
+	RA_Offline_ledgerGetPendingByGameId(ra_sync_game_id, &pre_unlocks, &pre_count);
 	
-	RA_LOG_INFO("[SYNC_THREAD] Pre-sync snapshot: %u total pending unlocks\n", pre_count);
+	RA_LOG_INFO("[SYNC_THREAD] Pre-sync snapshot: %u pending unlocks (game_id=%u)\n",
+	            pre_count, ra_sync_game_id);
 	for (uint32_t i = 0; i < pre_count; i++) {
 		RA_LOG_INFO("[SYNC_THREAD]   pending[%u]: ach=%u game=%u timestamp=%u hash=%.8s\n",
 		            i, pre_unlocks[i].achievement_id, pre_unlocks[i].game_id,
 		            pre_unlocks[i].timestamp, pre_unlocks[i].game_hash);
 	}
 	
-	// Compute game-filtered count for the notification — when syncing a
-	// specific game we should only show the count for that game, not the
-	// total across all games.
 	uint32_t display_count = pre_count;
-	if (ra_sync_game_id != 0 && pre_unlocks && pre_count > 0) {
-		uint32_t game_count = 0;
-		for (uint32_t i = 0; i < pre_count; i++) {
-			if (pre_unlocks[i].game_id == ra_sync_game_id)
-				game_count++;
-		}
-		display_count = game_count;
-	}
 
 	// Show sync progress in top-left (same area as badge download notifications)
 	if (display_count > 0) {
@@ -1518,17 +1597,20 @@ static int ra_sync_thread_func(void* data) {
 	            result.synced, result.skipped, result.failed, result.total,
 	            (long long)time(NULL));
 	
-	// Store synced achievement IDs for deferred main-thread state update.
+	// Post synced achievement IDs to the FSM event queue for the main thread.
 	// We know that RA_Sync_syncAll processes unlocks in order from the
 	// pending list, and synced + skipped + failed <= total. The first
 	// (synced + skipped) entries in our pre-snapshot were processed.
 	// We collect the IDs that match the game filter and were successfully
 	// synced so the main thread can update rcheevos unlock bits.
 	if (result.synced > 0 && pre_unlocks && pre_count > 0) {
-		SDL_LockMutex(ra_deferred.mutex);
+		RAEvent sync_ev;
+		memset(&sync_ev, 0, sizeof(sync_ev));
+		sync_ev.type = RA_EV_SYNC_DONE;
+		
 		uint32_t idx = 0;
 		uint32_t processed = 0;
-		for (uint32_t i = 0; i < pre_count && idx < RA_MAX_DEFERRED_SYNC_IDS; i++) {
+		for (uint32_t i = 0; i < pre_count && idx < RA_FSM_MAX_SYNC_IDS; i++) {
 			// Skip entries that don't match the game filter
 			if (ra_sync_game_id != 0 && pre_unlocks[i].game_id != ra_sync_game_id)
 				continue;
@@ -1543,14 +1625,13 @@ static int ra_sync_thread_func(void* data) {
 			// just store all IDs up to result.synced count.
 			processed++;
 			if (processed <= result.synced) {
-				ra_deferred.sync_ids[idx] = pre_unlocks[i].achievement_id;
-				ra_deferred.sync_timestamps[idx] = pre_unlocks[i].timestamp;
+				sync_ev.data.sync_done.ids[idx] = pre_unlocks[i].achievement_id;
+				sync_ev.data.sync_done.timestamps[idx] = pre_unlocks[i].timestamp;
 				idx++;
 			}
 		}
-		ra_deferred.sync_count = idx;
-		ra_deferred.sync_apply = true;
-		SDL_UnlockMutex(ra_deferred.mutex);
+		sync_ev.data.sync_done.count = idx;
+		RA_FSM_post(&sync_ev);
 	}
 	
 	free(pre_unlocks);
@@ -1580,11 +1661,7 @@ static int ra_sync_thread_func(void* data) {
 	// so connectivity can be re-verified and sync retried
 	if (result.failed > 0) {
 		RA_Offline_setOffline(true);
-		SDL_LockMutex(ra_deferred.mutex);
-		ra_deferred.user_saw_offline = true;
-		ra_deferred.offline_notification = true;
-		ra_deferred.hardcore_disable = true;
-		SDL_UnlockMutex(ra_deferred.mutex);
+		RA_FSM_post_signal(RA_EV_SYNC_FAILED);
 		ra_start_connectivity_probe();
 	}
 	
@@ -1601,17 +1678,19 @@ static int ra_sync_thread_func(void* data) {
  * @param game_id  Game to sync (0 = sync all games).
  */
 static void ra_start_offline_sync(uint32_t game_id) {
+	RAConnState conn = ra_get_conn_state();
+	RASyncState sync = ra_get_sync_state();
 	RA_LOG_INFO("[SYNC_START] ra_start_offline_sync called: game_id=%u, "
-	            "offline=%d, syncing=%d, time_now=%lld\n",
-	            game_id, RA_Offline_isOffline(), RA_Offline_isSyncing(),
+	            "conn=%s, sync=%s, time_now=%lld\n",
+	            game_id, ra_conn_state_str(conn), ra_sync_state_str(sync),
 	            (long long)time(NULL));
 	
-	if (RA_Offline_isOffline()) {
-		RA_LOG_DEBUG("Sync: skipped (offline mode active)\n");
+	if (conn != CONN_ONLINE) {
+		RA_LOG_DEBUG("Sync: skipped (%s)\n", ra_conn_state_str(conn));
 		return;
 	}
-	if (RA_Offline_isSyncing()) {
-		RA_LOG_DEBUG("Sync: skipped (already syncing)\n");
+	if (sync == SYNC_RUNNING || sync == SYNC_ABORTING) {
+		RA_LOG_DEBUG("Sync: skipped (%s)\n", ra_sync_state_str(sync));
 		return;
 	}
 	
@@ -1628,13 +1707,18 @@ static void ra_start_offline_sync(uint32_t game_id) {
 	ra_sync_abort = false;
 	ra_sync_game_id = game_id;
 	RA_Offline_setSyncing(true);
+	
+	/* If a previous sync thread exited but we still hold the handle,
+	 * join it to release SDL resources before creating a new one. */
+	if (ra_sync_thread) {
+		SDL_WaitThread(ra_sync_thread, NULL);
+		ra_sync_thread = NULL;
+	}
+	
 	ra_sync_thread = SDL_CreateThread(ra_sync_thread_func, "ra_sync", NULL);
 	if (!ra_sync_thread) {
 		RA_LOG_ERROR("Failed to create sync thread\n");
 		RA_Offline_setSyncing(false);
-	} else {
-		SDL_DetachThread(ra_sync_thread);
-		ra_sync_thread = NULL;
 	}
 }
 
@@ -1667,10 +1751,14 @@ static int ra_connectivity_probe_func(void* data) {
 	
 	if (!username || !token || strlen(username) == 0 || strlen(token) == 0) {
 		RA_LOG_ERROR("Probe: no credentials available, exiting\n");
+		RA_FSM_post_signal(RA_EV_PROBE_STOPPED);
+		SDL_LockMutex(ra_probe_mutex);
 		ra_probe_running = false;
+		SDL_UnlockMutex(ra_probe_mutex);
 		return 1;
 	}
 	
+	bool probe_succeeded = false;
 	while (!ra_probe_abort) {
 		// Build login request via rcheevos API
 		rc_api_login_request_t login_params;
@@ -1685,7 +1773,10 @@ static int ra_connectivity_probe_func(void* data) {
 		if (rc != RC_OK) {
 			RA_LOG_ERROR("Probe: failed to build login request (rc=%d)\n", rc);
 			rc_api_destroy_request(&request);
+			RA_FSM_post_signal(RA_EV_PROBE_STOPPED);
+			SDL_LockMutex(ra_probe_mutex);
 			ra_probe_running = false;
+			SDL_UnlockMutex(ra_probe_mutex);
 			return 1;
 		}
 		
@@ -1698,8 +1789,8 @@ static int ra_connectivity_probe_func(void* data) {
 		bool success = false;
 		if (http_resp && http_resp->http_status == 200 &&
 		    http_resp->data && http_resp->size > 0) {
-			// Check for "Success":true in response
-			if (strstr(http_resp->data, "\"Success\":true")) {
+			// Check for "Success":true in response (handles optional space)
+			if (ra_find_json_bool(http_resp->data, "Success") == 1) {
 				// Extract server username from AvatarUrl in JSON response.
 				CFG_setRAServerUsernameFromAvatarUrl(http_resp->data);
 				if (strlen(CFG_getRAServerUsername()) > 0) {
@@ -1714,29 +1805,29 @@ static int ra_connectivity_probe_func(void* data) {
 				// Flip to online mode
 				RA_Offline_setOffline(false);
 				
-				RA_LOG_INFO("[CONNECTIVITY] Probe: connectivity restored, "
-				            "flipping to online (time_now=%lld)\n",
+				RA_LOG_INFO("[SM] Conn: → CONN_ONLINE (probe success, time_now=%lld)\n",
 				            (long long)time(NULL));
 				
-				// Set deferred flags for main thread to handle.
-				// If the offline notification hasn't been displayed yet
-				// (still deferred), cancel it — the user never saw "Offline"
-				// so showing "Connected" would also be meaningless noise.
-				SDL_LockMutex(ra_deferred.mutex);
-				if (ra_deferred.offline_notification) {
-					ra_deferred.offline_notification = false;
-					RA_LOG_INFO("Probe: cancelled pending offline notification (connectivity arrived in time)\n");
-					// Don't set online_notification — user never saw offline
-				} else {
-					ra_deferred.online_notification = true;
+				// Post event for main thread.  The event payload carries
+				// whether hardcore should be re-enabled and whether the
+				// offline notification was still pending (so the main
+				// thread can decide to suppress both offline + online toasts).
+				{
+					bool hc_enable = CFG_getRAHardcoreMode();
+					RAEvent ev;
+					memset(&ev, 0, sizeof(ev));
+					ev.type = RA_EV_PROBE_ONLINE;
+					ev.data.probe_online.hardcore_enable = hc_enable;
+					/* The main thread checks ra_deferred_offline_notification
+					 * directly — the probe can't safely read a main-thread-only
+					 * flag, so we always set offline_notif_cancel = false here.
+					 * The main thread determines if the cancel applies. */
+					ev.data.probe_online.offline_notif_cancel = false;
+					RA_FSM_post(&ev);
 				}
-				ra_deferred.sync = true;
-				if (CFG_getRAHardcoreMode()) {
-					ra_deferred.hardcore_enable = true;
-				}
-				SDL_UnlockMutex(ra_deferred.mutex);
 				
 				success = true;
+				probe_succeeded = true;
 				RA_LOG_INFO("Probe: login successful, transitioning to online mode\n");
 			} else {
 				RA_LOG_WARN("Probe: server returned 200 but Success!=true\n");
@@ -1755,51 +1846,73 @@ static int ra_connectivity_probe_func(void* data) {
 	}
 	
 	RA_LOG_INFO("Connectivity probe exiting\n");
+	// Post stopped event if we didn't already post PROBE_ONLINE
+	if (!probe_succeeded) {
+		RA_FSM_post_signal(RA_EV_PROBE_STOPPED);
+	}
+	SDL_LockMutex(ra_probe_mutex);
 	ra_probe_running = false;
+	SDL_UnlockMutex(ra_probe_mutex);
 	return 0;
 }
 
 /**
  * Start the connectivity probe thread (if not already running).
+ *
+ * Called from both the main thread and the sync background thread, so
+ * the check-and-set of ra_probe_running is protected by ra_probe_mutex
+ * to prevent a TOCTOU race that could launch duplicate probe threads.
  */
 static void ra_start_connectivity_probe(void) {
+	/* Atomically check-and-set probe state under ra_probe_mutex.
+	 * The lock must NOT be held across SDL_WaitThread/SDL_CreateThread
+	 * because the probe thread itself locks ra_probe_mutex at exit. */
+	SDL_LockMutex(ra_probe_mutex);
 	if (ra_probe_running) {
+		SDL_UnlockMutex(ra_probe_mutex);
 		RA_LOG_DEBUG("Probe: already running, not starting another\n");
 		return;
 	}
-	
 	ra_probe_abort = false;
 	ra_probe_running = true;
+	SDL_UnlockMutex(ra_probe_mutex);
 	
-	SDL_Thread* thread = SDL_CreateThread(ra_connectivity_probe_func, "ra_probe", NULL);
-	if (!thread) {
+	/* If a previous probe thread exited but we still hold the handle, join it
+	 * to release SDL resources before creating a new one. */
+	if (ra_probe_thread) {
+		SDL_WaitThread(ra_probe_thread, NULL);
+		ra_probe_thread = NULL;
+	}
+	
+	ra_probe_thread = SDL_CreateThread(ra_connectivity_probe_func, "ra_probe", NULL);
+	if (!ra_probe_thread) {
 		RA_LOG_ERROR("Failed to create connectivity probe thread\n");
+		SDL_LockMutex(ra_probe_mutex);
 		ra_probe_running = false;
+		SDL_UnlockMutex(ra_probe_mutex);
 		return;
 	}
 	
-	SDL_DetachThread(thread);
 	RA_LOG_INFO("Connectivity probe thread launched\n");
 }
 
 /**
  * Stop the connectivity probe thread (if running).
- * Blocks up to ~1s waiting for the thread to exit.
+ * Joins the thread to ensure it has fully exited before returning.
+ * May block up to HTTP_TIMEOUT_SECS (30s) while an in-flight request completes.
  */
 static void ra_stop_connectivity_probe(void) {
-	if (!ra_probe_running) return;
+	if (!ra_probe_thread) return;
 	
 	RA_LOG_DEBUG("Stopping connectivity probe...\n");
 	ra_probe_abort = true;
 	
-	// Wait for thread to notice and exit (up to 1 second)
-	for (int i = 0; i < 20 && ra_probe_running; i++) {
-		SDL_Delay(50);
-	}
-	
-	if (ra_probe_running) {
-		RA_LOG_WARN("Probe thread did not exit within 1s, proceeding anyway\n");
-	}
+	SDL_WaitThread(ra_probe_thread, NULL);
+	ra_probe_thread = NULL;
+	SDL_LockMutex(ra_probe_mutex);
+	ra_probe_running = false;
+	SDL_UnlockMutex(ra_probe_mutex);
+	RA_LOG_DEBUG("Connectivity probe thread joined\n");
 }
 
 /*****************************************************************************
@@ -1815,7 +1928,8 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 	
 	if (result == RC_OK) {
 		const rc_client_game_t* game = rc_client_get_game_info(client);
-		ra_game_loaded = true;
+		ra_game_state = GAME_LOADED;
+		RA_LOG_DEBUG("[SM] Game: → %s\n", ra_game_state_str(ra_get_game_state()));
 		
 		// Game loaded successfully — clear pending load info (no longer needed
 		// for retry).  Must happen before any early returns below.
@@ -1859,18 +1973,18 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 			                  "No achievements found for this game", NULL);
 		}
 	} else {
-		ra_game_loaded = false;
 		RA_LOG_ERROR("Game load failed: %s\n", error_message ? error_message : "unknown error");
 		
 		// If we're offline, the failure is likely a cache miss for game data
 		// (gameid/achievementsets/patch). Schedule a retry when connectivity
 		// is restored — don't show "no achievements" since it's transient.
-		if (RA_Offline_isOffline()) {
-			SDL_LockMutex(ra_deferred.mutex);
-			ra_deferred.game_load_retry = true;
-			SDL_UnlockMutex(ra_deferred.mutex);
+		if (ra_get_conn_state() != CONN_ONLINE) {
+			ra_game_state = GAME_LOAD_RETRY_PENDING;
 			RA_LOG_INFO("Game load failed while offline — will retry on connectivity restore\n");
 		} else {
+			// Genuine failure while online — clear pending load data (T7 fix)
+			ra_game_state = GAME_NONE;
+			ra_clear_pending_game();
 			Notification_push(NOTIFICATION_ACHIEVEMENT,
 			                  "No achievements found for this game", NULL);
 		}
@@ -1892,6 +2006,9 @@ void RA_init(void) {
 		RA_LOG_INFO("Already initialized, returning early\n");
 		return;
 	}
+	
+	// Initialize the FSM event queue (before any threads can post events)
+	RA_FSM_init();
 	
 	// Initialize offline subsystem (always, regardless of WiFi state)
 	RA_Offline_init(SHARED_USERDATA_PATH);
@@ -1966,9 +2083,7 @@ void RA_init(void) {
 	if (start_offline) {
 		RA_LOG_INFO("Initializing in offline mode (softcore only)...\n");
 		// Defer notification — Notification_init() hasn't been called yet at this point
-		SDL_LockMutex(ra_deferred.mutex);
-		ra_deferred.offline_notification = true;
-		SDL_UnlockMutex(ra_deferred.mutex);
+		ra_deferred_offline_notification = true;
 	} else {
 		RA_LOG_INFO("Initializing in online mode...\n");
 	}
@@ -2008,20 +2123,23 @@ void RA_init(void) {
 	
 	// Configure hardcore mode from settings
 	// Force softcore when offline
-	if (RA_Offline_isOffline()) {
+	if (ra_get_conn_state() != CONN_ONLINE) {
 		rc_client_set_hardcore_enabled(ra_client, 0);
 	} else {
 		rc_client_set_hardcore_enabled(ra_client, CFG_getRAHardcoreMode() ? 1 : 0);
 	}
 	
-	// Reset login state before attempting
-	ra_reset_login_state();
+	// Reset login/game state before attempting
+	ra_login_state = LOGIN_IDLE;
+	ra_game_state = GAME_NONE;
+	ra_reset_login_retry();
 	
 	// Attempt login with stored token
 	RA_LOG_INFO("Credentials check: authenticated=%d, token_len=%zu, username=%s\n",
 	            CFG_getRAAuthenticated(), strlen(CFG_getRAToken()), CFG_getRAUsername());
 	if (CFG_getRAAuthenticated() && strlen(CFG_getRAToken()) > 0) {
-		RA_LOG_INFO("Logging in with stored token (offline=%d)...\n", RA_Offline_isOffline());
+		RA_LOG_INFO("Logging in with stored token (conn=%s)...\n",
+		            ra_conn_state_str(ra_get_conn_state()));
 		ra_start_login();
 		
 		// Launch connectivity probe if we started offline with a cached login
@@ -2031,27 +2149,39 @@ void RA_init(void) {
 	} else {
 		RA_LOG_WARN("No stored token - user needs to authenticate in settings\n");
 	}
-	RA_LOG_INFO("RA_init() complete\n");
+	RA_LOG_INFO("RA_init() complete — conn=%s login=%s game=%s sync=%s\n",
+	            ra_conn_state_str(ra_get_conn_state()),
+	            ra_login_state_str(ra_get_login_state()),
+	            ra_game_state_str(ra_get_game_state()),
+	            ra_sync_state_str(ra_get_sync_state()));
 }
 
 void RA_quit(void) {
-	// Abort connectivity probe
+	// Abort connectivity probe (first pass — may be restarted by sync thread)
 	ra_stop_connectivity_probe();
 	
-	// Abort any running sync
-	if (RA_Offline_isSyncing()) {
-		RA_LOG_INFO("Aborting offline sync for shutdown\n");
+	// Abort any running sync — join the thread to avoid use-after-free
+	if (ra_sync_thread) {
+		RA_LOG_INFO("Joining sync thread for shutdown\n");
 		ra_sync_abort = true;
-		for (int i = 0; i < 20 && RA_Offline_isSyncing(); i++) {
-			SDL_Delay(50);
-		}
+		SDL_WaitThread(ra_sync_thread, NULL);
+		ra_sync_thread = NULL;
+		RA_LOG_DEBUG("Sync thread joined\n");
 	}
+	
+	// Stop probe again in case the sync thread restarted it on failure
+	ra_stop_connectivity_probe();
+	
+	// Shut down the FSM event queue (all threads are joined, drain any leftovers)
+	RA_FSM_quit();
 	
 	// Clear any pending game data
 	ra_clear_pending_game();
 	
-	// Reset login retry state
-	ra_reset_login_state();
+	// Reset login/game state
+	ra_login_state = LOGIN_IDLE;
+	ra_game_state = GAME_NONE;
+	ra_reset_login_retry();
 	
 	// Clean up badge cache
 	RA_Badges_quit();
@@ -2086,9 +2216,6 @@ void RA_quit(void) {
 	
 	// Shut down offline subsystem (after everything else)
 	RA_Offline_shutdown();
-	
-	ra_game_loaded = false;
-	ra_logged_in = false;
 }
 
 void RA_setMemoryAccessors(RA_GetMemoryFunc get_data, RA_GetMemorySizeFunc get_size) {
@@ -2239,14 +2366,15 @@ static void ra_do_load_game(const char* rom_path, const uint8_t* rom_data, size_
 }
 
 void RA_loadGame(const char* rom_path, const uint8_t* rom_data, size_t rom_size, const char* emu_tag) {
-	RA_LOG_INFO("RA_loadGame: client=%p, RAEnable=%d, logged_in=%d, path=%s\n",
-	            (void*)ra_client, CFG_getRAEnable(), ra_logged_in, rom_path);
+	RA_LOG_INFO("RA_loadGame: client=%p, RAEnable=%d, login=%s, path=%s\n",
+	            (void*)ra_client, CFG_getRAEnable(),
+	            ra_login_state_str(ra_get_login_state()), rom_path);
 	if (!ra_client || !CFG_getRAEnable()) {
 		return;
 	}
 	
 	// If not logged in yet, store the game info for deferred loading
-	if (!ra_logged_in) {
+	if (ra_get_login_state() != LOGIN_LOGGED_IN) {
 		RA_LOG_DEBUG("Login in progress - deferring game load for: %s\n", rom_path);
 		
 		// Clear any previous pending game
@@ -2273,10 +2401,12 @@ void RA_loadGame(const char* rom_path, const uint8_t* rom_data, size_t rom_size,
 		}
 		
 		ra_pending_load.active = true;
+		ra_game_state = GAME_PENDING_LOGIN;
 		return;
 	}
 	
 	// Already logged in - load immediately
+	ra_game_state = GAME_LOADING;
 	ra_do_load_game(rom_path, rom_data, rom_size, emu_tag);
 }
 
@@ -2285,17 +2415,17 @@ void RA_unloadGame(void) {
 		return;
 	}
 	
-	if (ra_game_loaded) {
+	if (ra_game_state == GAME_LOADED) {
 		RA_LOG_INFO("Unloading game\n");
 		
 		// Abort connectivity probe and sync before unloading
 		ra_stop_connectivity_probe();
 		
-		if (RA_Offline_isSyncing()) {
+		if (ra_get_sync_state() == SYNC_RUNNING) {
 			RA_LOG_INFO("Aborting offline sync for game unload\n");
 			ra_sync_abort = true;
 			// Give sync thread time to notice the abort
-			for (int i = 0; i < 10 && RA_Offline_isSyncing(); i++) {
+			for (int i = 0; i < 10 && ra_get_sync_state() != SYNC_IDLE; i++) {
 				SDL_Delay(50);
 			}
 		}
@@ -2326,100 +2456,42 @@ void RA_unloadGame(void) {
 		// freed in RA_quit() or overwritten in RA_setMemoryMap().
 		
 		rc_client_unload_game(ra_client);
-		ra_game_loaded = false;
 	}
 	
-	// Clear any pending game load retry and pending load data.
-	// If the user exits the game while a retry is pending, we must not
-	// retry loading a game that's no longer active.
+	// Clear any pending game data and reset game state.
+	// Handles all game states: PENDING_LOGIN, LOADING, LOAD_RETRY_PENDING, etc.
 	ra_clear_pending_game();
-	SDL_LockMutex(ra_deferred.mutex);
-	ra_deferred.game_load_retry = false;
-	SDL_UnlockMutex(ra_deferred.mutex);
+	ra_game_state = GAME_NONE;
 }
 
 /**
- * Process deferred state transition flags set by background threads.
- * Called periodically from RA_doFrame() (~every 500ms) and from RA_idle().
- * Handles: offline/online notifications, hardcore re-enable, sync trigger,
- * and login retry scheduling.
+ * Named action: handle probe-online event.
+ *
+ * The connectivity probe confirmed we're back online.  This triggers:
+ * - Cancel pending offline notification if user hasn't seen it yet
+ * - Otherwise mark the online transition for UI
+ * - Re-enable hardcore mode if configured
+ * - Trigger sync of pending offline unlocks
  */
-static void ra_process_deferred_flags(void) {
-	// --- Snapshot: copy all deferred flags under the lock, then reset them ---
-	bool snap_offline_notification = false;
-	bool snap_online_notification = false;
-	bool snap_sync = false;
-	bool snap_hardcore_enable = false;
-	bool snap_hardcore_disable = false;
-	bool snap_sync_apply = false;
-	bool snap_user_saw_offline = false;
-	bool snap_game_load_retry = false;
-	uint32_t snap_sync_ids[RA_MAX_DEFERRED_SYNC_IDS];
-	uint32_t snap_sync_timestamps[RA_MAX_DEFERRED_SYNC_IDS];
-	uint32_t snap_sync_count = 0;
+static void action_probe_online(const RAEvent* ev) {
+	RA_LOG_INFO("[SM] action_probe_online: hardcore=%d\n",
+	            ev->data.probe_online.hardcore_enable);
 	
-	SDL_LockMutex(ra_deferred.mutex);
-	
-	snap_offline_notification = ra_deferred.offline_notification;
-	snap_online_notification = ra_deferred.online_notification;
-	snap_sync = ra_deferred.sync;
-	snap_hardcore_enable = ra_deferred.hardcore_enable;
-	snap_hardcore_disable = ra_deferred.hardcore_disable;
-	snap_sync_apply = ra_deferred.sync_apply;
-	snap_user_saw_offline = ra_deferred.user_saw_offline;
-	snap_game_load_retry = ra_deferred.game_load_retry;
-	snap_sync_count = ra_deferred.sync_count;
-	if (snap_sync_apply && snap_sync_count > 0) {
-		memcpy(snap_sync_ids, ra_deferred.sync_ids,
-		       snap_sync_count * sizeof(uint32_t));
-		memcpy(snap_sync_timestamps, ra_deferred.sync_timestamps,
-		       snap_sync_count * sizeof(uint32_t));
+	// If the deferred offline notification hasn't been shown yet, cancel it.
+	// The user never saw "Offline" so showing "Connected" is meaningless noise.
+	if (ra_deferred_offline_notification) {
+		ra_deferred_offline_notification = false;
+		RA_LOG_INFO("Probe: cancelled pending offline notification "
+		            "(connectivity arrived in time)\n");
+	} else {
+		ra_user_saw_offline = false;
 	}
 	
-	// Reset all consumed flags while still holding the lock
-	ra_deferred.offline_notification = false;
-	ra_deferred.online_notification = false;
-	ra_deferred.sync = false;
-	ra_deferred.hardcore_enable = false;
-	ra_deferred.hardcore_disable = false;
-	ra_deferred.sync_apply = false;
-	ra_deferred.game_load_retry = false;
-	if (snap_sync_apply) {
-		ra_deferred.sync_count = 0;
-	}
-	// Update user_saw_offline based on the transitions we're about to process
-	if (snap_offline_notification) {
-		ra_deferred.user_saw_offline = true;
-	}
-	if (snap_online_notification && snap_user_saw_offline) {
-		ra_deferred.user_saw_offline = false;
-	}
-	
-	SDL_UnlockMutex(ra_deferred.mutex);
-	
-	// --- Process the snapshot without holding the lock ---
-	
-	// Process deferred offline flag (Notification_init() wasn't ready during RA_init())
-	if (snap_offline_notification) {
-		// user_saw_offline was already set inside the lock above
-	}
-	
-	// Handle deferred online transition (set by connectivity probe thread)
-	if (snap_online_notification) {
-		// user_saw_offline was already cleared inside the lock above
-	}
-	
-	if (snap_hardcore_enable) {
+	// Re-enable hardcore if configured
+	if (ev->data.probe_online.hardcore_enable) {
 		if (ra_client && CFG_getRAHardcoreMode()) {
 			rc_client_set_hardcore_enabled(ra_client, 1);
 			RA_LOG_INFO("Hardcore re-enabled after online transition\n");
-			// rc_client_set_hardcore_enabled() sets waiting_for_reset=1 which
-			// blocks rc_client_do_frame() from processing any achievements.
-			// We must call rc_client_reset() to acknowledge the reset and
-			// clear the flag.  This also resets all active triggers to their
-			// initial state, which is fine because ra_reapply_pending_unlocks
-			// (below) will re-mark pending achievements as UNLOCKED and set
-			// their triggers to TRIGGERED, preventing re-fire.
 			rc_client_reset(ra_client);
 			RA_LOG_DEBUG("rc_client_reset complete (cleared waiting_for_reset)\n");
 			uint32_t fixed = ra_reapply_pending_unlocks(ra_client, ra_game_hash);
@@ -2429,55 +2501,130 @@ static void ra_process_deferred_flags(void) {
 			}
 		}
 	}
-	if (snap_hardcore_disable) {
-		if (ra_client) {
-			rc_client_set_hardcore_enabled(ra_client, 0);
-			RA_LOG_INFO("Hardcore disabled after sync failure (offline mode)\n");
+	
+	// Trigger sync — deferred until game is loaded
+	ra_deferred_sync_pending = true;
+}
+
+/**
+ * Named action: handle sync-done event.
+ *
+ * The sync thread successfully synced achievements with the server.
+ * Store the results for application to rcheevos state.
+ */
+static void action_sync_done(const RAEvent* ev) {
+	RA_LOG_INFO("[SM] action_sync_done: count=%u\n", ev->data.sync_done.count);
+	
+	ra_sync_apply_pending = true;
+	ra_sync_apply_count = ev->data.sync_done.count;
+	if (ev->data.sync_done.count > 0) {
+		memcpy(ra_sync_apply_ids, ev->data.sync_done.ids,
+		       ev->data.sync_done.count * sizeof(uint32_t));
+		memcpy(ra_sync_apply_timestamps, ev->data.sync_done.timestamps,
+		       ev->data.sync_done.count * sizeof(uint32_t));
+	}
+}
+
+/**
+ * Named action: handle sync-failed event.
+ *
+ * The sync thread encountered failures.  Device goes back to offline mode:
+ * - Show offline notification
+ * - Disable hardcore
+ * - Mark user as having seen offline state
+ */
+static void action_sync_failed(const RAEvent* ev) {
+	(void)ev;
+	RA_LOG_WARN("[SM] action_sync_failed: reverting to offline mode\n");
+	
+	ra_user_saw_offline = true;
+	ra_deferred_offline_notification = true;
+	
+	if (ra_client) {
+		rc_client_set_hardcore_enabled(ra_client, 0);
+		RA_LOG_INFO("Hardcore disabled after sync failure (offline mode)\n");
+	}
+}
+
+/**
+ * Process FSM events and deferred main-thread state.
+ *
+ * Called periodically from RA_doFrame() (~every 500ms) and from RA_idle().
+ * Drains the FSM event queue (populated by background threads), then
+ * processes main-thread-only deferred flags (offline notification,
+ * sync pending, sync apply, login retry, game load retry).
+ */
+static void ra_process_deferred_flags(void) {
+	// --- Phase 1: Drain FSM event queue and dispatch to action functions ---
+	{
+		RAEvent ev_buf[RA_FSM_QUEUE_CAPACITY];
+		uint32_t ev_count = RA_FSM_drain(ev_buf, RA_FSM_QUEUE_CAPACITY);
+		
+		for (uint32_t i = 0; i < ev_count; i++) {
+			const RAEvent* ev = &ev_buf[i];
+			switch (ev->type) {
+			case RA_EV_PROBE_ONLINE:
+				action_probe_online(ev);
+				break;
+			case RA_EV_PROBE_STOPPED:
+				RA_LOG_DEBUG("[SM] Probe stopped (abort or failure)\n");
+				break;
+			case RA_EV_SYNC_DONE:
+				action_sync_done(ev);
+				break;
+			case RA_EV_SYNC_FAILED:
+				action_sync_failed(ev);
+				break;
+			default:
+				RA_LOG_WARN("[SM] Unknown event type %d\n", ev->type);
+				break;
+			}
 		}
 	}
-	if (snap_sync) {
-		RA_LOG_INFO("[DEFERRED] snap_sync=true, game_loaded=%d, time_now=%lld\n",
-		            ra_game_loaded, (long long)time(NULL));
+	
+	// --- Phase 2: Process main-thread-only deferred state ---
+	
+	// Deferred offline notification (set at RA_init or by sync failure)
+	if (ra_deferred_offline_notification) {
+		ra_user_saw_offline = true;
+		ra_deferred_offline_notification = false;
+	}
+	
+	// Deferred sync trigger (set by probe-online action)
+	if (ra_deferred_sync_pending) {
+		RAGameState gs = ra_get_game_state();
+		RA_LOG_INFO("[DEFERRED] sync_pending=true, game=%s, time_now=%lld\n",
+		            ra_game_state_str(gs), (long long)time(NULL));
 		// Don't start sync until the game is loaded — the sync thread will
 		// compact the ledger when done, which removes pending records needed
 		// by startsession patching and ra_reapply_pending_unlocks. If we sync
 		// before the game loads, those records are gone before rcheevos can
 		// use them, causing the just-synced achievement to appear locked.
-		if (!ra_game_loaded) {
-			SDL_LockMutex(ra_deferred.mutex);
-			ra_deferred.sync = true;  // Put it back for next cycle
-			SDL_UnlockMutex(ra_deferred.mutex);
-		} else {
+		if (gs == GAME_LOADED) {
+			ra_deferred_sync_pending = false;
 			const rc_client_game_t* g = rc_client_get_game_info(ra_client);
 			ra_start_offline_sync(g ? g->id : 0);
 		}
+		// else: stays pending until game loads
 	}
 	
 	// Apply synced achievement unlock state to rcheevos.
 	// The sync thread confirmed these achievements with the RA server; now we
 	// update rcheevos' internal unlock bits so the achievement list and summary
 	// reflect the correct state without needing to restart the game.
-	if (snap_sync_apply) {
+	if (ra_sync_apply_pending) {
 		// If the game isn't loaded yet, rcheevos doesn't have achievement data
-		// so we can't update unlock bits. Put the flags back for next cycle.
-		if (!ra_game_loaded) {
-			SDL_LockMutex(ra_deferred.mutex);
-			ra_deferred.sync_apply = true;
-			ra_deferred.sync_count = snap_sync_count;
-			memcpy(ra_deferred.sync_ids, snap_sync_ids,
-			       snap_sync_count * sizeof(uint32_t));
-			memcpy(ra_deferred.sync_timestamps, snap_sync_timestamps,
-			       snap_sync_count * sizeof(uint32_t));
-			SDL_UnlockMutex(ra_deferred.mutex);
-		} else if (ra_client) {
+		// so we can't update unlock bits. Keep pending until game loads.
+		if (ra_get_game_state() == GAME_LOADED && ra_client) {
+			ra_sync_apply_pending = false;
 			uint32_t applied = 0;
 			uint8_t mode = rc_client_get_hardcore_enabled(ra_client)
 				? RC_CLIENT_ACHIEVEMENT_UNLOCKED_BOTH
 				: RC_CLIENT_ACHIEVEMENT_UNLOCKED_SOFTCORE;
 			
-			for (uint32_t i = 0; i < snap_sync_count; i++) {
+			for (uint32_t i = 0; i < ra_sync_apply_count; i++) {
 				const rc_client_achievement_t* ach =
-					rc_client_get_achievement_info(ra_client, snap_sync_ids[i]);
+					rc_client_get_achievement_info(ra_client, ra_sync_apply_ids[i]);
 				if (ach && !(ach->unlocked & mode)) {
 					// Cast away const — rc_client_get_achievement_info returns a const
 					// pointer to the internal struct, but we need to update unlock state.
@@ -2485,9 +2632,11 @@ static void ra_process_deferred_flags(void) {
 					rc_client_achievement_t* mutable_ach = (rc_client_achievement_t*)ach;
 					mutable_ach->unlocked |= mode;
 					time_t old_unlock_time = mutable_ach->unlock_time;
-					mutable_ach->unlock_time = (time_t)snap_sync_timestamps[i];
-					RA_LOG_INFO("Deferred sync-apply: ach %u old_unlock_time=%lld new_unlock_time(ledger)=%lld\n",
-					            snap_sync_ids[i], (long long)old_unlock_time, (long long)mutable_ach->unlock_time);
+					mutable_ach->unlock_time = (time_t)ra_sync_apply_timestamps[i];
+					RA_LOG_INFO("Deferred sync-apply: ach %u old_unlock_time=%lld "
+					            "new_unlock_time(ledger)=%lld\n",
+					            ra_sync_apply_ids[i], (long long)old_unlock_time,
+					            (long long)mutable_ach->unlock_time);
 					if (mutable_ach->state == RC_CLIENT_ACHIEVEMENT_STATE_ACTIVE) {
 						mutable_ach->state = RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED;
 					}
@@ -2496,38 +2645,41 @@ static void ra_process_deferred_flags(void) {
 			}
 			
 			if (applied > 0) {
-				RA_LOG_INFO("Applied %u synced achievement unlocks to rcheevos state\n", applied);
+				RA_LOG_INFO("Applied %u synced achievement unlocks to rcheevos state\n",
+				            applied);
 			}
 		}
+		// else: stays pending until game loads
 	}
 	
-	// Check for pending login retry
-	if (ra_client && ra_login_retry.pending && SDL_GetTicks() >= ra_login_retry.next_time) {
-		ra_login_retry.pending = false;
-		ra_start_login();
+	// Check for pending login retry timer
+	if (ra_client && ra_login_state == LOGIN_RETRY_WAITING &&
+	    SDL_GetTicks() >= ra_login_retry.next_time) {
+		ra_start_login();   /* sets ra_login_state = LOGIN_IN_PROGRESS */
 	}
 	
 	// Retry game load after connectivity is restored.
 	// The game load may have failed due to an offline cache miss for game data
 	// requests (gameid, achievementsets, patch). Now that we're online, retry
 	// with the preserved pending load info.
-	if (snap_game_load_retry) {
-		if (RA_Offline_isOffline()) {
-			// Still offline — put it back for next cycle
-			SDL_LockMutex(ra_deferred.mutex);
-			ra_deferred.game_load_retry = true;
-			SDL_UnlockMutex(ra_deferred.mutex);
-		} else if (ra_pending_load.active && ra_client) {
-			RA_LOG_INFO("Retrying game load after connectivity restored: %s\n",
-			            ra_pending_load.rom_path);
-			ra_do_load_game(ra_pending_load.rom_path, ra_pending_load.rom_data,
-			                ra_pending_load.rom_size, ra_pending_load.emu_tag);
-			// ra_clear_pending_game() is called in ra_game_loaded_callback on success.
-			// If it fails again (unlikely now that we're online), the callback
-			// won't set game_load_retry again (only set when offline).
-		} else {
-			RA_LOG_WARN("game_load_retry set but no pending load or no client\n");
+	if (ra_game_state == GAME_LOAD_RETRY_PENDING) {
+		RAConnState conn = ra_get_conn_state();
+		if (conn == CONN_ONLINE) {
+			if (ra_pending_load.active && ra_client) {
+				ra_game_state = GAME_LOADING;
+				RA_LOG_INFO("Retrying game load after connectivity restored: %s\n",
+				            ra_pending_load.rom_path);
+				ra_do_load_game(ra_pending_load.rom_path, ra_pending_load.rom_data,
+				                ra_pending_load.rom_size, ra_pending_load.emu_tag);
+				// ra_clear_pending_game() is called in ra_game_loaded_callback on success.
+				// If it fails again (unlikely now that we're online), the callback
+				// won't set GAME_LOAD_RETRY_PENDING again (only set when offline).
+			} else {
+				ra_game_state = GAME_NONE;
+				RA_LOG_WARN("GAME_LOAD_RETRY_PENDING but no pending load or no client\n");
+			}
 		}
+		// else: stays pending until online
 	}
 }
 
@@ -2536,7 +2688,7 @@ void RA_doFrame(void) {
 	// This ensures game load completes and achievements are active
 	ra_process_queued_responses();
 	
-	if (ra_client && ra_game_loaded) {
+	if (ra_client && ra_game_state == GAME_LOADED) {
 		rc_client_do_frame(ra_client);
 	}
 	
@@ -2576,22 +2728,22 @@ void RA_idle(void) {
 }
 
 bool RA_isGameLoaded(void) {
-	return ra_game_loaded;
+	return ra_game_state == GAME_LOADED;
 }
 
 bool RA_isHardcoreModeActive(void) {
-	if (!ra_client || !ra_game_loaded) {
+	if (!ra_client || ra_game_state != GAME_LOADED) {
 		return false;
 	}
 	return rc_client_get_hardcore_enabled(ra_client) != 0;
 }
 
 bool RA_isLoggedIn(void) {
-	return ra_logged_in;
+	return ra_login_state == LOGIN_LOGGED_IN;
 }
 
 const char* RA_getUserDisplayName(void) {
-	if (!ra_client || !ra_logged_in) {
+	if (!ra_client || ra_login_state != LOGIN_LOGGED_IN) {
 		return NULL;
 	}
 	const rc_client_user_t* user = rc_client_get_user_info(ra_client);
@@ -2599,7 +2751,7 @@ const char* RA_getUserDisplayName(void) {
 }
 
 const char* RA_getGameTitle(void) {
-	if (!ra_client || !ra_game_loaded) {
+	if (!ra_client || ra_game_state != GAME_LOADED) {
 		return NULL;
 	}
 	const rc_client_game_t* game = rc_client_get_game_info(ra_client);
@@ -2607,7 +2759,7 @@ const char* RA_getGameTitle(void) {
 }
 
 void RA_getAchievementSummary(uint32_t* unlocked, uint32_t* total) {
-	if (!ra_client || !ra_game_loaded) {
+	if (!ra_client || ra_game_state != GAME_LOADED) {
 		if (unlocked) *unlocked = 0;
 		if (total) *total = 0;
 		return;
@@ -2643,7 +2795,7 @@ void RA_getAchievementSummary(uint32_t* unlocked, uint32_t* total) {
 }
 
 const void* RA_createAchievementList(int category, int grouping) {
-	if (!ra_client || !ra_game_loaded) {
+	if (!ra_client || ra_game_state != GAME_LOADED) {
 		return NULL;
 	}
 	return rc_client_create_achievement_list(ra_client, category, grouping);
@@ -2656,7 +2808,7 @@ void RA_destroyAchievementList(const void* list) {
 }
 
 const char* RA_getGameHash(void) {
-	if (!ra_game_loaded || ra_game_hash[0] == '\0') {
+	if (ra_game_state != GAME_LOADED || ra_game_hash[0] == '\0') {
 		return NULL;
 	}
 	return ra_game_hash;

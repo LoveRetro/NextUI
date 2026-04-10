@@ -11,6 +11,8 @@
 
 #include "ra_sync.h"
 #include "ra_offline.h"
+#define RA_UTIL_NEED_SDL
+#include "ra_util.h"
 #include "http.h"
 #include "md5.h"
 #include "config.h"
@@ -21,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>
+#include <SDL2/SDL.h>
 
 /* Logging macros using NextUI's LOG_* infrastructure */
 #define SYNC_LOG_INFO(fmt, ...)  LOG_info("[RA_SYNC] " fmt, ##__VA_ARGS__)
@@ -49,8 +51,15 @@ static void sync_ensure_init(void) {
 /**
  * If raServerUsername is not yet populated, do a lightweight token-based
  * login to the RA server and extract the internal username from the
- * AvatarUrl field.  This covers the case where the user updates to the
- * fix and syncs from Settings before minarch has had a chance to log in.
+ * AvatarUrl field.
+ *
+ * In the current codebase this HTTP fallback is never reached: all paths
+ * that trigger RA_Sync_syncAll() (game-load sync, probe-success sync,
+ * reconnect sync) set raServerUsername via the login callback or probe
+ * login before sync starts.  The fallback is retained for a planned
+ * future call path: settings-app batch sync, which may run before any
+ * minarch login has occurred (e.g. first sync after a firmware update
+ * that introduces the raServerUsername field).
  *
  * Returns the server username (from config — either pre-existing or
  * freshly fetched).  Returns NULL/empty on failure.
@@ -67,9 +76,12 @@ static const char* sync_resolve_server_username(void) {
 
 	SYNC_LOG_INFO("raServerUsername empty — performing login to resolve\n");
 
-	/* Build token-based login request: r=login&u=<user>&t=<token> */
+	/* Build token-based login request with URL-encoded credentials */
 	char post_data[512];
-	snprintf(post_data, sizeof(post_data), "r=login&u=%s&t=%s", username, token);
+	if (!ra_build_login_post_token(username, token, post_data, sizeof(post_data))) {
+		SYNC_LOG_ERROR("Failed to build login POST\n");
+		return NULL;
+	}
 
 	HTTP_Response* resp = HTTP_post(RA_API_URL, post_data, NULL);
 	if (!resp || resp->http_status != 200 || !resp->data || resp->size == 0) {
@@ -96,21 +108,6 @@ static const char* sync_resolve_server_username(void) {
 static uint32_t sync_random_delay(uint32_t min_ms, uint32_t max_ms) {
 	if (min_ms >= max_ms) return min_ms;
 	return min_ms + (rand() % (max_ms - min_ms + 1));
-}
-
-/**
- * Sleep for the given number of milliseconds, checking cancel flag
- * every 100ms. Returns true if cancelled.
- */
-static bool sync_interruptible_sleep(uint32_t ms, volatile bool* cancel) {
-	uint32_t elapsed = 0;
-	while (elapsed < ms) {
-		if (cancel && *cancel) return true;
-		uint32_t chunk = (ms - elapsed) > 100 ? 100 : (ms - elapsed);
-		usleep(chunk * 1000);
-		elapsed += chunk;
-	}
-	return (cancel && *cancel);
 }
 
 /**
@@ -216,9 +213,8 @@ static int sync_parse_response(HTTP_Response* resp) {
 		return -1;
 	}
 
-	/* Check for success: look for "Success":true (with or without space) */
-	if (strstr(resp->data, "\"Success\":true") != NULL ||
-	    strstr(resp->data, "\"Success\": true") != NULL) {
+	/* Check for success: "Success":true (with or without space) */
+	if (ra_find_json_bool(resp->data, "Success") == 1) {
 		return 1;
 	}
 
@@ -238,15 +234,12 @@ static int sync_parse_response(HTTP_Response* resp) {
 bool RA_Sync_hasPendingUnlocks(uint32_t* out_count) {
 	sync_ensure_init();
 
-	RA_PendingUnlock* unlocks = NULL;
 	uint32_t count = 0;
-
-	if (!RA_Offline_ledgerGetPendingUnlocks(&unlocks, &count)) {
+	if (!RA_Offline_ledgerGetPendingCount(&count)) {
 		if (out_count) *out_count = 0;
 		return false;
 	}
 
-	free(unlocks);
 	if (out_count) *out_count = count;
 	return count > 0;
 }
@@ -291,54 +284,13 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 		return result;
 	}
 
-	/* Read pending unlocks */
-	RA_PendingUnlock* all_unlocks = NULL;
-	uint32_t all_count = 0;
+	/* Read pending unlocks (filtered by game_id; 0 = all) */
+	RA_PendingUnlock* unlocks = NULL;
+	uint32_t count = 0;
 
-	if (!RA_Offline_ledgerGetPendingUnlocks(&all_unlocks, &all_count) || all_count == 0) {
-		free(all_unlocks);
+	if (!RA_Offline_ledgerGetPendingByGameId(game_id, &unlocks, &count) || count == 0) {
+		free(unlocks);
 		return result;
-	}
-
-	/*
-	 * If game_id is set, filter to only unlocks for that game.
-	 * Otherwise process all pending unlocks.
-	 */
-	RA_PendingUnlock* unlocks = all_unlocks;
-	uint32_t count = all_count;
-
-	RA_PendingUnlock* filtered = NULL;
-	if (game_id != 0) {
-		/* Count matching unlocks first */
-		uint32_t match_count = 0;
-		for (uint32_t i = 0; i < all_count; i++) {
-			if (all_unlocks[i].game_id == game_id) {
-				match_count++;
-			}
-		}
-
-		if (match_count == 0) {
-			free(all_unlocks);
-			return result;
-		}
-
-		/* Build filtered array */
-		filtered = (RA_PendingUnlock*)malloc(match_count * sizeof(RA_PendingUnlock));
-		if (!filtered) {
-			free(all_unlocks);
-			return result;
-		}
-
-		uint32_t j = 0;
-		for (uint32_t i = 0; i < all_count; i++) {
-			if (all_unlocks[i].game_id == game_id) {
-				filtered[j++] = all_unlocks[i];
-			}
-		}
-
-		free(all_unlocks);
-		unlocks = filtered;
-		count = match_count;
 	}
 
 	result.total = count;
@@ -478,7 +430,7 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 				delay = sync_random_delay(config->delay_min_ms,
 				                          config->delay_max_ms);
 			}
-			if (sync_interruptible_sleep(delay, cancel)) {
+			if (ra_interruptible_sleep(delay, cancel)) {
 				break;  /* Cancelled during delay */
 			}
 		}
