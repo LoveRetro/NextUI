@@ -944,17 +944,7 @@ void PLAT_setCurrentTimezone(const char* tz) {
 	free(tz_path);
 
 	// apply timezone to kernel
-	{
-		time_t before = time(NULL);
-		system("date -k");
-		time_t after = time(NULL);
-		long long delta = (long long)(after - before);
-		LOG_info("[PLATFORM] setCurrentTimezone(%s): date -k time before=%lld after=%lld delta=%lld sec\n",
-		         tz, (long long)before, (long long)after, delta);
-		if (delta > 2 || delta < -2) {
-			LOG_warn("[PLATFORM] date -k shifted time(NULL) by %lld seconds!\n", delta);
-		}
-	}
+	system("date -k");
 }
 
 bool PLAT_getNetworkTimeSync(void) {

@@ -808,7 +808,8 @@ int main(int argc, char *argv[])
                 MenuList::showOverlay(msg, OverlayDismissMode::None);
 
                 // Shared state between sync thread and main thread
-                volatile bool cancel = false;
+                SDL_atomic_t cancel;
+                SDL_AtomicSet(&cancel, 0);
                 std::atomic<bool> done{false};
                 std::mutex progress_mutex;
                 std::string progress_msg;
@@ -847,7 +848,7 @@ int main(int argc, char *argv[])
                     PAD_poll();
 
                     if (PAD_justPressed(BTN_B)) {
-                        cancel = true;
+                        SDL_AtomicSet(&cancel, 1);
                         MenuList::showOverlay("Cancelling sync...", OverlayDismissMode::None);
                     }
 
@@ -858,7 +859,7 @@ int main(int argc, char *argv[])
                             std::lock_guard<std::mutex> lock(progress_mutex);
                             current_msg = progress_msg;
                         }
-                        if (!cancel) {
+                        if (!SDL_AtomicGet(&cancel)) {
                             MenuList::showOverlay(current_msg, OverlayDismissMode::None);
                         }
                     }
@@ -870,9 +871,9 @@ int main(int argc, char *argv[])
                 MenuList::hideOverlay();
 
                 // Update button description with result
-                if (cancel && sync_result.synced == 0) {
+                if (SDL_AtomicGet(&cancel) && sync_result.synced == 0) {
                     item.setDesc("Sync cancelled");
-                } else if (cancel && sync_result.synced > 0) {
+                } else if (SDL_AtomicGet(&cancel) && sync_result.synced > 0) {
                     snprintf(msg, sizeof(msg), "Cancelled: %u of %u synced",
                              sync_result.synced, sync_result.total);
                     item.setDesc(msg);

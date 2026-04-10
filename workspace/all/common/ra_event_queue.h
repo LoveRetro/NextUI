@@ -1,25 +1,20 @@
 /**
- * ra_fsm.h — Event queue for the RetroAchievements state machine (SM-2).
+ * ra_event_queue.h — Thread-safe event queue for RetroAchievements background threads.
  *
  * Background threads (connectivity probe, sync engine) post events into a
- * mutex-protected queue.  The main thread drains the queue during its
- * periodic processing loop (ra_process_deferred_flags) and asserts that the
- * events agree with the existing deferred-flag mechanism.
- *
- * This is a belt-and-suspenders validation phase: both deferred flags AND
- * the event queue carry the same information.  The main thread processes
- * flags as before and uses the events to cross-check.  No behavioral change
- * is introduced — events are purely additive.
+ * mutex-protected circular buffer.  The main thread drains the queue during
+ * its periodic processing loop (ra_process_deferred_flags) and applies the
+ * state transitions described by each event.
  *
  * Lifecycle:
- *   RA_FSM_init()  — call once at startup (creates mutex + queue)
- *   RA_FSM_post()  — call from any thread (enqueues event under lock)
- *   RA_FSM_drain() — call from main thread (dequeues all pending events)
- *   RA_FSM_quit()  — call once at shutdown (drains queue, destroys mutex)
+ *   RA_EVQ_init()  — call once at startup (creates mutex + queue)
+ *   RA_EVQ_post()  — call from any thread (enqueues event under lock)
+ *   RA_EVQ_drain() — call from main thread (dequeues all pending events)
+ *   RA_EVQ_quit()  — call once at shutdown (drains queue, destroys mutex)
  */
 
-#ifndef RA_FSM_H
-#define RA_FSM_H
+#ifndef RA_EVENT_QUEUE_H
+#define RA_EVENT_QUEUE_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -31,9 +26,8 @@ extern "C" {
 /*****************************************************************************
  * Event types
  *
- * Each event corresponds to a specific deferred-flag transition that a
- * background thread sets.  The main thread uses these to cross-check
- * the snapshot it reads from the RADeferredState struct.
+ * Each event represents a state transition that a background thread needs
+ * the main thread to apply.
  *****************************************************************************/
 
 typedef enum {
@@ -72,7 +66,7 @@ typedef enum {
  * to indicate whether hardcore re-enable was requested.
  *****************************************************************************/
 
-#define RA_FSM_MAX_SYNC_IDS 256
+#define RA_EVQ_MAX_SYNC_IDS 256
 
 typedef struct {
 	RAEventType type;
@@ -85,8 +79,8 @@ typedef struct {
 
 		/** RA_EV_SYNC_DONE payload */
 		struct {
-			uint32_t ids[RA_FSM_MAX_SYNC_IDS];
-			uint32_t timestamps[RA_FSM_MAX_SYNC_IDS];
+			uint32_t ids[RA_EVQ_MAX_SYNC_IDS];
+			uint32_t timestamps[RA_EVQ_MAX_SYNC_IDS];
 			uint32_t count;
 		} sync_done;
 	} data;
@@ -97,19 +91,19 @@ typedef struct {
  *****************************************************************************/
 
 /** Maximum events that can be queued before the oldest is overwritten. */
-#define RA_FSM_QUEUE_CAPACITY 32
+#define RA_EVQ_QUEUE_CAPACITY 32
 
 /**
  * Initialize the event queue (create mutex, zero state).
  * Safe to call multiple times; subsequent calls are no-ops.
  */
-void RA_FSM_init(void);
+void RA_EVQ_init(void);
 
 /**
  * Shut down the event queue (drain pending events, destroy mutex).
  * Safe to call if never initialized.
  */
-void RA_FSM_quit(void);
+void RA_EVQ_quit(void);
 
 /**
  * Post an event from any thread.  Thread-safe (locks internal mutex).
@@ -117,7 +111,7 @@ void RA_FSM_quit(void);
  * happen in practice — the queue is sized generously for the actual
  * event rate of ~4 events per probe/sync cycle).
  */
-void RA_FSM_post(const RAEvent* event);
+void RA_EVQ_post(const RAEvent* event);
 
 /**
  * Drain all pending events into @out_buf (up to @capacity entries).
@@ -127,16 +121,16 @@ void RA_FSM_post(const RAEvent* event);
  * @param capacity  Size of out_buf.
  * @return          Number of events written to out_buf (0 if empty).
  */
-uint32_t RA_FSM_drain(RAEvent* out_buf, uint32_t capacity);
+uint32_t RA_EVQ_drain(RAEvent* out_buf, uint32_t capacity);
 
 /**
  * Convenience: post a signal-only event (no payload).
  * Equivalent to constructing an RAEvent with the given type and zeroed data.
  */
-void RA_FSM_post_signal(RAEventType type);
+void RA_EVQ_post_signal(RAEventType type);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* RA_FSM_H */
+#endif /* RA_EVENT_QUEUE_H */

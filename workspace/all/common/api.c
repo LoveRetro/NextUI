@@ -315,17 +315,7 @@ SDL_Surface *GFX_init(int mode)
 
 	// We always have to symlink, does not depend on NTP being enabled
 	PLAT_initTimezones();
-	{
-		time_t before_tz = time(NULL);
-		PLAT_setCurrentTimezone(PLAT_getCurrentTimezone());
-		time_t after_tz = time(NULL);
-		long long tz_delta = (long long)(after_tz - before_tz);
-		LOG_info("[GFX_init] PLAT_setCurrentTimezone: time before=%lld after=%lld delta=%lld sec\n",
-		         (long long)before_tz, (long long)after_tz, tz_delta);
-		if (tz_delta > 2 || tz_delta < -2) {
-			LOG_warn("[GFX_init] PLAT_setCurrentTimezone shifted time(NULL) by %lld seconds!\n", tz_delta);
-		}
-	}
+	PLAT_setCurrentTimezone(PLAT_getCurrentTimezone());
 
 	PLAT_initLid();
 	LEDS_initLeds();

@@ -1,5 +1,5 @@
-#ifndef __RA_OFFLINE_H__
-#define __RA_OFFLINE_H__
+#ifndef RA_OFFLINE_H
+#define RA_OFFLINE_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -12,7 +12,12 @@
  * - Response cache: Caches rcheevos server responses so games can load
  *   with achievements active when offline.
  * - Unlock ledger: Append-only binary log with hash chain integrity for
- *   persisting achievement unlocks across app restarts.
+ *   persisting achievement unlocks across app restarts and power cycles.
+ *   The ledger is the single source of truth for offline unlocks until the
+ *   sync engine confirms them with the RA server.  During gameplay, UNLOCK
+ *   records are appended; when connectivity is restored, the sync engine
+ *   reads pending records, submits them, writes SYNC_ACK records on
+ *   success, and finally compacts the file to remove confirmed records.
  * - Sync engine: Submits pending offline unlocks to the server with
  *   realistic timing when connectivity is restored.
  */
@@ -35,8 +40,11 @@ typedef enum {
 
 /**
  * On-disk ledger record (packed, fixed size).
- * Hash chain: each record's prev_hash = SHA-256 of the previous record's
- * complete bytes (including its own record_hash).
+ *
+ * Hash chain: each record's record_hash = SHA-256(bytes 0 .. prev_hash end),
+ * covering RA_LEDGER_RECORD_HASHABLE_SIZE bytes.  prev_hash = SHA-256 of
+ * the *entire* previous record (all fields including its record_hash),
+ * or zeros for the first record in the chain.
  */
 #pragma pack(push, 1)
 typedef struct {
@@ -45,13 +53,14 @@ typedef struct {
 	uint32_t game_id;           /* RA game ID */
 	uint32_t achievement_id;    /* 0 for session records */
 	uint8_t  hardcore;          /* 0=softcore, 1=hardcore */
-	char     game_hash[33];     /* Null-terminated MD5 hex */
-	uint8_t  prev_hash[32];     /* SHA-256 of previous record (zeros for first) */
-	uint8_t  record_hash[32];   /* SHA-256 of this record (bytes 0..prev_hash end) */
+	char     game_hash[33];     /* MD5 hex string + NUL (char, not uint8_t,
+	                             * because rcheevos provides it as text) */
+	uint8_t  prev_hash[32];     /* SHA-256 of entire previous record (zeros for first) */
+	uint8_t  record_hash[32];   /* SHA-256 of bytes [0, RA_LEDGER_RECORD_HASHABLE_SIZE) */
 } RA_LedgerRecord;
 #pragma pack(pop)
 
-/* Size of record data that gets hashed to produce record_hash */
+/* Bytes hashed to produce record_hash: everything up to (not including) record_hash */
 #define RA_LEDGER_RECORD_HASHABLE_SIZE  offsetof(RA_LedgerRecord, record_hash)
 
 /* Pending unlock info returned by ledger query */
@@ -303,4 +312,4 @@ void RA_Offline_patchStartsessionCacheWithUnlock(const char* game_hash,
                                                   uint32_t achievement_id,
                                                   uint32_t timestamp);
 
-#endif /* __RA_OFFLINE_H__ */
+#endif /* RA_OFFLINE_H */

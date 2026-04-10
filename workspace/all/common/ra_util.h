@@ -238,19 +238,19 @@ static inline bool ra_build_login_post_password(const char* username,
 
 #ifdef RA_UTIL_NEED_SDL
 /**
- * Sleep for @ms milliseconds, waking every 100ms to check *@cancel_flag.
- * Returns true if cancelled (flag became true), false if sleep completed.
+ * Sleep for @ms milliseconds, waking every 100ms to check @cancel_flag.
+ * Returns true if cancelled (flag became non-zero), false if sleep completed.
  * @cancel_flag may be NULL (sleep runs to completion).
  */
-static inline bool ra_interruptible_sleep(uint32_t ms, volatile bool* cancel_flag) {
+static inline bool ra_interruptible_sleep(uint32_t ms, SDL_atomic_t* cancel_flag) {
 	uint32_t elapsed = 0;
 	while (elapsed < ms) {
-		if (cancel_flag && *cancel_flag) return true;
+		if (cancel_flag && SDL_AtomicGet(cancel_flag)) return true;
 		uint32_t chunk = (ms - elapsed > 100) ? 100 : (ms - elapsed);
 		SDL_Delay(chunk);
 		elapsed += chunk;
 	}
-	return (cancel_flag && *cancel_flag);
+	return (cancel_flag && SDL_AtomicGet(cancel_flag));
 }
 #endif /* RA_UTIL_NEED_SDL */
 

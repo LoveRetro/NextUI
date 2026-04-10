@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <time.h>
 #include <unistd.h>
+#include <SDL2/SDL_atomic.h>
 
 /* Logging macros using NextUI's LOG_* infrastructure */
 #define OFFLINE_LOG_DEBUG(fmt, ...) LOG_debug("[RA_OFFLINE] " fmt, ##__VA_ARGS__)
@@ -22,9 +23,15 @@
  * Static state
  *****************************************************************************/
 
-static volatile bool ra_offline_initialized = false;
-static volatile bool ra_offline_mode = false;
-static volatile bool ra_sync_in_progress = false;
+static SDL_atomic_t ra_offline_initialized = {0};
+static SDL_atomic_t ra_offline_mode = {0};
+static SDL_atomic_t ra_sync_in_progress = {0};
+
+/* Lock ordering (always acquire in this order to avoid deadlock):
+ *   1. ra_ledger_mutex  — protects hash-chain, pending cache, write queue
+ *   2. wq->mutex        — protects the ledger write queue internals
+ *   3. ra_cache_mutex   — protects cache file read-modify-write
+ * ra_ledger_mutex and ra_cache_mutex are never held simultaneously. */
 
 /* Mutex protecting hash-chain state, pending cache, and the write queue.
  * Guards: ledger_append (hash chain + enqueue), ledgerCompact,
@@ -43,7 +50,7 @@ static char ra_cache_dir[512] = {0};
 static char ra_ledger_path[512] = {0};
 
 /* Running hash chain state: SHA-256 of the last ledger record written */
-static uint8_t ra_ledger_last_hash[SHA256_DIGEST_SIZE];
+static uint8_t ra_ledger_last_hash[NUI_SHA256_DIGEST_SIZE];
 static bool ra_ledger_has_records = false;
 
 /* Cached pending offline achievement IDs for quick lookup */
@@ -194,8 +201,8 @@ static bool cache_read_file(const char* path, char** out_body, size_t* out_len) 
 	}
 	body[len32] = '\0';
 
-	uint8_t stored_digest[SHA256_DIGEST_SIZE];
-	if (fread(stored_digest, SHA256_DIGEST_SIZE, 1, f) != 1) {
+	uint8_t stored_digest[NUI_SHA256_DIGEST_SIZE];
+	if (fread(stored_digest, NUI_SHA256_DIGEST_SIZE, 1, f) != 1) {
 		OFFLINE_LOG_WARN("Cache file missing digest: %s\n", path);
 		free(body);
 		fclose(f);
@@ -203,9 +210,9 @@ static bool cache_read_file(const char* path, char** out_body, size_t* out_len) 
 	}
 	fclose(f);
 
-	uint8_t computed_digest[SHA256_DIGEST_SIZE];
-	sha256_hash(body, len32, computed_digest);
-	if (memcmp(stored_digest, computed_digest, SHA256_DIGEST_SIZE) != 0) {
+	uint8_t computed_digest[NUI_SHA256_DIGEST_SIZE];
+	nui_sha256_hash(body, len32, computed_digest);
+	if (memcmp(stored_digest, computed_digest, NUI_SHA256_DIGEST_SIZE) != 0) {
 		OFFLINE_LOG_WARN("Cache file SHA-256 mismatch (corrupt): %s\n", path);
 		free(body);
 		unlink(path);
@@ -229,8 +236,8 @@ static bool cache_read_file(const char* path, char** out_body, size_t* out_len) 
  * @return true on success, false on I/O error.
  */
 static bool cache_write_file(const char* path, const char* body, size_t len) {
-	uint8_t digest[SHA256_DIGEST_SIZE];
-	sha256_hash(body, len, digest);
+	uint8_t digest[NUI_SHA256_DIGEST_SIZE];
+	nui_sha256_hash(body, len, digest);
 
 	FILE* f = fopen(path, "wb");
 	if (!f) {
@@ -243,7 +250,7 @@ static bool cache_write_file(const char* path, const char* body, size_t len) {
 	size_t written = 0;
 	written += fwrite(&len32, sizeof(len32), 1, f);
 	written += (fwrite(body, 1, len, f) == len) ? 1 : 0;
-	written += fwrite(digest, SHA256_DIGEST_SIZE, 1, f);
+	written += fwrite(digest, NUI_SHA256_DIGEST_SIZE, 1, f);
 
 	if (written < 3) {
 		OFFLINE_LOG_ERROR("Failed to write cache file: %s\n", path);
@@ -260,7 +267,7 @@ static bool cache_write_file(const char* path, const char* body, size_t len) {
 
 void RA_Offline_cacheResponse(const char* url, const char* post_data,
                               const char* response_body, size_t response_len) {
-	if (!ra_offline_initialized || !response_body || response_len == 0) return;
+	if (!SDL_AtomicGet(&ra_offline_initialized) || !response_body || response_len == 0) return;
 
 	char type_buf[32];
 	const char* req_type = get_request_type(url, post_data, type_buf, sizeof(type_buf));
@@ -515,7 +522,7 @@ passthrough:
 bool RA_Offline_patchStartsessionResponse(char* body, size_t body_len,
                                           const char* game_hash,
                                           char** out_body, size_t* out_len) {
-	if (!ra_offline_initialized || !body || body_len == 0) return false;
+	if (!SDL_AtomicGet(&ra_offline_initialized) || !body || body_len == 0) return false;
 
 	/* Delegate to the internal patching function, which reads the ledger
 	 * once internally. No need to pre-check — the function is a no-op
@@ -532,7 +539,7 @@ bool RA_Offline_patchStartsessionResponse(char* body, size_t body_len,
 
 bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
                                   char** out_body, size_t* out_len) {
-	if (!ra_offline_initialized || !out_body || !out_len) return false;
+	if (!SDL_AtomicGet(&ra_offline_initialized) || !out_body || !out_len) return false;
 
 	char type_buf[32];
 	const char* req_type = get_request_type(url, post_data, type_buf, sizeof(type_buf));
@@ -560,13 +567,13 @@ bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
 		char game_hash[64] = {0};
 		get_game_hash_param(url, post_data, game_hash, sizeof(game_hash));
 
-		char* pre_patch_body = *out_body;
+		size_t pre_patch_len = *out_len;
 		if (!patch_startsession_with_ledger(*out_body, *out_len, game_hash,
 		                                    out_body, out_len)) {
 			OFFLINE_LOG_WARN("Failed to patch startsession with ledger data\n");
-		} else if (*out_body != pre_patch_body) {
+		} else if (*out_len != pre_patch_len) {
 			OFFLINE_LOG_INFO("Patched offline startsession (%zu -> %zu bytes)\n",
-			                 (size_t)(pre_patch_body ? strlen(pre_patch_body) : 0), *out_len);
+			                 pre_patch_len, *out_len);
 		}
 	}
 
@@ -581,15 +588,15 @@ bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
  * Compute the SHA-256 of a complete ledger record (for chain linking).
  * This hashes the entire record including its record_hash field.
  */
-static void ledger_hash_record(const RA_LedgerRecord* rec, uint8_t out[SHA256_DIGEST_SIZE]) {
-	sha256_hash(rec, sizeof(RA_LedgerRecord), out);
+static void ledger_hash_record(const RA_LedgerRecord* rec, uint8_t out[NUI_SHA256_DIGEST_SIZE]) {
+	nui_sha256_hash(rec, sizeof(RA_LedgerRecord), out);
 }
 
 /**
  * Compute the record_hash field (hashes everything except record_hash itself).
  */
 static void ledger_compute_record_hash(RA_LedgerRecord* rec) {
-	sha256_hash(rec, RA_LEDGER_RECORD_HASHABLE_SIZE, rec->record_hash);
+	nui_sha256_hash(rec, RA_LEDGER_RECORD_HASHABLE_SIZE, rec->record_hash);
 }
 
 /**
@@ -600,7 +607,7 @@ static uint32_t ledger_validate_and_load(void) {
 	FILE* f = fopen(ra_ledger_path, "rb");
 	if (!f) {
 		OFFLINE_LOG_DEBUG("No ledger file found (will create on first write)\n");
-		memset(ra_ledger_last_hash, 0, SHA256_DIGEST_SIZE);
+		memset(ra_ledger_last_hash, 0, NUI_SHA256_DIGEST_SIZE);
 		ra_ledger_has_records = false;
 		return 0;
 	}
@@ -608,15 +615,15 @@ static uint32_t ledger_validate_and_load(void) {
 	uint32_t valid_count = 0;
 	uint32_t total_read = 0;
 	bool chain_broken = false;
-	uint8_t prev_hash[SHA256_DIGEST_SIZE];
-	memset(prev_hash, 0, SHA256_DIGEST_SIZE);
+	uint8_t prev_hash[NUI_SHA256_DIGEST_SIZE];
+	memset(prev_hash, 0, NUI_SHA256_DIGEST_SIZE);
 
 	RA_LedgerRecord rec;
 	while (fread(&rec, sizeof(rec), 1, f) == 1) {
 		total_read++;
 
 		/* Verify prev_hash chain */
-		if (memcmp(rec.prev_hash, prev_hash, SHA256_DIGEST_SIZE) != 0) {
+		if (memcmp(rec.prev_hash, prev_hash, NUI_SHA256_DIGEST_SIZE) != 0) {
 			OFFLINE_LOG_WARN("Ledger chain broken at record %u (skipping)\n", total_read - 1);
 			chain_broken = true;
 			/* Reset chain expectation to this record's actual prev_hash
@@ -624,9 +631,9 @@ static uint32_t ledger_validate_and_load(void) {
 		}
 
 		/* Verify record_hash (self-integrity, independent of chain) */
-		uint8_t expected_hash[SHA256_DIGEST_SIZE];
-		sha256_hash(&rec, RA_LEDGER_RECORD_HASHABLE_SIZE, expected_hash);
-		if (memcmp(rec.record_hash, expected_hash, SHA256_DIGEST_SIZE) != 0) {
+		uint8_t expected_hash[NUI_SHA256_DIGEST_SIZE];
+		nui_sha256_hash(&rec, RA_LEDGER_RECORD_HASHABLE_SIZE, expected_hash);
+		if (memcmp(rec.record_hash, expected_hash, NUI_SHA256_DIGEST_SIZE) != 0) {
 			OFFLINE_LOG_WARN("Ledger record_hash invalid at record %u (skipping)\n", total_read - 1);
 			chain_broken = true;
 			/* Skip this record but continue reading — don't update prev_hash
@@ -650,7 +657,7 @@ static uint32_t ledger_validate_and_load(void) {
 		                 "Will be repaired on next compaction.\n", valid_count, total_read);
 	}
 
-	memcpy(ra_ledger_last_hash, prev_hash, SHA256_DIGEST_SIZE);
+	memcpy(ra_ledger_last_hash, prev_hash, NUI_SHA256_DIGEST_SIZE);
 	ra_ledger_has_records = (valid_count > 0);
 
 	OFFLINE_LOG_DEBUG("Ledger loaded: %u valid records\n", valid_count);
@@ -680,7 +687,6 @@ static int ledger_writer_thread(void* userdata) {
 			break;
 		}
 
-		/* Dequeue one record */
 		RA_LedgerRecord rec = wq->records[wq->head];
 		wq->head = (wq->head + 1) % RA_LEDGER_WRITE_QUEUE_SIZE;
 		wq->count--;
@@ -765,7 +771,7 @@ static bool ledger_append(RA_LedgerRecord* rec) {
 	SDL_LockMutex(ra_ledger_mutex);
 
 	/* Finalize hash chain — must be done in order, under the mutex */
-	memcpy(rec->prev_hash, ra_ledger_last_hash, SHA256_DIGEST_SIZE);
+	memcpy(rec->prev_hash, ra_ledger_last_hash, NUI_SHA256_DIGEST_SIZE);
 	ledger_compute_record_hash(rec);
 
 	/* Update in-memory chain state immediately so the next enqueue sees it */
@@ -798,7 +804,6 @@ static bool ledger_append(RA_LedgerRecord* rec) {
 	return enqueued;
 }
 
-/* Initialize a ledger record with common fields zeroed and set */
 static void ledger_record_init(RA_LedgerRecord* rec, uint8_t type,
                                uint32_t game_id, uint32_t achievement_id,
                                uint8_t hardcore, const char* game_hash) {
@@ -815,7 +820,7 @@ static void ledger_record_init(RA_LedgerRecord* rec, uint8_t type,
 
 void RA_Offline_ledgerWriteSessionStart(uint32_t game_id, const char* game_hash,
                                         uint8_t hardcore) {
-	if (!ra_offline_initialized) return;
+	if (!SDL_AtomicGet(&ra_offline_initialized)) return;
 
 	RA_LedgerRecord rec;
 	ledger_record_init(&rec, RA_LEDGER_SESSION_START, game_id, 0, hardcore, game_hash);
@@ -828,7 +833,7 @@ void RA_Offline_ledgerWriteSessionStart(uint32_t game_id, const char* game_hash,
 
 void RA_Offline_ledgerWriteUnlock(uint32_t game_id, uint32_t achievement_id,
                                   const char* game_hash, uint8_t hardcore) {
-	if (!ra_offline_initialized) return;
+	if (!SDL_AtomicGet(&ra_offline_initialized)) return;
 
 	/* Hardcore unlocks are never written to the offline ledger — they cannot
 	 * be synced retroactively and would persist forever after compaction. */
@@ -842,13 +847,13 @@ void RA_Offline_ledgerWriteUnlock(uint32_t game_id, uint32_t achievement_id,
 	ledger_record_init(&rec, RA_LEDGER_ACHIEVEMENT_UNLOCK, game_id, achievement_id, 0, game_hash);
 
 	if (ledger_append(&rec)) {
-		OFFLINE_LOG_INFO("Ledger: UNLOCK achievement=%u game=%u timestamp=%u (time_now=%lld)\n",
-		                 achievement_id, game_id, rec.timestamp, (long long)time(NULL));
+		OFFLINE_LOG_INFO("Ledger: UNLOCK achievement=%u game=%u timestamp=%u\n",
+		                 achievement_id, game_id, rec.timestamp);
 	}
 }
 
 void RA_Offline_ledgerWriteSessionEnd(uint32_t game_id, const char* game_hash) {
-	if (!ra_offline_initialized) return;
+	if (!SDL_AtomicGet(&ra_offline_initialized)) return;
 
 	RA_LedgerRecord rec;
 	ledger_record_init(&rec, RA_LEDGER_SESSION_END, game_id, 0, 0, game_hash);
@@ -859,7 +864,7 @@ void RA_Offline_ledgerWriteSessionEnd(uint32_t game_id, const char* game_hash) {
 }
 
 void RA_Offline_ledgerWriteSyncAck(uint32_t achievement_id, uint32_t game_id) {
-	if (!ra_offline_initialized) return;
+	if (!SDL_AtomicGet(&ra_offline_initialized)) return;
 
 	RA_LedgerRecord rec;
 	ledger_record_init(&rec, RA_LEDGER_SYNC_ACK, game_id, achievement_id, 0, NULL);
@@ -969,7 +974,7 @@ static bool ledger_read_pending_records(RA_LedgerRecord** out_records,
 }
 
 void RA_Offline_ledgerCompact(void) {
-	if (!ra_offline_initialized) return;
+	if (!SDL_AtomicGet(&ra_offline_initialized)) return;
 
 	SDL_LockMutex(ra_ledger_mutex);
 
@@ -989,7 +994,7 @@ void RA_Offline_ledgerCompact(void) {
 			OFFLINE_LOG_INFO("Compact: ledger fully synced, deleted\n");
 		}
 		/* If unlink fails, the file may not exist — that's fine */
-		memset(ra_ledger_last_hash, 0, SHA256_DIGEST_SIZE);
+		memset(ra_ledger_last_hash, 0, NUI_SHA256_DIGEST_SIZE);
 		ra_ledger_has_records = false;
 		SDL_UnlockMutex(ra_ledger_mutex);
 		return;
@@ -1011,12 +1016,12 @@ void RA_Offline_ledgerCompact(void) {
 	}
 
 	/* Rebuild hash chain from scratch */
-	uint8_t prev_hash[SHA256_DIGEST_SIZE];
-	memset(prev_hash, 0, SHA256_DIGEST_SIZE);
+	uint8_t prev_hash[NUI_SHA256_DIGEST_SIZE];
+	memset(prev_hash, 0, NUI_SHA256_DIGEST_SIZE);
 
 	for (uint32_t i = 0; i < kept_count; i++) {
 		/* Update chain links */
-		memcpy(kept[i].prev_hash, prev_hash, SHA256_DIGEST_SIZE);
+		memcpy(kept[i].prev_hash, prev_hash, NUI_SHA256_DIGEST_SIZE);
 		ledger_compute_record_hash(&kept[i]);
 
 		if (fwrite(&kept[i], sizeof(RA_LedgerRecord), 1, out) != 1) {
@@ -1046,7 +1051,7 @@ void RA_Offline_ledgerCompact(void) {
 	}
 
 	/* Update in-memory chain state */
-	memcpy(ra_ledger_last_hash, prev_hash, SHA256_DIGEST_SIZE);
+	memcpy(ra_ledger_last_hash, prev_hash, NUI_SHA256_DIGEST_SIZE);
 	ra_ledger_has_records = true;
 
 	OFFLINE_LOG_INFO("Compact: rewrote ledger with %u records\n", kept_count);
@@ -1056,7 +1061,7 @@ void RA_Offline_ledgerCompact(void) {
 
 bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
                                         uint32_t* out_count) {
-	if (!ra_offline_initialized || !out_unlocks || !out_count) return false;
+	if (!SDL_AtomicGet(&ra_offline_initialized) || !out_unlocks || !out_count) return false;
 
 	SDL_LockMutex(ra_ledger_mutex);
 
@@ -1103,7 +1108,7 @@ bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
 bool RA_Offline_ledgerGetPendingCount(uint32_t* out_count) {
 	if (!out_count) return false;
 	*out_count = 0;
-	if (!ra_offline_initialized) return false;
+	if (!SDL_AtomicGet(&ra_offline_initialized)) return false;
 
 	SDL_LockMutex(ra_ledger_mutex);
 	RA_LedgerRecord* records = NULL;
@@ -1246,12 +1251,12 @@ bool RA_Offline_ledgerFindPendingUnlock(uint32_t achievement_id,
  *****************************************************************************/
 
 bool RA_Offline_isOffline(void) {
-	return ra_offline_mode;
+	return SDL_AtomicGet(&ra_offline_mode) != 0;
 }
 
 void RA_Offline_setOffline(bool offline) {
-	if (ra_offline_mode != offline) {
-		ra_offline_mode = offline;
+	if ((SDL_AtomicGet(&ra_offline_mode) != 0) != offline) {
+		SDL_AtomicSet(&ra_offline_mode, offline ? 1 : 0);
 		OFFLINE_LOG_INFO("Offline mode: %s\n", offline ? "ON" : "OFF");
 	}
 }
@@ -1261,11 +1266,11 @@ void RA_Offline_setOffline(bool offline) {
  *****************************************************************************/
 
 bool RA_Offline_isSyncing(void) {
-	return ra_sync_in_progress;
+	return SDL_AtomicGet(&ra_sync_in_progress) != 0;
 }
 
 void RA_Offline_setSyncing(bool syncing) {
-	ra_sync_in_progress = syncing;
+	SDL_AtomicSet(&ra_sync_in_progress, syncing ? 1 : 0);
 }
 
 /*****************************************************************************
@@ -1273,7 +1278,10 @@ void RA_Offline_setSyncing(bool syncing) {
  *****************************************************************************/
 
 void RA_Offline_init(const char* data_dir) {
-	if (ra_offline_initialized) return;
+	/* Must be called from the main thread before any background threads
+	 * are started — ledger_validate_and_load() runs before the mutex
+	 * exists, which is safe only because no concurrent access is possible. */
+	if (SDL_AtomicGet(&ra_offline_initialized)) return;
 
 	/* Store base paths */
 	snprintf(ra_data_dir, sizeof(ra_data_dir), "%s%s", data_dir, RA_OFFLINE_DIR);
@@ -1305,22 +1313,22 @@ void RA_Offline_init(const char* data_dir) {
 	/* Start the background ledger writer thread */
 	ledger_writer_start();
 
-	ra_offline_initialized = true;
+	SDL_AtomicSet(&ra_offline_initialized, 1);
 	OFFLINE_LOG_INFO("Initialized (cache: %s, ledger: %s)\n", ra_cache_dir, ra_ledger_path);
 }
 
 void RA_Offline_shutdown(void) {
-	if (!ra_offline_initialized) return;
+	if (!SDL_AtomicGet(&ra_offline_initialized)) return;
 
 	/* Stop the background writer first — flushes any queued records to disk */
 	ledger_writer_stop();
 
-	ra_offline_initialized = false;
-	ra_offline_mode = false;
-	ra_sync_in_progress = false;
+	SDL_AtomicSet(&ra_offline_initialized, 0);
+	SDL_AtomicSet(&ra_offline_mode, 0);
+	SDL_AtomicSet(&ra_sync_in_progress, 0);
 	ra_ledger_has_records = false;
 	ra_pending_count = 0;
-	memset(ra_ledger_last_hash, 0, SHA256_DIGEST_SIZE);
+	memset(ra_ledger_last_hash, 0, NUI_SHA256_DIGEST_SIZE);
 
 	if (ra_ledger_mutex) {
 		SDL_DestroyMutex(ra_ledger_mutex);
@@ -1340,6 +1348,8 @@ void RA_Offline_shutdown(void) {
  *****************************************************************************/
 
 void RA_Offline_refreshPendingCache(void) {
+	if (!SDL_AtomicGet(&ra_offline_initialized)) return;
+
 	/* Read pending unlocks (ledgerGetPendingUnlocks locks internally) */
 	RA_PendingUnlock* unlocks = NULL;
 	uint32_t count = 0;
@@ -1422,7 +1432,7 @@ void RA_Offline_clearPendingCache(void) {
 void RA_Offline_patchStartsessionCacheWithUnlock(const char* game_hash,
                                                   uint32_t achievement_id,
                                                   uint32_t timestamp) {
-	if (!ra_offline_initialized || !game_hash || game_hash[0] == '\0') return;
+	if (!SDL_AtomicGet(&ra_offline_initialized) || !game_hash || game_hash[0] == '\0') return;
 
 	/* Serialize the entire read-modify-write to prevent lost updates when
 	 * HTTP worker threads and the sync thread patch the same game file. */

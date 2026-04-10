@@ -12,7 +12,7 @@
 
 #define RA_UTIL_NEED_SDL
 #include "ra_util.h"
-#include "ra_fsm.h"
+#include "ra_event_queue.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,9 +40,28 @@
  * are derived (computed from underlying flags on each query).  For login
  * and game-load the enum variable IS the authoritative state — every
  * transition is an explicit assignment.  Background threads communicate
- * exclusively through the FSM event queue (ra_fsm.h); the main thread
+ * exclusively through the event queue (ra_event_queue.h); the main thread
  * drains the queue in ra_process_deferred_flags() and updates the state
  * variables / deferred-action bools.
+ *
+ * Connectivity detection is two-tier:
+ *
+ *   1. Lightweight WiFi poll (every RA_WIFI_POLL_INTERVAL_MS, ~5 s):
+ *      Calls PLAT_wifiConnected() to detect link-layer drops and
+ *      restores without any network I/O.  Runs on the main thread
+ *      inside ra_process_deferred_flags(), Phase 3.
+ *
+ *   2. Full HTTP probe (every RA_PROBE_INTERVAL_MS, ~30 s, only while
+ *      offline): A background thread (ra_connectivity_probe_func) POSTs
+ *      to the RA login endpoint to verify end-to-end server reachability.
+ *      On success it caches the login response for offline use, flips
+ *      to online, and posts RA_EV_PROBE_ONLINE for the main thread.
+ *
+ * Typical connectivity restore flow:
+ *   WiFi poll detects link up → start probe → probe POSTs login → success
+ *   → RA_EV_PROBE_ONLINE → main thread triggers sync → sync submits
+ *   pending ledger unlocks → RA_EV_SYNC_DONE → main thread applies
+ *   results to rcheevos state.
  *****************************************************************************/
 
 /* Connectivity: is the device online or offline (with/without probe)? */
@@ -149,29 +168,29 @@ static RALoginRetry ra_login_retry = {0};
 #define RA_WIFI_POLL_INTERVAL_MS 5000  // Check wpa_cli status every 5 seconds
 
 // Connectivity probe state (background thread polls RA login endpoint)
-static volatile bool ra_probe_abort = false;
-static volatile bool ra_probe_running = false;
+static SDL_atomic_t ra_probe_abort = {0};
+static SDL_atomic_t ra_probe_running = {0};
 static SDL_Thread* ra_probe_thread = NULL;
 
 // Offline sync state (background thread replays pending unlocks)
 static SDL_Thread* ra_sync_thread = NULL;
-static volatile bool ra_sync_abort = false;
+static SDL_atomic_t ra_sync_abort = {0};
 static uint32_t ra_sync_game_id = 0;
 
 // Deferred state: simple main-thread-only flags.  Background threads
-// communicate exclusively through the FSM event queue (ra_fsm.h).
+// communicate exclusively through the event queue (ra_event_queue.h).
 // These flags are read and written only on the main thread — no mutex needed.
 // Note: game_load_retry is now encoded as ra_game_state == GAME_LOAD_RETRY_PENDING.
 static bool ra_deferred_offline_notification = false; /* show "Offline" toast when Notification_init is ready */
 static bool ra_deferred_sync_pending = false;         /* sync should start when game is loaded */
 static bool ra_user_saw_offline = false;              /* user has seen the "Offline" notification */
 static bool ra_sync_apply_pending = false;            /* sync results waiting to be applied */
-static uint32_t ra_sync_apply_ids[RA_FSM_MAX_SYNC_IDS];
-static uint32_t ra_sync_apply_timestamps[RA_FSM_MAX_SYNC_IDS];
+static uint32_t ra_sync_apply_ids[RA_EVQ_MAX_SYNC_IDS];
+static uint32_t ra_sync_apply_timestamps[RA_EVQ_MAX_SYNC_IDS];
 static uint32_t ra_sync_apply_count = 0;
 
 // Probe lifecycle mutex — protects ra_probe_running check-and-set.
-// Separate from the FSM event queue mutex.  Held only briefly for the
+// Separate from the event queue mutex.  Held only briefly for the
 // atomic read-modify-write in ra_start/stop_connectivity_probe and
 // at probe thread exit.  Must NOT be held across SDL_WaitThread.
 static SDL_mutex* ra_probe_mutex = NULL;
@@ -403,9 +422,9 @@ static void ra_reset_login_retry(void) {
 static RAConnState ra_get_conn_state(void) {
 	if (!RA_Offline_isOffline())
 		return CONN_ONLINE;
-	if (!ra_probe_running)
+	if (!SDL_AtomicGet(&ra_probe_running))
 		return CONN_OFFLINE_NO_PROBE;
-	if (ra_probe_abort)
+	if (SDL_AtomicGet(&ra_probe_abort))
 		return CONN_OFFLINE_PROBE_STOPPING;
 	return CONN_OFFLINE_PROBING;
 }
@@ -420,7 +439,7 @@ static RAGameState ra_get_game_state(void) {
 
 static RASyncState ra_get_sync_state(void) {
 	if (RA_Offline_isSyncing()) {
-		if (ra_sync_abort)
+		if (SDL_AtomicGet(&ra_sync_abort))
 			return SYNC_ABORTING;
 		return SYNC_RUNNING;
 	}
@@ -1626,7 +1645,7 @@ static int ra_sync_thread_func(void* data) {
 		
 		uint32_t idx = 0;
 		uint32_t processed = 0;
-		for (uint32_t i = 0; i < pre_count && idx < RA_FSM_MAX_SYNC_IDS; i++) {
+		for (uint32_t i = 0; i < pre_count && idx < RA_EVQ_MAX_SYNC_IDS; i++) {
 			// Skip entries that don't match the game filter
 			if (ra_sync_game_id != 0 && pre_unlocks[i].game_id != ra_sync_game_id)
 				continue;
@@ -1647,7 +1666,7 @@ static int ra_sync_thread_func(void* data) {
 			}
 		}
 		sync_ev.data.sync_done.count = idx;
-		RA_FSM_post(&sync_ev);
+		RA_EVQ_post(&sync_ev);
 	}
 	
 	free(pre_unlocks);
@@ -1677,7 +1696,7 @@ static int ra_sync_thread_func(void* data) {
 	// so connectivity can be re-verified and sync retried
 	if (result.failed > 0) {
 		RA_Offline_setOffline(true);
-		RA_FSM_post_signal(RA_EV_SYNC_FAILED);
+		RA_EVQ_post_signal(RA_EV_SYNC_FAILED);
 		ra_start_connectivity_probe();
 	}
 	
@@ -1720,7 +1739,7 @@ static void ra_start_offline_sync(uint32_t game_id) {
 	// Start sync on background thread
 	RA_LOG_INFO("Starting offline sync (%u pending unlocks, game_id=%u)\n",
 	            count, game_id);
-	ra_sync_abort = false;
+	SDL_AtomicSet(&ra_sync_abort, 0);
 	ra_sync_game_id = game_id;
 	RA_Offline_setSyncing(true);
 	
@@ -1767,15 +1786,15 @@ static int ra_connectivity_probe_func(void* data) {
 	
 	if (!username || !token || strlen(username) == 0 || strlen(token) == 0) {
 		RA_LOG_ERROR("Probe: no credentials available, exiting\n");
-		RA_FSM_post_signal(RA_EV_PROBE_STOPPED);
+		RA_EVQ_post_signal(RA_EV_PROBE_STOPPED);
 		SDL_LockMutex(ra_probe_mutex);
-		ra_probe_running = false;
+		SDL_AtomicSet(&ra_probe_running, 0);
 		SDL_UnlockMutex(ra_probe_mutex);
 		return 1;
 	}
 	
 	bool probe_succeeded = false;
-	while (!ra_probe_abort) {
+	while (!SDL_AtomicGet(&ra_probe_abort)) {
 		// Build login request via rcheevos API
 		rc_api_login_request_t login_params;
 		memset(&login_params, 0, sizeof(login_params));
@@ -1789,9 +1808,9 @@ static int ra_connectivity_probe_func(void* data) {
 		if (rc != RC_OK) {
 			RA_LOG_ERROR("Probe: failed to build login request (rc=%d)\n", rc);
 			rc_api_destroy_request(&request);
-			RA_FSM_post_signal(RA_EV_PROBE_STOPPED);
+			RA_EVQ_post_signal(RA_EV_PROBE_STOPPED);
 			SDL_LockMutex(ra_probe_mutex);
-			ra_probe_running = false;
+			SDL_AtomicSet(&ra_probe_running, 0);
 			SDL_UnlockMutex(ra_probe_mutex);
 			return 1;
 		}
@@ -1839,7 +1858,7 @@ static int ra_connectivity_probe_func(void* data) {
 					 * flag, so we always set offline_notif_cancel = false here.
 					 * The main thread determines if the cancel applies. */
 					ev.data.probe_online.offline_notif_cancel = false;
-					RA_FSM_post(&ev);
+					RA_EVQ_post(&ev);
 				}
 				
 				success = true;
@@ -1856,7 +1875,7 @@ static int ra_connectivity_probe_func(void* data) {
 		if (http_resp) HTTP_freeResponse(http_resp);
 		rc_api_destroy_request(&request);
 		
-		if (success || ra_probe_abort) break;
+		if (success || SDL_AtomicGet(&ra_probe_abort)) break;
 		
 		ra_interruptible_sleep(RA_PROBE_INTERVAL_MS, &ra_probe_abort);
 	}
@@ -1864,10 +1883,10 @@ static int ra_connectivity_probe_func(void* data) {
 	RA_LOG_INFO("Connectivity probe exiting\n");
 	// Post stopped event if we didn't already post PROBE_ONLINE
 	if (!probe_succeeded) {
-		RA_FSM_post_signal(RA_EV_PROBE_STOPPED);
+		RA_EVQ_post_signal(RA_EV_PROBE_STOPPED);
 	}
 	SDL_LockMutex(ra_probe_mutex);
-	ra_probe_running = false;
+	SDL_AtomicSet(&ra_probe_running, 0);
 	SDL_UnlockMutex(ra_probe_mutex);
 	return 0;
 }
@@ -1884,13 +1903,13 @@ static void ra_start_connectivity_probe(void) {
 	 * The lock must NOT be held across SDL_WaitThread/SDL_CreateThread
 	 * because the probe thread itself locks ra_probe_mutex at exit. */
 	SDL_LockMutex(ra_probe_mutex);
-	if (ra_probe_running) {
+	if (SDL_AtomicGet(&ra_probe_running)) {
 		SDL_UnlockMutex(ra_probe_mutex);
 		RA_LOG_DEBUG("Probe: already running, not starting another\n");
 		return;
 	}
-	ra_probe_abort = false;
-	ra_probe_running = true;
+	SDL_AtomicSet(&ra_probe_abort, 0);
+	SDL_AtomicSet(&ra_probe_running, 1);
 	SDL_UnlockMutex(ra_probe_mutex);
 	
 	/* If a previous probe thread exited but we still hold the handle, join it
@@ -1904,7 +1923,7 @@ static void ra_start_connectivity_probe(void) {
 	if (!ra_probe_thread) {
 		RA_LOG_ERROR("Failed to create connectivity probe thread\n");
 		SDL_LockMutex(ra_probe_mutex);
-		ra_probe_running = false;
+		SDL_AtomicSet(&ra_probe_running, 0);
 		SDL_UnlockMutex(ra_probe_mutex);
 		return;
 	}
@@ -1921,12 +1940,12 @@ static void ra_stop_connectivity_probe(void) {
 	if (!ra_probe_thread) return;
 	
 	RA_LOG_DEBUG("Stopping connectivity probe...\n");
-	ra_probe_abort = true;
+	SDL_AtomicSet(&ra_probe_abort, 1);
 	
 	SDL_WaitThread(ra_probe_thread, NULL);
 	ra_probe_thread = NULL;
 	SDL_LockMutex(ra_probe_mutex);
-	ra_probe_running = false;
+	SDL_AtomicSet(&ra_probe_running, 0);
 	SDL_UnlockMutex(ra_probe_mutex);
 	RA_LOG_DEBUG("Connectivity probe thread joined\n");
 }
@@ -2023,8 +2042,8 @@ void RA_init(void) {
 		return;
 	}
 	
-	// Initialize the FSM event queue (before any threads can post events)
-	RA_FSM_init();
+	// Initialize the event queue (before any threads can post events)
+	RA_EVQ_init();
 	
 	// Initialize offline subsystem (always, regardless of WiFi state)
 	RA_Offline_init(SHARED_USERDATA_PATH);
@@ -2179,7 +2198,7 @@ void RA_quit(void) {
 	// Abort any running sync — join the thread to avoid use-after-free
 	if (ra_sync_thread) {
 		RA_LOG_INFO("Joining sync thread for shutdown\n");
-		ra_sync_abort = true;
+		SDL_AtomicSet(&ra_sync_abort, 1);
 		SDL_WaitThread(ra_sync_thread, NULL);
 		ra_sync_thread = NULL;
 		RA_LOG_DEBUG("Sync thread joined\n");
@@ -2188,8 +2207,8 @@ void RA_quit(void) {
 	// Stop probe again in case the sync thread restarted it on failure
 	ra_stop_connectivity_probe();
 	
-	// Shut down the FSM event queue (all threads are joined, drain any leftovers)
-	RA_FSM_quit();
+	// Shut down the event queue (all threads are joined, drain any leftovers)
+	RA_EVQ_quit();
 	
 	// Clear any pending game data
 	ra_clear_pending_game();
@@ -2439,7 +2458,7 @@ void RA_unloadGame(void) {
 		
 		if (ra_get_sync_state() == SYNC_RUNNING) {
 			RA_LOG_INFO("Aborting offline sync for game unload\n");
-			ra_sync_abort = true;
+			SDL_AtomicSet(&ra_sync_abort, 1);
 			// Give sync thread time to notice the abort
 			for (int i = 0; i < 10 && ra_get_sync_state() != SYNC_IDLE; i++) {
 				SDL_Delay(50);
@@ -2563,18 +2582,25 @@ static void action_sync_failed(const RAEvent* ev) {
 }
 
 /**
- * Process FSM events and deferred main-thread state.
+ * Central dispatcher: process FSM events and deferred main-thread state.
  *
  * Called periodically from RA_doFrame() (~every 500ms) and from RA_idle().
- * Drains the FSM event queue (populated by background threads), then
- * processes main-thread-only deferred flags (offline notification,
- * sync pending, sync apply, login retry, game load retry).
+ * This is the single point where background-thread signals are converted
+ * into main-thread state transitions.
+ *
+ * Phase 1: Drain the event queue populated by background threads (probe,
+ *          sync) and dispatch each event to its action_*() handler.
+ * Phase 2: Check main-thread-only deferred flags (offline notification,
+ *          sync pending, sync apply, login retry, game load retry) and
+ *          act on any that are set.
+ * Phase 3: Lightweight WiFi connectivity poll — calls PLAT_wifiConnected()
+ *          to detect link-layer drops/restores without network I/O.
  */
 static void ra_process_deferred_flags(void) {
-	// --- Phase 1: Drain FSM event queue and dispatch to action functions ---
+	// --- Phase 1: Drain event queue and dispatch to action functions ---
 	{
-		RAEvent ev_buf[RA_FSM_QUEUE_CAPACITY];
-		uint32_t ev_count = RA_FSM_drain(ev_buf, RA_FSM_QUEUE_CAPACITY);
+		RAEvent ev_buf[RA_EVQ_QUEUE_CAPACITY];
+		uint32_t ev_count = RA_EVQ_drain(ev_buf, RA_EVQ_QUEUE_CAPACITY);
 		
 		for (uint32_t i = 0; i < ev_count; i++) {
 			const RAEvent* ev = &ev_buf[i];
@@ -2718,7 +2744,7 @@ static void ra_process_deferred_flags(void) {
 				ra_user_saw_offline = true;
 				ra_start_connectivity_probe();
 			} else if (wifi_up && RA_Offline_isOffline() &&
-			           !ra_probe_running) {
+			           !SDL_AtomicGet(&ra_probe_running)) {
 				// WiFi is back but no probe is running (edge case:
 				// probe was never started, or exited without success).
 				// Kick off a probe to verify real connectivity and

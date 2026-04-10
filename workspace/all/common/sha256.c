@@ -34,7 +34,7 @@ static const uint32_t sha256_k[64] = {
 #define SIG0(x) (ROTR(x, 7) ^ ROTR(x, 18) ^ ((x) >> 3))
 #define SIG1(x) (ROTR(x, 17) ^ ROTR(x, 19) ^ ((x) >> 10))
 
-static void sha256_transform(SHA256_CTX* ctx, const uint8_t* data) {
+static void sha256_transform(NUI_SHA256_CTX* ctx, const uint8_t* data) {
 	uint32_t a, b, c, d, e, f, g, h, t1, t2, w[64];
 	int i;
 
@@ -62,7 +62,7 @@ static void sha256_transform(SHA256_CTX* ctx, const uint8_t* data) {
 	ctx->state[4] += e; ctx->state[5] += f; ctx->state[6] += g; ctx->state[7] += h;
 }
 
-void sha256_init(SHA256_CTX* ctx) {
+void nui_sha256_init(NUI_SHA256_CTX* ctx) {
 	ctx->state[0] = 0x6a09e667; ctx->state[1] = 0xbb67ae85;
 	ctx->state[2] = 0x3c6ef372; ctx->state[3] = 0xa54ff53a;
 	ctx->state[4] = 0x510e527f; ctx->state[5] = 0x9b05688c;
@@ -70,13 +70,13 @@ void sha256_init(SHA256_CTX* ctx) {
 	ctx->count = 0;
 }
 
-void sha256_update(SHA256_CTX* ctx, const void* data, size_t len) {
+void nui_sha256_update(NUI_SHA256_CTX* ctx, const void* data, size_t len) {
 	const uint8_t* p = (const uint8_t*)data;
 	size_t fill = (size_t)(ctx->count & 0x3f);
 	ctx->count += len;
 
 	if (fill) {
-		size_t avail = SHA256_BLOCK_SIZE - fill;
+		size_t avail = NUI_SHA256_BLOCK_SIZE - fill;
 		if (len < avail) {
 			memcpy(ctx->buffer + fill, p, len);
 			return;
@@ -86,17 +86,17 @@ void sha256_update(SHA256_CTX* ctx, const void* data, size_t len) {
 		p += avail;
 		len -= avail;
 	}
-	while (len >= SHA256_BLOCK_SIZE) {
+	while (len >= NUI_SHA256_BLOCK_SIZE) {
 		sha256_transform(ctx, p);
-		p += SHA256_BLOCK_SIZE;
-		len -= SHA256_BLOCK_SIZE;
+		p += NUI_SHA256_BLOCK_SIZE;
+		len -= NUI_SHA256_BLOCK_SIZE;
 	}
 	if (len) {
 		memcpy(ctx->buffer, p, len);
 	}
 }
 
-void sha256_final(SHA256_CTX* ctx, uint8_t digest[SHA256_DIGEST_SIZE]) {
+void nui_sha256_final(NUI_SHA256_CTX* ctx, uint8_t digest[NUI_SHA256_DIGEST_SIZE]) {
 	uint64_t bits = ctx->count * 8;
 	size_t fill = (size_t)(ctx->count & 0x3f);
 	int i;
@@ -104,7 +104,7 @@ void sha256_final(SHA256_CTX* ctx, uint8_t digest[SHA256_DIGEST_SIZE]) {
 	/* Padding */
 	ctx->buffer[fill++] = 0x80;
 	if (fill > 56) {
-		memset(ctx->buffer + fill, 0, SHA256_BLOCK_SIZE - fill);
+		memset(ctx->buffer + fill, 0, NUI_SHA256_BLOCK_SIZE - fill);
 		sha256_transform(ctx, ctx->buffer);
 		fill = 0;
 	}
@@ -125,9 +125,9 @@ void sha256_final(SHA256_CTX* ctx, uint8_t digest[SHA256_DIGEST_SIZE]) {
 	}
 }
 
-void sha256_hash(const void* data, size_t len, uint8_t digest[SHA256_DIGEST_SIZE]) {
-	SHA256_CTX ctx;
-	sha256_init(&ctx);
-	sha256_update(&ctx, data, len);
-	sha256_final(&ctx, digest);
+void nui_sha256_hash(const void* data, size_t len, uint8_t digest[NUI_SHA256_DIGEST_SIZE]) {
+	NUI_SHA256_CTX ctx;
+	nui_sha256_init(&ctx);
+	nui_sha256_update(&ctx, data, len);
+	nui_sha256_final(&ctx, digest);
 }

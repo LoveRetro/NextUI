@@ -26,6 +26,7 @@
 #include <SDL2/SDL.h>
 
 /* Logging macros using NextUI's LOG_* infrastructure */
+#define SYNC_LOG_DEBUG(fmt, ...) LOG_debug("[RA_SYNC] " fmt, ##__VA_ARGS__)
 #define SYNC_LOG_INFO(fmt, ...)  LOG_info("[RA_SYNC] " fmt, ##__VA_ARGS__)
 #define SYNC_LOG_WARN(fmt, ...)  LOG_warn("[RA_SYNC] " fmt, ##__VA_ARGS__)
 #define SYNC_LOG_ERROR(fmt, ...) LOG_error("[RA_SYNC] " fmt, ##__VA_ARGS__)
@@ -246,7 +247,7 @@ bool RA_Sync_hasPendingUnlocks(uint32_t* out_count) {
 
 RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
                               const RA_SyncConfig* config,
-                              volatile bool* cancel,
+                              SDL_atomic_t* cancel,
                               RA_SyncProgressCallback progress_cb,
                               void* userdata) {
 	RA_SyncResult result = {0, 0, 0, 0};
@@ -258,8 +259,12 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 		config = &sync_default_config;
 	}
 
-	/* Seed RNG for random delays */
-	srand((unsigned)time(NULL));
+	/* Seed RNG once for random delays (avoid reseeding global PRNG on every call) */
+	static bool rng_seeded = false;
+	if (!rng_seeded) {
+		srand((unsigned)time(NULL));
+		rng_seeded = true;
+	}
 
 	/* Get credentials.
 	 * For the username used in hash validation, prefer the server (internal)
@@ -274,7 +279,7 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 	                        : CFG_getRAUsername();
 	const char* token = CFG_getRAToken();
 
-	SYNC_LOG_INFO("Using username '%s' for sync hash computation "
+	SYNC_LOG_DEBUG("Using username '%s' for sync hash computation "
 	              "(server_username='%s', config_username='%s')\n",
 	              username,
 	              server_username ? server_username : "(null)",
@@ -301,7 +306,7 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 	/* Process each pending unlock */
 	for (uint32_t i = 0; i < count; i++) {
 		/* Check cancel before starting each submission */
-		if (cancel && *cancel) {
+		if (cancel && SDL_AtomicGet(cancel)) {
 			break;
 		}
 
@@ -323,17 +328,10 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 			seconds_since = (uint32_t)(now - (time_t)unlock->timestamp);
 		}
 
-		/* Diagnostic logging: capture all values used in the seconds_since
-		 * computation so we can identify clock drift / timezone warp issues.
-		 * If timestamp >= now, seconds_since stays 0 and &o= is omitted,
-		 * causing the server to use its own time instead of the unlock time. */
-		SYNC_LOG_INFO("ach=%u: ledger_timestamp=%u time_now=%lld diff=%lld seconds_since=%u%s\n",
-		              unlock->achievement_id,
-		              unlock->timestamp,
-		              (long long)now,
-		              (long long)(now - (time_t)unlock->timestamp),
-		              seconds_since,
-		              seconds_since == 0 ? " [WARNING: &o= will be omitted, server uses own time]" : "");
+		/* Log timing details at debug level for diagnosing clock drift. */
+		SYNC_LOG_DEBUG("ach=%u: ledger_timestamp=%u time_now=%lld seconds_since=%u\n",
+		              unlock->achievement_id, unlock->timestamp,
+		              (long long)now, seconds_since);
 
 		/* Build request */
 		char* post_data = sync_build_post_data(username, token,
@@ -350,20 +348,17 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 			continue;
 		}
 
-		/* Log the POST body for diagnostics.  Redact the token (&t=...) to
-		 * avoid leaking credentials, but keep everything else so we can
-		 * verify &o= is present and the signature is correct. */
+		/* Log the POST body at debug level (token redacted). */
 		{
-			/* Find &t= and the next & after it */
 			const char* t_start = strstr(post_data, "&t=");
 			if (t_start) {
 				const char* t_end = strchr(t_start + 3, '&');
-				SYNC_LOG_INFO("ach=%u: POST %.*s&t=***%s\n",
+				SYNC_LOG_DEBUG("ach=%u: POST %.*s&t=***%s\n",
 				              unlock->achievement_id,
 				              (int)(t_start - post_data), post_data,
 				              t_end ? t_end : "");
 			} else {
-				SYNC_LOG_INFO("ach=%u: POST %s\n",
+				SYNC_LOG_DEBUG("ach=%u: POST %s\n",
 				              unlock->achievement_id, post_data);
 			}
 		}
@@ -372,19 +367,15 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 		HTTP_Response* http_resp = HTTP_post(RA_API_URL, post_data, NULL);
 		free(post_data);
 
-		/* Log raw server response before parsing */
+		/* Log raw server response at debug level */
 		if (http_resp && http_resp->data && http_resp->size > 0) {
-			/* Truncate at 512 chars to avoid flooding logs */
 			int log_len = (int)http_resp->size;
 			if (log_len > 512) log_len = 512;
-			SYNC_LOG_INFO("ach=%u: server response (status=%d): %.*s\n",
+			SYNC_LOG_DEBUG("ach=%u: server response (status=%d): %.*s\n",
 			              unlock->achievement_id,
 			              http_resp->http_status,
 			              log_len, http_resp->data);
-		} else if (http_resp) {
-			SYNC_LOG_WARN("ach=%u: server response empty (status=%d)\n",
-			              unlock->achievement_id, http_resp->http_status);
-		} else {
+		} else if (!http_resp) {
 			SYNC_LOG_WARN("ach=%u: no HTTP response (network failure?)\n",
 			              unlock->achievement_id);
 		}
@@ -394,7 +385,7 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 
 		if (parse_result == 1) {
 			/* Success — write SYNC_ACK to ledger */
-			SYNC_LOG_INFO("ach=%u: server accepted (seconds_since=%u)\n",
+			SYNC_LOG_DEBUG("ach=%u: server accepted (seconds_since=%u)\n",
 			              unlock->achievement_id, seconds_since);
 			RA_Offline_ledgerWriteSyncAck(unlock->achievement_id, unlock->game_id);
 			/* Patch cached startsession to include this unlock so the next
@@ -439,7 +430,7 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 	free(unlocks);
 
 	/* Post-sync ledger maintenance */
-	if (result.failed == 0 && (!cancel || !*cancel)) {
+	if (result.failed == 0 && (!cancel || !SDL_AtomicGet(cancel))) {
 		/* Full sync completed — compact ledger to remove synced records */
 		if (result.synced > 0) {
 			RA_Offline_clearPendingCache();

@@ -1,8 +1,9 @@
-#ifndef __RA_SYNC_H__
-#define __RA_SYNC_H__
+#ifndef RA_SYNC_H
+#define RA_SYNC_H
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <SDL2/SDL_atomic.h>
 
 /**
  * Standalone RetroAchievements offline sync engine.
@@ -91,7 +92,7 @@ bool RA_Sync_hasPendingUnlocks(uint32_t* out_count);
  */
 RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
                               const RA_SyncConfig* config,
-                              volatile bool* cancel,
+                              SDL_atomic_t* cancel,
                               RA_SyncProgressCallback progress_cb,
                               void* userdata);
 
@@ -99,4 +100,4 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 }
 #endif
 
-#endif /* __RA_SYNC_H__ */
+#endif /* RA_SYNC_H */
