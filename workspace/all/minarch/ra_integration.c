@@ -145,6 +145,9 @@ static RALoginRetry ra_login_retry = {0};
 #define RA_PROBE_INTERVAL_MS  30000  // 30 seconds between probe attempts
 #define RA_PROBE_SLEEP_CHUNK_MS 200  // Sleep granularity for abort responsiveness
 
+// Lightweight WiFi state polling (detects drops without hitting RA server)
+#define RA_WIFI_POLL_INTERVAL_MS 5000  // Check wpa_cli status every 5 seconds
+
 // Connectivity probe state (background thread polls RA login endpoint)
 static volatile bool ra_probe_abort = false;
 static volatile bool ra_probe_running = false;
@@ -1177,6 +1180,19 @@ static void ra_server_call(const rc_api_request_t* request,
 				static const char* synthetic_success = "{\"Success\":true}";
 				if (!ra_queue_push(synthetic_success, strlen(synthetic_success), 200, callback, callback_data)) {
 					RA_LOG_WARN("[AWARD_GATE] Failed to queue synthetic success for blocked ach=%u\n", ach_id);
+				}
+				
+				// If we blocked because the achievement is pending (not because
+				// sync is running), and we still think we're online, then a real
+				// HTTP request just failed while the system didn't know WiFi was
+				// down.  Transition to offline and start the connectivity probe
+				// so that sync fires automatically when WiFi returns.
+				if (is_pending && !RA_Offline_isOffline()) {
+					RA_LOG_INFO("[AWARD_GATE] HTTP failure detected while "
+					            "apparently online — switching to offline mode "
+					            "and starting connectivity probe\n");
+					RA_Offline_setOffline(true);
+					ra_start_connectivity_probe();
 				}
 				return;
 			}
@@ -2680,6 +2696,38 @@ static void ra_process_deferred_flags(void) {
 			}
 		}
 		// else: stays pending until online
+	}
+	
+	// --- Phase 3: Lightweight WiFi connectivity polling ---
+	// Check wpa_cli status every RA_WIFI_POLL_INTERVAL_MS to detect WiFi
+	// drops/restores without hitting the RA server.  This catches the case
+	// where WiFi disappears mid-game before any HTTP request fails (e.g.,
+	// router reboot, wifi_init.sh toggle, moving out of range).
+	{
+		static uint32_t last_wifi_poll = 0;
+		uint32_t now = SDL_GetTicks();
+		if (ra_client && now - last_wifi_poll >= RA_WIFI_POLL_INTERVAL_MS) {
+			last_wifi_poll = now;
+			bool wifi_up = PLAT_wifiConnected();
+			
+			if (!wifi_up && !RA_Offline_isOffline()) {
+				// WiFi dropped while we thought we were online
+				RA_LOG_WARN("[WIFI_POLL] WiFi connection lost — "
+				            "switching to offline mode\n");
+				RA_Offline_setOffline(true);
+				ra_user_saw_offline = true;
+				ra_start_connectivity_probe();
+			} else if (wifi_up && RA_Offline_isOffline() &&
+			           !ra_probe_running) {
+				// WiFi is back but no probe is running (edge case:
+				// probe was never started, or exited without success).
+				// Kick off a probe to verify real connectivity and
+				// trigger sync.
+				RA_LOG_INFO("[WIFI_POLL] WiFi restored while offline, "
+				            "no probe running — starting probe\n");
+				ra_start_connectivity_probe();
+			}
+		}
 	}
 }
 
