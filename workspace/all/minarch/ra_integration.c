@@ -1685,8 +1685,12 @@ static int ra_sync_thread_func(void* data) {
 			         result.skipped, result.skipped == 1 ? "" : "s");
 		}
 		if (result.synced > 0 || result.failed > 0 || result.skipped > 0) {
-			Notification_setProgressIndicatorPersistent(false);
+			// Show first (resets start_time), THEN clear persistent.
+			// Reversed order risks a TOCTOU race: the main thread's
+			// Notification_update could see persistent=false with the old
+			// start_time and expire the indicator before we set new content.
 			Notification_showProgressIndicator(msg, "", NULL);
+			Notification_setProgressIndicatorPersistent(false);
 		} else {
 			Notification_hideProgressIndicator();
 		}
@@ -2689,6 +2693,14 @@ static void ra_process_deferred_flags(void) {
 			if (applied > 0) {
 				RA_LOG_INFO("Applied %u synced achievement unlocks to rcheevos state\n",
 				            applied);
+			}
+			
+			// Clear pending cache entries for ALL synced achievements (not just
+			// the ones we applied above — some may already have been unlocked by
+			// rcheevos' own retry, but the cache entry still needs removing so
+			// the UI drops the offline icon and the AWARD_GATE stops blocking).
+			for (uint32_t i = 0; i < ra_sync_apply_count; i++) {
+				RA_Offline_removePendingCacheEntry(ra_sync_apply_ids[i]);
 			}
 		}
 		// else: stays pending until game loads

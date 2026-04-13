@@ -223,24 +223,21 @@ void Notification_update(uint32_t now) {
         }
     }
     
-	// Update progress indicator timeout (skip if persistent)
-	// Snapshot under lock to avoid tearing from background writer threads
+	// Update progress indicator timeout (skip if persistent).
+	// Read-check-write must be atomic to avoid a TOCTOU race: a background
+	// thread can call showProgressIndicator() between our read and write,
+	// resetting start_time.  If we then write active=0 based on the stale
+	// snapshot, the new notification is silently killed.
 	SDL_LockMutex(progress_mutex);
-	int prog_active = progress_state.active;
-	int prog_persistent = progress_state.persistent;
-	uint32_t prog_start = progress_state.start_time;
-	SDL_UnlockMutex(progress_mutex);
-	
-	if (prog_active && !prog_persistent) {
-		uint32_t elapsed = now - prog_start;
+	if (progress_state.active && !progress_state.persistent) {
+		uint32_t elapsed = now - progress_state.start_time;
 		int duration_seconds = CFG_getRAProgressNotificationDuration();
 		if (duration_seconds > 0 && elapsed >= (uint32_t)(duration_seconds * 1000)) {
-			SDL_LockMutex(progress_mutex);
 			progress_state.active = 0;
 			progress_state.dirty = 1;
-			SDL_UnlockMutex(progress_mutex);
 		}
 	}
+	SDL_UnlockMutex(progress_mutex);
     
     // Check each notification for expiration
     for (int i = 0; i < notification_count; i++) {
