@@ -988,9 +988,17 @@ void CFG_setRAServerUsername(const char* username)
 bool CFG_setRAServerUsernameFromAvatarUrl(const char* str)
 {
     if (!str) return false;
+    /* Accept both unescaped "/UserPic/" (rcheevos-decoded strings) and
+     * JSON-escaped "\/UserPic\/" (raw RA API response bodies). */
     const char* marker = strstr(str, "/UserPic/");
-    if (!marker) return false;
-    marker += 9; /* skip past "/UserPic/" */
+    size_t marker_skip = 9; /* strlen("/UserPic/") */
+    if (!marker) {
+        marker = strstr(str, "\\/UserPic\\/");
+        marker_skip = 11; /* strlen("\\/UserPic\\/") */
+        if (!marker) return false;
+    }
+    marker += marker_skip;
+    /* Name ends at ".png" (or its escaped form, though ".png" has no slash). */
     const char* dot = strstr(marker, ".png");
     if (!dot || dot <= marker) return false;
     size_t len = (size_t)(dot - marker);
