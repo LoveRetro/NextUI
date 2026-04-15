@@ -3137,12 +3137,29 @@ int main (int argc, char *argv[]) {
 					SDL_UnlockMutex(bgMutex);
 					folderbgchanged = 1;
 					GFX_clearLayers(LAYER_TRANSITION);
+					// Draw the selection pill at its target position before capturing the new
+					// screen, so the cursor is present in the incoming slide surface rather than
+					// blinking in after the transition animation ends.
+					if (currentScreen == SCREEN_GAMELIST && total > 0 && globalpill && list_show_entry_names) {
+						SDL_LockMutex(animMutex);
+						GFX_drawOnLayer(globalpill, SCALE1(BUTTON_MARGIN), (int)SCALE1(targetY + PADDING), globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
+						if (globalText) {
+							GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
+						}
+						SDL_UnlockMutex(animMutex);
+					}
 					GFX_flipHidden();
 					SDL_Surface *tmpNewScreen = GFX_captureRendererToSurface();
 					SDL_SetSurfaceBlendMode(tmpNewScreen,SDL_BLENDMODE_BLEND);
+					GFX_clearLayers(LAYER_SCROLLTEXT); // baked into tmpNewScreen; must clear or it floats above the animation
 					GFX_clearLayers(LAYER_THUMBNAIL);
-					if(animationdirection == SLIDE_LEFT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,-250,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpNewScreen,FIXED_WIDTH,0,0,0,FIXED_WIDTH,FIXED_HEIGHT,255,255,LAYER_THUMBNAIL,ANIM_EASE_OUT,ANIM_EASE_OUT);
-					if(animationdirection == SLIDE_RIGHT) GFX_animateAndFadeSurface(tmpNewScreen,-250,0,0,0,FIXED_WIDTH,FIXED_HEIGHT,200,tmpOldScreen,0,0,FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,255,255,LAYER_THUMBNAIL,ANIM_EASE_OUT,ANIM_EASE_OUT);
+					{
+						int _duration = (CFG_getMenuTransitions() == TRANSITION_COMFY)
+							? TRANSITION_COMFY_DURATION
+							: TRANSITION_SNAPPY_DURATION;
+						if(animationdirection == SLIDE_LEFT) GFX_animateAndFadeSurface(tmpOldScreen,0,0,-250,0,FIXED_WIDTH,FIXED_HEIGHT,_duration,tmpNewScreen,FIXED_WIDTH,0,0,0,FIXED_WIDTH,FIXED_HEIGHT,255,255,LAYER_THUMBNAIL,TRANSITION_CURVE,TRANSITION_CURVE,TRANSITION_INTENSITY);
+						if(animationdirection == SLIDE_RIGHT) GFX_animateAndFadeSurface(tmpNewScreen,-250,0,0,0,FIXED_WIDTH,FIXED_HEIGHT,_duration,tmpOldScreen,0,0,FIXED_WIDTH,0,FIXED_WIDTH,FIXED_HEIGHT,255,255,LAYER_THUMBNAIL,TRANSITION_CURVE,TRANSITION_CURVE,TRANSITION_INTENSITY);
+					}
 					GFX_clearLayers(LAYER_THUMBNAIL);
 					SDL_FreeSurface(tmpNewScreen);
 				}

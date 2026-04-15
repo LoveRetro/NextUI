@@ -1398,12 +1398,16 @@ SDL_Surface* PLAT_captureRendererToSurface() {
 	return surface;
 }
 
-static float anim_ease(float t, int easing) {
+static float anim_ease(float t, int easing, float intensity) {
 	switch (easing) {
 		case ANIM_EASE_OUT:
-			return 1.0f - powf(1.0f - t, 2.0f);
+			return 1.0f - powf(1.0f - t, intensity);
 		case ANIM_EASE_IN:
-			return t * t * t;
+			return powf(t, intensity);
+		case ANIM_EASE_IN_OUT:
+			return t < 0.5f
+				? 0.5f * powf(2.0f * t, intensity)
+				: 1.0f - 0.5f * powf(2.0f * (1.0f - t), intensity);
 		default:
 			return t;
 	}
@@ -1415,7 +1419,7 @@ void PLAT_animateAndFadeSurface(
 	SDL_Surface *fadeSurface,
 	int fade_x, int fade_y, int fade_target_x, int fade_target_y, int fade_w, int fade_h,
 	int start_opacity, int target_opacity, int layer,
-	int input_easing, int fade_easing
+	int input_easing, int fade_easing, int intensity
 ) {
 	if (!inputSurface || !vid.renderer) return;
 
@@ -1451,8 +1455,8 @@ void PLAT_animateAndFadeSurface(
 	for (int frame = 0; frame <= total_frames; ++frame) {
 
 		float t = (float)frame / total_frames;
-		float t_input = anim_ease(t, input_easing);
-		float t_fade  = anim_ease(t, fade_easing);
+		float t_input = anim_ease(t, input_easing, (float)intensity);
+		float t_fade  = anim_ease(t, fade_easing, (float)intensity);
 
 		int current_x = x + (int)((target_x - x) * t_input);
 		int current_y = y + (int)((target_y - y) * t_input);
