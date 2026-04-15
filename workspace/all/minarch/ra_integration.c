@@ -1464,13 +1464,19 @@ static void ra_login_callback(int result, const char* error_message,
 		// The RA server builds avatar_url from the internal username field
 		// (e.g. "/UserPic/SammySwagz.png"), which may differ from
 		// display_name if the user has renamed their account.
+		bool have_server_username = false;
 		if (user && user->avatar_url) {
-			CFG_setRAServerUsernameFromAvatarUrl(user->avatar_url);
-			if (strlen(CFG_getRAServerUsername()) > 0) {
+			have_server_username = CFG_setRAServerUsernameFromAvatarUrl(user->avatar_url);
+			if (have_server_username) {
 				RA_LOG_INFO("Extracted server username from avatar_url: '%s' "
 				            "(display_name: '%s')\n",
 				            CFG_getRAServerUsername(), user->display_name);
 			}
+		}
+		if (!have_server_username) {
+			// avatar_url missing or unparseable — clear any stale value so
+			// offline sync falls back to the user-entered username.
+			CFG_setRAServerUsername("");
 		}
 		
 		// Trigger deferred game load if one is pending
@@ -1831,10 +1837,13 @@ static int ra_connectivity_probe_func(void* data) {
 			// Check for "Success":true in response (handles optional space)
 			if (ra_find_json_bool(http_resp->data, "Success") == 1) {
 				// Extract server username from AvatarUrl in JSON response.
-				CFG_setRAServerUsernameFromAvatarUrl(http_resp->data);
-				if (strlen(CFG_getRAServerUsername()) > 0) {
+				if (CFG_setRAServerUsernameFromAvatarUrl(http_resp->data)) {
 					RA_LOG_INFO("Probe: extracted server username "
 					            "from AvatarUrl: '%s'\n", CFG_getRAServerUsername());
+				} else {
+					// AvatarUrl missing or unparseable — clear any stale value
+					// so offline sync falls back to the user-entered username.
+					CFG_setRAServerUsername("");
 				}
 				
 				// Cache the login response (write-through)

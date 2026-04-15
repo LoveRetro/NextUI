@@ -374,8 +374,10 @@ const char* CFG_getRAServerUsername(void);
 void CFG_setRAServerUsername(const char* username);
 // Extract the RA server's internal username from any string containing
 // "/UserPic/USERNAME.png" (e.g. an avatar URL or raw JSON) and persist
-// it via CFG_setRAServerUsername().  No-op if the pattern is not found.
-void CFG_setRAServerUsernameFromAvatarUrl(const char* str);
+// it via CFG_setRAServerUsername().  Returns true if a username was
+// extracted and stored; returns false (and leaves any existing stored
+// value untouched) if the pattern is missing or malformed.
+bool CFG_setRAServerUsernameFromAvatarUrl(const char* str);
 bool CFG_getRAAuthenticated(void);
 void CFG_setRAAuthenticated(bool authenticated);
 bool CFG_getRAShowNotifications(void);

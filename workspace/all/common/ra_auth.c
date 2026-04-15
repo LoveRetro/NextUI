@@ -31,10 +31,22 @@ static void parse_login_response(const char* json, RA_AuthResponse* response) {
         // The RA server builds AvatarUrl from the internal username field
         // (e.g. "/UserPic/SammySwagz.png"), which may differ from the
         // display_name if the user has renamed their account.
+        // Unfortunately, there is no current other way with the RA api to get the orginal 
+        // username which was used, and if an offline achievement was send with an updated
+        // name, the server will reject the unlock time, and use the current time instead.
         {
             char avatar_url[256] = {0};
+            bool have_server_username = false;
             if (ra_find_json_string(json, "AvatarUrl", avatar_url, sizeof(avatar_url))) {
-                CFG_setRAServerUsernameFromAvatarUrl(avatar_url);
+                have_server_username = CFG_setRAServerUsernameFromAvatarUrl(avatar_url);
+            }
+            if (!have_server_username) {
+                // AvatarUrl missing or malformed — clear any stale value from a
+                // prior login so offline sync falls back to CFG_getRAUsername().
+                // This may produce incorrect unlock timestamps for renamed
+                // accounts, but it's better than signing unlocks with a stale
+                // internal username the server no longer recognizes.
+                CFG_setRAServerUsername("");
             }
         }
         

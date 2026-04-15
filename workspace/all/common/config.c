@@ -985,20 +985,21 @@ void CFG_setRAServerUsername(const char* username)
     CFG_sync();
 }
 
-void CFG_setRAServerUsernameFromAvatarUrl(const char* str)
+bool CFG_setRAServerUsernameFromAvatarUrl(const char* str)
 {
-    if (!str) return;
+    if (!str) return false;
     const char* marker = strstr(str, "/UserPic/");
-    if (!marker) return;
+    if (!marker) return false;
     marker += 9; /* skip past "/UserPic/" */
     const char* dot = strstr(marker, ".png");
-    if (!dot || dot <= marker) return;
+    if (!dot || dot <= marker) return false;
     size_t len = (size_t)(dot - marker);
-    if (len == 0 || len >= sizeof(settings.raServerUsername)) return;
+    if (len == 0 || len >= sizeof(settings.raServerUsername)) return false;
     char username[64];
     memcpy(username, marker, len);
     username[len] = '\0';
     CFG_setRAServerUsername(username);
+    return true;
 }
 
 bool CFG_getRAAuthenticated(void)
