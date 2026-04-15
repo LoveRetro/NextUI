@@ -50,60 +50,6 @@ static void sync_ensure_init(void) {
 }
 
 /**
- * If raServerUsername is not yet populated, do a lightweight token-based
- * login to the RA server and extract the internal username from the
- * AvatarUrl field.
- *
- * In the current codebase this HTTP fallback is never reached: all paths
- * that trigger RA_Sync_syncAll() (game-load sync, probe-success sync,
- * reconnect sync) set raServerUsername via the login callback or probe
- * login before sync starts.  The fallback is retained for a planned
- * future call path: settings-app batch sync, which may run before any
- * minarch login has occurred (e.g. first sync after a firmware update
- * that introduces the raServerUsername field).
- *
- * Returns the server username (from config — either pre-existing or
- * freshly fetched).  Returns NULL/empty on failure.
- */
-static const char* sync_resolve_server_username(void) {
-	const char* cached = CFG_getRAServerUsername();
-	if (cached && strlen(cached) > 0)
-		return cached;
-
-	const char* username = CFG_getRAUsername();
-	const char* token = CFG_getRAToken();
-	if (!username || !token || strlen(username) == 0 || strlen(token) == 0)
-		return NULL;
-
-	SYNC_LOG_INFO("raServerUsername empty — performing login to resolve\n");
-
-	/* Build token-based login request with URL-encoded credentials */
-	char post_data[512];
-	if (!ra_build_login_post_token(username, token, post_data, sizeof(post_data))) {
-		SYNC_LOG_ERROR("Failed to build login POST\n");
-		return NULL;
-	}
-
-	HTTP_Response* resp = HTTP_post(RA_API_URL, post_data, NULL);
-	if (!resp || resp->http_status != 200 || !resp->data || resp->size == 0) {
-		SYNC_LOG_WARN("Login for server username failed (status=%d)\n",
-		              resp ? resp->http_status : -1);
-		if (resp) HTTP_freeResponse(resp);
-		return NULL;
-	}
-
-	/* Extract server username from AvatarUrl in login response */
-	CFG_setRAServerUsernameFromAvatarUrl(resp->data);
-	const char* resolved = CFG_getRAServerUsername();
-	if (resolved && strlen(resolved) > 0) {
-		SYNC_LOG_INFO("Resolved server username: '%s'\n", resolved);
-	}
-
-	HTTP_freeResponse(resp);
-	return CFG_getRAServerUsername();
-}
-
-/**
  * Generate a random delay in [min_ms, max_ms].
  */
 static uint32_t sync_random_delay(uint32_t min_ms, uint32_t max_ms) {
@@ -268,12 +214,13 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 
 	/* Get credentials.
 	 * For the username used in hash validation, prefer the server (internal)
-	 * username extracted from the AvatarUrl during login.  This may differ
-	 * from the display_name / locally-configured username if the user has
-	 * renamed their account.  If the server username isn't cached yet
-	 * (e.g. first sync after a firmware update), do a lightweight login
-	 * to resolve it on the fly. */
-	const char* server_username = sync_resolve_server_username();
+	 * username captured from the AvatarUrl during the user's last settings-
+	 * initiated authentication.  This may differ from the locally-configured
+	 * username if the user has renamed their account.  If it's empty, fall
+	 * back to CFG_getRAUsername() — unlock timestamps may be rejected for
+	 * renamed accounts, but the user can refresh by re-authenticating in
+	 * settings. */
+	const char* server_username = CFG_getRAServerUsername();
 	const char* username = (server_username && strlen(server_username) > 0)
 	                        ? server_username
 	                        : CFG_getRAUsername();
