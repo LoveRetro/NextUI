@@ -29,10 +29,10 @@ static void parse_login_response(const char* json, RA_AuthResponse* response) {
         
         // Extract internal (server) username from AvatarUrl.
         // The RA server builds AvatarUrl from the internal username field
-        // (e.g. "/UserPic/SammySwagz.png"), which may differ from the
+        // (e.g. "/UserPic/MyOriginalUserName.png"), which may differ from the
         // display_name if the user has renamed their account.
         // Unfortunately, there is no current other way with the RA api to get the orginal 
-        // username which was used, and if an offline achievement was send with an updated
+        // username which was used, and if an offline achievement was sent with an updated
         // name, the server will reject the unlock time, and use the current time instead.
         {
             char avatar_url[256] = {0};
