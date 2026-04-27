@@ -4516,6 +4516,11 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		if (message) LOG_info("%s\n", message->msg);
 		break;
 	}
+	case RETRO_ENVIRONMENT_SHUTDOWN: { /* 7 */
+		LOG_info("Core requested shutdown\n");
+		quit = 1;
+		break;
+	}
 	case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: { /* 8 */
 		// puts("RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL");
 		// TODO: used by fceumm at least
@@ -6940,7 +6945,7 @@ static int OptionPragmas_openMenu(MenuList* list, int i) {
 		totalcount += config.shaderpragmas[y].count;
 	}
 	PragmasOptions_menu.items = calloc(totalcount + 1, sizeof(MenuItem));
-	for (int y=0; y < SH_NROFSHADERS; y++) {
+	for (int y=0; y < config.shaders.options[SH_NROFSHADERS].value; y++) {
 		for (int j = 0; j < config.shaderpragmas[y].count; j++) {
 			MenuItem* item = &PragmasOptions_menu.items[progressCount];
 			Option* configitem = &config.shaderpragmas[y].options[j];
@@ -6973,9 +6978,20 @@ static int OptionShaders_optionChanged(MenuList* list, int i) {
 		MenuItem* item = &list->items[y];
 		item->value = config.shaders.options[y].value;
 	}
-	// Recursively call Config_syncShaders again for some reason
-	if(i==SH_SHADERS_PRESET) 
+
+	if(i==SH_SHADERS_PRESET) {
+		// On shader preset change:
+		// Push all new shader settings to shader engine,
+		// compile shaders if needed, populate pragmas list
 		initShaders();
+
+		// Now that we have a list of shader parameters,
+		// re-read shader preset file to set pragma values in-menu
+		Config_syncShaders(item->key, item->value);
+
+		// Push parameters to shader engine
+		applyShaderSettings();
+	}
 	return MENU_CALLBACK_NOP;
 }
 
@@ -8856,7 +8872,7 @@ static void limitFF(void) {
 	last_time = now;
 }
 
-static void Rewind_run_frame(void) {
+static void run_frame(void) {
 	// if rewind is toggled, fast-forward toggle must stay off; fast-forward hold pauses rewind
 	int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
 	if (do_rewind) {
@@ -8909,16 +8925,8 @@ static void Rewind_run_frame(void) {
 			ff_paused_by_rewind_hold = 0;
 		}
 
-		int ff_runs = 1;
-		if (fast_forward) {
-			// when "None" is selected, assume a modest 2x instead of unbounded spam
-			ff_runs = max_ff_speed ? max_ff_speed + 1 : 2;
-		}
-
-		for (int ff_step = 0; ff_step < ff_runs; ff_step++) {
-			core.run();
-			Rewind_push(0);
-		}
+		core.run();
+		Rewind_push(0);
 	}
 	limitFF();
 }
@@ -9089,7 +9097,7 @@ int main(int argc , char* argv[]) {
 	while (!quit) {
 		GFX_startFrame();
 
-		Rewind_run_frame();
+		run_frame();
 		
 		// Process RetroAchievements for this frame
 		RA_doFrame();
