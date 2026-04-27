@@ -613,12 +613,18 @@ void PLAT_animateSurface(
 	int target_opacity,
 	int layer
 );
+#define ANIM_LINEAR      0
+#define ANIM_EASE_OUT    1  // fast start, slows to stop
+#define ANIM_EASE_IN     2  // slow start, fast exit
+#define ANIM_EASE_IN_OUT 3  // slow start, fast middle, slow end
+
 void PLAT_animateAndFadeSurface(
 	SDL_Surface *inputSurface,
 	int x, int y, int target_x, int target_y, int w, int h, int duration_ms,
 	SDL_Surface *fadeSurface,
-	int fade_x, int fade_y, int fade_w, int fade_h,
-	int start_opacity, int target_opacity, int layer
+	int fade_x, int fade_y, int fade_target_x, int fade_target_y, int fade_w, int fade_h,
+	int start_opacity, int target_opacity, int layer,
+	int input_easing, int fade_easing, int intensity
 );
 
 void PLAT_animateSurfaceOpacity(SDL_Surface *inputSurface, int x, int y, int w, int h,
