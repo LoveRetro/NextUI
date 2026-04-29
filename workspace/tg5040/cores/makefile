@@ -52,7 +52,7 @@ fbneo_REPO = https://github.com/libretro/FBNeo
 fbneo_CORE = fbneo_libretro.so
 fbneo_BUILD_PATH = fbneo/src/burner/libretro
 fbneo_MAKE = make
-fbneo_HASH = aaecfedbb206a79d0e35a0dfe922622b921a66f7
+fbneo_HASH = 8e96a4a38506054b2d9ceb9f5e93689f143359e7
 
 mednafen_pce_fast_REPO = https://github.com/libretro/beetle-pce-fast-libretro
 mednafen_vb_REPO = https://github.com/libretro/beetle-vb-libretro

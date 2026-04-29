@@ -1,7 +1,7 @@
 diff --git a/src/burner/libretro/Makefile b/src/burner/libretro/Makefile
 old mode 100644
 new mode 100755
-index 0f097afd7..a70405dd3 100644
+index 0f097afd7..a70405dd3
 --- a/src/burner/libretro/Makefile
 +++ b/src/burner/libretro/Makefile
 @@ -359,6 +359,22 @@ else ifeq ($(platform), classic_armv7_a7)
@@ -28,10 +28,10 @@ index 0f097afd7..a70405dd3 100644
  # Playstation Classic
  else ifeq ($(platform), classic_armv8_a35)
 diff --git a/src/burner/libretro/libretro.cpp b/src/burner/libretro/libretro.cpp
-index 9181b189b..1cc0ce3ab 100644
+index 6cf17df9f..59ba0cb05 100644
 --- a/src/burner/libretro/libretro.cpp
 +++ b/src/burner/libretro/libretro.cpp
-@@ -78,7 +78,7 @@ INT32 nAudSegLen = 0;
+@@ -71,7 +71,7 @@ INT32 nAudSegLen = 0;
  
  static UINT8* pVidImage              = NULL;
  static bool bVidImageNeedRealloc     = false;
@@ -40,7 +40,7 @@ index 9181b189b..1cc0ce3ab 100644
  static int16_t *pAudBuffer           = NULL;
  static char text_missing_files[2048] = "";
  
-@@ -1569,7 +1569,52 @@ void retro_run()
+@@ -1579,7 +1579,52 @@ void retro_run()
  		pBurnDraw = NULL;
  	}
  
@@ -94,7 +94,7 @@ index 9181b189b..1cc0ce3ab 100644
  
  	bool updated = false;
  	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
-@@ -1587,7 +1632,7 @@ void retro_run()
+@@ -1597,7 +1642,7 @@ void retro_run()
  		// change orientation/geometry if vertical mode was toggled on/off
  		if (old_nVerticalMode != nVerticalMode)
  		{
@@ -103,7 +103,7 @@ index 9181b189b..1cc0ce3ab 100644
  			struct retro_system_av_info av_info;
  			retro_get_system_av_info(&av_info);
  			environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &av_info);
-@@ -2217,7 +2262,7 @@ static bool retro_load_game_common()
+@@ -2227,7 +2272,7 @@ static bool retro_load_game_common()
  
  		// Initializing display, autorotate if needed
  		BurnDrvGetFullSize(&nGameWidth, &nGameHeight);
