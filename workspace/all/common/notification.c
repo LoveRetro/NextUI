@@ -14,6 +14,8 @@
 #define NOTIF_MARGIN        12   // Margin from screen edge
 #define NOTIF_STACK_GAP      6   // Gap between stacked notifications
 #define NOTIF_ICON_GAP       4   // Gap between icon and text
+#define NOTIF_SLIDE_IN_MS   180  // Slide-in animation duration
+#define NOTIF_FADE_OUT_MS   250  // Fade-out animation duration
 
 // System indicator sizing (must match GFX_blitHardwareIndicator dimensions)
 #define SYS_INDICATOR_EXTRA_PAD  4   // Extra padding for indicator pill
@@ -41,7 +43,7 @@ static int notif_margin;
 static int notif_stack_gap;
 static int notif_icon_gap;
 
-// Track if we need to re-render (only when notifications change)
+// Track if we need to re-render when static state changes
 static int render_dirty = 1;
 static int last_notification_count = 0;
 
@@ -141,6 +143,23 @@ static void remove_notification(int index) {
     render_dirty = 1;
 }
 
+static int notification_is_animating(const Notification* n, uint32_t now) {
+    uint32_t elapsed = now - n->start_time;
+    if (elapsed < NOTIF_SLIDE_IN_MS) return 1;
+    if (elapsed > n->duration_ms && elapsed < (n->duration_ms + NOTIF_FADE_OUT_MS)) return 1;
+    return 0;
+}
+
+static Uint8 notification_alpha(const Notification* n, uint32_t now) {
+    uint32_t elapsed = now - n->start_time;
+    if (elapsed <= n->duration_ms) return 255;
+
+    uint32_t fade_elapsed = elapsed - n->duration_ms;
+    if (fade_elapsed >= NOTIF_FADE_OUT_MS) return 0;
+
+    return (Uint8)(((NOTIF_FADE_OUT_MS - fade_elapsed) * 255U) / NOTIF_FADE_OUT_MS);
+}
+
 ///////////////////////////////
 // Public API
 ///////////////////////////////
@@ -227,7 +246,7 @@ void Notification_update(uint32_t now) {
         Notification* n = &notifications[i];
         uint32_t elapsed = now - n->start_time;
         
-        if (n->state == NOTIFICATION_STATE_VISIBLE && elapsed >= n->duration_ms) {
+        if (n->state == NOTIFICATION_STATE_VISIBLE && elapsed >= (n->duration_ms + NOTIF_FADE_OUT_MS)) {
             n->state = NOTIFICATION_STATE_DONE;
         }
     }
@@ -333,7 +352,9 @@ static void render_progress_indicator(void) {
 }
 
 // Render a single notification pill
-static void render_notification_pill(Notification* n, int x, int y, SDL_Color text_color, SDL_Color bg_color_sdl) {
+static void render_notification_pill(Notification* n, int x, int y, Uint8 alpha, SDL_Color text_color, SDL_Color bg_color_sdl) {
+    if (alpha == 0) return;
+
     int text_w = 0, text_h = 0;
     TTF_SizeUTF8(font.tiny, n->message, &text_w, &text_h);
     
@@ -374,14 +395,19 @@ static void render_notification_pill(Notification* n, int x, int y, SDL_Color te
         SDL_FreeSurface(text_surf);
     }
     
-    SDL_SetSurfaceBlendMode(notif_surface, SDL_BLENDMODE_NONE);
+    if (alpha < 255) {
+        SDL_SetSurfaceBlendMode(notif_surface, SDL_BLENDMODE_BLEND);
+        SDL_SetSurfaceAlphaMod(notif_surface, alpha);
+    } else {
+        SDL_SetSurfaceBlendMode(notif_surface, SDL_BLENDMODE_NONE);
+    }
     SDL_Rect dst_rect = {x, y, pill_w, pill_h};
     SDL_BlitSurface(notif_surface, NULL, gl_notification_surface, &dst_rect);
     SDL_FreeSurface(notif_surface);
 }
 
 // Render notification stack (bottom-left, stacking upward)
-static void render_notification_stack(void) {
+static void render_notification_stack(uint32_t now) {
     SDL_Color text_color = uintToColour(THEME_COLOR1_255);
     SDL_Color bg_color_sdl = uintToColour(THEME_COLOR2_255);
     
@@ -391,8 +417,17 @@ static void render_notification_stack(void) {
     for (int i = 0; i < notification_count; i++) {
         Notification* n = &notifications[i];
         
-        int text_h = 0;
-        TTF_SizeUTF8(font.tiny, n->message, NULL, &text_h);
+        int text_w = 0, text_h = 0;
+        TTF_SizeUTF8(font.tiny, n->message, &text_w, &text_h);
+
+        int icon_w = 0, icon_h = 0, icon_total_w = 0;
+        if (n->icon) {
+            icon_h = text_h;
+            icon_w = (n->icon->w * icon_h) / n->icon->h;
+            icon_total_w = icon_w + notif_icon_gap;
+        }
+
+        int pill_w = icon_total_w + text_w + (notif_padding_x * 2);
         int pill_h = text_h + (notif_padding_y * 2);
         
         // Calculate stack offset (how far up from base)
@@ -405,9 +440,16 @@ static void render_notification_stack(void) {
         }
         
         int x = base_x;
+        uint32_t elapsed = now - n->start_time;
+        if (elapsed < NOTIF_SLIDE_IN_MS) {
+            int start_x = -pill_w;
+            x = start_x + (int)((elapsed * (uint32_t)(base_x - start_x)) / NOTIF_SLIDE_IN_MS);
+        }
+
         int y = base_y - pill_h - stack_offset;
+        Uint8 alpha = notification_alpha(n, now);
         
-        render_notification_pill(n, x, y, text_color, bg_color_sdl);
+        render_notification_pill(n, x, y, alpha, text_color, bg_color_sdl);
     }
 }
 
@@ -445,9 +487,20 @@ void Notification_renderToLayer(int layer) {
     
     // We have notifications or indicators
     needs_clear_frame = 1;
+
+    uint32_t now = SDL_GetTicks();
+    int notifications_animating = 0;
+    if (has_notifications) {
+        for (int i = 0; i < notification_count; i++) {
+            if (notification_is_animating(&notifications[i], now)) {
+                notifications_animating = 1;
+                break;
+            }
+        }
+    }
     
     // Check if anything changed
-    int notifications_changed = render_dirty || notification_count != last_notification_count;
+    int notifications_changed = render_dirty || notification_count != last_notification_count || notifications_animating;
     int indicator_changed = system_indicator_dirty || system_indicator_type != last_system_indicator_type;
     int progress_changed = progress_state.dirty;
     
@@ -476,7 +529,7 @@ void Notification_renderToLayer(int layer) {
         render_progress_indicator();
     }
     if (has_notifications) {
-        render_notification_stack();
+        render_notification_stack(now);
     }
     
     // Set the notification surface for GL rendering
