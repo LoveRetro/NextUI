@@ -108,7 +108,7 @@ typedef struct
 	bool clock24h;
 	bool showBatteryPercent;
 	bool showMenuAnimations;
-	bool showMenuTransitions;
+	int showMenuTransitions; // 0=off, 1=snappy, 2=comfy
 	bool showRecents;
 	bool showTools;
 	bool showCollections;
@@ -133,7 +133,7 @@ typedef struct
 
 	// Haptic
 	bool haptics;
-	
+
 	// Networking
 	bool ntp;
 	int currentTimezone; // index of timezone in tz database
@@ -165,6 +165,11 @@ typedef struct
 
 } NextUISettings;
 
+// Transition mode constants
+#define TRANSITION_OFF    0
+#define TRANSITION_SNAPPY 1
+#define TRANSITION_COMFY  2
+
 #define CFG_DEFAULT_FONT_ID 1  // Next
 #define CFG_DEFAULT_COLOR1 0xffffffU
 #define CFG_DEFAULT_COLOR2 0x9b2257U
@@ -185,7 +190,7 @@ typedef struct
 #define CFG_DEFAULT_CLOCK24H true
 #define CFG_DEFAULT_SHOWBATTERYPERCENT false
 #define CFG_DEFAULT_SHOWMENUANIMATIONS true
-#define CFG_DEFAULT_SHOWMENUTRANSITIONS true
+#define CFG_DEFAULT_SHOWMENUTRANSITIONS TRANSITION_SNAPPY
 #define CFG_DEFAULT_SHOWRECENTS true
 #define CFG_DEFAULT_SHOWCOLLECTIONS true
 #define CFG_DEFAULT_SHOWGAMEART true
@@ -232,6 +237,12 @@ typedef struct
 #define CFG_DEFAULT_RA_PROGRESS_NOTIFICATION_DURATION 1
 #define CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER RA_SORT_UNLOCKED_FIRST
 
+// Transition animation parameters (fixed per mode)
+#define TRANSITION_SNAPPY_DURATION  150
+#define TRANSITION_COMFY_DURATION   250
+#define TRANSITION_CURVE            1   // ANIM_EASE_OUT
+#define TRANSITION_INTENSITY        3
+
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
 void CFG_get(const char *key, char * value);
@@ -269,9 +280,9 @@ void CFG_setShowBatteryPercent(bool show);
 // Show/hide menu animations in main menu.
 bool CFG_getMenuAnimations(void);
 void CFG_setMenuAnimations(bool show);
-// Show/hide menu transitions between screens in main menu.
-bool CFG_getMenuTransitions(void);
-void CFG_setMenuTransitions(bool show);
+// Menu transition mode: TRANSITION_OFF, TRANSITION_SNAPPY, TRANSITION_COMFY.
+int CFG_getMenuTransitions(void);
+void CFG_setMenuTransitions(int mode);
 // Set thumbnail rounding radius.
 int CFG_getThumbnailRadius(void);
 void CFG_setThumbnailRadius(int radius);

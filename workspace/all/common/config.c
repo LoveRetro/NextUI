@@ -92,6 +92,7 @@ void CFG_defaults(NextUISettings *cfg)
         .raNotificationDuration = CFG_DEFAULT_RA_NOTIFICATION_DURATION,
         .raProgressNotificationDuration = CFG_DEFAULT_RA_PROGRESS_NOTIFICATION_DURATION,
         .raAchievementSortOrder = CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER,
+
 };
 
     *cfg = defaults;
@@ -188,7 +189,8 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             }
             if (sscanf(line, "menutransitions=%i", &temp_value) == 1)
             {
-                CFG_setMenuTransitions((bool)temp_value);
+                // Old bool values (0/1) map directly: 0=off, 1=snappy.
+                CFG_setMenuTransitions(temp_value);
                 continue;
             }
             if (sscanf(line, "recents=%i", &temp_value) == 1)
@@ -591,14 +593,14 @@ void CFG_setMenuAnimations(bool show)
     CFG_sync();
 }
 
-bool CFG_getMenuTransitions(void)
+int CFG_getMenuTransitions(void)
 {
     return settings.showMenuTransitions;
 }
 
-void CFG_setMenuTransitions(bool show)
+void CFG_setMenuTransitions(int mode)
 {
-    settings.showMenuTransitions = show;
+    settings.showMenuTransitions = mode;
     CFG_sync();
 }
 
