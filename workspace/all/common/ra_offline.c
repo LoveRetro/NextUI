@@ -1,6 +1,8 @@
+#define RA_LOG_PREFIX "RA_OFFLINE"
+#include "ra_log.h"
+
 #include "ra_offline.h"
 #include "ra_util.h"
-#include "sha256.h"
 #include "defines.h"
 #include "api.h"
 
@@ -12,12 +14,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <SDL2/SDL_atomic.h>
+#include <openssl/evp.h>
 
-/* Logging macros using NextUI's LOG_* infrastructure */
-#define OFFLINE_LOG_DEBUG(fmt, ...) LOG_debug("[RA_OFFLINE] " fmt, ##__VA_ARGS__)
-#define OFFLINE_LOG_INFO(fmt, ...)  LOG_info("[RA_OFFLINE] " fmt, ##__VA_ARGS__)
-#define OFFLINE_LOG_WARN(fmt, ...)  LOG_warn("[RA_OFFLINE] " fmt, ##__VA_ARGS__)
-#define OFFLINE_LOG_ERROR(fmt, ...) LOG_error("[RA_OFFLINE] " fmt, ##__VA_ARGS__)
+#define NUI_SHA256_DIGEST_SIZE 32
 
 /*****************************************************************************
  * Static state
@@ -182,19 +181,19 @@ static bool cache_read_file(const char* path, char** out_body, size_t* out_len) 
 
 	uint32_t len32;
 	if (fread(&len32, sizeof(len32), 1, f) != 1 || len32 > 8 * 1024 * 1024) {
-		OFFLINE_LOG_WARN("Cache file corrupt or too large: %s\n", path);
+		RA_LOG_WARN("Cache file corrupt or too large: %s\n", path);
 		fclose(f);
 		return false;
 	}
 
 	char* body = (char*)malloc(len32 + 1);
 	if (!body) {
-		OFFLINE_LOG_ERROR("Failed to allocate %u bytes for cache read: %s\n", len32, path);
+		RA_LOG_ERROR("Failed to allocate %u bytes for cache read: %s\n", len32, path);
 		fclose(f);
 		return false;
 	}
 	if (fread(body, 1, len32, f) != len32) {
-		OFFLINE_LOG_WARN("Cache file truncated: %s\n", path);
+		RA_LOG_WARN("Cache file truncated: %s\n", path);
 		free(body);
 		fclose(f);
 		return false;
@@ -203,7 +202,7 @@ static bool cache_read_file(const char* path, char** out_body, size_t* out_len) 
 
 	uint8_t stored_digest[NUI_SHA256_DIGEST_SIZE];
 	if (fread(stored_digest, NUI_SHA256_DIGEST_SIZE, 1, f) != 1) {
-		OFFLINE_LOG_WARN("Cache file missing digest: %s\n", path);
+		RA_LOG_WARN("Cache file missing digest: %s\n", path);
 		free(body);
 		fclose(f);
 		return false;
@@ -211,9 +210,9 @@ static bool cache_read_file(const char* path, char** out_body, size_t* out_len) 
 	fclose(f);
 
 	uint8_t computed_digest[NUI_SHA256_DIGEST_SIZE];
-	nui_sha256_hash(body, len32, computed_digest);
+	EVP_Digest(body, len32, computed_digest, NULL, EVP_sha256(), NULL);
 	if (memcmp(stored_digest, computed_digest, NUI_SHA256_DIGEST_SIZE) != 0) {
-		OFFLINE_LOG_WARN("Cache file SHA-256 mismatch (corrupt): %s\n", path);
+		RA_LOG_WARN("Cache file SHA-256 mismatch (corrupt): %s\n", path);
 		free(body);
 		unlink(path);
 		return false;
@@ -237,11 +236,11 @@ static bool cache_read_file(const char* path, char** out_body, size_t* out_len) 
  */
 static bool cache_write_file(const char* path, const char* body, size_t len) {
 	uint8_t digest[NUI_SHA256_DIGEST_SIZE];
-	nui_sha256_hash(body, len, digest);
+	EVP_Digest(body, len, digest, NULL, EVP_sha256(), NULL);
 
 	FILE* f = fopen(path, "wb");
 	if (!f) {
-		OFFLINE_LOG_ERROR("Failed to open cache file for writing: %s (%s)\n",
+		RA_LOG_ERROR("Failed to open cache file for writing: %s (%s)\n",
 		                  path, strerror(errno));
 		return false;
 	}
@@ -253,7 +252,7 @@ static bool cache_write_file(const char* path, const char* body, size_t len) {
 	written += fwrite(digest, NUI_SHA256_DIGEST_SIZE, 1, f);
 
 	if (written < 3) {
-		OFFLINE_LOG_ERROR("Failed to write cache file: %s\n", path);
+		RA_LOG_ERROR("Failed to write cache file: %s\n", path);
 		fclose(f);
 		unlink(path);
 		return false;
@@ -278,7 +277,7 @@ void RA_Offline_cacheResponse(const char* url, const char* post_data,
 	if (path[0] == '\0') return;
 
 	if (cache_write_file(path, response_body, response_len)) {
-		OFFLINE_LOG_DEBUG("Cached %s response (%zu bytes) to %s\n",
+		RA_LOG_DEBUG("Cached %s response (%zu bytes) to %s\n",
 		                  req_type, response_len, path);
 	}
 }
@@ -379,7 +378,7 @@ static uint32_t inject_unlocks_into_array(const char* body, size_t body_len,
 	/* Log each achievement being injected */
 	for (uint32_t i = 0; i < pending_count; i++) {
 		if (!need_inject[i]) continue;
-		OFFLINE_LOG_INFO("inject_unlocks: %s ach=%u timestamp=%u\n",
+		RA_LOG_INFO("inject_unlocks: %s ach=%u timestamp=%u\n",
 		                 array_key, pending[i].achievement_id,
 		                 pending[i].timestamp);
 	}
@@ -463,7 +462,7 @@ static bool patch_startsession_with_ledger(char* body, size_t body_len,
 			pending, pending_count, game_hash,
 			&new_body, &new_len);
 		if (injected > 0 && new_body) {
-			OFFLINE_LOG_DEBUG("Patching startsession: injected %u ledger unlocks "
+			RA_LOG_DEBUG("Patching startsession: injected %u ledger unlocks "
 			                 "into Unlocks array\n", injected);
 			if (body_replaced) {
 				free(current_body);
@@ -484,7 +483,7 @@ static bool patch_startsession_with_ledger(char* body, size_t body_len,
 			pending, pending_count, game_hash,
 			&new_body, &new_len);
 		if (injected > 0 && new_body) {
-			OFFLINE_LOG_DEBUG("Patching startsession: injected %u ledger unlocks "
+			RA_LOG_DEBUG("Patching startsession: injected %u ledger unlocks "
 			                 "into HardcoreUnlocks array\n", injected);
 			if (body_replaced) {
 				free(current_body);
@@ -499,7 +498,7 @@ static bool patch_startsession_with_ledger(char* body, size_t body_len,
 	free(pending);
 
 	if (total_injected > 0 && body_replaced) {
-		OFFLINE_LOG_DEBUG("Patched startsession: %zu -> %zu bytes\n",
+		RA_LOG_DEBUG("Patched startsession: %zu -> %zu bytes\n",
 		                 body_len, current_len);
 		free(body);
 		*out_body = current_body;
@@ -550,11 +549,11 @@ bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
 	if (path[0] == '\0') return false;
 
 	if (!cache_read_file(path, out_body, out_len)) {
-		OFFLINE_LOG_DEBUG("Cache miss for %s: %s\n", req_type, path);
+		RA_LOG_DEBUG("Cache miss for %s: %s\n", req_type, path);
 		return false;
 	}
 
-	OFFLINE_LOG_DEBUG("Cache hit for %s (%zu bytes) from %s\n",
+	RA_LOG_DEBUG("Cache hit for %s (%zu bytes) from %s\n",
 	                  req_type, *out_len, path);
 
 	/* For startsession responses served from cache, patch in any pending ledger unlocks
@@ -570,9 +569,9 @@ bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
 		size_t pre_patch_len = *out_len;
 		if (!patch_startsession_with_ledger(*out_body, *out_len, game_hash,
 		                                    out_body, out_len)) {
-			OFFLINE_LOG_WARN("Failed to patch startsession with ledger data\n");
+			RA_LOG_WARN("Failed to patch startsession with ledger data\n");
 		} else if (*out_len != pre_patch_len) {
-			OFFLINE_LOG_INFO("Patched offline startsession (%zu -> %zu bytes)\n",
+			RA_LOG_INFO("Patched offline startsession (%zu -> %zu bytes)\n",
 			                 pre_patch_len, *out_len);
 		}
 	}
@@ -589,14 +588,14 @@ bool RA_Offline_getCachedResponse(const char* url, const char* post_data,
  * This hashes the entire record including its record_hash field.
  */
 static void ledger_hash_record(const RA_LedgerRecord* rec, uint8_t out[NUI_SHA256_DIGEST_SIZE]) {
-	nui_sha256_hash(rec, sizeof(RA_LedgerRecord), out);
+	EVP_Digest(rec, sizeof(RA_LedgerRecord), out, NULL, EVP_sha256(), NULL);
 }
 
 /**
  * Compute the record_hash field (hashes everything except record_hash itself).
  */
 static void ledger_compute_record_hash(RA_LedgerRecord* rec) {
-	nui_sha256_hash(rec, RA_LEDGER_RECORD_HASHABLE_SIZE, rec->record_hash);
+	EVP_Digest(rec, RA_LEDGER_RECORD_HASHABLE_SIZE, rec->record_hash, NULL, EVP_sha256(), NULL);
 }
 
 /**
@@ -606,7 +605,7 @@ static void ledger_compute_record_hash(RA_LedgerRecord* rec) {
 static uint32_t ledger_validate_and_load(void) {
 	FILE* f = fopen(ra_ledger_path, "rb");
 	if (!f) {
-		OFFLINE_LOG_DEBUG("No ledger file found (will create on first write)\n");
+		RA_LOG_DEBUG("No ledger file found (will create on first write)\n");
 		memset(ra_ledger_last_hash, 0, NUI_SHA256_DIGEST_SIZE);
 		ra_ledger_has_records = false;
 		return 0;
@@ -624,7 +623,7 @@ static uint32_t ledger_validate_and_load(void) {
 
 		/* Verify prev_hash chain */
 		if (memcmp(rec.prev_hash, prev_hash, NUI_SHA256_DIGEST_SIZE) != 0) {
-			OFFLINE_LOG_WARN("Ledger chain broken at record %u (skipping)\n", total_read - 1);
+			RA_LOG_WARN("Ledger chain broken at record %u (skipping)\n", total_read - 1);
 			chain_broken = true;
 			/* Reset chain expectation to this record's actual prev_hash
 			 * so we can continue validating subsequent records */
@@ -632,9 +631,9 @@ static uint32_t ledger_validate_and_load(void) {
 
 		/* Verify record_hash (self-integrity, independent of chain) */
 		uint8_t expected_hash[NUI_SHA256_DIGEST_SIZE];
-		nui_sha256_hash(&rec, RA_LEDGER_RECORD_HASHABLE_SIZE, expected_hash);
+		EVP_Digest(&rec, RA_LEDGER_RECORD_HASHABLE_SIZE, expected_hash, NULL, EVP_sha256(), NULL);
 		if (memcmp(rec.record_hash, expected_hash, NUI_SHA256_DIGEST_SIZE) != 0) {
-			OFFLINE_LOG_WARN("Ledger record_hash invalid at record %u (skipping)\n", total_read - 1);
+			RA_LOG_WARN("Ledger record_hash invalid at record %u (skipping)\n", total_read - 1);
 			chain_broken = true;
 			/* Skip this record but continue reading — don't update prev_hash
 			 * so the next record's chain link will also break, but we'll
@@ -653,14 +652,14 @@ static uint32_t ledger_validate_and_load(void) {
 		/* Chain was broken but we recovered what we could. Compact to fix.
 		 * Don't truncate — that loses valid records after the break point.
 		 * Instead, trigger a compaction on next sync to rebuild the chain. */
-		OFFLINE_LOG_WARN("Ledger has chain integrity issues (%u/%u records valid). "
+		RA_LOG_WARN("Ledger has chain integrity issues (%u/%u records valid). "
 		                 "Will be repaired on next compaction.\n", valid_count, total_read);
 	}
 
 	memcpy(ra_ledger_last_hash, prev_hash, NUI_SHA256_DIGEST_SIZE);
 	ra_ledger_has_records = (valid_count > 0);
 
-	OFFLINE_LOG_DEBUG("Ledger loaded: %u valid records\n", valid_count);
+	RA_LOG_DEBUG("Ledger loaded: %u valid records\n", valid_count);
 	return valid_count;
 }
 
@@ -696,11 +695,11 @@ static int ledger_writer_thread(void* userdata) {
 		/* Write to disk — blocking I/O, safe on background thread */
 		FILE* f = fopen(ra_ledger_path, "ab");
 		if (!f) {
-			OFFLINE_LOG_ERROR("Ledger writer: failed to open ledger: %s\n",
+			RA_LOG_ERROR("Ledger writer: failed to open ledger: %s\n",
 			                  strerror(errno));
 		} else {
 			if (fwrite(&rec, sizeof(RA_LedgerRecord), 1, f) != 1) {
-				OFFLINE_LOG_ERROR("Ledger writer: fwrite failed: %s\n",
+				RA_LOG_ERROR("Ledger writer: fwrite failed: %s\n",
 				                  strerror(errno));
 			}
 			fflush(f);
@@ -729,7 +728,7 @@ static void ledger_writer_start(void) {
 	wq->running       = true;
 	wq->thread        = SDL_CreateThread(ledger_writer_thread, "ra_ledger_writer", NULL);
 	if (!wq->thread) {
-		OFFLINE_LOG_ERROR("Failed to create ledger writer thread: %s\n", SDL_GetError());
+		RA_LOG_ERROR("Failed to create ledger writer thread: %s\n", SDL_GetError());
 	}
 }
 
@@ -786,7 +785,7 @@ static bool ledger_append(RA_LedgerRecord* rec) {
 
 	SDL_LockMutex(wq->mutex);
 	if (wq->count >= RA_LEDGER_WRITE_QUEUE_SIZE) {
-		OFFLINE_LOG_WARN("Ledger write queue full — waiting for drain\n");
+		RA_LOG_WARN("Ledger write queue full — waiting for drain\n");
 		SDL_CondWaitTimeout(wq->cond_empty, wq->mutex, 5000);
 	}
 	if (wq->count < RA_LEDGER_WRITE_QUEUE_SIZE) {
@@ -796,7 +795,7 @@ static bool ledger_append(RA_LedgerRecord* rec) {
 		SDL_CondSignal(wq->cond_nonempty);
 		enqueued = true;
 	} else {
-		OFFLINE_LOG_ERROR("Ledger write queue still full after 5s — record dropped!\n");
+		RA_LOG_ERROR("Ledger write queue still full after 5s — record dropped!\n");
 	}
 	SDL_UnlockMutex(wq->mutex);
 
@@ -826,7 +825,7 @@ void RA_Offline_ledgerWriteSessionStart(uint32_t game_id, const char* game_hash,
 	ledger_record_init(&rec, RA_LEDGER_SESSION_START, game_id, 0, hardcore, game_hash);
 
 	if (ledger_append(&rec)) {
-		OFFLINE_LOG_DEBUG("Ledger: SESSION_START game=%u hash=%s\n", game_id,
+		RA_LOG_DEBUG("Ledger: SESSION_START game=%u hash=%s\n", game_id,
 		                  game_hash ? game_hash : "(null)");
 	}
 }
@@ -838,7 +837,7 @@ void RA_Offline_ledgerWriteUnlock(uint32_t game_id, uint32_t achievement_id,
 	/* Hardcore unlocks are never written to the offline ledger — they cannot
 	 * be synced retroactively and would persist forever after compaction. */
 	if (hardcore) {
-		OFFLINE_LOG_DEBUG("Ledger: skipping hardcore UNLOCK achievement=%u game=%u\n",
+		RA_LOG_DEBUG("Ledger: skipping hardcore UNLOCK achievement=%u game=%u\n",
 		                  achievement_id, game_id);
 		return;
 	}
@@ -847,7 +846,7 @@ void RA_Offline_ledgerWriteUnlock(uint32_t game_id, uint32_t achievement_id,
 	ledger_record_init(&rec, RA_LEDGER_ACHIEVEMENT_UNLOCK, game_id, achievement_id, 0, game_hash);
 
 	if (ledger_append(&rec)) {
-		OFFLINE_LOG_INFO("Ledger: UNLOCK achievement=%u game=%u timestamp=%u\n",
+		RA_LOG_INFO("Ledger: UNLOCK achievement=%u game=%u timestamp=%u\n",
 		                 achievement_id, game_id, rec.timestamp);
 	}
 }
@@ -859,7 +858,7 @@ void RA_Offline_ledgerWriteSessionEnd(uint32_t game_id, const char* game_hash) {
 	ledger_record_init(&rec, RA_LEDGER_SESSION_END, game_id, 0, 0, game_hash);
 
 	if (ledger_append(&rec)) {
-		OFFLINE_LOG_DEBUG("Ledger: SESSION_END game=%u\n", game_id);
+		RA_LOG_DEBUG("Ledger: SESSION_END game=%u\n", game_id);
 	}
 }
 
@@ -870,7 +869,7 @@ void RA_Offline_ledgerWriteSyncAck(uint32_t achievement_id, uint32_t game_id) {
 	ledger_record_init(&rec, RA_LEDGER_SYNC_ACK, game_id, achievement_id, 0, NULL);
 
 	if (ledger_append(&rec)) {
-		OFFLINE_LOG_DEBUG("Ledger: SYNC_ACK achievement=%u game=%u\n",
+		RA_LOG_DEBUG("Ledger: SYNC_ACK achievement=%u game=%u\n",
 		                  achievement_id, game_id);
 	}
 }
@@ -982,7 +981,7 @@ void RA_Offline_ledgerCompact(void) {
 	RA_LedgerRecord* kept = NULL;
 	uint32_t kept_count = 0;
 	if (!ledger_read_pending_records(&kept, &kept_count)) {
-		OFFLINE_LOG_ERROR("Compact: failed to read pending records\n");
+		RA_LOG_ERROR("Compact: failed to read pending records\n");
 		SDL_UnlockMutex(ra_ledger_mutex);
 		return;
 	}
@@ -991,7 +990,7 @@ void RA_Offline_ledgerCompact(void) {
 		/* Everything was acked (or no ledger) — delete the ledger */
 		free(kept);
 		if (unlink(ra_ledger_path) == 0) {
-			OFFLINE_LOG_INFO("Compact: ledger fully synced, deleted\n");
+			RA_LOG_INFO("Compact: ledger fully synced, deleted\n");
 		}
 		/* If unlink fails, the file may not exist — that's fine */
 		memset(ra_ledger_last_hash, 0, NUI_SHA256_DIGEST_SIZE);
@@ -1001,7 +1000,7 @@ void RA_Offline_ledgerCompact(void) {
 	}
 
 	/* Rewrite the ledger with only the kept records, rebuilding the hash chain */
-	OFFLINE_LOG_INFO("Compact: keeping %u pending records\n", kept_count);
+	RA_LOG_INFO("Compact: keeping %u pending records\n", kept_count);
 
 	/* Write to a temp file, then rename for atomicity */
 	char tmp_path[512];
@@ -1009,7 +1008,7 @@ void RA_Offline_ledgerCompact(void) {
 
 	FILE* out = fopen(tmp_path, "wb");
 	if (!out) {
-		OFFLINE_LOG_ERROR("Compact: failed to create temp file: %s\n", strerror(errno));
+		RA_LOG_ERROR("Compact: failed to create temp file: %s\n", strerror(errno));
 		free(kept);
 		SDL_UnlockMutex(ra_ledger_mutex);
 		return;
@@ -1025,7 +1024,7 @@ void RA_Offline_ledgerCompact(void) {
 		ledger_compute_record_hash(&kept[i]);
 
 		if (fwrite(&kept[i], sizeof(RA_LedgerRecord), 1, out) != 1) {
-			OFFLINE_LOG_ERROR("Compact: write failed at record %u\n", i);
+			RA_LOG_ERROR("Compact: write failed at record %u\n", i);
 			fclose(out);
 			unlink(tmp_path);
 			free(kept);
@@ -1043,7 +1042,7 @@ void RA_Offline_ledgerCompact(void) {
 
 	/* Atomic replace */
 	if (rename(tmp_path, ra_ledger_path) != 0) {
-		OFFLINE_LOG_ERROR("Compact: rename failed: %s\n", strerror(errno));
+		RA_LOG_ERROR("Compact: rename failed: %s\n", strerror(errno));
 		unlink(tmp_path);
 		free(kept);
 		SDL_UnlockMutex(ra_ledger_mutex);
@@ -1054,7 +1053,7 @@ void RA_Offline_ledgerCompact(void) {
 	memcpy(ra_ledger_last_hash, prev_hash, NUI_SHA256_DIGEST_SIZE);
 	ra_ledger_has_records = true;
 
-	OFFLINE_LOG_INFO("Compact: rewrote ledger with %u records\n", kept_count);
+	RA_LOG_INFO("Compact: rewrote ledger with %u records\n", kept_count);
 	free(kept);
 	SDL_UnlockMutex(ra_ledger_mutex);
 }
@@ -1100,7 +1099,7 @@ bool RA_Offline_ledgerGetPendingUnlocks(RA_PendingUnlock** out_unlocks,
 
 	*out_unlocks = unlocks;
 	*out_count = record_count;
-	OFFLINE_LOG_DEBUG("Ledger: %u pending softcore unlocks\n", record_count);
+	RA_LOG_DEBUG("Ledger: %u pending softcore unlocks\n", record_count);
 	SDL_UnlockMutex(ra_ledger_mutex);
 	return true;
 }
@@ -1257,7 +1256,7 @@ bool RA_Offline_isOffline(void) {
 void RA_Offline_setOffline(bool offline) {
 	if ((SDL_AtomicGet(&ra_offline_mode) != 0) != offline) {
 		SDL_AtomicSet(&ra_offline_mode, offline ? 1 : 0);
-		OFFLINE_LOG_INFO("Offline mode: %s\n", offline ? "ON" : "OFF");
+		RA_LOG_INFO("Offline mode: %s\n", offline ? "ON" : "OFF");
 	}
 }
 
@@ -1290,7 +1289,7 @@ void RA_Offline_init(const char* data_dir) {
 
 	/* Create directories */
 	if (ra_mkdirs(ra_cache_dir) != 0) {
-		OFFLINE_LOG_ERROR("Failed to create cache directory: %s (%s)\n",
+		RA_LOG_ERROR("Failed to create cache directory: %s (%s)\n",
 		                  ra_cache_dir, strerror(errno));
 		/* Continue anyway - caching will fail gracefully */
 	}
@@ -1301,20 +1300,20 @@ void RA_Offline_init(const char* data_dir) {
 	/* Create ledger mutex for thread-safe access */
 	ra_ledger_mutex = SDL_CreateMutex();
 	if (!ra_ledger_mutex) {
-		OFFLINE_LOG_ERROR("Failed to create ledger mutex: %s\n", SDL_GetError());
+		RA_LOG_ERROR("Failed to create ledger mutex: %s\n", SDL_GetError());
 	}
 
 	/* Create cache mutex for serializing cache file read-modify-write */
 	ra_cache_mutex = SDL_CreateMutex();
 	if (!ra_cache_mutex) {
-		OFFLINE_LOG_ERROR("Failed to create cache mutex: %s\n", SDL_GetError());
+		RA_LOG_ERROR("Failed to create cache mutex: %s\n", SDL_GetError());
 	}
 
 	/* Start the background ledger writer thread */
 	ledger_writer_start();
 
 	SDL_AtomicSet(&ra_offline_initialized, 1);
-	OFFLINE_LOG_INFO("Initialized (cache: %s, ledger: %s)\n", ra_cache_dir, ra_ledger_path);
+	RA_LOG_INFO("Initialized (cache: %s, ledger: %s)\n", ra_cache_dir, ra_ledger_path);
 }
 
 void RA_Offline_shutdown(void) {
@@ -1340,7 +1339,7 @@ void RA_Offline_shutdown(void) {
 		ra_cache_mutex = NULL;
 	}
 
-	OFFLINE_LOG_INFO("Shut down\n");
+	RA_LOG_INFO("Shut down\n");
 }
 
 /*****************************************************************************
@@ -1364,7 +1363,7 @@ void RA_Offline_refreshPendingCache(void) {
 	SDL_LockMutex(ra_ledger_mutex);
 	uint32_t to_cache = count < RA_MAX_PENDING_CACHE ? count : RA_MAX_PENDING_CACHE;
 	if (count > RA_MAX_PENDING_CACHE) {
-		OFFLINE_LOG_WARN("Pending cache truncated: %u entries, max %u\n",
+		RA_LOG_WARN("Pending cache truncated: %u entries, max %u\n",
 		                 count, RA_MAX_PENDING_CACHE);
 	}
 	for (uint32_t i = 0; i < to_cache; i++) {
@@ -1374,7 +1373,7 @@ void RA_Offline_refreshPendingCache(void) {
 	SDL_UnlockMutex(ra_ledger_mutex);
 	free(unlocks);
 
-	OFFLINE_LOG_DEBUG("Pending cache refreshed: %u entries\n", to_cache);
+	RA_LOG_DEBUG("Pending cache refreshed: %u entries\n", to_cache);
 }
 
 bool RA_Offline_isUnlockPending(uint32_t achievement_id) {
@@ -1402,7 +1401,7 @@ void RA_Offline_addPendingCacheEntry(uint32_t achievement_id) {
 	if (ra_pending_count < RA_MAX_PENDING_CACHE) {
 		ra_pending_ids[ra_pending_count++] = achievement_id;
 	} else {
-		OFFLINE_LOG_WARN("Pending cache full (%u entries), achievement %u not cached for UI\n",
+		RA_LOG_WARN("Pending cache full (%u entries), achievement %u not cached for UI\n",
 		                 RA_MAX_PENDING_CACHE, achievement_id);
 	}
 	SDL_UnlockMutex(ra_ledger_mutex);
@@ -1569,7 +1568,7 @@ void RA_Offline_patchStartsessionCacheWithUnlock(const char* game_hash,
 
 	/* Rewrite cache file with updated body and new SHA-256 */
 	if (cache_write_file(path, current_body, current_len)) {
-		OFFLINE_LOG_INFO("patchCache: injected achievement %u into %s\n",
+		RA_LOG_INFO("patchCache: injected achievement %u into %s\n",
 		                 achievement_id, path);
 	}
 	free(current_body);

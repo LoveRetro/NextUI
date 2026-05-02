@@ -1,3 +1,6 @@
+#define RA_LOG_PREFIX "RA_BADGES"
+#include "ra_log.h"
+
 #include "ra_badges.h"
 #include "ra_util.h"
 #include "http.h"
@@ -12,12 +15,6 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <unistd.h>
-
-// Logging macros using NextUI's LOG_* infrastructure
-#define BADGE_LOG_DEBUG(fmt, ...) LOG_debug("[RA_BADGES] " fmt, ##__VA_ARGS__)
-#define BADGE_LOG_INFO(fmt, ...)  LOG_info("[RA_BADGES] " fmt, ##__VA_ARGS__)
-#define BADGE_LOG_WARN(fmt, ...)  LOG_warn("[RA_BADGES] " fmt, ##__VA_ARGS__)
-#define BADGE_LOG_ERROR(fmt, ...) LOG_error("[RA_BADGES] " fmt, ##__VA_ARGS__)
 
 /*****************************************************************************
  * Constants
@@ -88,7 +85,7 @@ static BadgeCacheEntry* find_or_create_entry(const char* badge_name, bool locked
 	
 	// Create new entry if space available
 	if (badge_cache_count >= MAX_CACHED_BADGES) {
-		BADGE_LOG_WARN("Cache full, cannot add badge %s\n", badge_name);
+		RA_LOG_WARN("Cache full, cannot add badge %s\n", badge_name);
 		return NULL;
 	}
 	
@@ -116,7 +113,7 @@ static bool cache_file_exists(const char* path) {
 static bool save_to_cache(const char* path, const char* data, size_t size) {
 	FILE* f = fopen(path, "wb");
 	if (!f) {
-		BADGE_LOG_ERROR("Failed to open cache file for writing: %s\n", path);
+		RA_LOG_ERROR("Failed to open cache file for writing: %s\n", path);
 		return false;
 	}
 	
@@ -124,7 +121,7 @@ static bool save_to_cache(const char* path, const char* data, size_t size) {
 	fclose(f);
 	
 	if (written != size) {
-		BADGE_LOG_ERROR("Failed to write cache file: %s\n", path);
+		RA_LOG_ERROR("Failed to write cache file: %s\n", path);
 		unlink(path);
 		return false;
 	}
@@ -136,7 +133,7 @@ static bool save_to_cache(const char* path, const char* data, size_t size) {
 static SDL_Surface* load_from_cache(const char* path) {
 	SDL_Surface* surface = IMG_Load(path);
 	if (!surface) {
-		BADGE_LOG_WARN("Failed to load badge image: %s - %s\n", path, IMG_GetError());
+		RA_LOG_WARN("Failed to load badge image: %s - %s\n", path, IMG_GetError());
 		return NULL;
 	}
 	return surface;
@@ -190,7 +187,7 @@ static void badge_download_callback(HTTP_Response* response, void* userdata);
 // Queue a download for later processing (must hold mutex)
 static void queue_download(const char* badge_name, bool locked) {
 	if (download_queue.count >= MAX_CACHED_BADGES) {
-		BADGE_LOG_WARN("Download queue full, dropping badge %s\n", badge_name);
+		RA_LOG_WARN("Download queue full, dropping badge %s\n", badge_name);
 		return;
 	}
 	
@@ -268,11 +265,11 @@ static void badge_download_callback(HTTP_Response* response, void* userdata) {
 	if (response && response->data && response->http_status == 200 && !response->error) {
 		success = save_to_cache(ctx->cache_path, response->data, response->size);
 		if (!success) {
-			BADGE_LOG_WARN("Failed to save badge %s%s to cache\n",
+			RA_LOG_WARN("Failed to save badge %s%s to cache\n",
 			          ctx->badge_name, ctx->locked ? "_lock" : "");
 		}
 	} else {
-		BADGE_LOG_WARN("Failed to download badge %s%s: %s\n",
+		RA_LOG_WARN("Failed to download badge %s%s: %s\n",
 		          ctx->badge_name, ctx->locked ? "_lock" : "",
 		          response && response->error ? response->error : "HTTP error");
 	}

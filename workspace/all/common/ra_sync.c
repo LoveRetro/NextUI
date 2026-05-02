@@ -9,12 +9,14 @@
  * (per-game sync on game load).
  */
 
+#define RA_LOG_PREFIX "RA_SYNC"
+#include "ra_log.h"
+
 #include "ra_sync.h"
 #include "ra_offline.h"
 #define RA_UTIL_NEED_SDL
 #include "ra_util.h"
 #include "http.h"
-#include "md5.h"
 #include "config.h"
 #include "defines.h"
 #include "api.h"
@@ -24,12 +26,9 @@
 #include <string.h>
 #include <time.h>
 #include <SDL2/SDL.h>
+#include <openssl/evp.h>
 
-/* Logging macros using NextUI's LOG_* infrastructure */
-#define SYNC_LOG_DEBUG(fmt, ...) LOG_debug("[RA_SYNC] " fmt, ##__VA_ARGS__)
-#define SYNC_LOG_INFO(fmt, ...)  LOG_info("[RA_SYNC] " fmt, ##__VA_ARGS__)
-#define SYNC_LOG_WARN(fmt, ...)  LOG_warn("[RA_SYNC] " fmt, ##__VA_ARGS__)
-#define SYNC_LOG_ERROR(fmt, ...) LOG_error("[RA_SYNC] " fmt, ##__VA_ARGS__)
+#define NUI_MD5_DIGEST_SIZE 16
 
 #define RA_API_URL "https://retroachievements.org/dorequest.php"
 
@@ -77,20 +76,21 @@ static void sync_compute_signature(uint32_t achievement_id,
 	snprintf(id_str, sizeof(id_str), "%u", achievement_id);
 	snprintf(hc_str, sizeof(hc_str), "%u", hardcore ? 1 : 0);
 
-	NUI_MD5_CTX ctx;
-	nui_md5_init(&ctx);
-	nui_md5_update(&ctx, id_str, strlen(id_str));
-	nui_md5_update(&ctx, username, strlen(username));
-	nui_md5_update(&ctx, hc_str, strlen(hc_str));
+	EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+	EVP_DigestInit_ex(ctx, EVP_md5(), NULL);
+	EVP_DigestUpdate(ctx, id_str, strlen(id_str));
+	EVP_DigestUpdate(ctx, username, strlen(username));
+	EVP_DigestUpdate(ctx, hc_str, strlen(hc_str));
 
 	if (seconds_since > 0) {
 		snprintf(sec_str, sizeof(sec_str), "%u", seconds_since);
-		nui_md5_update(&ctx, id_str, strlen(id_str));
-		nui_md5_update(&ctx, sec_str, strlen(sec_str));
+		EVP_DigestUpdate(ctx, id_str, strlen(id_str));
+		EVP_DigestUpdate(ctx, sec_str, strlen(sec_str));
 	}
 
 	uint8_t digest[NUI_MD5_DIGEST_SIZE];
-	nui_md5_final(&ctx, digest);
+	EVP_DigestFinal_ex(ctx, digest, NULL);
+	EVP_MD_CTX_free(ctx);
 
 	for (int i = 0; i < NUI_MD5_DIGEST_SIZE; i++) {
 		sprintf(sig_out + i * 2, "%02x", digest[i]);
@@ -226,7 +226,7 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 	                        : CFG_getRAUsername();
 	const char* token = CFG_getRAToken();
 
-	SYNC_LOG_DEBUG("Using username '%s' for sync hash computation "
+	RA_LOG_DEBUG("Using username '%s' for sync hash computation "
 	              "(server_username='%s', config_username='%s')\n",
 	              username,
 	              server_username ? server_username : "(null)",
@@ -247,7 +247,7 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 
 	result.total = count;
 
-	SYNC_LOG_INFO("Starting sync: %u pending unlocks, game_id=%u, time_now=%lld\n",
+	RA_LOG_INFO("Starting sync: %u pending unlocks, game_id=%u, time_now=%lld\n",
 	              count, game_id, (long long)time(NULL));
 
 	/* Process each pending unlock */
@@ -276,7 +276,7 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 		}
 
 		/* Log timing details at debug level for diagnosing clock drift. */
-		SYNC_LOG_DEBUG("ach=%u: ledger_timestamp=%u time_now=%lld seconds_since=%u\n",
+		RA_LOG_DEBUG("ach=%u: ledger_timestamp=%u time_now=%lld seconds_since=%u\n",
 		              unlock->achievement_id, unlock->timestamp,
 		              (long long)now, seconds_since);
 
@@ -287,7 +287,7 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 		                                       unlock->game_hash,
 		                                       seconds_since);
 		if (!post_data) {
-			SYNC_LOG_ERROR("ach=%u: failed to build POST data\n", unlock->achievement_id);
+			RA_LOG_ERROR("ach=%u: failed to build POST data\n", unlock->achievement_id);
 			result.skipped++;
 			if (progress_cb) {
 				progress_cb(i + 1, count, false, userdata);
@@ -300,12 +300,12 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 			const char* t_start = strstr(post_data, "&t=");
 			if (t_start) {
 				const char* t_end = strchr(t_start + 3, '&');
-				SYNC_LOG_DEBUG("ach=%u: POST %.*s&t=***%s\n",
+				RA_LOG_DEBUG("ach=%u: POST %.*s&t=***%s\n",
 				              unlock->achievement_id,
 				              (int)(t_start - post_data), post_data,
 				              t_end ? t_end : "");
 			} else {
-				SYNC_LOG_DEBUG("ach=%u: POST %s\n",
+				RA_LOG_DEBUG("ach=%u: POST %s\n",
 				              unlock->achievement_id, post_data);
 			}
 		}
@@ -318,12 +318,12 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 		if (http_resp && http_resp->data && http_resp->size > 0) {
 			int log_len = (int)http_resp->size;
 			if (log_len > 512) log_len = 512;
-			SYNC_LOG_DEBUG("ach=%u: server response (status=%d): %.*s\n",
+			RA_LOG_DEBUG("ach=%u: server response (status=%d): %.*s\n",
 			              unlock->achievement_id,
 			              http_resp->http_status,
 			              log_len, http_resp->data);
 		} else if (!http_resp) {
-			SYNC_LOG_WARN("ach=%u: no HTTP response (network failure?)\n",
+			RA_LOG_WARN("ach=%u: no HTTP response (network failure?)\n",
 			              unlock->achievement_id);
 		}
 
@@ -332,7 +332,7 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 
 		if (parse_result == 1) {
 			/* Success — write SYNC_ACK to ledger */
-			SYNC_LOG_DEBUG("ach=%u: server accepted (seconds_since=%u)\n",
+			RA_LOG_DEBUG("ach=%u: server accepted (seconds_since=%u)\n",
 			              unlock->achievement_id, seconds_since);
 			RA_Offline_ledgerWriteSyncAck(unlock->achievement_id, unlock->game_id);
 			/* Patch cached startsession to include this unlock so the next
@@ -342,11 +342,11 @@ RA_SyncResult RA_Sync_syncAll(uint32_t game_id,
 			result.synced++;
 		} else if (parse_result == 0) {
 			/* Server rejected — skip and continue */
-			SYNC_LOG_WARN("ach=%u: server rejected\n", unlock->achievement_id);
+			RA_LOG_WARN("ach=%u: server rejected\n", unlock->achievement_id);
 			result.skipped++;
 		} else {
 			/* Network error — stop sync, remaining unlocks stay pending */
-			SYNC_LOG_ERROR("ach=%u: network error, stopping sync\n", unlock->achievement_id);
+			RA_LOG_ERROR("ach=%u: network error, stopping sync\n", unlock->achievement_id);
 			result.failed++;
 			if (progress_cb) {
 				progress_cb(i + 1, count, false, userdata);

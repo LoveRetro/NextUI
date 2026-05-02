@@ -1,3 +1,6 @@
+#define RA_LOG_PREFIX "RA"
+#include "ra_log.h"
+
 #include "ra_integration.h"
 #include "ra_consoles.h"
 #include "chd_reader.h"
@@ -26,12 +29,6 @@
 #include <rcheevos/rc_libretro.h>
 #include <rcheevos/rc_hash.h>
 #include <rcheevos/rc_api_user.h>
-
-// Logging macros - use NextUI log levels
-#define RA_LOG_DEBUG(fmt, ...) LOG_debug("[RA] " fmt, ##__VA_ARGS__)
-#define RA_LOG_INFO(fmt, ...)  LOG_info("[RA] " fmt, ##__VA_ARGS__)
-#define RA_LOG_WARN(fmt, ...)  LOG_warn("[RA] " fmt, ##__VA_ARGS__)
-#define RA_LOG_ERROR(fmt, ...) LOG_error("[RA] " fmt, ##__VA_ARGS__)
 
 /*****************************************************************************
  * State machine enums (SM-1 / SM-4)

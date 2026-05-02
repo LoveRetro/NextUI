@@ -27,7 +27,7 @@ SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../
 # RA support
 ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355 desktop))
 # RA source files
-SOURCE += ../common/http.c ../common/ra_badges.c ../common/ra_offline.c ../common/sha256.c ../common/md5.c ../common/ra_sync.c ../common/ra_event_queue.c ra_integration.c chd_reader.c
+SOURCE += ../common/http.c ../common/ra_badges.c ../common/ra_offline.c ../common/ra_sync.c ../common/ra_event_queue.c ra_integration.c chd_reader.c
 endif
 
 CC = $(CROSS_COMPILE)gcc
@@ -64,7 +64,7 @@ endif
 
 # RA support: rcheevos and libchdr linking
 ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355 desktop))
-LDFLAGS += -lrcheevos -lchdr
+LDFLAGS += -lrcheevos -lchdr -lcrypto
 CFLAGS += -DRC_CLIENT_SUPPORTS_HASH -DHAS_CHEEVOS -DHAS_CHDR
 ifeq ($(PLATFORM), desktop)
 # Desktop needs rpath for local shared library lookup
