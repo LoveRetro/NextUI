@@ -95,14 +95,13 @@ ifeq ($(PLATFORM), desktop)
 all: clean libretro-common rcheevos libchdr $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
-else ifneq (,$(filter $(PLATFORM),tg5040 tg5050))
+else ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))
 # Platforms with RA support
 all: clean libretro-common libsrm.a rcheevos libchdr $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libsamplerate.so.* build/$(PLATFORM)
-	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
+	cp -L $(PREFIX)/lib/libcrypto.so.* build/$(PLATFORM)
 ifeq ($(PLATFORM), my355)
-	cp -L $(PREFIX)/lib/libcrypto.so.3 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libsqlite3.so build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libffi.so.7 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libtinyalsa.so.2 build/$(PLATFORM)
