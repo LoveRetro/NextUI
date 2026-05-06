@@ -122,8 +122,6 @@ ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.* ./build/SYSTEM/$(PLATFORM)/lib/
 
 	# libchdr and libcrypto for RetroAchievements
-	# Ensure build outputs are readable in CI (sub-builds can emit restrictive perms)
-	chmod a+r ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.* ./workspace/all/minarch/build/$(PLATFORM)/libcrypto.so.* || true
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libcrypto.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 
