@@ -101,6 +101,7 @@ all: clean libretro-common libsrm.a rcheevos libchdr $(PREFIX_LOCAL)/include/mse
 	mkdir -p build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libsamplerate.so.* build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libcrypto.so.* build/$(PLATFORM)
+	chmod a+r build/$(PLATFORM)/libcrypto.so.*
 ifeq ($(PLATFORM), my355)
 	cp -L $(PREFIX)/lib/libsqlite3.so build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libffi.so.7 build/$(PLATFORM)
