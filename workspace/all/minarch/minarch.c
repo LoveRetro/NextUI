@@ -612,7 +612,7 @@ finish:
 #define CHEAT_MAX_LIST_LENGTH (CHEAT_MAX_DISPLAY_PATHS * MAX_PATH)
 static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 	// reserve a few entries at the end, for sanitized name and glob patterns
-	const int sanitized_paths_count = 3
+	const int sanitized_paths_count = 3;
 
 	// Generate possible paths, ordered by most likely to be used (pre v6.2.3 style first)
 	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, game.name); // /mnt/SDCARD/Cheats/GB/Super Example World.<ext>.cht
