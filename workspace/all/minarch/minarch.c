@@ -7174,6 +7174,7 @@ static int OptionAchievements_showDetail(MenuList* list, int i) {
 		
 		if (dirty) {
 			bool is_muted = RA_isAchievementMuted(ach->id);
+			bool is_offline_pending = RA_isAchievementOfflinePending(ach->id);
 			
 			GFX_clear(screen);
 			
@@ -7240,6 +7241,23 @@ static int OptionAchievements_showDetail(MenuList* list, int i) {
 				SDL_FreeSurface(progress_text);
 			}
 			
+			// Offline pending indicator
+			if (is_offline_pending) {
+				SDL_Surface* offline_text = TTF_RenderUTF8_Blended(font.tiny, "Unlocked offline - pending sync", COLOR_LIGHT_TEXT);
+				int wifi_size = SCALE1(12);
+				int total_w = wifi_size + SCALE1(4) + offline_text->w;
+				int icon_x = center_x - total_w / 2;
+				int text_x = icon_x + wifi_size + SCALE1(4);
+				int wifi_y = content_y + (offline_text->h - wifi_size) / 2;
+				GFX_blitAssetColor(ASSET_WIFI_OFF, NULL, screen,
+				                   &(SDL_Rect){icon_x, wifi_y}, 0xCCCCCC);
+				SDL_BlitSurface(offline_text, NULL, screen, &(SDL_Rect){
+					text_x, content_y
+				});
+				content_y += offline_text->h + SCALE1(2);
+				SDL_FreeSurface(offline_text);
+			}
+			
 			// Unlock rate/rarity (smaller font, gray)
 			if (ach->rarity > 0) {
 				char rarity_buf[32];
@@ -7278,9 +7296,18 @@ static int OptionAchievements_showDetail(MenuList* list, int i) {
 			
 			// Muted status below other info with gap before title
 			if (is_muted) {
-				SDL_Surface* mute_text = TTF_RenderUTF8_Blended(font.tiny, "MUTED: Will not show in notifications", COLOR_LIGHT_TEXT);
+				SDL_Surface* mute_text = TTF_RenderUTF8_Blended(font.tiny, "Muted - progress notifications silenced", COLOR_LIGHT_TEXT);
+				int mute_icon_w = SCALE1(10);
+				int mute_icon_h = SCALE1(12);
+				int total_w = mute_icon_w + SCALE1(4) + mute_text->w;
+				int icon_x = center_x - total_w / 2;
+				int text_x = icon_x + mute_icon_w + SCALE1(4);
+				int icon_y = content_y + SCALE1(4) + (mute_text->h - mute_icon_h) / 2;
+				SDL_Rect mute_src = {0, SCALE1(4), SCALE1(10), SCALE1(12)};
+				GFX_blitAssetColor(ASSET_VOLUME_MUTE, &mute_src, screen,
+				                   &(SDL_Rect){icon_x, icon_y}, 0xCCCCCC);
 				SDL_BlitSurface(mute_text, NULL, screen, &(SDL_Rect){
-					center_x - mute_text->w / 2, content_y + SCALE1(4)
+					text_x, content_y + SCALE1(4)
 				});
 				SDL_FreeSurface(mute_text);
 			}
@@ -7302,7 +7329,7 @@ static int OptionAchievements_showDetail(MenuList* list, int i) {
 
 static int OptionAchievements_openMenu(MenuList* list, int i) {
 	if (!RA_isGameLoaded()) {
-		Menu_message("No game loaded for achievements", (char*[]){"B","BACK", NULL});
+		Menu_message("No achievements found for this game.\n\nThis ROM may need a compatibility patch\nor may not be a supported version.\n\nVisit retroachievements.org to check\nsupported game files.", (char*[]){"B","BACK", NULL});
 		return MENU_CALLBACK_NOP;
 	}
 
@@ -7310,7 +7337,7 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 	RA_getAchievementSummary(&unlocked, &total);
 
 	if (total == 0) {
-		Menu_message("No achievements available for this game", (char*[]){"B","BACK", NULL});
+		Menu_message("No achievements available for this game.\n\nThis game may not have achievements yet.\n\nVisit retroachievements.org for details.", (char*[]){"B","BACK", NULL});
 		return MENU_CALLBACK_NOP;
 	}
 
@@ -7532,6 +7559,7 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 			for (int j = start, row = 0; j < end && j < filtered_count; j++, row++) {
 				const rc_client_achievement_t* ach = filtered[j];
 				bool is_muted = RA_isAchievementMuted(ach->id);
+				bool is_offline_pending = RA_isAchievementOfflinePending(ach->id);
 				bool is_selected = (row == selected_row);
 				SDL_Color text_color = COLOR_WHITE;
 
@@ -7552,16 +7580,19 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 
 				if (is_selected) {
 					// White pill for the text area with icon (like MENU_FIXED selected text pill)
-					// Calculate width needed for: badge + spacing + title + mute indicator + padding
+					// Calculate width needed for: badge + spacing + [mute icon] + [wifi icon] + title + padding
 					int badge_display_size = SCALE1(BUTTON_SIZE - 4);  // Badge sized to fit in row
 					int title_width = 0;
 					TTF_SizeUTF8(font.small, ach->title, &title_width, NULL);
 					int mute_width = 0;
 					if (is_muted) {
-						TTF_SizeUTF8(font.tiny, "[M]", &mute_width, NULL);
-						mute_width += SCALE1(4);  // spacing
+						mute_width = SCALE1(10) + SCALE1(4);  // volume-mute icon + gap
 					}
-					int pill_width = opt_pad + badge_display_size + SCALE1(6) + title_width + mute_width + opt_pad;
+					int offline_width = 0;
+					if (is_offline_pending) {
+						offline_width = SCALE1(12) + SCALE1(4);  // wifi-off icon + gap
+					}
+					int pill_width = opt_pad + badge_display_size + SCALE1(6) + mute_width + offline_width + title_width + opt_pad;
 					
 					GFX_blitPillDark(ASSET_BUTTON, screen, &(SDL_Rect){
 						ox, oy + SCALE1(row * BUTTON_SIZE), pill_width, row_height
@@ -7580,25 +7611,36 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 						SDL_BlitScaled(badge, &badge_src, screen, &badge_dst);
 					}
 
+					int text_x = ox + opt_pad + badge_display_size + SCALE1(6);
+
+					// Mute icon prefix (volume-mute icon, cropped to match text height)
+					if (is_muted) {
+						int mute_icon_h = SCALE1(12);
+						int mute_y = oy + SCALE1(row * BUTTON_SIZE) + (row_height - mute_icon_h) / 2;
+						SDL_Rect mute_src = {0, SCALE1(4), SCALE1(10), SCALE1(12)};
+						GFX_blitAssetColor(ASSET_VOLUME_MUTE, &mute_src, screen,
+						                   &(SDL_Rect){text_x, mute_y}, THEME_COLOR5_255);
+						text_x += mute_width;
+					}
+
+					// Offline pending icon prefix (wifi-off icon before title)
+					if (is_offline_pending) {
+						int wifi_size = SCALE1(12);
+						int wifi_y = oy + SCALE1(row * BUTTON_SIZE) + (row_height - wifi_size) / 2;
+						GFX_blitAssetColor(ASSET_WIFI_OFF, NULL, screen,
+						                   &(SDL_Rect){text_x, wifi_y}, THEME_COLOR5_255);
+						text_x += offline_width;
+					}
+
 					// Title text
 					SDL_Surface* title_text = TTF_RenderUTF8_Blended(font.small, ach->title, text_color);
 					SDL_BlitSurface(title_text, NULL, screen, &(SDL_Rect){
-						ox + opt_pad + badge_display_size + SCALE1(6),
+						text_x,
 						oy + SCALE1((row * BUTTON_SIZE) + 1)
 					});
 					SDL_FreeSurface(title_text);
-
-					// Mute indicator inside the pill
-					if (is_muted) {
-						SDL_Surface* mute_text = TTF_RenderUTF8_Blended(font.tiny, "[M]", text_color);
-						SDL_BlitSurface(mute_text, NULL, screen, &(SDL_Rect){
-							ox + opt_pad + badge_display_size + SCALE1(6) + title_width + SCALE1(4),
-							oy + SCALE1((row * BUTTON_SIZE) + 3)
-						});
-						SDL_FreeSurface(mute_text);
-					}
 				} else {
-					// Unselected row - just badge + title + mute indicator, no pills
+					// Unselected row - just badge + title + indicators, no pills
 					int badge_display_size = SCALE1(BUTTON_SIZE - 4);
 					
 					// Badge icon
@@ -7613,30 +7655,40 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 						SDL_BlitScaled(badge, &badge_src, screen, &badge_dst);
 					}
 
-					// Title text (theme color for unselected)
+					int text_x = ox + opt_pad + badge_display_size + SCALE1(6);
+
+					// Mute icon prefix (volume-mute icon, cropped to match text height)
+					if (is_muted) {
+						int mute_icon_h = SCALE1(12);
+						int mute_y = oy + SCALE1(row * BUTTON_SIZE) + (row_height - mute_icon_h) / 2;
+						SDL_Rect mute_src = {0, SCALE1(4), SCALE1(10), SCALE1(12)};
+						GFX_blitAssetColor(ASSET_VOLUME_MUTE, &mute_src, screen,
+						                   &(SDL_Rect){text_x, mute_y}, RGB_WHITE);
+						text_x += SCALE1(10) + SCALE1(4);
+					}
+
+					// Offline pending icon prefix (wifi-off icon before title)
+					if (is_offline_pending) {
+						int wifi_size = SCALE1(12);
+						int wifi_y = oy + SCALE1(row * BUTTON_SIZE) + (row_height - wifi_size) / 2;
+						GFX_blitAssetColor(ASSET_WIFI_OFF, NULL, screen,
+						                   &(SDL_Rect){text_x, wifi_y}, RGB_WHITE);
+						text_x += wifi_size + SCALE1(4);
+					}
+
+					// Title text (white for unselected)
 					SDL_Surface* title_text = TTF_RenderUTF8_Blended(font.small, ach->title, COLOR_WHITE);
 					SDL_BlitSurface(title_text, NULL, screen, &(SDL_Rect){
-						ox + opt_pad + badge_display_size + SCALE1(6),
+						text_x,
 						oy + SCALE1((row * BUTTON_SIZE) + 1)
 					});
 					SDL_FreeSurface(title_text);
-
-					// Mute indicator
-					if (is_muted) {
-						SDL_Surface* mute_text = TTF_RenderUTF8_Blended(font.tiny, "[M]", COLOR_WHITE);
-						int title_width = 0;
-						TTF_SizeUTF8(font.small, ach->title, &title_width, NULL);
-						SDL_BlitSurface(mute_text, NULL, screen, &(SDL_Rect){
-							ox + opt_pad + badge_display_size + SCALE1(6) + title_width + SCALE1(4),
-							oy + SCALE1((row * BUTTON_SIZE) + 3)
-						});
-						SDL_FreeSurface(mute_text);
-					}
 				}
 			}
 
-			// Button hints at bottom with dynamic Y button text
-			char* hints[] = {"Y", ach_filter_locked_only ? "SHOW ALL" : "SHOW LOCKED", "X", "MUTE", NULL};
+			// Button hints at bottom with dynamic Y and X button text
+			int selected_muted = (filtered_count > 0) ? RA_isAchievementMuted(filtered[selected]->id) : 0;
+			char* hints[] = {"Y", ach_filter_locked_only ? "SHOW ALL" : "SHOW LOCKED", "X", selected_muted ? "UNMUTE" : "MUTE", NULL};
 			GFX_blitButtonGroup(hints, 0, screen, 1);
 
 			GFX_flip(screen);
@@ -8961,8 +9013,6 @@ void onAudioSinkChanged(int device, int watch_event)
 }
 
 int main(int argc , char* argv[]) {
-	LOG_info("MinArch\n");
-
 	//static char asoundpath[MAX_PATH];
 	//sprintf(asoundpath, "%s/.asoundrc", getenv("HOME"));
 	//LOG_info("minarch: need asoundrc at %s\n", asoundpath);
@@ -9186,14 +9236,16 @@ int main(int argc , char* argv[]) {
 	PLAT_clearTurbo();
 
 	Menu_quit();
-	Notification_quit();
 	QuitSettings();
 
 finish:
 
-	// Unload game and shutdown RetroAchievements before Core_quit
+	// Unload game and shutdown RetroAchievements before Notification_quit —
+	// RA background threads (sync, badge downloads) may call notification
+	// APIs, so the notification mutex should outlive all RA threads.
 	RA_unloadGame();
 	RA_quit();
+	Notification_quit();
 	
 	Game_close();
 	Rewind_free();
