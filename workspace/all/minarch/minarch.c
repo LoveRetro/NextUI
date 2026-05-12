@@ -604,11 +604,16 @@ finish:
 }
 
 // return variations with/without extensions and other cruft
-#define CHEAT_MAX_PATHS 16
+// note: CHEAT_MAX_PATHS must be large enough to contain one entry per extension supported by a core, plus ~5 more
+// 48 is enough: retroarch cores with most extensions at the moment is VICE VIC-20 at 37 and rom-cleaner at 42
+#define CHEAT_MAX_PATHS 48
 #define CHEAT_MAX_DISPLAY_PATHS 8
 // the list of displayed paths will be a bit shorter, we cant render that much text
 #define CHEAT_MAX_LIST_LENGTH (CHEAT_MAX_DISPLAY_PATHS * MAX_PATH)
 static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
+	// reserve a few entries at the end, for sanitized name and glob patterns
+	const int sanitized_paths_count = 3;
+
 	// Generate possible paths, ordered by most likely to be used (pre v6.2.3 style first)
 	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, game.name); // /mnt/SDCARD/Cheats/GB/Super Example World.<ext>.cht
 	if(CFG_getUseExtractedFileName())
@@ -627,7 +632,8 @@ static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 		
 		strcpy(exts, core.extensions);
 		while ((ext = strtok(i ? NULL : exts, "|"))) {
-			if (*count >= CHEAT_MAX_PATHS - 1) {
+			// sanitized_paths_count slots are reserved for sanitized rom name, see below
+			if (*count >= CHEAT_MAX_PATHS - sanitized_paths_count) {
 				LOG_info("Maximum cheat paths reached, stopping\n");
 				break;
 			}
@@ -660,6 +666,7 @@ static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 	// eg. Super Example World (USA).zip -> Super Example World
 	//     Super Example World (USA) [!].7z -> Super Example World
 	//     Super Example World (USA) (Rev 1).rar -> Super Example World
+	// Important: update `sanitized_paths_count` if adding more sanitized variations
 	char rom_name[MAX_PATH];
 	getDisplayName(game.alt_name, rom_name);
 	sprintf(paths[(*count)++], "%s/%s.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World.cht
@@ -670,18 +677,20 @@ static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 
 	// Santitized alias, ignoring all extra cruft - including Cheat specifics like "(Game Breaker)" etc.
 	// This is a wildcard that may match something unexpected, but also may find something when nothing else does.
-	getDisplayName(game.alt_name, rom_name);
 	getAlias(game.path, rom_name);
 	sprintf(paths[(*count)++], "%s/%s*.cht", core.cheats_dir, rom_name); // /mnt/SDCARD/Cheats/GB/Super Example World*.cht
 	// Log all path candidates
 	{
-		int i;
-		char list[CHEAT_MAX_LIST_LENGTH] = {0};
-		for (i=0; i<*count; i++) {
-			strcat(list, paths[i]);
-			if (i < *count-1) strcat(list, ", ");
+		char *list = calloc(*count * (MAX_PATH + 2) + 1, 1); // path + separator for each entry
+		if (list != NULL) {
+			int i;
+			for (i=0; i<*count; i++) {
+				strcat(list, paths[i]);
+				if (i < *count-1) strcat(list, ", ");
+			}
+			//LOG_info("Cheat paths to check: %s\n", list);
+			free(list);
 		}
-		LOG_info("Cheat paths to check: %s\n", list);
 	}
 }
 
@@ -6845,8 +6854,8 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
 	else {
 		// update
 		for (int j = 0; j < cheatcodes.count; j++) {
-			struct Cheat *cheat = &cheatcodes.cheats[i];
-			MenuItem *item = &OptionCheats_menu.items[i];
+			struct Cheat *cheat = &cheatcodes.cheats[j];
+			MenuItem *item = &OptionCheats_menu.items[j];
 			// I guess that makes sense, nobody is changing these but us - what about state restore?
 			if(!cheat->enabled)
 				continue;
