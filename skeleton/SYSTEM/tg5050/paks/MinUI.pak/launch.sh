@@ -22,6 +22,7 @@ export CORES_PATH="$SYSTEM_PATH/cores"
 export USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
 export SHARED_USERDATA_PATH="$SDCARD_PATH/.userdata/shared"
 export LOGS_PATH="$USERDATA_PATH/logs"
+export HOOKS_PATH="$USERDATA_PATH/.hooks"
 export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
 export HOME="$USERDATA_PATH"
 
@@ -44,6 +45,7 @@ mkdir -p "$SAVES_PATH"
 mkdir -p "$CHEATS_PATH"
 mkdir -p "$USERDATA_PATH"
 mkdir -p "$LOGS_PATH"
+mkdir -p "$HOOKS_PATH"
 mkdir -p "$SHARED_USERDATA_PATH/.minui"
 
 export TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
