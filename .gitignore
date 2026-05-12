@@ -41,6 +41,7 @@ audiomon.elf
 
 workspace/hash.txt
 workspace/readmes
+workspace/.container_runtime
 
 AGENTS.md
 CLAUDE.md
