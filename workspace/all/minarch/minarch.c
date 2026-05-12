@@ -688,7 +688,7 @@ static void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 				strcat(list, paths[i]);
 				if (i < *count-1) strcat(list, ", ");
 			}
-			LOG_info("Cheat paths to check: %s\n", list);
+			//LOG_info("Cheat paths to check: %s\n", list);
 			free(list);
 		}
 	}
