@@ -86,6 +86,7 @@ void CFG_defaults(NextUISettings *cfg)
         .raPassword = CFG_DEFAULT_RA_PASSWORD,
         .raHardcoreMode = CFG_DEFAULT_RA_HARDCOREMODE,
         .raToken = CFG_DEFAULT_RA_TOKEN,
+        .raServerUsername = CFG_DEFAULT_RA_SERVER_USERNAME,
         .raAuthenticated = CFG_DEFAULT_RA_AUTHENTICATED,
         .raShowNotifications = CFG_DEFAULT_RA_SHOW_NOTIFICATIONS,
         .raNotificationDuration = CFG_DEFAULT_RA_NOTIFICATION_DURATION,
@@ -371,6 +372,13 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 char *value = line + 8;
                 value[strcspn(value, "\n")] = 0;
                 CFG_setRAToken(value);
+                continue;
+            }
+            if (strncmp(line, "raServerUsername=", 17) == 0)
+            {
+                char *value = line + 17;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setRAServerUsername(value);
                 continue;
             }
             if (sscanf(line, "raAuthenticated=%i", &temp_value) == 1)
@@ -963,6 +971,47 @@ void CFG_setRAToken(const char* token)
     CFG_sync();
 }
 
+const char* CFG_getRAServerUsername(void)
+{
+    return settings.raServerUsername;
+}
+
+void CFG_setRAServerUsername(const char* username)
+{
+    if (username) {
+        strncpy(settings.raServerUsername, username, sizeof(settings.raServerUsername) - 1);
+        settings.raServerUsername[sizeof(settings.raServerUsername) - 1] = '\0';
+    } else {
+        settings.raServerUsername[0] = '\0';
+    }
+    CFG_sync();
+}
+
+bool CFG_setRAServerUsernameFromAvatarUrl(const char* str)
+{
+    if (!str) return false;
+    /* Accept both unescaped "/UserPic/" (rcheevos-decoded strings) and
+     * JSON-escaped "\/UserPic\/" (raw RA API response bodies). */
+    const char* marker = strstr(str, "/UserPic/");
+    size_t marker_skip = 9; /* strlen("/UserPic/") */
+    if (!marker) {
+        marker = strstr(str, "\\/UserPic\\/");
+        marker_skip = 11; /* strlen("\\/UserPic\\/") */
+        if (!marker) return false;
+    }
+    marker += marker_skip;
+    /* Name ends at ".png" (or its escaped form, though ".png" has no slash). */
+    const char* dot = strstr(marker, ".png");
+    if (!dot || dot <= marker) return false;
+    size_t len = (size_t)(dot - marker);
+    if (len == 0 || len >= sizeof(settings.raServerUsername)) return false;
+    char username[64];
+    memcpy(username, marker, len);
+    username[len] = '\0';
+    CFG_setRAServerUsername(username);
+    return true;
+}
+
 bool CFG_getRAAuthenticated(void)
 {
     return settings.raAuthenticated;
@@ -1255,6 +1304,7 @@ void CFG_sync(void)
     fprintf(file, "raPassword=%s\n", settings.raPassword);
     fprintf(file, "raHardcoreMode=%i\n", settings.raHardcoreMode);
     fprintf(file, "raToken=%s\n", settings.raToken);
+    fprintf(file, "raServerUsername=%s\n", settings.raServerUsername);
     fprintf(file, "raAuthenticated=%i\n", settings.raAuthenticated);
     fprintf(file, "raShowNotifications=%i\n", settings.raShowNotifications);
     fprintf(file, "raNotificationDuration=%i\n", settings.raNotificationDuration);

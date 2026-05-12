@@ -1,6 +1,6 @@
 # there is no reason to use this makefile manually
 
-.PHONY: build clean
+.PHONY: build clean _runtime_check
 
 ifeq (,$(PLATFORM))
 $(error please specify PLATFORM, eg. make PLATFORM=trimui)
@@ -13,8 +13,17 @@ GIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain
 INIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain/.build
 IMAGE_NAME=ghcr.io/loveretro/$(PLATFORM)-toolchain:latest
 
+CONTAINER_RUNTIME ?= $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
+ifeq (,$(CONTAINER_RUNTIME))
+$(error Neither docker nor podman found in PATH)
+endif
+
+RUNTIME_MARKER := $(HOST_WORKSPACE)/.container_runtime
+LAST_RUNTIME := $(shell cat $(RUNTIME_MARKER) 2>/dev/null)
+CURRENT_RUNTIME := $(notdir $(CONTAINER_RUNTIME))
+
 all: $(INIT_IF_NECESSARY)
-	docker run -it --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) $(IMAGE_NAME) /bin/bash
+	$(CONTAINER_RUNTIME) run -it --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) $(IMAGE_NAME) /bin/bash
 
 $(INIT_IF_NECESSARY): $(GIT_IF_NECESSARY)
 	cd toolchains/$(PLATFORM)-toolchain && make .build
@@ -22,19 +31,36 @@ $(INIT_IF_NECESSARY): $(GIT_IF_NECESSARY)
 $(GIT_IF_NECESSARY):
 	mkdir -p toolchains
 	git clone https://github.com/LoveRetro/$(PLATFORM)-toolchain/ toolchains/$(PLATFORM)-toolchain
-	docker pull $(IMAGE_NAME) && touch toolchains/$(PLATFORM)-toolchain/.build
+	$(CONTAINER_RUNTIME) pull $(IMAGE_NAME) && touch toolchains/$(PLATFORM)-toolchain/.build
 
 clean:
 	cd toolchains/$(PLATFORM)-toolchain && make clean
 
-build: $(INIT_IF_NECESSARY)
-	docker run --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && cd /root/workspace && make'
+_runtime_check:
+	@if [ -n "$(LAST_RUNTIME)" ] && [ "$(LAST_RUNTIME)" != "$(CURRENT_RUNTIME)" ]; then \
+		echo "Container runtime changed ($(LAST_RUNTIME) -> $(CURRENT_RUNTIME)), cleaning workspace build artifacts..."; \
+		PREV=$$(command -v $(LAST_RUNTIME) 2>/dev/null); \
+		if [ -n "$$PREV" ]; then \
+			$$PREV run --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) $(IMAGE_NAME) /bin/bash -c \
+				'find $(GUEST_WORKSPACE) -depth -user root -delete 2>/dev/null; true'; \
+		else \
+			echo "Error: previous runtime $(LAST_RUNTIME) not available to clean root-owned artifacts."; \
+			echo "Run: sudo rm -rf $(HOST_WORKSPACE)/*/build $(HOST_WORKSPACE)/$(PLATFORM)/other"; \
+			exit 1; \
+		fi; \
+	fi
 
-build-cores: $(INIT_IF_NECESSARY)
-	docker run --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && cd /root/workspace && make cores'
+build: $(INIT_IF_NECESSARY) _runtime_check
+	$(CONTAINER_RUNTIME) run --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && cd /root/workspace && make'
+	@echo "$(CURRENT_RUNTIME)" > $(RUNTIME_MARKER)
 
-build-core: $(INIT_IF_NECESSARY)
+build-cores: $(INIT_IF_NECESSARY) _runtime_check
+	$(CONTAINER_RUNTIME) run --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && cd /root/workspace && make cores'
+	@echo "$(CURRENT_RUNTIME)" > $(RUNTIME_MARKER)
+
+build-core: $(INIT_IF_NECESSARY) _runtime_check
 ifndef CORE
 	$(error CORE is not set)
 endif
-	docker run --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) -e CORE=$(CORE) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && cd /root/workspace && make core'
+	$(CONTAINER_RUNTIME) run --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) -e CORE=$(CORE) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && cd /root/workspace && make core'
+	@echo "$(CURRENT_RUNTIME)" > $(RUNTIME_MARKER)
