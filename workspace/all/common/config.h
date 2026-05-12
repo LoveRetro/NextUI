@@ -156,6 +156,7 @@ typedef struct
 	char raPassword[128];
 	bool raHardcoreMode;
 	char raToken[64];           // API token (stored after successful auth)
+	char raServerUsername[64];  // Server's internal username (from avatar URL, used for sync hash)
 	bool raAuthenticated;       // Whether we have a valid token
 	bool raShowNotifications;   // Show achievement unlock notifications
 	int raNotificationDuration; // Duration for achievement notifications (1-5 seconds)
@@ -229,6 +230,7 @@ typedef struct
 #define CFG_DEFAULT_RA_PASSWORD ""
 #define CFG_DEFAULT_RA_HARDCOREMODE false
 #define CFG_DEFAULT_RA_TOKEN ""
+#define CFG_DEFAULT_RA_SERVER_USERNAME ""
 #define CFG_DEFAULT_RA_AUTHENTICATED false
 #define CFG_DEFAULT_RA_SHOW_NOTIFICATIONS true
 #define CFG_DEFAULT_RA_NOTIFICATION_DURATION 3
@@ -379,6 +381,14 @@ bool CFG_getRAHardcoreMode(void);
 void CFG_setRAHardcoreMode(bool enable);
 const char* CFG_getRAToken(void);
 void CFG_setRAToken(const char* token);
+const char* CFG_getRAServerUsername(void);
+void CFG_setRAServerUsername(const char* username);
+// Extract the RA server's internal username from any string containing
+// "/UserPic/USERNAME.png" (e.g. an avatar URL or raw JSON) and persist
+// it via CFG_setRAServerUsername().  Returns true if a username was
+// extracted and stored; returns false (and leaves any existing stored
+// value untouched) if the pattern is missing or malformed.
+bool CFG_setRAServerUsernameFromAvatarUrl(const char* str);
 bool CFG_getRAAuthenticated(void);
 void CFG_setRAAuthenticated(bool authenticated);
 bool CFG_getRAShowNotifications(void);
