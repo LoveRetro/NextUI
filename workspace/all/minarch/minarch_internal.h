@@ -82,6 +82,7 @@ extern enum retro_pixel_format fmt;
 
 extern struct Core core;
 extern struct Game game;
+extern struct retro_disk_control_ext_callback disk_control_ext;
 extern GFX_Renderer renderer;
 extern SDL_Surface *screen;
 
