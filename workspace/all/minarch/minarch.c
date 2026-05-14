@@ -35,12 +35,14 @@
 #include <SDL2/SDL.h>
 #include <rcheevos/rc_client.h>
 
+#include "minarch_internal.h"
+
 ///////////////////////////////////////
 
-static SDL_Surface* screen;
-static int quit = 0;
-static int newScreenshot = 0;
-static int show_menu = 0;
+SDL_Surface* screen;
+int quit = 0;
+int newScreenshot = 0;
+int show_menu = 0;
 static int simple_mode = 0;
 static void selectScaler(int src_w, int src_h, int src_p);
 enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
@@ -71,32 +73,32 @@ enum {
 #define REWIND_MAX_LZ4_ACCELERATION 64        // max LZ4 acceleration value
 
 // default frontend options
-static int screen_scaling = SCALE_ASPECT;
+int screen_scaling = SCALE_ASPECT;
 static int resampling_quality = 2;
 static int ambient_mode = 0;
 static int screen_sharpness = SHARPNESS_SOFT;
-static int screen_effect = EFFECT_NONE;
+int screen_effect = EFFECT_NONE;
 static int screenx = 64;
 static int screeny = 64;
 static int overlay = 0; 
-static int use_core_fps = 0;
+int use_core_fps = 0;
 static int sync_ref = 0;
 static int show_debug = 0;
 static int max_ff_speed = 3; // 4x
-static int ff_audio = 0;
-static int fast_forward = 0;
-static int rewind_pressed = 0;
-static int rewind_toggle = 0;
-static int ff_toggled = 0;
-static int ff_hold_active = 0;
-static int ff_paused_by_rewind_hold = 0;
-static int rewinding = 0;
-static int rewind_cfg_enable = MINARCH_DEFAULT_REWIND_ENABLE;
-static int rewind_cfg_buffer_mb = MINARCH_DEFAULT_REWIND_BUFFER_MB;
-static int rewind_cfg_granularity = MINARCH_DEFAULT_REWIND_GRANULARITY;
-static int rewind_cfg_audio = MINARCH_DEFAULT_REWIND_AUDIO;
-static int rewind_cfg_compress = 1;
-static int rewind_cfg_lz4_acceleration = MINARCH_DEFAULT_REWIND_LZ4_ACCELERATION;
+int ff_audio = 0;
+int fast_forward = 0;
+int rewind_pressed = 0;
+int rewind_toggle = 0;
+int ff_toggled = 0;
+int ff_hold_active = 0;
+int ff_paused_by_rewind_hold = 0;
+int rewinding = 0;
+int rewind_cfg_enable = MINARCH_DEFAULT_REWIND_ENABLE;
+int rewind_cfg_buffer_mb = MINARCH_DEFAULT_REWIND_BUFFER_MB;
+int rewind_cfg_granularity = MINARCH_DEFAULT_REWIND_GRANULARITY;
+int rewind_cfg_audio = MINARCH_DEFAULT_REWIND_AUDIO;
+int rewind_cfg_compress = 1;
+int rewind_cfg_lz4_acceleration = MINARCH_DEFAULT_REWIND_LZ4_ACCELERATION;
 static int overclock = 0; // auto
 static int has_custom_controllers = 0;
 static int gamepad_type = 0; // index in gamepad_labels/gamepad_values
@@ -111,65 +113,12 @@ GFX_Renderer renderer;
 
 ///////////////////////////////////////
 
-static struct Core {
-	int initialized;
-	int need_fullpath;
-	
-	const char tag[8]; // eg. GBC
-	const char name[128]; // eg. gambatte
-	const char version[128]; // eg. Gambatte (v0.5.0-netlink 7e02df6)
-	const char extensions[128]; // eg. gb|gbc|dmg
-	
-	const char config_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/rg35xx/GB-gambatte
-	const char states_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/arm-480/GB-gambatte
-	const char saves_dir[MAX_PATH]; // eg. /mnt/sdcard/Saves/GB
-	const char bios_dir[MAX_PATH]; // eg. /mnt/sdcard/Bios/GB
-	const char cheats_dir[MAX_PATH]; // eg. /mnt/sdcard/Cheats/GB
-	const char overlays_dir[MAX_PATH]; // eg. /mnt/sdcard/Cheats/GB
-	
-	double fps;
-	double sample_rate;
-	double aspect_ratio;
-
-	void* handle;
-	void (*init)(void);
-	void (*deinit)(void);
-	
-	void (*get_system_info)(struct retro_system_info *info);
-	void (*get_system_av_info)(struct retro_system_av_info *info);
-	void (*set_controller_port_device)(unsigned port, unsigned device);
-	
-	void (*reset)(void);
-	void (*run)(void);
-	size_t (*serialize_size)(void);
-	bool (*serialize)(void *data, size_t size);
-	bool (*unserialize)(const void *data, size_t size);
-	void (*cheat_reset)(void);
-	void (*cheat_set)(unsigned id, bool enabled, const char*);
-	bool (*load_game)(const struct retro_game_info *game);
-	bool (*load_game_special)(unsigned game_type, const struct retro_game_info *info, size_t num_info);
-	void (*unload_game)(void);
-	unsigned (*get_region)(void);
-	void *(*get_memory_data)(unsigned id);
-	size_t (*get_memory_size)(unsigned id);
-	
-	retro_core_options_update_display_callback_t update_visibility_callback;
-	// retro_audio_buffer_status_callback_t audio_buffer_status;
-} core;
+struct Core core;
 
 int extract_zip(char** extensions);
 static bool getAlias(char* path, char* alias);
 
-static struct Game {
-	char path[MAX_PATH];
-	char name[MAX_PATH]; // TODO: rename to basename?
-	char alt_name[MAX_PATH]; // alternate name, eg. unzipped rom file name
-	char m3u_path[MAX_PATH];
-	char tmp_path[MAX_PATH]; // location of unzipped file
-	void* data;
-	size_t size;
-	int is_open;
-} game;
+struct Game game;
 static void Game_open(char* path) {
 	LOG_info("Game_open\n");
 	int skipzip = 0;
