@@ -229,3 +229,68 @@ enum {
 };
 
 #include "minarch_options.h"
+
+/* -----------------------------------------------------------------------
+   Symbols defined in minarch.c shared with extracted modules
+   ----------------------------------------------------------------------- */
+
+struct Cheats; // forward declaration for Core_applyCheats
+
+// Label arrays
+extern char* button_labels[];
+extern char* gamepad_labels[];
+extern char* gamepad_values[];
+extern char* onoff_labels[];
+extern int has_custom_controllers;
+
+// Shader option indices
+enum {
+	SH_EXTRASETTINGS,
+	SH_SHADERS_PRESET,
+	SH_NROFSHADERS,
+
+	SH_SHADER1,
+	SH_SHADER1_FILTER,
+	SH_SRCTYPE1,
+	SH_SCALETYPE1,
+	SH_UPSCALE1,
+
+	SH_SHADER2,
+	SH_SHADER2_FILTER,
+	SH_SRCTYPE2,
+	SH_SCALETYPE2,
+	SH_UPSCALE2,
+
+	SH_SHADER3,
+	SH_SHADER3_FILTER,
+	SH_SRCTYPE3,
+	SH_SCALETYPE3,
+	SH_UPSCALE3,
+
+	SH_NONE
+};
+
+// Config loaded state
+enum {
+	CONFIG_NONE,
+	CONFIG_CONSOLE,
+	CONFIG_GAME,
+};
+
+// Config write mode
+enum {
+	CONFIG_WRITE_ALL,
+	CONFIG_WRITE_GAME,
+};
+
+// Functions defined in minarch.c used by frontend opts module
+void Menu_beforeSleep(void);
+void Menu_afterSleep(void);
+void hdmimon(void);
+void Config_write(int override);
+void Config_restore(void);
+void applyShaderSettings(void);
+void initShaders(void);
+char** list_files_in_folder(const char* folderPath, int* fileCount, const char* defaultElement, const char* extensionFilter);
+void Core_applyCheats(struct Cheats *cheats);
+void Config_syncShaders(char* key, int value);
