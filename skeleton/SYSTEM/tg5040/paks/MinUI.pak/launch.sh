@@ -113,11 +113,7 @@ fi
 # start stock gpio input daemon
 trimui_inputd &
 
-set_cpu() {
-	local mode="$1"
-	sh "$SYSTEM_PATH/bin/governor.sh" "$mode"
-}
-set_cpu "auto"
+sh "$SYSTEM_PATH/bin/governor.sh" "auto"
 
 keymon.elf & # &> $SDCARD_PATH/keymon.txt &
 batmon.elf & # &> $SDCARD_PATH/batmon.txt &
@@ -188,7 +184,7 @@ touch "$EXEC_PATH"  && sync
 while [ -f $EXEC_PATH ]; do
 	nextui.elf &> $LOGS_PATH/nextui.txt
 	# default launched paks to performance, they can change it themselves after launch if they want
-	set_cpu "performance"
+	sh "$SYSTEM_PATH/bin/governor.sh" "performance"
 	
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
@@ -198,7 +194,7 @@ while [ -f $EXEC_PATH ]; do
 		"$SYSTEM_PATH/bin/run_hooks.sh" post-launch.d
 		rm -f $NEXT_PATH
 		# reset to performance when exiting, UI will reset to auto if needed
-		set_cpu "performance"
+		sh "$SYSTEM_PATH/bin/governor.sh" "performance"
 	fi
 
 	if [ -f "/tmp/poweroff" ]; then
