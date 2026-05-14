@@ -69,6 +69,17 @@ struct Game {
 	int is_open;
 };
 
+enum {
+	SCALE_NATIVE,
+	SCALE_ASPECT,
+	SCALE_ASPECT_SCREEN,
+	SCALE_FULLSCREEN,
+	SCALE_CROPPED,
+	SCALE_COUNT,
+};
+
+extern enum retro_pixel_format fmt;
+
 extern struct Core core;
 extern struct Game game;
 extern GFX_Renderer renderer;
@@ -92,6 +103,10 @@ extern int screen_effect;
 
 extern int DEVICE_WIDTH;
 extern int DEVICE_HEIGHT;
+extern int DEVICE_PITCH;
+extern int ambient_mode;
+extern int show_debug;
+extern int shader_reset_suppressed;
 
 extern int rewind_cfg_enable;
 extern int rewind_cfg_buffer_mb;
@@ -178,6 +193,7 @@ void Config_syncFrontend(char* key, int value);
 
 // Special per-game hooks (defined in minarch.c)
 void Special_updatedDMGPalette(int frames);
+void Special_render(void);
 
 enum {
 	FE_OPT_SCALING,
