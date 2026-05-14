@@ -109,6 +109,17 @@ extern int ambient_mode;
 extern int show_debug;
 extern int shader_reset_suppressed;
 
+extern char* scaling_labels[];
+extern int simple_mode;
+extern int resampling_quality;
+extern int screen_sharpness;
+extern int cfg_screenx;
+extern int cfg_screeny;
+extern int overlay;
+extern int sync_ref;
+extern int max_ff_speed;
+extern int overclock;
+
 extern int rewind_cfg_enable;
 extern int rewind_cfg_buffer_mb;
 extern int rewind_cfg_granularity;
@@ -303,15 +314,10 @@ enum {
 	CONFIG_WRITE_GAME,
 };
 
-// Functions defined in minarch.c used by frontend opts module
-void Config_readOptions(void);
+// Functions defined in minarch.c
 void Menu_beforeSleep(void);
 void Menu_afterSleep(void);
 void hdmimon(void);
-void Config_write(int override);
-void Config_restore(void);
-void applyShaderSettings(void);
-void initShaders(void);
-char** list_files_in_folder(const char* folderPath, int* fileCount, const char* defaultElement, const char* extensionFilter);
 void Core_applyCheats(struct Cheats *cheats);
-void Config_syncShaders(char* key, int value);
+
+#include "minarch_config.h"
