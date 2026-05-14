@@ -100,21 +100,7 @@ echo 0 > /sys/class/led_anim/max_scale
 # start gpio input daemon
 trimui_inputd &
 
-echo userspace > /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor
-echo 408000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq
-echo 2160000 > /sys/devices/system/cpu/cpu4/cpufreq/scaling_max_freq
-
-BIG_PATH=/sys/devices/system/cpu/cpu4/cpufreq/scaling_setspeed
-CPU_SPEED_PERF=2160000
-echo $CPU_SPEED_PERF > $BIG_PATH
-
-echo schedutil > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-echo 408000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
-echo 2000000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
-
-#LITTLE_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
-#CPU_SPEED_PERF_LITTLE=2000000
-#echo $CPU_SPEED_PERF_LITTLE > $LITTLE_PATH
+sh "$SYSTEM_PATH/bin/governor.sh" "auto"
 
 echo performance > /sys/devices/platform/soc@3000000/1800000.gpu/devfreq/1800000.gpu/governor
 
@@ -198,8 +184,9 @@ EXEC_PATH="/tmp/nextui_exec"
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
 while [ -f $EXEC_PATH ]; do
-	nextui.elf &> $LOGS_PATH/nextui.txt
-	echo $CPU_SPEED_PERF > $BIG_PATH
+	nextui.elf &> $LOGS_PATH/nextui.txt	
+	# default launched paks to performance, they can change it themselves after launch if they want
+	sh "$SYSTEM_PATH/bin/governor.sh" "performance"
 
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
@@ -208,7 +195,8 @@ while [ -f $EXEC_PATH ]; do
 		eval $CMD
 		"$SYSTEM_PATH/bin/run_hooks.sh" post-launch.d
 		rm -f $NEXT_PATH
-		echo $CPU_SPEED_PERF > $BIG_PATH
+		# reset to performance when exiting, UI will reset to auto if needed
+		sh "$SYSTEM_PATH/bin/governor.sh" "performance"
 	fi
 
 	if [ -f "/tmp/poweroff" ]; then

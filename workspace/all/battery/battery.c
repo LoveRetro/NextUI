@@ -637,7 +637,7 @@ int main(int argc, char *argv[])
 {
     InitSettings();
 
-    PWR_setCPUSpeed(CPU_SPEED_MENU);
+    PWR_setCPUSpeed(CPU_SPEED_AUTO);
     device_model = PLAT_getModel();
 
     screen = GFX_init(MODE_MAIN);

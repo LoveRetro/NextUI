@@ -217,7 +217,7 @@ int main(int argc, char *argv[])
     int is_brick = exactMatch("brick", device);
     
 	InitSettings();
-    PWR_setCPUSpeed(CPU_SPEED_MENU);
+    PWR_setCPUSpeed(CPU_SPEED_AUTO);
 
     if (is_brick) {
         const char *brick_names[] = {"F1 key", "F2 key", "Top bar", "L&R triggers"};

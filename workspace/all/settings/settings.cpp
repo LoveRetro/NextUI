@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
         LOG_info("This is stock OS version %s\n", version);
         InitSettings();
 
-        PWR_setCPUSpeed(CPU_SPEED_MENU);
+        PWR_setCPUSpeed(CPU_SPEED_AUTO);
 
         Context ctx = {0};
         ctx.dirty = 1;
