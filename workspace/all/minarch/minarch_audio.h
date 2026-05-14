@@ -1,6 +1,5 @@
 #pragma once
 
-#include <stdint.h>
 #include "libretro.h"
 
 void audio_sample_callback(int16_t left, int16_t right);
