@@ -575,10 +575,10 @@ void LEDS_setProfile(int profile); // enum LightProfile
 void LEDS_updateLeds(bool indicator_only);
 
 enum {
-	CPU_SPEED_MENU,
-	CPU_SPEED_POWERSAVE,
-	CPU_SPEED_NORMAL,
-	CPU_SPEED_PERFORMANCE,
+	CPU_SPEED_AUTO = 0,
+	CPU_SPEED_PERFORMANCE = 1,
+	CPU_SPEED_POWERSAVE = 2,
+	CPU_SPEED_MENU = CPU_SPEED_AUTO, // legacy
 };
 #define PWR_setCPUSpeed PLAT_setCPUSpeed
 
@@ -690,7 +690,6 @@ void Perf_endCPUMonitor(void);
 
 void *PLAT_cpu_monitor(void *arg);
 void PLAT_setCPUSpeed(int speed); // enum
-void PLAT_setCustomCPUSpeed(int speed);
 // note: this affects the calling thread and every thread spawned from it (after)
 void PLAT_pinToCores(int core_type); // CPU_CORE_EFFICIENCY or CPU_CORE_PERFORMANCE
 void PLAT_setRumble(int strength);

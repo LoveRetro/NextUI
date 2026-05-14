@@ -285,11 +285,28 @@ void *PLAT_cpu_monitor(void *arg) {
     return NULL;
 }
 
-void PLAT_setCustomCPUSpeed(int speed) {
-    // Frequency control is now handled by kernel governor scripts
-}
 void PLAT_setCPUSpeed(int speed) {
-    // Frequency control is now handled by kernel governor scripts
+	const char* mode;
+	switch (speed) {
+		case CPU_SPEED_AUTO: mode = "auto"; break;
+		case CPU_SPEED_PERFORMANCE: mode = "performance"; break;
+		case CPU_SPEED_POWERSAVE: mode = "powersave"; break;
+		default: return;
+	}
+	
+	const char* system_path = getenv("SYSTEM_PATH");
+	if (!system_path) {
+		LOG_info("WARNING: SYSTEM_PATH not set, cannot run governor script\n");
+		return;
+	}
+	char cmd[512];
+	int n = snprintf(cmd, sizeof(cmd), "sh \"%s/bin/governor.sh\" \"%s\"", system_path, mode);
+	if (n < 0 || n >= (int)sizeof(cmd)) {
+		LOG_info("WARNING: SYSTEM_PATH too long for governor script path\n");
+		return;
+	}
+	int ret = system(cmd);
+	if (ret != 0) LOG_info("WARNING: governor script exited with status %d for mode '%s'\n", ret, mode);
 }
 
 #define MAX_STRENGTH 0xFFFF

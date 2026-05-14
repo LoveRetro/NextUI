@@ -2994,26 +2994,6 @@ static int Config_getValue(char* cfg, const char* key, char* out_value, int* loc
 	return 1;
 }
 
-
-
-
-
-static void run_governor_script(const char* script_name) {
-	const char* system_path = getenv("SYSTEM_PATH");
-	if (!system_path) {
-		LOG_info("WARNING: SYSTEM_PATH not set, cannot run governor script\n");
-		return;
-	}
-	char cmd[512];
-	int n = snprintf(cmd, sizeof(cmd), "sh \"%s/bin/%s\"", system_path, script_name);
-	if (n < 0 || n >= (int)sizeof(cmd)) {
-		LOG_info("WARNING: SYSTEM_PATH too long for governor script path\n");
-		return;
-	}
-	int ret = system(cmd);
-	if (ret != 0) LOG_info("WARNING: governor script '%s' exited with status %d\n", script_name, ret);
-}
-
 static void updateCPUMonitor(void) {
     Perf_setCPUMonitorEnabled(show_debug);
     if (!show_debug) return;
@@ -3031,11 +3011,7 @@ static void updateCPUMonitor(void) {
 
 static void setOverclock(int i) {
 	overclock = i;
-	switch (i) {
-		case 0: run_governor_script("auto_governor.sh"); break;
-		case 1: run_governor_script("performance_governor.sh"); break;
-		case 2: run_governor_script("powersave_governor.sh"); break;
-	}
+	PWR_setCPUSpeed(i);
 }
 static void Config_syncFrontend(char* key, int value) {
 	int i = -1;
@@ -9253,9 +9229,7 @@ int main(int argc , char* argv[]) {
 	QuitSettings();
 
 finish:
-
     Perf_setCPUMonitorEnabled(0);
-	run_governor_script("auto_governor.sh"); // restore auto governor on return to menu
 
 	// Unload game and shutdown RetroAchievements before Notification_quit —
 	// RA background threads (sync, badge downloads) may call notification

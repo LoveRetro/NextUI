@@ -2259,6 +2259,7 @@ int main (int argc, char *argv[]) {
 	system("gametimectl.elf stop_all");
 
 	GFX_setVsync(VSYNC_STRICT);
+	PWR_setCPUSpeed(CPU_SPEED_AUTO);
 
 	PAD_reset();
 	GFX_clearLayers(LAYER_ALL);
