@@ -2,6 +2,7 @@
 #include "minarch_rewind.h"
 
 #include <string.h>
+#include <time.h>
 #include <lz4.h>
 
 RewindContext rewind_ctx = {0};
