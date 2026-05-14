@@ -118,6 +118,61 @@ typedef struct ButtonMapping {
 	int ignore;
 } ButtonMapping;
 
+typedef struct Option {
+	char* key;
+	char* name; // desc
+	char* desc; // info, truncated
+	char* full; // info, longer but possibly still truncated
+	char *category;
+	char* var;
+	int default_value;
+	int value;
+	int count; // TODO: drop this?
+	int lock;
+	int hidden;
+	char** values;
+	char** labels;
+} Option;
+typedef struct OptionCategory {
+	char *key;
+	char *desc;
+	char *info;
+} OptionCategory;
+typedef struct OptionList {
+	int count;
+	int changed;
+	Option* options;
+
+	int enabled_count;
+	Option** enabled_options;
+
+	OptionCategory *categories;
+} OptionList;
+
+struct Config {
+	char* system_cfg;
+	char* default_cfg;
+	char* user_cfg;
+	char* shaders_preset;
+	char* device_tag;
+	OptionList frontend;
+	OptionList core;
+	OptionList shaders;
+	OptionList shaderpragmas[3];
+	ButtonMapping* controls;
+	ButtonMapping* shortcuts;
+	int loaded;
+	int initialized;
+};
+
+extern struct Config config;
+extern ButtonMapping default_button_mapping[];
+extern ButtonMapping core_button_mapping[];
+extern int gamepad_type;
+extern int last_rewind_pressed;
+
+void Config_syncFrontend(char* key, int value);
+
 enum {
 	FE_OPT_SCALING,
 	FE_OPT_RESAMPLING,
