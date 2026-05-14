@@ -1077,54 +1077,6 @@ static char* shscaletype_labels[] = {
 
 ///////////////////////////////
 
-enum {
-	FE_OPT_SCALING,
-	FE_OPT_RESAMPLING,
-	FE_OPT_AMBIENT,
-	FE_OPT_EFFECT,
-	FE_OPT_OVERLAY,
-	FE_OPT_SCREENX,
-	FE_OPT_SCREENY,
-	FE_OPT_SHARPNESS,
-	FE_OPT_SYNC_REFERENCE,
-	FE_OPT_OVERCLOCK,
-	FE_OPT_DEBUG,
-	FE_OPT_MAXFF,
-	FE_OPT_FF_AUDIO,
-	FE_OPT_REWIND_ENABLE,
-	FE_OPT_REWIND_BUFFER,
-	FE_OPT_REWIND_GRANULARITY,
-	FE_OPT_REWIND_COMPRESSION,
-	FE_OPT_REWIND_COMPRESSION_ACCEL,
-	FE_OPT_REWIND_AUDIO,
-	FE_OPT_COUNT,
-};
-
-enum {
-	SHORTCUT_SAVE_STATE,
-	SHORTCUT_LOAD_STATE,
-	SHORTCUT_RESET_GAME,
-	SHORTCUT_SAVE_QUIT,
-	SHORTCUT_CYCLE_SCALE,
-	SHORTCUT_CYCLE_EFFECT,
-	SHORTCUT_TOGGLE_FF,
-	SHORTCUT_HOLD_FF,
-	SHORTCUT_TOGGLE_REWIND,
-	SHORTCUT_HOLD_REWIND,
-	SHORTCUT_GAMESWITCHER,
-	SHORTCUT_SCREENSHOT,
-	// Trimui only
-	SHORTCUT_TOGGLE_TURBO_A,
-	SHORTCUT_TOGGLE_TURBO_B,
-	SHORTCUT_TOGGLE_TURBO_X,
-	SHORTCUT_TOGGLE_TURBO_Y,
-	SHORTCUT_TOGGLE_TURBO_L,
-	SHORTCUT_TOGGLE_TURBO_L2,
-	SHORTCUT_TOGGLE_TURBO_R,
-	SHORTCUT_TOGGLE_TURBO_R2,
-	// 
-	SHORTCUT_COUNT,
-};
 
 enum {
 	SYNC_SRC_AUTO,
@@ -1157,17 +1109,6 @@ enum {
 	SH_NONE
 };
 
-#define LOCAL_BUTTON_COUNT 16 // depends on device
-#define RETRO_BUTTON_COUNT 16 // allow L3/R3 to be remapped by user if desired, eg. Virtual Boy uses extra buttons for right d-pad
-
-typedef struct ButtonMapping { 
-	char* name;
-	int retro;
-	int local; // TODO: dislike this name...
-	int mod;
-	int default_;
-	int ignore;
-} ButtonMapping;
 
 static ButtonMapping default_button_mapping[] = { // used if pak.cfg doesn't exist or doesn't have bindings
 	{"Up",			RETRO_DEVICE_ID_JOYPAD_UP,		BTN_ID_DPAD_UP},
