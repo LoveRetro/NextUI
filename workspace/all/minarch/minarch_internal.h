@@ -304,6 +304,7 @@ enum {
 };
 
 // Functions defined in minarch.c used by frontend opts module
+void Config_readOptions(void);
 void Menu_beforeSleep(void);
 void Menu_afterSleep(void);
 void hdmimon(void);
