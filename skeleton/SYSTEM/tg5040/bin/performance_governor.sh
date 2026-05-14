@@ -1,5 +1,5 @@
 #!/bin/sh
-# performance_governor.sh - schedutil governor, min freq to max freq
+# performance_governor.sh - schedutil governor, min freq to max freq (408-2000 MHz on TG5040)
 # All cpu*/cpufreq entries point at this same shared policy0 path.
 CPU_PATH=/sys/devices/system/cpu/cpufreq/policy0
 [ -f "$CPU_PATH/scaling_available_frequencies" ] || exit 0

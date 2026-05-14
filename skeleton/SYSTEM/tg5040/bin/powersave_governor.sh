@@ -1,5 +1,5 @@
 #!/bin/sh
-# powersave_governor.sh - conservative governor, min freq to midpoint max
+# powersave_governor.sh - conservative governor, min freq to midpoint max (408-1200 MHz on TG5040)
 # All cpu*/cpufreq entries point at this same shared policy0 path.
 CPU_PATH=/sys/devices/system/cpu/cpufreq/policy0
 [ -f "$CPU_PATH/scaling_available_frequencies" ] || exit 0

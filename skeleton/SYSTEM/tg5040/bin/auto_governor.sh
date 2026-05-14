@@ -1,5 +1,5 @@
 #!/bin/sh
-# auto_governor.sh - ondemand governor, min freq to one step below max
+# auto_governor.sh - ondemand governor, min freq to one step below max (408-1800 MHz on TG5040)
 # All cpu*/cpufreq entries point at this same shared policy0 path.
 CPU_PATH=/sys/devices/system/cpu/cpufreq/policy0
 [ -f "$CPU_PATH/scaling_available_frequencies" ] || exit 0
