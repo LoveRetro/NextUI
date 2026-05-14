@@ -127,8 +127,6 @@ extern int rewind_cfg_audio;
 extern int rewind_cfg_compress;
 extern int rewind_cfg_lz4_acceleration;
 
-bool getAlias(char* path, char* alias);
-
 #include "minarch_rewind.h"
 
 /* -----------------------------------------------------------------------
@@ -315,9 +313,8 @@ enum {
 };
 
 // Functions defined in minarch.c
-void Menu_beforeSleep(void);
-void Menu_afterSleep(void);
 void hdmimon(void);
 void Core_applyCheats(struct Cheats *cheats);
 
 #include "minarch_config.h"
+#include "minarch_menu.h"

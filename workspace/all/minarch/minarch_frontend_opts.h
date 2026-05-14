@@ -47,12 +47,9 @@ typedef struct MenuList {
 } MenuList;
 
 // -----------------------------------------------------------------------
-// Functions defined in minarch.c that the extracted module calls
+// Functions defined in minarch_menu.c (see minarch_menu.h)
 // -----------------------------------------------------------------------
-
-int Menu_options(MenuList* list);
-void OptionSaveChanges_updateDesc(void);
-void OptionAchievements_updateDesc(void);
+#include "minarch_menu.h"
 
 // -----------------------------------------------------------------------
 // Public API: functions defined in minarch_frontend_opts.c
