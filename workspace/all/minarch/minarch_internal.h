@@ -270,6 +270,7 @@ extern char* button_labels[];
 extern char* gamepad_labels[];
 extern char* gamepad_values[];
 extern char* onoff_labels[];
+extern char* sync_ref_labels[];
 extern int has_custom_controllers;
 
 // Shader option indices
@@ -297,6 +298,13 @@ enum {
 	SH_UPSCALE3,
 
 	SH_NONE
+};
+
+// Sync reference source
+enum {
+	SYNC_SRC_AUTO,
+	SYNC_SRC_SCREEN,
+	SYNC_SRC_CORE,
 };
 
 // Config loaded state
