@@ -6,8 +6,11 @@ Hooks are platform-specific, just like paks. The launcher reads them from:
 
 ```
 $USERDATA_PATH/.hooks/
+    boot.d/          # scripts run on boot
     pre-launch.d/    # scripts run before launch
     post-launch.d/   # scripts run after launch exits
+    pre-sleep.d/     # scripts run before device goes to sleep
+    post-resume.d/   # scripts run after device wakes from sleep
 ```
 
 On device, `USERDATA_PATH` resolves to:
