@@ -100,7 +100,25 @@ echo 0 > /sys/class/led_anim/max_scale
 # start gpio input daemon
 trimui_inputd &
 
-sh "$SYSTEM_PATH/bin/auto_governor.sh"
+set_cpu() {
+	local mode="$1"
+	case "$mode" in
+		auto)
+			sh "$SYSTEM_PATH/bin/auto_governor.sh"
+			;;
+		performance)
+			sh "$SYSTEM_PATH/bin/performance_governor.sh"
+			;;
+		powersave)
+			sh "$SYSTEM_PATH/bin/powersave_governor.sh"
+			;;
+		*)
+			echo "set_cpu: unknown mode '$mode' (auto/performance/powersave)" >&2
+			return 1
+			;;
+	esac
+}
+set_cpu "auto"
 
 echo performance > /sys/devices/platform/soc@3000000/1800000.gpu/devfreq/1800000.gpu/governor
 
@@ -184,8 +202,9 @@ EXEC_PATH="/tmp/nextui_exec"
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
 while [ -f $EXEC_PATH ]; do
-	nextui.elf &> $LOGS_PATH/nextui.txt
-	echo $CPU_SPEED_PERF > $BIG_PATH
+	nextui.elf &> $LOGS_PATH/nextui.txt	
+	# default launched paks to performance, they can change it themselves after launch if they want
+	set_cpu "performance"
 
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
@@ -194,7 +213,8 @@ while [ -f $EXEC_PATH ]; do
 		eval $CMD
 		"$SYSTEM_PATH/bin/run_hooks.sh" post-launch.d
 		rm -f $NEXT_PATH
-		echo $CPU_SPEED_PERF > $BIG_PATH
+		# reset to performance when exiting, UI will reset to auto if needed
+		set_cpu "performance"
 	fi
 
 	if [ -f "/tmp/poweroff" ]; then
