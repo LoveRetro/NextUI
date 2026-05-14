@@ -179,17 +179,19 @@ void input_poll_callback(void) {
 		show_menu = 1;
 	}
 
-	// Two-pass button mapping: first collect buttons consumed by MENU+button
-	// shortcuts this frame, then build the retro bitmask skipping consumed ones.
-	int consumed[LOCAL_BUTTON_COUNT] = {0};
-	for (int i = 0; i < SHORTCUT_COUNT; i++) {
-		ButtonMapping *mapping = &config.shortcuts[i];
-		if (!mapping->mod) continue;
-		if (!PAD_isPressed(BTN_MENU)) continue;
-		int btn = 1 << mapping->local;
-		if (btn == BTN_NONE) continue;
-		if (PAD_isPressed(btn) && mapping->local >= 0 && mapping->local < LOCAL_BUTTON_COUNT) {
-			consumed[mapping->local] = 1;
+	// Block buttons used in MENU+button shortcuts until they are physically released.
+	// Tracking persists across frames so releasing MENU before the button doesn't leak.
+	static int consumed_mask = 0; // bit i = BTN_ID i is consumed
+	for (int i = 0; i < LOCAL_BUTTON_COUNT; i++) {
+		if ((consumed_mask >> i) & 1) {
+			if (!PAD_isPressed(1 << i)) consumed_mask &= ~(1 << i);
+		}
+	}
+	if (PAD_isPressed(BTN_MENU)) {
+		for (int i = 0; i < SHORTCUT_COUNT; i++) {
+			ButtonMapping *mapping = &config.shortcuts[i];
+			if (!mapping->mod || mapping->local < 0 || mapping->local >= LOCAL_BUTTON_COUNT) continue;
+			if (PAD_isPressed(1 << mapping->local)) consumed_mask |= (1 << mapping->local);
 		}
 	}
 
@@ -198,7 +200,7 @@ void input_poll_callback(void) {
 		ButtonMapping* mapping = &config.controls[i];
 		int btn = 1 << mapping->local;
 		if (btn==BTN_NONE) continue; // present buttons can still be unbound
-		if (mapping->local >= 0 && mapping->local < LOCAL_BUTTON_COUNT && consumed[mapping->local]) continue;
+		if (mapping->local >= 0 && mapping->local < LOCAL_BUTTON_COUNT && (consumed_mask >> mapping->local) & 1) continue;
 		if (gamepad_type==0) {
 			switch(btn) {
 				case BTN_DPAD_UP:    btn = BTN_UP;    break;
@@ -214,7 +216,6 @@ void input_poll_callback(void) {
 		//  && !PWR_ignoreSettingInput(btn, show_setting)
 	}
 
-	// if (buttons) LOG_info("buttons: %i\n", buttons);
 }
 int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) {
 	if (port==0 && device==RETRO_DEVICE_JOYPAD && index==0) {
