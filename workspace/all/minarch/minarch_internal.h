@@ -90,6 +90,9 @@ extern int ff_paused_by_rewind_hold;
 extern int screen_scaling;
 extern int screen_effect;
 
+extern int DEVICE_WIDTH;
+extern int DEVICE_HEIGHT;
+
 extern int rewind_cfg_enable;
 extern int rewind_cfg_buffer_mb;
 extern int rewind_cfg_granularity;
@@ -173,6 +176,9 @@ extern int last_rewind_pressed;
 
 void Config_syncFrontend(char* key, int value);
 
+// Special per-game hooks (defined in minarch.c)
+void Special_updatedDMGPalette(int frames);
+
 enum {
 	FE_OPT_SCALING,
 	FE_OPT_RESAMPLING,
@@ -221,3 +227,5 @@ enum {
 	//
 	SHORTCUT_COUNT,
 };
+
+#include "minarch_options.h"
