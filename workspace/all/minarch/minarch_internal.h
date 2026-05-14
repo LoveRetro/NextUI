@@ -96,3 +96,5 @@ extern int rewind_cfg_granularity;
 extern int rewind_cfg_audio;
 extern int rewind_cfg_compress;
 extern int rewind_cfg_lz4_acceleration;
+
+bool getAlias(char* path, char* alias);
