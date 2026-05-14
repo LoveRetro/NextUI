@@ -1,7 +1,6 @@
 #pragma once
 
 #include "libretro.h"
-#include <stdint.h>
 
 int setFastForward(int enable);
 void input_poll_callback(void);
