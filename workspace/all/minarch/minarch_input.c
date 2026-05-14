@@ -179,26 +179,32 @@ void input_poll_callback(void) {
 		show_menu = 1;
 	}
 
-	// TODO: figure out how to ignore button when MENU+button is handled first
-	// TODO: array size of LOCAL_ whatever that macro is
-	// TODO: then split it into two loops
-	// TODO: first check for MENU+button
-	// TODO: when found mark button the array
-	// TODO: then check for button
-	// TODO: only modify if absent from array
-	// TODO: the shortcuts loop above should also contribute to the array
+	// Two-pass button mapping: first collect buttons consumed by MENU+button
+	// shortcuts this frame, then build the retro bitmask skipping consumed ones.
+	int consumed[LOCAL_BUTTON_COUNT] = {0};
+	for (int i = 0; i < SHORTCUT_COUNT; i++) {
+		ButtonMapping *mapping = &config.shortcuts[i];
+		if (!mapping->mod) continue;
+		if (!PAD_isPressed(BTN_MENU)) continue;
+		int btn = 1 << mapping->local;
+		if (btn == BTN_NONE) continue;
+		if (PAD_isPressed(btn) && mapping->local >= 0 && mapping->local < LOCAL_BUTTON_COUNT) {
+			consumed[mapping->local] = 1;
+		}
+	}
 
 	buttons = 0;
 	for (int i=0; config.controls[i].name; i++) {
 		ButtonMapping* mapping = &config.controls[i];
 		int btn = 1 << mapping->local;
 		if (btn==BTN_NONE) continue; // present buttons can still be unbound
+		if (mapping->local >= 0 && mapping->local < LOCAL_BUTTON_COUNT && consumed[mapping->local]) continue;
 		if (gamepad_type==0) {
 			switch(btn) {
-				case BTN_DPAD_UP: 		btn = BTN_UP; break;
-				case BTN_DPAD_DOWN: 	btn = BTN_DOWN; break;
-				case BTN_DPAD_LEFT: 	btn = BTN_LEFT; break;
-				case BTN_DPAD_RIGHT: 	btn = BTN_RIGHT; break;
+				case BTN_DPAD_UP:    btn = BTN_UP;    break;
+				case BTN_DPAD_DOWN:  btn = BTN_DOWN;  break;
+				case BTN_DPAD_LEFT:  btn = BTN_LEFT;  break;
+				case BTN_DPAD_RIGHT: btn = BTN_RIGHT; break;
 			}
 		}
 		if (PAD_isPressed(btn) && (!mapping->mod || PAD_isPressed(BTN_MENU))) {

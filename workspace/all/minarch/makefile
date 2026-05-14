@@ -22,7 +22,7 @@ SDL?=SDL
 TARGET = minarch
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 INCDIR = -I. -I./libretro-common/include/ -I../common/ -I../../$(PLATFORM)/platform/
-SOURCE = $(TARGET).c minarch_cheats.c minarch_rewind.c minarch_audio.c \
+SOURCE = $(TARGET).c minarch_cheats.c minarch_rewind.c minarch_audio.c minarch_input.c \
          ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c \
          ../common/notification.c ../../$(PLATFORM)/platform/platform.c
 
