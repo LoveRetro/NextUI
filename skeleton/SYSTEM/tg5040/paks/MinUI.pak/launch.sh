@@ -115,21 +115,7 @@ trimui_inputd &
 
 set_cpu() {
 	local mode="$1"
-	case "$mode" in
-		auto)
-			sh "$SYSTEM_PATH/bin/auto_governor.sh"
-			;;
-		performance)
-			sh "$SYSTEM_PATH/bin/performance_governor.sh"
-			;;
-		powersave)
-			sh "$SYSTEM_PATH/bin/powersave_governor.sh"
-			;;
-		*)
-			echo "set_cpu: unknown mode '$mode' (auto/performance/powersave)" >&2
-			return 1
-			;;
-	esac
+	sh "$SYSTEM_PATH/bin/governor.sh" "$mode"
 }
 set_cpu "auto"
 
