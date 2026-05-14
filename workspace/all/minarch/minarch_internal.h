@@ -195,6 +195,9 @@ void Config_syncFrontend(char* key, int value);
 void Special_updatedDMGPalette(int frames);
 void Special_render(void);
 
+// Libretro environment callback (defined in minarch.c)
+bool environment_callback(unsigned cmd, void *data);
+
 enum {
 	FE_OPT_SCALING,
 	FE_OPT_RESAMPLING,
