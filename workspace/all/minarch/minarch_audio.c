@@ -1,5 +1,35 @@
+#include <stdbool.h>
+#include <SDL2/SDL.h>
+#include <msettings.h>
 #include "minarch_internal.h"
 #include "minarch_audio.h"
+
+static bool resetAudio = false;
+
+void Audio_onSinkChanged(int device, int watch_event) {
+	switch (watch_event) {
+	case DIRWATCH_CREATE:      LOG_info("callback reason: DIRWATCH_CREATE\n");      break;
+	case DIRWATCH_DELETE:      LOG_info("callback reason: DIRWATCH_DELETE\n");      break;
+	case FILEWATCH_MODIFY:     LOG_info("callback reason: FILEWATCH_MODIFY\n");     break;
+	case FILEWATCH_DELETE:     LOG_info("callback reason: FILEWATCH_DELETE\n");     break;
+	case FILEWATCH_CLOSE_WRITE:LOG_info("callback reason: FILEWATCH_CLOSE_WRITE\n");break;
+	}
+
+	resetAudio = true;
+
+	// FIXME: This shouldnt be necessary, alsa should just read .asoundrc for the changed default device.
+	if (device == AUDIO_SINK_BLUETOOTH)
+		SDL_setenv("AUDIODEV", "bluealsa", 1);
+	else
+		SDL_setenv("AUDIODEV", "default", 1);
+}
+
+void Audio_checkAndResetIfNeeded(void) {
+	if (!resetAudio) return;
+	resetAudio = false;
+	LOG_info("Resetting audio device config! (new state: %s)\n", SDL_getenv("AUDIODEV"));
+	SND_resetAudio(core.sample_rate, core.fps);
+}
 
 void audio_sample_callback(int16_t left, int16_t right) {
 	if (rewinding && !rewind_ctx.audio) return;

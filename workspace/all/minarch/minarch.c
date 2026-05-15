@@ -1,39 +1,10 @@
-#include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <msettings.h>
 
-#include <unistd.h>
-#include <fcntl.h>
-#include <dlfcn.h>
-#include <libgen.h>
-#include <time.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include <zip.h> 
-#include <pthread.h>
-#include <glob.h>
-#include <lz4.h>
-
-// libretro-common
-#include "libretro.h"
-#ifdef HAS_SRM
-#include "streams/rzip_stream.h"
-#include "streams/file_stream.h"
-#endif
-
-#include "defines.h"
-#include "api.h"
-#include "utils.h"
-#include "scaler.h"
-#include "notification.h"
-#include "config.h"
-#include "ra_integration.h"
-#include "ra_badges.h"
-#include <dirent.h>
 #include <SDL2/SDL_image.h>
-#include <SDL2/SDL.h>
-#include <rcheevos/rc_client.h>
+
+#include "notification.h"
+#include "ra_integration.h"
 
 #include "minarch_internal.h"
 #include "minarch_cheats.h"
@@ -47,6 +18,7 @@
 #include "minarch_game.h"
 #include "minarch_environment.h"
 #include "minarch_config.h"
+#include "minarch_runframe.h"
 
 ///////////////////////////////////////
 
@@ -151,135 +123,8 @@ void hdmimon(void) {
 	}
 }
 
-static void chooseSyncRef(void) {
-	switch (sync_ref) {
-		case SYNC_SRC_AUTO:   use_core_fps = (core.get_region() == RETRO_REGION_PAL); break;
-		case SYNC_SRC_SCREEN: use_core_fps = 0; break;
-		case SYNC_SRC_CORE:   use_core_fps = 1; break;
-	}
-	LOG_info("%s: sync_ref is set to %s, game region is %s, use core fps = %s\n",
-		  __FUNCTION__,
-		  sync_ref_labels[sync_ref],
-		  core.get_region() == RETRO_REGION_NTSC ? "NTSC" : "PAL",
-		  use_core_fps ? "yes" : "no");
-}
-
-static void limitFF(void) {
-	static uint64_t ff_frame_time = 0;
-	static uint64_t last_time = 0;
-	static int last_max_speed = -1;
-	if (last_max_speed!=max_ff_speed) {
-		last_max_speed = max_ff_speed;
-		ff_frame_time = 1000000 / (core.fps * (max_ff_speed + 1));
-	}
-	
-	uint64_t now = getMicroseconds();
-	if (fast_forward && max_ff_speed) {
-		if (last_time == 0) last_time = now;
-		int elapsed = now - last_time;
-		if (elapsed>0 && elapsed<0x80000) {
-			if (elapsed<ff_frame_time) {
-				int delay = (ff_frame_time - elapsed) / 1000;
-				if (delay>0 && delay<17) { // don't allow a delay any greater than a frame
-					SDL_Delay(delay);
-				}
-			}
-			last_time += ff_frame_time;
-			return;
-		}
-	}
-	last_time = now;
-}
-
-static void run_frame(void) {
-	// if rewind is toggled, fast-forward toggle must stay off; fast-forward hold pauses rewind
-	int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
-	if (do_rewind) {
-		int was_rewinding = rewinding;
-		int rewind_result = Rewind_step_back();
-		if (rewind_result == REWIND_STEP_OK) {
-			// Actually stepped back - run one frame to render the restored state
-			rewinding = 1;
-			fast_forward = 0;
-			core.run();
-		}
-		else if (rewind_result == REWIND_STEP_CADENCE) {
-			// Waiting for cadence - don't run core, just re-render current frame
-			rewinding = 1;
-			fast_forward = 0;
-			// Poll input manually since core.run() isn't called
-			input_poll_callback();
-			// Skip core.run() entirely to avoid advancing the game
-		}
-		else {
-			int hold_empty = rewind_ctx.enabled && rewind_pressed && !rewind_toggle;
-			if (hold_empty) {
-				// Hold-to-rewind: freeze when empty to avoid advance/rewind oscillation.
-				rewinding = was_rewinding ? 1 : 0;
-				// Poll input manually so release is detected while core.run() is skipped
-				input_poll_callback();
-			} else {
-				// Buffer empty: auto untoggle rewind, resume FF if it was paused for a hold
-				if (rewind_toggle) rewind_toggle = 0;
-				if (ff_paused_by_rewind_hold && ff_toggled) {
-					ff_paused_by_rewind_hold = 0;
-					fast_forward = setFastForward(1);
-				}
-				if (was_rewinding) {
-					rewinding = 1;
-					Rewind_sync_encode_state();
-				}
-				rewinding = 0;
-				core.run();
-				Rewind_push(0);
-			}
-		}
-	}
-	else {
-		Rewind_sync_encode_state();
-		rewinding = 0;
-		if (ff_paused_by_rewind_hold && !rewind_pressed) {
-			// resume fast forward after hold rewind ends
-			if (ff_toggled) fast_forward = setFastForward(1);
-			ff_paused_by_rewind_hold = 0;
-		}
-
-		core.run();
-		Rewind_push(0);
-	}
-	limitFF();
-}
-
 #define PWR_UPDATE_FREQ 5
 #define PWR_UPDATE_FREQ_INGAME 20
-
-// We need to do this on the audio thread (aka main thread currently)
-static bool resetAudio = false;
-
-void onAudioSinkChanged(int device, int watch_event)
-{
-	switch (watch_event)
-	{
-	case DIRWATCH_CREATE: LOG_info("callback reason: DIRWATCH_CREATE\n"); break;
-	case DIRWATCH_DELETE: LOG_info("callback reason: DIRWATCH_DELETE\n"); break;
-	case FILEWATCH_MODIFY: LOG_info("callback reason: FILEWATCH_MODIFY\n"); break;
-	case FILEWATCH_DELETE: LOG_info("callback reason: FILEWATCH_DELETE\n"); break;
-	case FILEWATCH_CLOSE_WRITE: LOG_info("callback reason: FILEWATCH_CLOSE_WRITE\n"); break;
-	}
-
-	resetAudio = true;
-
-	// FIXME: This shouldnt be necessary, alsa should just read .asoundrc for the changed defult device.
-	if(device == AUDIO_SINK_BLUETOOTH)
-		SDL_setenv("AUDIODEV", "bluealsa", 1);
-	else
-		SDL_setenv("AUDIODEV", "default", 1);
-
-	//if(device != AUDIO_SINK_DEFAULT && !exists(SDCARD_PATH "/.userdata/tg5040/.asoundrc"))
-	//	LOG_error("asoundrc is not there yet!!!\n");
-	//else if(device == AUDIO_SINK_DEFAULT && exists(SDCARD_PATH "/.userdata/tg5040/.asoundrc"))
-	//	LOG_error("asoundrc is not deleted yet!!!\n");
-}
 
 int main(int argc , char* argv[]) {
 	//static char asoundpath[MAX_PATH];
@@ -358,7 +203,7 @@ int main(int argc , char* argv[]) {
 	// Mute audio during startup to avoid pops (InitSettings would be logical, but too late)
 	SND_overrideMute(1);
 	SND_init(core.sample_rate, core.fps);
-	SND_registerDeviceWatcher(onAudioSinkChanged);
+	SND_registerDeviceWatcher(Audio_onSinkChanged);
 	InitSettings(); // after we initialize audio
 	Menu_init();
 	Notification_init();
@@ -470,11 +315,7 @@ int main(int argc , char* argv[]) {
 			chooseSyncRef();
 		}
 
-		if (resetAudio) {
-			resetAudio = false;
-			LOG_info("Resetting audio device config! (new state: %s)\n", SDL_getenv("AUDIODEV"));
-			SND_resetAudio(core.sample_rate, core.fps);
-		}
+		Audio_checkAndResetIfNeeded();
 
 		hdmimon();
 	}
