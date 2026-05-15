@@ -97,7 +97,7 @@ static int rewind_cfg_granularity = MINARCH_DEFAULT_REWIND_GRANULARITY;
 static int rewind_cfg_audio = MINARCH_DEFAULT_REWIND_AUDIO;
 static int rewind_cfg_compress = 1;
 static int rewind_cfg_lz4_acceleration = MINARCH_DEFAULT_REWIND_LZ4_ACCELERATION;
-static int overclock = 3; // auto
+static int overclock = 0; // auto
 static int has_custom_controllers = 0;
 static int gamepad_type = 0; // index in gamepad_labels/gamepad_values
 
@@ -2499,10 +2499,9 @@ static char* button_labels[] = {
 	NULL,
 };
 static char* overclock_labels[] = {
-	"Powersave",
-	"Normal",
-	"Performance",
 	"Auto",
+	"Performance",
+	"Powersave",
 	NULL,
 };
 
@@ -2649,10 +2648,10 @@ static struct Config {
 			[FE_OPT_OVERCLOCK] = {
 				.key	= "minarch_cpu_speed",
 				.name	= "CPU Speed",
-				.desc	= "Over- or underclock the CPU to prioritize\npure performance or power savings.",
-				.default_value = 3,
-				.value = 3,
-				.count = 4,
+				.desc	= "Choose how the CPU scales.\nAuto is recommended for most users.",
+				.default_value = 0,
+				.value = 0,
+				.count = 3,
 				.values = overclock_labels,
 				.labels = overclock_labels,
 			},
@@ -2995,34 +2994,24 @@ static int Config_getValue(char* cfg, const char* key, char* out_value, int* loc
 	return 1;
 }
 
+static void updateCPUMonitor(void) {
+    Perf_setCPUMonitorEnabled(show_debug);
+    if (!show_debug) return;
 
-
-
+    pthread_t cpucheckthread;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    if (pthread_create(&cpucheckthread, &attr, PLAT_cpu_monitor, NULL) != 0) {
+        LOG_info("WARNING: failed to start CPU monitor thread\n");
+        Perf_setCPUMonitorEnabled(0);
+    }
+    pthread_attr_destroy(&attr);
+}
 
 static void setOverclock(int i) {
-    overclock = i;
-    switch (i) {
-        case 0: {
-			useAutoCpu = 0;
-            PWR_setCPUSpeed(CPU_SPEED_POWERSAVE);
-            break;
-		}
-        case 1:  {
-			useAutoCpu = 0;
-            PWR_setCPUSpeed(CPU_SPEED_NORMAL);
-            break;
-		}
-        case 2:  {
-			useAutoCpu = 0;
-            PWR_setCPUSpeed(CPU_SPEED_PERFORMANCE);
-            break;
-		}
-        case 3:  {
-            PWR_setCPUSpeed(CPU_SPEED_NORMAL);
-			useAutoCpu = 1;
-            break;
-		}
-    }
+	overclock = i;
+	PWR_setCPUSpeed(i);
 }
 static void Config_syncFrontend(char* key, int value) {
 	int i = -1;
@@ -3089,7 +3078,9 @@ static void Config_syncFrontend(char* key, int value) {
 		i = FE_OPT_OVERCLOCK;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_DEBUG].key)) {
-		show_debug = value;
+        int prev_show_debug = show_debug;
+        show_debug = value;
+        if (prev_show_debug != show_debug) updateCPUMonitor();
 		i = FE_OPT_DEBUG;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_MAXFF].key)) {
@@ -6284,8 +6275,6 @@ void Menu_beforeSleep() {
 	RTC_write();
 	State_autosave();
 	putFile(AUTO_RESUME_PATH, game.path + strlen(SDCARD_PATH));
-	
-	PWR_setCPUSpeed(CPU_SPEED_MENU);
 }
 void Menu_afterSleep() {
 	unlink(AUTO_RESUME_PATH);
@@ -8569,7 +8558,6 @@ static void Menu_loop(void) {
 	SRAM_write();
 	RTC_write();
 	if (!HAS_POWER_BUTTON) PWR_enableSleep();
-	PWR_setCPUSpeed(CPU_SPEED_MENU); // set Hz directly
 
 	GFX_setEffect(EFFECT_NONE);
 	
@@ -9030,22 +9018,15 @@ int main(int argc , char* argv[]) {
 	//else 
 	//	LOG_info("asoundrc does not exist at %s\n", asoundpath);
 
-	pthread_t cpucheckthread;
-	pthread_attr_t attr;
-	pthread_attr_init(&attr);
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    pthread_create(&cpucheckthread, &attr, PLAT_cpu_monitor, NULL);
-	pthread_attr_destroy(&attr);
-
-	setOverclock(2); // start up in performance mode, faster init
-	PWR_pinToCores(CPU_CORE_PERFORMANCE); // thread affinity
-	
-	char core_path[MAX_PATH];
-	char rom_path[MAX_PATH]; 
-	char tag_name[MAX_PATH];
-
 	if(argc < 2)
 		return EXIT_FAILURE;
+
+	setOverclock(1); // start up in performance mode, faster init
+	PWR_pinToCores(CPU_CORE_PERFORMANCE); // thread affinity
+
+	char core_path[MAX_PATH];
+	char rom_path[MAX_PATH];
+	char tag_name[MAX_PATH];
 
 	strcpy(core_path, argv[1]);
 	strcpy(rom_path, argv[2]);
@@ -9248,6 +9229,7 @@ int main(int argc , char* argv[]) {
 	QuitSettings();
 
 finish:
+    Perf_setCPUMonitorEnabled(0);
 
 	// Unload game and shutdown RetroAchievements before Notification_quit —
 	// RA background threads (sync, badge downloads) may call notification
