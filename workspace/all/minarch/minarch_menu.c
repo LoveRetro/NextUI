@@ -7,6 +7,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <rcheevos/rc_client.h>
+#include <msettings.h>
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
@@ -18,6 +19,7 @@
 #include "minarch_saves.h"
 #include "minarch_game.h"
 #include "minarch_config.h"
+#include "minarch_video.h"
 #include "minarch_frontend_opts.h"
 #include "minarch_menu.h"
 
