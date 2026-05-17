@@ -43,16 +43,16 @@ apply_mode() {
 	
 	case "$mode" in
 		auto)
-			# ondemand governor, min freq to one step below max
+			# schedutil governor, min freq to one step below max
 			# policy0 - little Cores (408-1320 MHz on TG5050)
 			# policy4 - BIG Cores (408-2088 MHz on TG5050)
-			set_policy "$policy" "ondemand" "second_max"
+			set_policy "$policy" "schedutil" "second_max"
 			;;
 		performance)
-			# schedutil governor, min freq to max freq
-			# policy0 - little Cores (408-1416 MHz on TG5050)
-			# policy4 - BIG Cores (408-2160 MHz on TG5050)
-			set_policy "$policy" "schedutil" "max"
+			# performance governor, max freq
+			# policy0 - little Cores (1416 MHz on TG5050)
+			# policy4 - BIG Cores (2160 MHz on TG5050)
+			set_policy "$policy" "performance" "max"
 			;;
 		powersave)
 			# conservative governor, min freq to midpoint max
