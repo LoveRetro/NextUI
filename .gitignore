@@ -45,3 +45,4 @@ workspace/.container_runtime
 
 AGENTS.md
 CLAUDE.md
+.worktrees/
