@@ -1,5 +1,5 @@
-#include "minarch_internal.h"
-#include "minarch_options.h"
+#include "ma_internal.h"
+#include "ma_options.h"
 
 #include <string.h>
 #include <stdlib.h>

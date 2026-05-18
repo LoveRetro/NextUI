@@ -1,8 +1,8 @@
 #include <stdbool.h>
 #include <SDL2/SDL.h>
 #include <msettings.h>
-#include "minarch_internal.h"
-#include "minarch_audio.h"
+#include "ma_internal.h"
+#include "ma_audio.h"
 
 static bool resetAudio = false;
 

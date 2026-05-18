@@ -14,14 +14,14 @@
 #include "notification.h"
 #include "ra_integration.h"
 #include "ra_badges.h"
-#include "minarch_internal.h"
-#include "minarch_cheats.h"
-#include "minarch_saves.h"
-#include "minarch_game.h"
-#include "minarch_config.h"
-#include "minarch_video.h"
-#include "minarch_frontend_opts.h"
-#include "minarch_menu.h"
+#include "ma_internal.h"
+#include "ma_cheats.h"
+#include "ma_saves.h"
+#include "ma_game.h"
+#include "ma_config.h"
+#include "ma_video.h"
+#include "ma_frontend_opts.h"
+#include "ma_menu.h"
 
 ///////////////////////////////
 

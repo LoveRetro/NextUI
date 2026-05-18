@@ -1,9 +1,9 @@
 #include <string.h>
 #include <math.h>
 
-#include "minarch_internal.h"
+#include "ma_internal.h"
 #include "scaler.h"
-#include "minarch_video.h"
+#include "ma_video.h"
 
 
 static const char* bitmap_font[] = {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minarch_internal.h"
+#include "ma_internal.h"
 
 // Option value helpers
 int   Option_getValueIndex(Option *item, const char *value);

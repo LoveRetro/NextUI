@@ -1,6 +1,6 @@
-#include "minarch_internal.h"
-#include "minarch_frontend_opts.h"
-#include "minarch_cheats.h"
+#include "ma_internal.h"
+#include "ma_frontend_opts.h"
+#include "ma_cheats.h"
 #include "ra_integration.h"
 #include "notification.h"
 

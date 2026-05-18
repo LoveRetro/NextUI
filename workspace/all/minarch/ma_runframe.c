@@ -1,9 +1,9 @@
 #include <SDL2/SDL.h>
-#include "minarch_internal.h"
-#include "minarch_rewind.h"
-#include "minarch_input.h"
-#include "minarch_config.h"
-#include "minarch_runframe.h"
+#include "ma_internal.h"
+#include "ma_rewind.h"
+#include "ma_input.h"
+#include "ma_config.h"
+#include "ma_runframe.h"
 
 void chooseSyncRef(void) {
 	switch (sync_ref) {

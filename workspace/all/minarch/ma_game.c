@@ -6,8 +6,8 @@
 #include <zip.h>
 #include <libgen.h>
 
-#include "minarch_internal.h"
-#include "minarch_game.h"
+#include "ma_internal.h"
+#include "ma_game.h"
 
 struct Game game;
 struct retro_disk_control_ext_callback disk_control_ext;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minarch_internal.h"
+#include "ma_internal.h"
 
 // -----------------------------------------------------------------------
 // Menu type system
@@ -47,12 +47,12 @@ typedef struct MenuList {
 } MenuList;
 
 // -----------------------------------------------------------------------
-// Functions defined in minarch_menu.c (see minarch_menu.h)
+// Functions defined in ma_menu.c (see ma_menu.h)
 // -----------------------------------------------------------------------
-#include "minarch_menu.h"
+#include "ma_menu.h"
 
 // -----------------------------------------------------------------------
-// Public API: functions defined in minarch_frontend_opts.c
+// Public API: functions defined in ma_frontend_opts.c
 // -----------------------------------------------------------------------
 
 // Menu utility (also called from minarch.c achievement section)

@@ -127,7 +127,7 @@ extern int rewind_cfg_audio;
 extern int rewind_cfg_compress;
 extern int rewind_cfg_lz4_acceleration;
 
-#include "minarch_rewind.h"
+#include "ma_rewind.h"
 
 /* -----------------------------------------------------------------------
    Input / shortcut / options enums and types
@@ -257,7 +257,7 @@ enum {
 	SHORTCUT_COUNT,
 };
 
-#include "minarch_options.h"
+#include "ma_options.h"
 
 /* -----------------------------------------------------------------------
    Symbols defined in minarch.c shared with extracted modules
@@ -324,5 +324,5 @@ enum {
 void hdmimon(void);
 void Core_applyCheats(struct Cheats *cheats);
 
-#include "minarch_config.h"
-#include "minarch_menu.h"
+#include "ma_config.h"
+#include "ma_menu.h"

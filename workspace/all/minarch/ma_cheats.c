@@ -1,5 +1,5 @@
-#include "minarch_internal.h"
-#include "minarch_cheats.h"
+#include "ma_internal.h"
+#include "ma_cheats.h"
 
 #include <ctype.h>
 #include <string.h>

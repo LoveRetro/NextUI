@@ -2,13 +2,13 @@
 #include <libgen.h>
 #include <string.h>
 
-#include "minarch_internal.h"
-#include "minarch_saves.h"
-#include "minarch_video.h"
-#include "minarch_audio.h"
-#include "minarch_input.h"
-#include "minarch_cheats.h"
-#include "minarch_core.h"
+#include "ma_internal.h"
+#include "ma_saves.h"
+#include "ma_video.h"
+#include "ma_audio.h"
+#include "ma_input.h"
+#include "ma_cheats.h"
+#include "ma_core.h"
 
 
 void Core_getName(char* in_name, char* out_name) {

@@ -1,10 +1,10 @@
 #include <string.h>
 
-#include "minarch_internal.h"
-#include "minarch_options.h"
-#include "minarch_input.h"
+#include "ma_internal.h"
+#include "ma_options.h"
+#include "ma_input.h"
 #include "ra_integration.h"
-#include "minarch_environment.h"
+#include "ma_environment.h"
 
 static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
 	// TODO: handle other args? not sure I can

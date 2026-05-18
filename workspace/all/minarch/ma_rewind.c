@@ -1,5 +1,5 @@
-#include "minarch_internal.h"
-#include "minarch_rewind.h"
+#include "ma_internal.h"
+#include "ma_rewind.h"
 
 #include <string.h>
 #include <time.h>

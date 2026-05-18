@@ -4,9 +4,9 @@
 #include <math.h>
 #include <dirent.h>
 
-#include "minarch_internal.h"
-#include "minarch_options.h"
-#include "minarch_config.h"
+#include "ma_internal.h"
+#include "ma_options.h"
+#include "ma_config.h"
 
 static ButtonMapping button_label_mapping[] = { // used to lookup the retro_id and local btn_id from button name
 	{"NONE",	-1,								BTN_ID_NONE},

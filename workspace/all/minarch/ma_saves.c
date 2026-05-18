@@ -4,7 +4,7 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include "minarch_internal.h"
+#include "ma_internal.h"
 #include "ra_integration.h"
 #include "notification.h"
 
@@ -13,7 +13,7 @@
 #include "streams/file_stream.h"
 #endif
 
-#include "minarch_saves.h"
+#include "ma_saves.h"
 
 ///////////////////////////////////////
 
