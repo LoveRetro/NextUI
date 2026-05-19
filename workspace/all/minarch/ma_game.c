@@ -23,7 +23,7 @@ static unsigned int archiveCacheHash(const char* str);
 static int prepareArchiveTempPath(const char* entry_name);
 static int openArchiveOutputFile(const char* path, off_t expected_size);
 static int extract_7z_with_bsdtar(char** extensions);
-static int extract_7z_with_7zip(char** extensions, const char* command);
+static int extract_7z_with_7zip(char** extensions, const char* command, int* command_not_found);
 
 void Game_open(char* path) {
 	LOG_info("Game_open\n");
@@ -444,7 +444,7 @@ static int extract_7z_with_bsdtar(char** extensions)
 	close(fd);
 
 	struct stat st;
-	if (status != 0 || stat(game.tmp_path, &st) != 0 || st.st_size <= 0) {
+	if (status != 0 || stat(game.tmp_path, &st) != 0) {
 		unlink(game.tmp_path);
 		return 0;
 	}
@@ -452,15 +452,19 @@ static int extract_7z_with_bsdtar(char** extensions)
 	return 1;
 }
 
-static int extract_7z_with_7zip(char** extensions, const char* command)
+static int extract_7z_with_7zip(char** extensions, const char* command, int* command_not_found)
 {
 	pid_t pid;
 	char entry_name[MAX_PATH] = {0};
-	char matched_entry_name[MAX_PATH] = {0};
+	char pending_entry_name[MAX_PATH] = {0};
 	char line[1024];
-	int matched_entry = 0;
+	int pending_has_path = 0;
+	int pending_has_size = 0;
 	int found_entry = 0;
 	off_t entry_size = -1;
+	off_t pending_entry_size = -1;
+	if (command_not_found)
+		*command_not_found = 0;
 	char *list_argv[] = {(char*)command, "l", "-slt", "--", game.path, NULL};
 	FILE* pipe_file = openReadPipe(list_argv, &pid);
 	if (!pipe_file)
@@ -469,15 +473,28 @@ static int extract_7z_with_7zip(char** extensions, const char* command)
 	while (fgets(line, sizeof(line), pipe_file) != NULL) {
 		normalizeNewline(line);
 		trimTrailingNewlines(line);
-		if (prefixMatch("Path = ", line)) {
-			char *path = line + strlen("Path = ");
-			matched_entry = !found_entry && archiveEntryMatches(path, extensions);
-			if (matched_entry)
-				snprintf(matched_entry_name, sizeof(matched_entry_name), "%s", path);
+		if (!line[0] || prefixMatch("----------", line)) {
+			if (!found_entry && pending_has_path && pending_has_size &&
+				archiveEntryMatches(pending_entry_name, extensions)) {
+				snprintf(entry_name, sizeof(entry_name), "%s", pending_entry_name);
+				entry_size = pending_entry_size;
+				found_entry = 1;
+			}
+			pending_entry_name[0] = '\0';
+			pending_entry_size = -1;
+			pending_has_path = 0;
+			pending_has_size = 0;
 			continue;
 		}
 
-		if (!matched_entry || found_entry || !prefixMatch("Size = ", line))
+		if (prefixMatch("Path = ", line)) {
+			char *path = line + strlen("Path = ");
+			snprintf(pending_entry_name, sizeof(pending_entry_name), "%s", path);
+			pending_has_path = 1;
+			continue;
+		}
+
+		if (!prefixMatch("Size = ", line))
 			continue;
 
 		char *size = line + strlen("Size = ");
@@ -485,13 +502,21 @@ static int extract_7z_with_7zip(char** extensions, const char* command)
 		long long parsed_size = strtoll(size, &endptr, 10);
 		if (endptr == size || parsed_size < 0)
 			continue;
-		snprintf(entry_name, sizeof(entry_name), "%s", matched_entry_name);
-		entry_size = (off_t)parsed_size;
-		found_entry = 1;
-		matched_entry = 0;
+		pending_entry_size = (off_t)parsed_size;
+		pending_has_size = 1;
 	}
 
-	if (closeReadPipe(pipe_file, pid) != 0 || !entry_name[0] || entry_size < 0)
+	if (!found_entry && pending_has_path && pending_has_size &&
+		archiveEntryMatches(pending_entry_name, extensions)) {
+		snprintf(entry_name, sizeof(entry_name), "%s", pending_entry_name);
+		entry_size = pending_entry_size;
+		found_entry = 1;
+	}
+
+	int list_status = closeReadPipe(pipe_file, pid);
+	if (list_status == 127 && command_not_found)
+		*command_not_found = 1;
+	if (list_status != 0 || !entry_name[0] || entry_size < 0)
 		return 0;
 
 	if (!prepareArchiveTempPath(entry_name))
@@ -506,9 +531,11 @@ static int extract_7z_with_7zip(char** extensions, const char* command)
 	char *extract_argv[] = {(char*)command, "e", "-so", "-y", "--", game.path, entry_name, NULL};
 	int status = runCommandToFd(extract_argv, fd);
 	close(fd);
+	if (status == 127 && command_not_found)
+		*command_not_found = 1;
 
 	struct stat st;
-	if (status != 0 || stat(game.tmp_path, &st) != 0 || st.st_size <= 0) {
+	if (status != 0 || stat(game.tmp_path, &st) != 0) {
 		unlink(game.tmp_path);
 		return 0;
 	}
@@ -519,10 +546,13 @@ static int extract_7z_with_7zip(char** extensions, const char* command)
 int extract_7z(char** extensions)
 {
 	if (!exactMatch("desktop", PLATFORM)) {
-		if (extract_7z_with_7zip(extensions, BIN_PATH "/7zz"))
+		int command_not_found = 0;
+		if (extract_7z_with_7zip(extensions, BIN_PATH "/7zz", &command_not_found))
 			return 1;
-
-		LOG_error("can't extract 7z archive `%s' with bundled helper `%s`\n", game.path, BIN_PATH "/7zz");
+		if (command_not_found)
+			LOG_error("can't extract 7z archive `%s': command `%s' not found\n", game.path, BIN_PATH "/7zz");
+		else
+			LOG_error("can't extract 7z archive `%s' with bundled helper `%s`\n", game.path, BIN_PATH "/7zz");
 		return 0;
 	}
 
@@ -536,8 +566,11 @@ int extract_7z(char** extensions)
 	};
 
 	for (int i = 0; seven_zip_commands[i]; i++) {
-		if (extract_7z_with_7zip(extensions, seven_zip_commands[i]))
+		int command_not_found = 0;
+		if (extract_7z_with_7zip(extensions, seven_zip_commands[i], &command_not_found))
 			return 1;
+		if (command_not_found)
+			LOG_error("can't extract 7z archive `%s': command `%s' not found\n", game.path, seven_zip_commands[i]);
 	}
 
 	if (extract_7z_with_bsdtar(extensions))
