@@ -1095,7 +1095,14 @@ void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
     {
-        sprintf(value, "%s", CFG_getFontFile());
+        // backward compat: return integer for built-in fonts
+        const char *f = CFG_getFontFile();
+        if (strcmp(f, "font1.ttf") == 0)
+            sprintf(value, "1");
+        else if (strcmp(f, "font2.ttf") == 0)
+            sprintf(value, "0");
+        else
+            sprintf(value, "%s", f);
     }
     else if (strcmp(key, "color1") == 0)
     {
@@ -1280,7 +1287,14 @@ void CFG_sync(void)
         return;
     }
 
-    fprintf(file, "font=%s\n", settings.fontFile);
+    // backward compat: write integer for built-in fonts so existing paks
+    // that parse "font=" as an int keep working
+    if (strcmp(settings.fontFile, "font1.ttf") == 0)
+        fprintf(file, "font=1\n");
+    else if (strcmp(settings.fontFile, "font2.ttf") == 0)
+        fprintf(file, "font=0\n");
+    else
+        fprintf(file, "font=%s\n", settings.fontFile);
     fprintf(file, "color1=0x%06X\n", settings.color1_255);
     fprintf(file, "color2=0x%06X\n", settings.color2_255);
     fprintf(file, "color3=0x%06X\n", settings.color3_255);
@@ -1342,7 +1356,13 @@ void CFG_sync(void)
 void CFG_print(void)
 {
     printf("{\n");
-    printf("\t\"font\": \"%s\",\n", settings.fontFile);
+    // backward compat: output integer for built-in fonts
+    if (strcmp(settings.fontFile, "font1.ttf") == 0)
+        printf("\t\"font\": \"1\",\n");
+    else if (strcmp(settings.fontFile, "font2.ttf") == 0)
+        printf("\t\"font\": \"0\",\n");
+    else
+        printf("\t\"font\": \"%s\",\n", settings.fontFile);
     printf("\t\"color1\": \"0x%06X\",\n", settings.color1_255);
     printf("\t\"color2\": \"0x%06X\",\n", settings.color2_255);
     printf("\t\"color3\": \"0x%06X\",\n", settings.color3_255);
