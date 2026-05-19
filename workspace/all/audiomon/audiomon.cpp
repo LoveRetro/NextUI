@@ -33,6 +33,7 @@ enum DeviceType {
 
 bool use_syslog = false;
 bool running = true;
+static std::string connected_a2dp_mac;
 
 void log(const std::string& msg) {
     if (use_syslog) syslog(LOG_INFO, "%s", msg.c_str());
@@ -203,6 +204,7 @@ void handleDeviceConnected(DBusConnection* conn, const std::string& path) {
     std::string mac = pathToMac(path);
     if (hasUUID(conn, path, UUID_A2DP)) {
         log("Audio device connected: " + mac);
+        connected_a2dp_mac = mac;
         writeAudioFile(mac, DEVICE_BLUETOOTH);
         SetAudioSink(AUDIO_SINK_BLUETOOTH);
     } else {
@@ -212,8 +214,12 @@ void handleDeviceConnected(DBusConnection* conn, const std::string& path) {
 
 void handleDeviceDisconnected(DBusConnection* conn, const std::string& path) {
     std::string mac = pathToMac(path);
-    if (hasUUID(conn, path, UUID_A2DP)) {
+    // Use cached MAC rather than querying BlueZ: after an abrupt power-off the
+    // device's service cache may already be gone, causing hasUUID to return false
+    // and silently skip the audio switch-back.
+    if (!connected_a2dp_mac.empty() && mac == connected_a2dp_mac) {
         log("Audio device disconnected: " + mac);
+        connected_a2dp_mac.clear();
         clearAudioFile();
         // TODO: we could maintain a stack here, if USBC was connected before and restore that instead
         SetAudioSink(AUDIO_SINK_DEFAULT);
