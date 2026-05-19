@@ -126,6 +126,7 @@ extern int rewind_cfg_granularity;
 extern int rewind_cfg_audio;
 extern int rewind_cfg_compress;
 extern int rewind_cfg_lz4_acceleration;
+extern int rewind_init_ready;
 
 #include "ma_rewind.h"
 

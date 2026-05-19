@@ -57,6 +57,7 @@ int rewind_cfg_granularity = MINARCH_DEFAULT_REWIND_GRANULARITY;
 int rewind_cfg_audio = MINARCH_DEFAULT_REWIND_AUDIO;
 int rewind_cfg_compress = 1;
 int rewind_cfg_lz4_acceleration = MINARCH_DEFAULT_REWIND_LZ4_ACCELERATION;
+int rewind_init_ready = 0; // gate Rewind_init from syncFrontend until startup is past Core_load
 int overclock = 0; // auto
 int has_custom_controllers = 0;
 int gamepad_type = 0; // index in gamepad_labels/gamepad_values
@@ -242,8 +243,9 @@ int main(int argc , char* argv[]) {
 	initShaders();
 	Config_readOptions();
 	applyShaderSettings();
-	Rewind_init(core.serialize_size ? core.serialize_size() : 0);
-	if (core.serialize_size) Rewind_on_state_change();
+	int rewind_initialized = Rewind_init(core.serialize_size ? core.serialize_size() : 0);
+	rewind_init_ready = 1;  // Mark setup as attempted, even if rewind init failed, so option changes can retry it later.
+	if (rewind_initialized && core.serialize_size) Rewind_on_state_change();
 	// release config when all is loaded
 	Config_free();
 
