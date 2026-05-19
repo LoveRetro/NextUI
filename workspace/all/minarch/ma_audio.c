@@ -17,14 +17,11 @@ void Audio_onSinkChanged(int device, int watch_event) {
 
 	resetAudio = true;
 
-	// ALSA caches its config, so "default" may still resolve to bluealsa after
-	// .asoundrc is deleted.  Name both endpoints explicitly to bypass the cache.
+	// FIXME: This shouldnt be necessary, alsa should just read .asoundrc for the changed default device.
 	if (device == AUDIO_SINK_BLUETOOTH)
 		SDL_setenv("AUDIODEV", "bluealsa", 1);
-	else if (device == AUDIO_SINK_USBDAC)
-		SDL_setenv("AUDIODEV", "plughw:1", 1);
 	else
-		SDL_setenv("AUDIODEV", "plughw:0", 1);
+		SDL_setenv("AUDIODEV", "default", 1);
 }
 
 void Audio_checkAndResetIfNeeded(void) {
