@@ -39,12 +39,12 @@ set_policy() {
 
 case "$MODE" in
 	auto)
-		# ondemand governor, min freq to one step below max (408-1800 MHz on TG5040)
-		set_policy /sys/devices/system/cpu/cpufreq/policy0 "ondemand" "second_max"
+		# schedutil governor, min freq to one step below max (408-1800 MHz on TG5040)
+		set_policy /sys/devices/system/cpu/cpufreq/policy0 "schedutil" "second_max"
 		;;
 	performance)
-		# schedutil governor, min freq to max freq (408-2000 MHz on TG5040)
-		set_policy /sys/devices/system/cpu/cpufreq/policy0 "schedutil" "max"
+		# performance governor, max freq (2000 MHz on TG5040)
+		set_policy /sys/devices/system/cpu/cpufreq/policy0 "performance" "max"
 		;;
 	powersave)
 		# conservative governor, min freq to midpoint max (408-1200 MHz on TG5040)
