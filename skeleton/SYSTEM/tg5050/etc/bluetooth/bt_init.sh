@@ -53,9 +53,9 @@ start_bt() {
 	fi      
 
 	# Allow headsets to auto-reconnect without user re-pairing.
-	# XRadio BT firmware sets store_hint=0, so link keys are never
-	# persisted; JustWorksRepairing=always lets earbuds re-initiate
-	# the bond from their side after a reboot.
+	# Some BT controller firmware never persists link keys to disk;
+	# JustWorksRepairing=always lets earbuds re-initiate the bond
+	# from their side after a reboot without user interaction.
 	if ! grep -q 'JustWorksRepairing = always' /etc/bluetooth/main.conf 2>/dev/null; then
 		sed -i 's/#JustWorksRepairing = never/JustWorksRepairing = always/' /etc/bluetooth/main.conf 2>/dev/null
 	fi
