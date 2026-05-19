@@ -30,7 +30,7 @@ void CFG_defaults(NextUISettings *cfg)
         return;
 
     NextUISettings defaults = {
-        .font = CFG_DEFAULT_FONT_ID,
+        .fontFile = CFG_DEFAULT_FONT_FILE,
         .color1_255 = CFG_DEFAULT_COLOR1,
         .color2_255 = CFG_DEFAULT_COLOR2,
         .color3_255 = CFG_DEFAULT_COLOR3,
@@ -119,9 +119,17 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
         {
             int temp_value;
             uint32_t temp_color;
-            if (sscanf(line, "font=%i", &temp_value) == 1)
+            if (strncmp(line, "font=", 5) == 0)
             {
-                CFG_setFontId(temp_value);
+                char *value = line + 5;
+                value[strcspn(value, "\n")] = 0;
+                // backward compat: "0" -> font2.ttf, "1" -> font1.ttf
+                if (strcmp(value, "0") == 0)
+                    CFG_setFontFile("font2.ttf");
+                else if (strcmp(value, "1") == 0)
+                    CFG_setFontFile("font1.ttf");
+                else
+                    CFG_setFontFile(value);
                 fontLoaded = true;
                 continue;
             }
@@ -420,25 +428,41 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
     CFG_setColor(7, CFG_getColor(COLOR_BACKGROUND));
     // avoid reloading the font if not neccessary
     if (!fontLoaded)
-        CFG_setFontId(CFG_getFontId());
+        CFG_setFontFile(CFG_getFontFile());
 }
 
-int CFG_getFontId(void)
+const char* CFG_getFontFile(void)
 {
-    return settings.font;
+    return settings.fontFile;
 }
 
-void CFG_setFontId(int id)
+void CFG_setFontFile(const char* filename)
 {
-    settings.font = clamp(id, 0, 2);
+    if (!filename || !filename[0]) {
+        strncpy(settings.fontFile, CFG_DEFAULT_FONT_FILE, sizeof(settings.fontFile) - 1);
+        settings.fontFile[sizeof(settings.fontFile) - 1] = '\0';
+    } else {
+        strncpy(settings.fontFile, filename, sizeof(settings.fontFile) - 1);
+        settings.fontFile[sizeof(settings.fontFile) - 1] = '\0';
+    }
 
-    char *fontPath;
-    if (settings.font == 1)
-        fontPath = RES_PATH "/font1.ttf";
-    else
-        fontPath = RES_PATH "/font2.ttf";
+    // resolve full path: built-ins in RES_PATH, custom fonts in FONTS_PATH
+    char fontPath[512];
+    if (strcmp(settings.fontFile, "font1.ttf") == 0 ||
+        strcmp(settings.fontFile, "font2.ttf") == 0) {
+        snprintf(fontPath, sizeof(fontPath), "%s/%s", RES_PATH, settings.fontFile);
+    } else {
+        snprintf(fontPath, sizeof(fontPath), "%s/%s", FONTS_PATH, settings.fontFile);
+    }
 
-    if(settings.onFontChange)
+    // fall back to default if file doesn't exist
+    if (access(fontPath, F_OK) != 0) {
+        strncpy(settings.fontFile, CFG_DEFAULT_FONT_FILE, sizeof(settings.fontFile) - 1);
+        settings.fontFile[sizeof(settings.fontFile) - 1] = '\0';
+        snprintf(fontPath, sizeof(fontPath), "%s/%s", RES_PATH, settings.fontFile);
+    }
+
+    if (settings.onFontChange)
         settings.onFontChange(fontPath);
 }
 
@@ -1071,7 +1095,14 @@ void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
     {
-        sprintf(value, "%i", CFG_getFontId());
+        // backward compat: return integer for built-in fonts
+        const char *f = CFG_getFontFile();
+        if (strcmp(f, "font1.ttf") == 0)
+            sprintf(value, "1");
+        else if (strcmp(f, "font2.ttf") == 0)
+            sprintf(value, "0");
+        else
+            sprintf(value, "%s", f);
     }
     else if (strcmp(key, "color1") == 0)
     {
@@ -1225,10 +1256,11 @@ void CFG_get(const char *key, char *value)
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
     {
-        if (CFG_getFontId() == 1)
-            sprintf(value, "\"%s\"", RES_PATH "/font1.ttf");
+        const char *f = CFG_getFontFile();
+        if (strcmp(f, "font1.ttf") == 0 || strcmp(f, "font2.ttf") == 0)
+            sprintf(value, "\"%s/%s\"", RES_PATH, f);
         else
-            sprintf(value, "\"%s\"", RES_PATH "/font2.ttf");
+            sprintf(value, "\"%s/%s\"", FONTS_PATH, f);
     }
 
     else {
@@ -1255,7 +1287,14 @@ void CFG_sync(void)
         return;
     }
 
-    fprintf(file, "font=%i\n", settings.font);
+    // backward compat: write integer for built-in fonts so existing paks
+    // that parse "font=" as an int keep working
+    if (strcmp(settings.fontFile, "font1.ttf") == 0)
+        fprintf(file, "font=1\n");
+    else if (strcmp(settings.fontFile, "font2.ttf") == 0)
+        fprintf(file, "font=0\n");
+    else
+        fprintf(file, "font=%s\n", settings.fontFile);
     fprintf(file, "color1=0x%06X\n", settings.color1_255);
     fprintf(file, "color2=0x%06X\n", settings.color2_255);
     fprintf(file, "color3=0x%06X\n", settings.color3_255);
@@ -1317,7 +1356,13 @@ void CFG_sync(void)
 void CFG_print(void)
 {
     printf("{\n");
-    printf("\t\"font\": %i,\n", settings.font);
+    // backward compat: output integer for built-in fonts
+    if (strcmp(settings.fontFile, "font1.ttf") == 0)
+        printf("\t\"font\": \"1\",\n");
+    else if (strcmp(settings.fontFile, "font2.ttf") == 0)
+        printf("\t\"font\": \"0\",\n");
+    else
+        printf("\t\"font\": \"%s\",\n", settings.fontFile);
     printf("\t\"color1\": \"0x%06X\",\n", settings.color1_255);
     printf("\t\"color2\": \"0x%06X\",\n", settings.color2_255);
     printf("\t\"color3\": \"0x%06X\",\n", settings.color3_255);
@@ -1358,10 +1403,11 @@ void CFG_print(void)
     printf("\t\"currentTimezone\": %i,\n", settings.currentTimezone);
 
     // meta, not a real setting
-    if (settings.font == 1)
-        printf("\t\"fontpath\": \"%s\"\n", RES_PATH "/font1.ttf");
+    const char *fp = CFG_getFontFile();
+    if (strcmp(fp, "font1.ttf") == 0 || strcmp(fp, "font2.ttf") == 0)
+        printf("\t\"fontpath\": \"%s/%s\"\n", RES_PATH, fp);
     else
-        printf("\t\"fontpath\": \"%s\"\n", RES_PATH "/font2.ttf");
+        printf("\t\"fontpath\": \"%s/%s\"\n", FONTS_PATH, fp);
 
     printf("}\n");
 }
