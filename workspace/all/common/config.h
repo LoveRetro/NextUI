@@ -85,7 +85,7 @@ enum {
 typedef struct
 {
 	// Theme
-	int font;
+	char fontFile[256];
 	uint32_t color1_255; // not screen mapped
 	uint32_t color2_255; // not screen mapped
 	uint32_t color3_255; // not screen mapped
@@ -170,7 +170,7 @@ typedef struct
 #define TRANSITION_SNAPPY 1
 #define TRANSITION_COMFY  2
 
-#define CFG_DEFAULT_FONT_ID 1  // Next
+#define CFG_DEFAULT_FONT_FILE "font1.ttf"  // Next
 #define CFG_DEFAULT_COLOR1 0xffffffU
 #define CFG_DEFAULT_COLOR2 0x9b2257U
 #define CFG_DEFAULT_COLOR3 0x1e2329U
@@ -247,11 +247,11 @@ void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
 void CFG_get(const char *key, char * value);
 // void CFG_defaults(NextUISettings*);
-//  The font id to use as the UI font.
-//  0 - Default MinUI font
-//  1 - Default NextUI font (default)
-int CFG_getFontId(void);
-void CFG_setFontId(int fontid);
+// The font filename to use as the UI font.
+// Built-in: "font1.ttf" (Next, default), "font2.ttf" (OG)
+// Custom fonts go in FONTS_PATH directory.
+const char* CFG_getFontFile(void);
+void CFG_setFontFile(const char* filename);
 // The colors to use for the UI. These are 0xRRGGBB values.
 // 0 - Color1 (primary hint/asset colour)
 // 1 - Color2 (accent colour)
