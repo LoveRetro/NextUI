@@ -52,6 +52,14 @@ start_bt() {
 		start_hci_attach
 	fi      
 
+	# Allow headsets to auto-reconnect without user re-pairing.
+	# Some BT controller firmware never persists link keys to disk;
+	# JustWorksRepairing=always lets earbuds re-initiate the bond
+	# from their side after a reboot without user interaction.
+	if ! grep -q 'JustWorksRepairing = always' /etc/bluetooth/main.conf 2>/dev/null; then
+		sed -i 's/#JustWorksRepairing = never/JustWorksRepairing = always/' /etc/bluetooth/main.conf 2>/dev/null
+	fi
+
 	# Start bluetooth daemon if not running
     d=`ps | grep bluetoothd | grep -v grep`
 	[ -z "$d" ] && {
