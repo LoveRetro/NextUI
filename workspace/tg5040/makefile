@@ -14,19 +14,22 @@ REQUIRES_EVTEST=other/evtest
 REQUIRES_JSTEST=other/jstest
 REQUIRES_UNZIP60=other/unzip60
 REQUIRES_FILEMGR=other/NextCommander
+REQUIRES_7ZIP=other/7zip
 
 all: readmes
 
-early: $(REQUIRES_EVTEST) $(REQUIRES_JSTEST) $(REQUIRES_UNZIP60) $(REQUIRES_FILEMGR)
+early: $(REQUIRES_EVTEST) $(REQUIRES_JSTEST) $(REQUIRES_UNZIP60) $(REQUIRES_FILEMGR) $(REQUIRES_7ZIP)
 	mkdir -p other
 	cd $(REQUIRES_FILEMGR) && make -j
 	cd $(REQUIRES_EVTEST) && $(CROSS_COMPILE)gcc -o evtest evtest.c
 	cd $(REQUIRES_JSTEST) && $(CROSS_COMPILE)gcc -o jstest jstest.c
 	cd $(REQUIRES_UNZIP60) && make -f unix/Makefile.trimuismart unzip
+	cd $(REQUIRES_7ZIP)/CPP/7zip/Bundles/Alone2 && $(MAKE) -j -f ../../cmpl_gcc.mak O=_o CC=$(CROSS_COMPILE)gcc CXX=$(CROSS_COMPILE)g++ CFLAGS_WARN_GCC_9= LDFLAGS_STATIC_3="-static-libstdc++ -static-libgcc"
 
 clean:
 	cd $(REQUIRES_FILEMGR) && make clean
 	cd $(REQUIRES_UNZIP60) && make -f unix/Makefile.trimuismart clean
+	rm -rf $(REQUIRES_7ZIP)/CPP/7zip/Bundles/Alone2/_o
 
 ###########################################################
 
@@ -41,5 +44,8 @@ $(REQUIRES_JSTEST):
 
 $(REQUIRES_UNZIP60):
 	git clone --depth 1 https://github.com/shauninman/unzip60.git $(REQUIRES_UNZIP60)
+
+$(REQUIRES_7ZIP):
+	git clone --depth 1 --branch 26.00 https://github.com/ip7z/7zip.git $(REQUIRES_7ZIP)
 
 include ../all/readmes/makefile
