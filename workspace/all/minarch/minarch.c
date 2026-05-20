@@ -139,7 +139,7 @@ int main(int argc , char* argv[]) {
 	if(argc < 2)
 		return EXIT_FAILURE;
 
-	setOverclock(1); // start up in performance mode, faster init
+	setOverclock(CPU_SPEED_AUTO); // start in auto as default
 	PWR_pinToCores(CPU_CORE_PERFORMANCE); // thread affinity
 
 	char core_path[MAX_PATH];
@@ -182,7 +182,7 @@ int main(int argc , char* argv[]) {
 	Config_load(); // before init?
 	Config_init();
 	Config_readOptions(); // cores with boot logo option (eg. gb) need to load options early
-	setOverclock(overclock); // why twice?
+	setOverclock(overclock); // we started in auto, now reset to value loaded from config
 	
 	Core_init();
 
