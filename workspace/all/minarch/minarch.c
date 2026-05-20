@@ -139,7 +139,7 @@ int main(int argc , char* argv[]) {
 	if(argc < 2)
 		return EXIT_FAILURE;
 
-	setOverclock(CPU_SPEED_AUTO); // start in auto as default
+	PWR_setCPUSpeed(CPU_SPEED_PERFORMANCE); // start in performance mode for fast loading
 	PWR_pinToCores(CPU_CORE_PERFORMANCE); // thread affinity
 
 	char core_path[MAX_PATH];
@@ -182,7 +182,6 @@ int main(int argc , char* argv[]) {
 	Config_load(); // before init?
 	Config_init();
 	Config_readOptions(); // cores with boot logo option (eg. gb) need to load options early
-	setOverclock(overclock); // we started in auto, now reset to value loaded from config
 	
 	Core_init();
 
@@ -250,6 +249,11 @@ int main(int argc , char* argv[]) {
 	Config_free();
 
 	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
+	
+	// we started in performance mode, now reset to the desired mode
+	// if the config didn't specify the desired cpu speed, the default is 0 = auto
+	setOverclock(overclock);
+
 	while (!quit) {
 		GFX_startFrame();
 
