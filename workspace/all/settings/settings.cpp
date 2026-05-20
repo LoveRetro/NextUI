@@ -97,11 +97,16 @@ static std::vector<FontEntry> enumerateFonts() {
     fonts.push_back({"font1.ttf", "Next"});
     fonts.push_back({"font2.ttf", "OG"});
 
-    DIR *dir = opendir(FONTS_PATH);
+    DIR *dir = opendir(RES_PATH);
     if (dir) {
         struct dirent *ent;
         while ((ent = readdir(dir)) != NULL) {
             if (ent->d_name[0] == '.') continue;
+            // skip built-in/system fonts (font1/font2 already added above)
+            if (strcmp(ent->d_name, "font1.ttf") == 0 || strcmp(ent->d_name, "font2.ttf") == 0)
+                continue;
+            if (strncmp(ent->d_name, "BPreplay", 8) == 0)
+                continue;
             size_t len = strlen(ent->d_name);
             if (len < 5) continue;
             const char *ext = ent->d_name + len - 4;

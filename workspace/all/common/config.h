@@ -249,7 +249,7 @@ void CFG_get(const char *key, char * value);
 // void CFG_defaults(NextUISettings*);
 // The font filename to use as the UI font.
 // Built-in: "font1.ttf" (Next, default), "font2.ttf" (OG)
-// Custom fonts go in FONTS_PATH directory.
+// Custom fonts go in RES_PATH alongside built-in fonts.
 const char* CFG_getFontFile(void);
 void CFG_setFontFile(const char* filename);
 // The colors to use for the UI. These are 0xRRGGBB values.
