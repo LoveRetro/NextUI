@@ -57,6 +57,7 @@ int rewind_cfg_granularity = MINARCH_DEFAULT_REWIND_GRANULARITY;
 int rewind_cfg_audio = MINARCH_DEFAULT_REWIND_AUDIO;
 int rewind_cfg_compress = 1;
 int rewind_cfg_lz4_acceleration = MINARCH_DEFAULT_REWIND_LZ4_ACCELERATION;
+int rewind_init_ready = 0; // gate Rewind_init from syncFrontend until startup is past Core_load
 int overclock = 0; // auto
 int has_custom_controllers = 0;
 int gamepad_type = 0; // index in gamepad_labels/gamepad_values
@@ -138,7 +139,7 @@ int main(int argc , char* argv[]) {
 	if(argc < 2)
 		return EXIT_FAILURE;
 
-	setOverclock(1); // start up in performance mode, faster init
+	PWR_setCPUSpeed(CPU_SPEED_PERFORMANCE); // start in performance mode for fast loading
 	PWR_pinToCores(CPU_CORE_PERFORMANCE); // thread affinity
 
 	char core_path[MAX_PATH];
@@ -181,7 +182,6 @@ int main(int argc , char* argv[]) {
 	Config_load(); // before init?
 	Config_init();
 	Config_readOptions(); // cores with boot logo option (eg. gb) need to load options early
-	setOverclock(overclock); // why twice?
 	
 	Core_init();
 
@@ -242,12 +242,18 @@ int main(int argc , char* argv[]) {
 	initShaders();
 	Config_readOptions();
 	applyShaderSettings();
-	Rewind_init(core.serialize_size ? core.serialize_size() : 0);
-	if (core.serialize_size) Rewind_on_state_change();
+	int rewind_initialized = Rewind_init(core.serialize_size ? core.serialize_size() : 0);
+	rewind_init_ready = 1;  // Mark setup as attempted, even if rewind init failed, so option changes can retry it later.
+	if (rewind_initialized && core.serialize_size) Rewind_on_state_change();
 	// release config when all is loaded
 	Config_free();
 
 	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
+	
+	// we started in performance mode, now reset to the desired mode
+	// if the config didn't specify the desired cpu speed, the default is 0 = auto
+	setOverclock(overclock);
+
 	while (!quit) {
 		GFX_startFrame();
 
