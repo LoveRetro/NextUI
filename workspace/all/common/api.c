@@ -166,9 +166,9 @@ static struct PWR_Context
 	int can_sleep;
 	int can_poweroff;
 	int can_autosleep;
-	int requested_sleep;
-	int requested_wake;
-	int resume_tick;
+	int requested_sleep; // unused?
+	int requested_wake; // unused?
+	int resume_tick; // unused?
 
 	pthread_t battery_pt;
 	SDL_atomic_t is_charging;

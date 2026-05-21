@@ -514,7 +514,6 @@ void PWR_updateFrequency(int secs, int updateWifi);
 
 void PWR_disablePowerOff(void);
 void PWR_powerOff(int reboot);
-int PWR_isPoweringOff(void);
 
 void PWR_sleep(void);
 int PWR_deepSleep(void);
