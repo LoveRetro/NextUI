@@ -1227,7 +1227,7 @@ int Menu_options(MenuList* list) {
 					
 					if (item->desc) desc = item->desc;
 				}
-				text = TTF_RenderUTF8_Blended(font.small, item->name, text_color);
+				text = TTF_RenderUTF8_Blended(font.small, T(item->name), text_color);
 				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
 					ox+SCALE1(OPTION_PADDING),
 					oy+SCALE1((j*BUTTON_SIZE)+1)
@@ -1302,7 +1302,7 @@ int Menu_options(MenuList* list) {
 					
 					if (item->desc) desc = item->desc;
 				}
-				text = TTF_RenderUTF8_Blended(font.small, item->name, text_color);
+				text = TTF_RenderUTF8_Blended(font.small, T(item->name), text_color);
 				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
 					ox+SCALE1(OPTION_PADDING),
 					oy+SCALE1((j*BUTTON_SIZE)+1)
@@ -1326,7 +1326,7 @@ int Menu_options(MenuList* list) {
 					if (!mrw || type!=MENU_INPUT) {
 						if(item->values) {
 							for (int j=0; item->values[j]; j++) {
-								TTF_SizeUTF8(font.tiny, item->values[j], &rw, NULL);
+								TTF_SizeUTF8(font.tiny, T(item->values[j]), &rw, NULL);
 								if (lw+rw>w) w = lw+rw;
 								if (rw>mrw) mrw = rw;
 							}
@@ -1373,7 +1373,7 @@ int Menu_options(MenuList* list) {
 					
 					if (item->desc) desc = item->desc;
 				}
-				text = TTF_RenderUTF8_Blended(font.small, item->name, text_color);
+				text = TTF_RenderUTF8_Blended(font.small, T(item->name), text_color);
 				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
 					ox+SCALE1(OPTION_PADDING),
 					oy+SCALE1((j*BUTTON_SIZE)+1)
@@ -1387,7 +1387,7 @@ int Menu_options(MenuList* list) {
 					int count = 0;
 					while ( item->values && item->values[count]) count++;
 					if (item->value >= 0 && item->value < count) {
-						text = TTF_RenderUTF8_Blended(font.tiny, item->values[item->value], COLOR_WHITE); // always white
+						text = TTF_RenderUTF8_Blended(font.tiny, T(item->values[item->value]), COLOR_WHITE); // always white
 						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
 							ox + mw - text->w - SCALE1(OPTION_PADDING),
 							oy+SCALE1((j*BUTTON_SIZE)+3)
@@ -1411,8 +1411,8 @@ int Menu_options(MenuList* list) {
 		
 		if (desc) {
 			int w,h;
-			GFX_sizeText(font.tiny, desc, SCALE1(12), &w,&h);
-			GFX_blitText(font.tiny, desc, SCALE1(12), COLOR_WHITE, screen, &(SDL_Rect){
+			GFX_sizeText(font.tiny, T(desc), SCALE1(12), &w,&h);
+			GFX_blitText(font.tiny, T(desc), SCALE1(12), COLOR_WHITE, screen, &(SDL_Rect){
 				(screen->w - w) / 2,
 				screen->h - SCALE1(PADDING) - h,
 				w,h

@@ -893,29 +893,32 @@ void initShaders() {
    Moved from minarch.c; these are the static data backing the config module.
    ----------------------------------------------------------------------- */
 
+// Labels stored as i18n keys; the renderer applies T() at draw time so a
+// language change is picked up live. Keys with no translation entry fall back
+// to the literal (so the previous English text still shows up).
 char* onoff_labels[] = {
-	"Off",
-	"On",
+	"val.off",
+	"val.on",
 	NULL
 };
 char* scaling_labels[] = {
-	"Native",
-	"Aspect",
-	"Aspect Screen",
-	"Fullscreen",
-	"Cropped",
+	"frontend.lbl.scaling.native",
+	"frontend.lbl.scaling.aspect",
+	"frontend.lbl.scaling.aspect_screen",
+	"frontend.lbl.scaling.fullscreen",
+	"frontend.lbl.scaling.cropped",
 	NULL
 };
 static char* resample_labels[] = {
-	"Low",
-	"Medium",
-	"High",
-	"Max",
+	"frontend.lbl.resample.low",
+	"frontend.lbl.resample.medium",
+	"frontend.lbl.resample.high",
+	"frontend.lbl.resample.max",
 	NULL
 };
 static char* rewind_enable_labels[] = {
-	"Off",
-	"On",
+	"val.off",
+	"val.on",
 	NULL
 };
 static char* rewind_buffer_labels[] = {
@@ -966,31 +969,31 @@ static char* rewind_compression_accel_values[] = {
 	NULL
 };
 static char* rewind_compression_accel_labels[] = {
-	"1 (best ratio)",
-	"2 (default)",
-	"4 (fast)",
-	"8 (faster)",
-	"12 (fastest)",
+	"frontend.lbl.rewind_compression.best",
+	"frontend.lbl.rewind_compression.default",
+	"frontend.lbl.rewind_compression.fast",
+	"frontend.lbl.rewind_compression.faster",
+	"frontend.lbl.rewind_compression.fastest",
 	NULL
 };
 static char* ambient_labels[] = {
-	"Off",
-	"All",
-	"Top",
-	"FN",
-	"LR",
-	"Top/LR",
+	"val.off",
+	"frontend.lbl.ambient.all",
+	"frontend.lbl.ambient.top",
+	"frontend.lbl.ambient.fn",
+	"frontend.lbl.ambient.lr",
+	"frontend.lbl.ambient.top_lr",
 	NULL
 };
 
 static char* effect_labels[] = {
-	"None",
-	"Line",
-	"Grid",
+	"frontend.lbl.effect.none",
+	"frontend.lbl.effect.line",
+	"frontend.lbl.effect.grid",
 	NULL
 };
 static char* overlay_labels[] = {
-	"None",
+	"frontend.lbl.overlay.none",
 	NULL
 };
 // static char* sharpness_labels[] = {
@@ -1289,10 +1292,10 @@ char* gamepad_values[] = {
 
 char* getScreenScalingDesc(void) {
 	if (GFX_supportsOverscan()) {
-		return "Native uses integer scaling. Aspect uses core nreported aspect ratio.\nAspect screen uses screen aspect ratio\n Fullscreen has non-square\npixels. Cropped is integer scaled then cropped.";
+		return "frontend.opt.screen_scaling.desc_overscan";
 	}
 	else {
-		return "Native uses integer scaling.\nAspect uses core reported aspect ratio.\nAspect screen uses screen aspect ratio\nFullscreen has non-square pixels.";
+		return "frontend.opt.screen_scaling.desc_default";
 	}
 }
 int getScreenScalingCount(void) {
@@ -1306,7 +1309,7 @@ struct Config config = {
 		.options = (Option[]){
 			[FE_OPT_SCALING] = {
 				.key	= "minarch_screen_scaling", 
-				.name	= "Screen Scaling",
+				.name = "frontend.opt.screen_scaling",
 				.desc	= NULL, // will call getScreenScalingDesc()
 				.default_value = 1,
 				.value = 1,
@@ -1316,8 +1319,8 @@ struct Config config = {
 			},
 			[FE_OPT_RESAMPLING] = {
 				.key	= "minarch__resampling_quality", 
-				.name	= "Audio Resampling Quality",
-				.desc	= "Resampling quality higher takes more CPU",
+				.name = "frontend.opt.resampling",
+				.desc = "frontend.opt.resampling.desc",
 				.default_value = 2,
 				.value = 2,
 				.count = 4,
@@ -1326,8 +1329,8 @@ struct Config config = {
 			},
 			[FE_OPT_AMBIENT] = {
 				.key	= "minarch_ambient", 
-				.name	= "Ambient Mode",
-				.desc	= "Makes your leds follow on screen colors",
+				.name = "frontend.opt.ambient",
+				.desc = "frontend.opt.ambient.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 6,
@@ -1336,8 +1339,8 @@ struct Config config = {
 			},
 			[FE_OPT_EFFECT] = {
 				.key	= "minarch_screen_effect",
-				.name	= "Screen Effect",
-				.desc	= "Grid simulates an LCD grid.\nLine simulates CRT scanlines.\nEffects usually look best at native scaling.",
+				.name = "frontend.opt.effect",
+				.desc = "frontend.opt.effect.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 3,
@@ -1346,8 +1349,8 @@ struct Config config = {
 			},
 			[FE_OPT_OVERLAY] = {
 				.key	= "minarch_overlay",
-				.name	= "Overlay",
-				.desc	= "Choose a custom overlay png from the Overlays folder",
+				.name = "frontend.opt.overlay",
+				.desc = "frontend.opt.overlay.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 1,
@@ -1356,8 +1359,8 @@ struct Config config = {
 			},
 			[FE_OPT_SCREENX] = {
 				.key	= "minarch_screen_offsetx",
-				.name	= "Offset screen X",
-				.desc	= "Offset X pixels",
+				.name = "frontend.opt.offset_x",
+				.desc = "frontend.opt.offset_x.desc",
 				.default_value = 64,
 				.value = 64,
 				.count = 129,
@@ -1366,8 +1369,8 @@ struct Config config = {
 			},
 			[FE_OPT_SCREENY] = {
 				.key	= "minarch_screen_offsety",
-				.name	= "Offset screen Y",
-				.desc	= "Offset Y pixels",
+				.name = "frontend.opt.offset_y",
+				.desc = "frontend.opt.offset_y.desc",
 				.default_value = 64,
 				.value = 64,
 				.count = 129,
@@ -1377,8 +1380,8 @@ struct Config config = {
 			[FE_OPT_SHARPNESS] = {
 				// 	.key	= "minarch_screen_sharpness",
 				.key	= "minarch_scale_filter",
-				.name	= "Screen Sharpness",
-				.desc	= "LINEAR smooths lines, but works better when final image is at higher resolution, so either core that outputs higher resolution or upscaling with shaders",
+				.name = "frontend.opt.sharpness",
+				.desc = "frontend.opt.sharpness.desc",
 				.default_value = 1,
 				.value = 1,
 				.count = 3,
@@ -1387,8 +1390,8 @@ struct Config config = {
 			},
 			[FE_OPT_SYNC_REFERENCE] = {
 				.key	= "minarch_sync_reference",
-				.name	= "Core Sync",
-				.desc	= "Choose what should be used as a\nreference for the frame rate.\n\"Native\" uses the emulator frame rate,\n\"Screen\" uses the frame rate of the screen.",
+				.name = "frontend.opt.core_sync",
+				.desc = "frontend.opt.core_sync.desc",
 				.default_value = SYNC_SRC_AUTO,
 				.value = SYNC_SRC_AUTO,
 				.count = 3,
@@ -1397,8 +1400,8 @@ struct Config config = {
 			},
 			[FE_OPT_OVERCLOCK] = {
 				.key	= "minarch_cpu_speed",
-				.name	= "CPU Speed",
-				.desc	= "Choose how the CPU scales.\nAuto is recommended for most users.",
+				.name = "frontend.opt.cpu_speed",
+				.desc = "frontend.opt.cpu_speed.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 3,
@@ -1407,8 +1410,8 @@ struct Config config = {
 			},
 			[FE_OPT_DEBUG] = {
 				.key	= "minarch_debug_hud",
-				.name	= "Debug HUD",
-				.desc	= "Show frames per second, cpu load,\nresolution, and scaler information.",
+				.name = "frontend.opt.debug_hud",
+				.desc = "frontend.opt.debug_hud.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1417,8 +1420,8 @@ struct Config config = {
 			},
 			[FE_OPT_MAXFF] = {
 				.key	= "minarch_max_ff_speed",
-				.name	= "Max FF Speed",
-				.desc	= "Fast forward will not exceed the\nselected speed (but may be less\ndepending on game and emulator).",
+				.name = "frontend.opt.max_ff",
+				.desc = "frontend.opt.max_ff.desc",
 				.default_value = 3, // 4x
 				.value = 3, // 4x
 				.count = 8,
@@ -1427,8 +1430,8 @@ struct Config config = {
 			},
 			[FE_OPT_FF_AUDIO] = {
 				.key	= "minarch__ff_audio", 
-				.name	= "Fast forward audio",
-				.desc	= "Play or mute audio when fast forwarding.",
+				.name = "frontend.opt.ff_audio",
+				.desc = "frontend.opt.ff_audio.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1437,8 +1440,8 @@ struct Config config = {
 			},
 			[FE_OPT_REWIND_ENABLE] = {
 				.key	= "minarch_rewind_enable",
-				.name	= "Rewind",
-				.desc	= "Enable in-memory rewind buffer.\nMust set a shortcut to access rewind during gameplay.\nUses extra CPU and memory.",
+				.name = "frontend.opt.rewind",
+				.desc = "frontend.opt.rewind.desc",
 				.default_value = MINARCH_DEFAULT_REWIND_ENABLE ? 1 : 0,
 				.value = MINARCH_DEFAULT_REWIND_ENABLE ? 1 : 0,
 				.count = 2,
@@ -1447,8 +1450,8 @@ struct Config config = {
 			},
 			[FE_OPT_REWIND_BUFFER] = {
 				.key	= "minarch_rewind_buffer_mb",
-				.name	= "Rewind Buffer (MB)",
-				.desc	= "Memory reserved for rewind snapshots.\nIncrease for longer rewind times.",
+				.name = "frontend.opt.rewind_buffer",
+				.desc = "frontend.opt.rewind_buffer.desc",
 				.default_value = 3, // 64MB
 				.value = 3,
 				.count = 6,
@@ -1457,8 +1460,8 @@ struct Config config = {
 			},
 			[FE_OPT_REWIND_GRANULARITY] = {
 				.key	= "minarch_rewind_granularity",
-				.name	= "Rewind Interval",
-				.desc	= "Interval between rewind snapshots.\nShorter intervals improve smoothness during rewind,\nbut increase CPU and memory usage.",
+				.name = "frontend.opt.rewind_interval",
+				.desc = "frontend.opt.rewind_interval.desc",
 				.default_value = 0, // 16ms
 				.value = 0,
 				.count = 12,
@@ -1467,8 +1470,8 @@ struct Config config = {
 			},
 			[FE_OPT_REWIND_COMPRESSION] = {
 				.key	= "minarch_rewind_compression",
-				.name	= "Rewind Compression",
-				.desc	= "Compress rewind snapshots to save memory at the cost of CPU.",
+				.name = "frontend.opt.rewind_compression",
+				.desc = "frontend.opt.rewind_compression.desc",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1477,8 +1480,8 @@ struct Config config = {
 			},
 			[FE_OPT_REWIND_COMPRESSION_ACCEL] = {
 				.key	= "minarch_rewind_compression_speed",
-				.name	= "Rewind Compression Speed",
-				.desc	= "LZ4 acceleration used for rewind snapshots.\nLower values compress more but use more CPU.",
+				.name = "frontend.opt.rewind_compression_speed",
+				.desc = "frontend.opt.rewind_compression_speed.desc",
 				.default_value = 1, // value 2
 				.value = 1,
 				.count = 5,
@@ -1487,8 +1490,8 @@ struct Config config = {
 			},
 			[FE_OPT_REWIND_AUDIO] = {
 				.key	= "minarch_rewind_audio",
-				.name	= "Rewind audio",
-				.desc	= "Play or mute audio when rewinding.",
+				.name = "frontend.opt.rewind_audio",
+				.desc = "frontend.opt.rewind_audio.desc",
 				.default_value = MINARCH_DEFAULT_REWIND_AUDIO ? 1 : 0,
 				.value = MINARCH_DEFAULT_REWIND_AUDIO ? 1 : 0,
 				.count = 2,
@@ -1509,8 +1512,8 @@ struct Config config = {
 		.options = (Option[]){
 			[SH_EXTRASETTINGS] = {
 				.key	= "minarch_shaders_settings", 
-				.name	= "Optional Shaders Settings",
-				.desc	= "If shaders have extra settings they will show up in this settings menu",
+				.name = "frontend.opt.opt_shaders",
+				.desc = "frontend.opt.opt_shaders.desc",
 				.default_value = 1,
 				.value = 1,
 				.count = 0,
@@ -1519,8 +1522,8 @@ struct Config config = {
 			},
 			[SH_SHADERS_PRESET] = {
 				.key	= "minarch_shaders_preset", 
-				.name	= "Shader / Emulator Settings Preset",
-				.desc	= "Load a premade shaders/emulators config.\nTo try out a preset, exit the game without saving settings!",
+				.name = "frontend.opt.shader_preset",
+				.desc = "frontend.opt.shader_preset.desc",
 				.default_value = 1,
 				.value = 1,
 				.count = 0,
@@ -1529,8 +1532,8 @@ struct Config config = {
 			},
 			[SH_NROFSHADERS] = {
 				.key	= "minarch_nrofshaders", 
-				.name	= "Number of Shaders",
-				.desc	= "Number of shaders 1 to 3",
+				.name = "frontend.opt.shader_count",
+				.desc = "frontend.opt.shader_count.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 4,
@@ -1540,8 +1543,8 @@ struct Config config = {
 			
 			[SH_SHADER1] = {
 				.key	= "minarch_shader1", 
-				.name	= "Shader 1",
-				.desc	= "Shader 1 program to run",
+				.name = "frontend.opt.shader_1",
+				.desc = "frontend.opt.shader_1.desc",
 				.default_value = 1,
 				.value = 1,
 				.count = 0,
@@ -1550,8 +1553,8 @@ struct Config config = {
 			},
 			[SH_SHADER1_FILTER] = {
 				.key	= "minarch_shader1_filter", 
-				.name	= "Shader 1 Filter",
-				.desc	= "Method of upscaling, NEAREST or LINEAR",
+				.name = "frontend.opt.shader_1_filter",
+				.desc = "frontend.opt.shader_filter.desc",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1560,8 +1563,8 @@ struct Config config = {
 			},
 			[SH_SRCTYPE1] = {
 				.key	= "minarch_shader1_srctype", 
-				.name	= "Shader 1 Source type",
-				.desc	= "This will choose resolution source to scale from",
+				.name = "frontend.opt.shader_1_source",
+				.desc = "frontend.opt.shader_source.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1570,8 +1573,8 @@ struct Config config = {
 			},
 			[SH_SCALETYPE1] = {
 				.key	= "minarch_shader1_scaletype", 
-				.name	= "Shader 1 Texture Type",
-				.desc	= "This will choose resolution source to scale from",
+				.name = "frontend.opt.shader_1_texture",
+				.desc = "frontend.opt.shader_source.desc",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1580,8 +1583,8 @@ struct Config config = {
 			},
 			[SH_UPSCALE1] = {
 				.key	= "minarch_shader1_upscale", 
-				.name	= "Shader 1 Scale",
-				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)",
+				.name = "frontend.opt.shader_1_scale",
+				.desc = "frontend.opt.shader_scale.desc",
 				.default_value = 1,
 				.value = 1,
 				.count = 9,
@@ -1590,8 +1593,8 @@ struct Config config = {
 			},
 			[SH_SHADER2] = {
 				.key	= "minarch_shader2", 
-				.name	= "Shader 2",
-				.desc	= "Shader 2 program to run",
+				.name = "frontend.opt.shader_2",
+				.desc = "frontend.opt.shader_2.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 0,
@@ -1601,8 +1604,8 @@ struct Config config = {
 			},
 			[SH_SHADER2_FILTER] = {
 				.key	= "minarch_shader2_filter", 
-				.name	= "Shader 2 Filter",
-				.desc	= "Method of upscaling, NEAREST or LINEAR",
+				.name = "frontend.opt.shader_2_filter",
+				.desc = "frontend.opt.shader_filter.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1611,8 +1614,8 @@ struct Config config = {
 			},
 			[SH_SRCTYPE2] = {
 				.key	= "minarch_shader2_srctype", 
-				.name	= "Shader 2 Source type",
-				.desc	= "This will choose resolution source to scale from",
+				.name = "frontend.opt.shader_2_source",
+				.desc = "frontend.opt.shader_source.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1621,8 +1624,8 @@ struct Config config = {
 			},
 			[SH_SCALETYPE2] = {
 				.key	= "minarch_shader2_scaletype", 
-				.name	= "Shader 2 Texture Type",
-				.desc	= "This will choose resolution source to scale from",
+				.name = "frontend.opt.shader_2_texture",
+				.desc = "frontend.opt.shader_source.desc",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1631,8 +1634,8 @@ struct Config config = {
 			},
 			[SH_UPSCALE2] = {
 				.key	= "minarch_shader2_upscale", 
-				.name	= "Shader 2 Scale",
-				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)",
+				.name = "frontend.opt.shader_2_scale",
+				.desc = "frontend.opt.shader_scale.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 9,
@@ -1641,8 +1644,8 @@ struct Config config = {
 			},
 			[SH_SHADER3] = {
 				.key	= "minarch_shader3", 
-				.name	= "Shader 3",
-				.desc	= "Shader 3 program to run",
+				.name = "frontend.opt.shader_3",
+				.desc = "frontend.opt.shader_3.desc",
 				.default_value = 2,
 				.value = 2,
 				.count = 0,
@@ -1652,8 +1655,8 @@ struct Config config = {
 			},
 			[SH_SHADER3_FILTER] = {
 				.key	= "minarch_shader3_filter", 
-				.name	= "Shader 3 Filter",
-				.desc	= "Method of upscaling, NEAREST or LINEAR",
+				.name = "frontend.opt.shader_3_filter",
+				.desc = "frontend.opt.shader_filter.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1662,8 +1665,8 @@ struct Config config = {
 			},
 			[SH_SRCTYPE3] = {
 				.key	= "minarch_shader3_srctype", 
-				.name	= "Shader 3 Source type",
-				.desc	= "This will choose resolution source to scale from",
+				.name = "frontend.opt.shader_3_source",
+				.desc = "frontend.opt.shader_source.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 2,
@@ -1672,8 +1675,8 @@ struct Config config = {
 			},
 			[SH_SCALETYPE3] = {
 				.key	= "minarch_shader3_scaletype", 
-				.name	= "Shader 3 Texture Type",
-				.desc	= "This will choose resolution source to scale from",
+				.name = "frontend.opt.shader_3_texture",
+				.desc = "frontend.opt.shader_source.desc",
 				.default_value = 1,
 				.value = 1,
 				.count = 2,
@@ -1682,8 +1685,8 @@ struct Config config = {
 			},
 			[SH_UPSCALE3] = {
 				.key	= "minarch_shader3_upscale", 
-				.name	= "Shader 3 Scale",
-				.desc	= "This will scale images x times,\nscreen scales to screens resolution (can hit performance)",
+				.name = "frontend.opt.shader_3_scale",
+				.desc = "frontend.opt.shader_scale.desc",
 				.default_value = 0,
 				.value = 0,
 				.count = 9,
