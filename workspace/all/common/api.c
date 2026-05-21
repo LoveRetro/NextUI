@@ -3963,6 +3963,9 @@ static void PWR_enterSleep(void)
 }
 static void PWR_exitSleep(void)
 {
+	if (!GetHDMI())
+		PLAT_enableBacklight(1);
+
 	LEDS_popProfileOverride(LIGHT_PROFILE_SLEEP);
 
 	PWR_updateFrequency(-1, true);
@@ -3981,7 +3984,6 @@ static void PWR_exitSleep(void)
 		{
 			VIB_singlePulse(VIB_sleepStrength, VIB_sleepDuration_ms);
 		}
-		PLAT_enableBacklight(1);
 		SND_overrideMute(1);
 		SetVolume(GetVolume());
 	}
@@ -4042,7 +4044,6 @@ void PWR_sleep(void)
 
 	system("gametimectl.elf stop_all");
 
-	GFX_clear(gfx.screen);
 	PAD_reset();
 	PWR_enterSleep();
 	PWR_waitForWake();
