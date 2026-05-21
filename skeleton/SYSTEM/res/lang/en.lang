@@ -1,0 +1,544 @@
+# NextUI English strings (reference / fallback)
+# Format: key=value
+# Lines starting with # and empty lines are ignored.
+# Trailing whitespace is stripped.
+
+# ---------------------------------------------------------------------
+# Button hints (short labels next to button glyphs)
+# ---------------------------------------------------------------------
+btn.back=BACK
+btn.okay=OKAY
+btn.open=OPEN
+btn.resume=RESUME
+btn.remove=REMOVE
+btn.sleep=SLEEP
+btn.menu=MENU
+btn.power=POWER
+btn.info=INFO
+btn.mute=MUTE
+btn.unmute=UNMUTE
+btn.show_all=SHOW ALL
+btn.show_locked=SHOW LOCKED
+
+# ---------------------------------------------------------------------
+# Main launcher (nextui)
+# ---------------------------------------------------------------------
+launcher.recents=Recents
+launcher.games=Games
+launcher.wifi=Wifi
+launcher.bluetooth=Bluetooth
+launcher.sleep=Sleep
+launcher.reboot=Reboot
+launcher.poweroff=Poweroff
+launcher.no_recents=No Recents
+launcher.empty_folder=Empty folder
+launcher.no_preview=No Preview
+
+# ---------------------------------------------------------------------
+# In-game menu (minarch / ma_menu)
+# ---------------------------------------------------------------------
+menu.continue=Continue
+menu.save=Save
+menu.load=Load
+menu.options=Options
+menu.quit=Quit
+menu.reset=Reset
+menu.empty_slot=Empty Slot
+menu.no_preview=No Preview
+menu.screenshot_saved=Screenshot saved
+
+# Options sub-menu
+menu.opt.frontend=Frontend
+menu.opt.emulator=Emulator
+menu.opt.shaders=Shaders
+menu.opt.cheats=Cheats
+menu.opt.controls=Controls
+menu.opt.shortcuts=Shortcuts
+menu.opt.achievements=Achievements
+menu.opt.save_changes=Save Changes
+
+# Save changes sub-menu
+menu.opt.save_for_console=Save for console
+menu.opt.save_for_game=Save for game
+menu.opt.restore_defaults=Restore defaults
+
+# Save-state config status
+state.cfg.defaults=Using defaults.
+state.cfg.console=Using console config.
+state.cfg.game=Using game config.
+
+state.msg.saved_console=Saved for console.
+state.msg.saved_game=Saved for game.
+state.msg.restored_console=Restored console defaults.
+state.msg.restored_defaults=Restored defaults.
+
+# Controls / set hint
+controls.set_hint=Press A to set and X to clear.
+controls.controller=Controller
+controls.controller_desc=Select the type of controller.
+
+# Cheats / shaders / extras error states
+error.no_options_category=This category has no options.
+error.no_options_core=This core has no options.
+error.no_extras=No extra settings found
+error.no_shaders=No shaders available\n/Shaders folder or shader files not found
+error.no_cheat_file=No cheat file loaded.\n\n
+error.cheats_disabled_hardcore=Cheats disabled in Hardcore mode
+
+# Achievements (RetroAchievements)
+ach.no_for_game=No achievements found for this game.\n\nThis ROM may need a compatibility patch\nor may not be a supported version.\n\nVisit retroachievements.org to check\nsupported game files.
+ach.no_available=No achievements available for this game.\n\nThis game may not have achievements yet.\n\nVisit retroachievements.org for details.
+ach.failed_load=Failed to load achievements
+ach.not_available=Achievement list not available
+ach.none_found=No achievements found
+ach.offline_pending=Unlocked offline - pending sync
+ach.muted_silenced=Muted - progress notifications silenced
+
+# ---------------------------------------------------------------------
+# Settings (settings.cpp)
+# ---------------------------------------------------------------------
+# Top-level sections
+settings.section.appearance=Appearance
+settings.section.display=Display
+settings.section.audio=Audio
+settings.section.system=System
+settings.section.power=Power
+settings.section.network=Network
+settings.section.language=Language
+settings.section.advanced=Advanced
+
+# Common buttons
+settings.reset_defaults=Reset to defaults
+settings.reset_defaults_desc=Resets all options in this menu to their default values.
+
+# Appearance
+settings.appearance.font=Font
+settings.appearance.font_desc=The font to render all UI text.
+settings.appearance.show_battery_pct=Show battery percentage
+settings.appearance.show_battery_pct_desc=Show battery level as percent in the status pill
+settings.appearance.show_anim=Show menu animations
+settings.appearance.show_anim_desc=Enable or disable menu animations
+settings.appearance.transitions=Menu transitions
+settings.appearance.transitions_desc=Style of animated transition when navigating menus
+settings.appearance.art_radius=Game art corner radius
+settings.appearance.art_radius_desc=Set the radius for the rounded corners of game art
+settings.appearance.art_width=Game art width
+settings.appearance.art_width_desc=Set the percentage of screen width used for game art.\nUI elements might overrule this to avoid clipping.
+settings.appearance.show_folder_names=Show folder names at root
+settings.appearance.show_folder_names_desc=Show folder names at root directory
+settings.appearance.show_recents=Show Recents
+settings.appearance.show_recents_desc=Show "Recently Played" menu entry in game list.
+settings.appearance.show_tools=Show Tools
+settings.appearance.show_tools_desc=Show "Tools" menu entry in game list.
+settings.appearance.show_art=Show game art
+settings.appearance.show_art_desc=Show game artwork in the main menu
+settings.appearance.folder_bg=Use folder background for ROMs
+settings.appearance.folder_bg_desc=If enabled, used the emulator background image. Otherwise uses the default.
+settings.appearance.qs_ui=Show Quickswitcher UI
+settings.appearance.qs_ui_desc=Show/hide Quickswitcher UI elements.\nWhen hidden, will only draw background images.
+
+# Display
+settings.display.brightness=Brightness
+settings.display.brightness_desc=Display brightness (0 to 10)
+settings.display.colortemp=Color temperature
+settings.display.colortemp_desc=Color temperature (0 to 40)
+settings.display.contrast=Contrast
+settings.display.contrast_desc=Contrast enhancement (-4 to 5)
+settings.display.saturation=Saturation
+settings.display.saturation_desc=Saturation enhancement (-5 to 5)
+settings.display.exposure=Exposure
+settings.display.exposure_desc=Exposure enhancement (-4 to 5)
+
+# Audio
+settings.audio.volume=Volume
+settings.audio.volume_desc=Speaker volume
+settings.audio.volume_muted=Muted
+
+# System
+settings.system.screen_timeout=Screen timeout
+settings.system.screen_timeout_desc=Period of inactivity before screen turns off (0-600s)
+settings.system.suspend_timeout=Suspend timeout
+settings.system.suspend_timeout_desc=Time before device goes to sleep after screen is off (5-600s)
+settings.system.haptic=Haptic feedback
+settings.system.haptic_desc=Enable or disable haptic feedback on certain actions in the OS
+settings.system.default_view=Default view
+settings.system.default_view_desc=The initial view to show on boot
+settings.system.view.content_list=Content List
+settings.system.view.game_switcher=Game Switcher
+settings.system.view.quick_menu=Quick Menu
+settings.system.clock_24h=Show 24h time format
+settings.system.clock_24h_desc=Show clock in the 24hrs time format
+settings.system.show_clock=Show clock
+settings.system.show_clock_desc=Show clock in the status pill
+settings.system.auto_time=Set time and date automatically
+settings.system.auto_time_desc=Automatically adjust system time\nwith NTP (requires internet access)
+settings.system.timezone=Time zone
+settings.system.timezone_desc=Your time zone
+settings.system.save_format=Save format
+settings.system.save_format_desc=The save format to use.\nMinUI: Game.gba.sav, Retroarch: Game.srm, Generic: Game.sav
+settings.system.save_state_format=Save state format
+settings.system.save_state_format_desc=The save state format to use. MinUI: Game.st0, \nRetroarch-ish: Game.state.0, Retroarch: Game.state0
+settings.system.extracted_name=Use extracted file name
+settings.system.extracted_name_desc=Use the extracted file name instead of the archive name.\nOnly applies to cores that do not handle archives natively
+settings.system.safe_poweroff=Safe poweroff
+settings.system.safe_poweroff_desc=Bypasses the stock shutdown procedure to avoid the "limbo bug".\nInstructs the PMIC directly to soft disconnect the battery.
+settings.system.fan_speed=Fan Speed
+settings.system.fan_speed_desc=Select the fan speed percentage (Quiet/Normal/Performance or 0-100%)
+settings.system.fan.performance=Performance
+settings.system.fan.normal=Normal
+settings.system.fan.quiet=Quiet
+
+# Colors
+settings.color.main=Main Color
+settings.color.main_desc=The color used to render main UI elements.
+settings.color.primary=Primary Accent Color
+settings.color.primary_desc=The color used to highlight important things in the user interface.
+settings.color.secondary=Secondary Accent Color
+settings.color.secondary_desc=A secondary highlight color.
+settings.color.hint=Hint info Color
+settings.color.hint_desc=Color for button hints and info
+settings.color.list_text=List Text
+settings.color.list_text_desc=List text color
+settings.color.list_text_selected=List Text Selected
+settings.color.list_text_selected_desc=List selected text color
+settings.color.background=Background Color
+settings.color.background_desc=Background color used when no background image is set.
+
+# Generic values
+val.on=On
+val.off=Off
+val.never=Never
+val.unchanged=Unchanged
+val.snappy=Snappy
+val.comfy=Comfy
+val.fullscreen=Fullscreen
+val.fit=Fit
+val.fill=Fill
+
+# ---------------------------------------------------------------------
+# Language menu (new)
+# ---------------------------------------------------------------------
+settings.language.title=Language
+settings.language.desc=UI language for menus and notifications.
+settings.language.restart_hint=Some labels update after a reboot.
+
+# ---------------------------------------------------------------------
+# Bluetooth / WiFi menus
+# ---------------------------------------------------------------------
+bt.title=Bluetooth
+bt.scan=Scan for devices
+bt.devices=Devices
+bt.connecting=Connecting...
+bt.connected=Connected
+bt.disconnected=Disconnected
+bt.failed=Connection failed
+bt.pairing=Pairing...
+bt.paired=Paired
+bt.forget=Forget device
+
+wifi.title=WiFi
+wifi.scan=Scan networks
+wifi.networks=Networks
+wifi.connecting=Connecting...
+wifi.connected=Connected
+wifi.disconnected=Disconnected
+wifi.failed=Connection failed
+wifi.password=Password
+wifi.forget=Forget network
+
+# =====================================================================
+# Phase 2: full settings.cpp coverage
+# =====================================================================
+
+# --- Audio / volume / fan / mute common labels ---
+val.muted=Muted
+
+# --- Save format labels ---
+val.fmt.minui=MinUI (default)
+val.fmt.retroarch_compressed=Retroarch (compressed)
+val.fmt.retroarch_uncompressed=Retroarch (uncompressed)
+val.fmt.generic=Generic
+val.fmt.retroarch_ish_compressed=Retroarch-ish (compressed)
+val.fmt.retroarch_ish_uncompressed=Retroarch-ish (uncompressed)
+
+# --- Notifications menu ---
+settings.notif.title=Notifications
+settings.notif.save_states=Save states
+settings.notif.save_states_desc=Show notification when saving game state
+settings.notif.load_states=Load states
+settings.notif.load_states_desc=Show notification when loading game state
+settings.notif.screenshots=Screenshots
+settings.notif.screenshots_desc=Show notification when taking a screenshot
+settings.notif.vol_display=Vol / Display Adjustments
+settings.notif.vol_display_desc=Show overlay for volume, brightness,\nand color temp adjustments
+settings.notif.duration=Duration
+settings.notif.duration_desc=How long notifications stay on screen
+
+# --- FN switch / mute submenu ---
+settings.fn.title=FN Switch
+settings.fn.main=FN switch
+settings.fn.main_desc=FN switch settings
+settings.mute.volume_toggled=Volume when toggled
+settings.mute.volume_toggled_desc=Speaker volume (0-20)
+settings.mute.fn_disables_led=FN switch disables LED
+settings.mute.fn_disables_led_desc=Switch will also disable LEDs
+settings.mute.brightness_toggled=Brightness when toggled
+settings.mute.brightness_toggled_desc=Display brightness (0 to 10)
+settings.mute.colortemp_toggled=Color temperature when toggled
+settings.mute.colortemp_toggled_desc=Color temperature (0 to 40)
+settings.mute.contrast_toggled=Contrast when toggled
+settings.mute.contrast_toggled_desc=Contrast enhancement (-4 to 5)
+settings.mute.saturation_toggled=Saturation when toggled
+settings.mute.saturation_toggled_desc=Saturation enhancement (-5 to 5)
+settings.mute.exposure_toggled=Exposure when toggled
+settings.mute.exposure_toggled_desc=Exposure enhancement (-4 to 5)
+settings.mute.turbo.a=Turbo fire A
+settings.mute.turbo.a_desc=Enable turbo fire A
+settings.mute.turbo.b=Turbo fire B
+settings.mute.turbo.b_desc=Enable turbo fire B
+settings.mute.turbo.x=Turbo fire X
+settings.mute.turbo.x_desc=Enable turbo fire X
+settings.mute.turbo.y=Turbo fire Y
+settings.mute.turbo.y_desc=Enable turbo fire Y
+settings.mute.turbo.l1=Turbo fire L1
+settings.mute.turbo.l1_desc=Enable turbo fire L1
+settings.mute.turbo.l2=Turbo fire L2
+settings.mute.turbo.l2_desc=Enable turbo fire L2
+settings.mute.turbo.r1=Turbo fire R1
+settings.mute.turbo.r1_desc=Enable turbo fire R1
+settings.mute.turbo.r2=Turbo fire R2
+settings.mute.turbo.r2_desc=Enable turbo fire R2
+settings.mute.dpad_mode=Dpad mode when toggled
+settings.mute.dpad_mode_desc=Dpad: default. Joystick: Dpad exclusively acts as analog stick.\nBoth: Dpad and Joystick inputs at the same time.
+val.dpad=Dpad
+val.joystick=Joystick
+val.both=Both
+
+# --- RetroAchievements menu ---
+settings.ra.title=RetroAchievements
+settings.ra.in_game=RetroAchievements
+settings.ra.in_game_desc=Achievement tracking settings
+settings.ra.enable=Enable Achievements
+settings.ra.enable_desc=Enable RetroAchievements integration
+settings.ra.username=Username
+settings.ra.username_desc=RetroAchievements username
+settings.ra.password=Password
+settings.ra.password_desc=RetroAchievements password
+settings.ra.not_set=(not set)
+settings.ra.authenticate=Authenticate
+settings.ra.authenticate_desc=Test credentials and retrieve API token
+settings.ra.err_credentials=Error: Username and password required
+settings.ra.authenticating=Authenticating...
+settings.ra.authenticated_as=Authenticated as %s
+settings.ra.err_prefix=Error: %s
+settings.ra.status=Status
+settings.ra.status_desc=Authentication status
+settings.ra.status_yes=Authenticated
+settings.ra.status_no=Not authenticated
+settings.ra.show_notif=Show Notifications
+settings.ra.show_notif_desc=Show achievement unlock notifications
+settings.ra.notif_duration=Notification Duration
+settings.ra.notif_duration_desc=How long achievement notifications stay on screen
+settings.ra.progress_duration=Progress Duration
+settings.ra.progress_duration_desc=Duration for progress updates (top-left). Off to disable.
+settings.ra.sort=Achievement Sort Order
+settings.ra.sort_desc=How achievements are sorted in the in-game menu
+settings.ra.sync=Sync Offline Unlocks
+settings.ra.sync_pending_fmt=%u pending — send to RA server
+settings.ra.sync_no_pending=No pending unlocks
+settings.ra.sync_not_auth=Not authenticated
+settings.ra.sync_inprogress_fmt=Syncing %u achievement%s...\n\n(0/%u)
+settings.ra.sync_progress_fmt=Syncing achievements...\n\n(%u/%u)
+settings.ra.sync_cancelling=Cancelling sync...
+settings.ra.sync_cancelled=Sync cancelled
+settings.ra.sync_cancelled_partial_fmt=Cancelled: %u of %u synced
+settings.ra.sync_incomplete_fmt=Incomplete: %u synced, retry later
+settings.ra.sync_synced_fmt=Synced %u achievement%s
+
+# RA sort labels
+ra.sort.unlocked_first=Unlocked First
+ra.sort.display_first=Display Order (First)
+ra.sort.display_last=Display Order (Last)
+ra.sort.won_most=Won By (Most)
+ra.sort.won_least=Won By (Least)
+ra.sort.points_most=Points (Most)
+ra.sort.points_least=Points (Least)
+ra.sort.title_az=Title (A-Z)
+ra.sort.title_za=Title (Z-A)
+ra.sort.type_asc=Type (Asc)
+ra.sort.type_desc=Type (Desc)
+
+# --- Default view ---
+settings.system.view.content_list=Content List
+
+# --- In-Game menu ---
+settings.ingame.title=In-Game
+settings.ingame.main=In-Game
+settings.ingame.main_desc=In-game settings for MinArch
+settings.ingame.notifications=Notifications
+settings.ingame.notifications_desc=Save state notifications
+
+# --- About menu ---
+settings.about.title=About
+settings.about.main=About
+settings.about.version=NextUI version
+settings.about.platform=Platform
+settings.about.os_version=Stock OS version
+settings.about.busybox=Busybox version
+settings.about.busybox_missing=BusyBox version not found.
+
+# --- Main menu ---
+settings.main.appearance=Appearance
+settings.main.appearance_desc=UI customization
+settings.main.display=Display
+settings.main.system=System
+settings.main.network=Network
+settings.main.bluetooth=Bluetooth
+
+# --- Stock OS overlay ---
+settings.stock_warning=Stock OS changes detected.\nThis may cause instability or issues.\nIf you experience problems, please consider\nreverting to clean stock firmware.
+
+# --- Scaling labels (audio/video) ---
+val.fullscreen=Fullscreen
+val.fit=Fit
+val.fill=Fill
+
+# =====================================================================
+# Phase 3: btmenu.cpp + wifimenu.cpp
+# =====================================================================
+
+# Both menus share the "Network" top-level slot.
+bt.network=Network
+bt.toggle=Bluetooth
+bt.toggle_desc=Enable/disable Bluetooth
+bt.diagnostics=Bluetooth diagnostics
+bt.diagnostics_desc=Enable/disable Bluetooth logging
+bt.samplerate_max=Maximum sampling rate
+bt.samplerate_max_desc=44100 Hz: better compatibility\n48000 Hz: better quality
+bt.enabling=Enabling Bluetooth...
+bt.disabling=Disabling Bluetooth...
+bt.options=Options
+bt.pair=Pair
+bt.pair_desc=Pair this device.
+bt.pairing_overlay=Pairing...
+bt.forget_desc=Forget this device.
+bt.connect=Connect
+bt.connect_desc=Connect this device.
+bt.connecting_overlay=Connecting...
+bt.disconnect=Disconnect
+bt.disconnect_desc=Disconnect this device.
+
+wifi.network=Network
+wifi.toggle=WiFi
+wifi.toggle_desc=Enable/disable WiFi
+wifi.diagnostics=WiFi diagnostics
+wifi.diagnostics_desc=Enable/disable WiFi logging
+wifi.enabling=Enabling WiFi...
+wifi.disabling=Disabling WiFi...
+wifi.options=Options
+wifi.connect_known=Connect
+wifi.connect_known_desc=Connect to this network.
+wifi.enter_pass=Enter WiFi passcode
+wifi.enter_pass_desc=Connect to this network.
+wifi.connecting_overlay=Connecting...
+wifi.password_prompt=Enter Wifi passcode
+wifi.forget_desc=Removes credentials for this network.
+
+# =====================================================================
+# Phase 4: complete coverage (all remaining modules)
+# =====================================================================
+
+# Hardcore save/state messages
+save.load_disabled_hc=Load states disabled in Hardcore mode
+save.save_disabled_hc=Save states disabled in Hardcore mode
+
+# RA / achievements extra notifications
+ach.game_mastered=Game Mastered!
+
+# Common extra button hints
+btn.cancel=CANCEL
+btn.set=SET
+btn.apply=APPLY
+btn.exit=EXIT
+btn.enter=ENTER
+btn.copy=COPY
+btn.fine=FINE
+btn.coarse=COARSE
+btn.scroll=SCROLL
+btn.zoom=ZOOM
+btn.select_light=Select light
+btn.hr_24=24 HOUR
+btn.hr_12=12 HOUR
+btn.ok=OK
+
+# Clock app
+clock.am=AM
+clock.pm=PM
+
+# Game time tracker
+gametime.total=TOTAL
+gametime.average=AVERAGE
+gametime.plays=# PLAYS
+
+# Generic empty / no-content fallback (reused across menus)
+generic.empty_folder=Empty folder
+
+# Keyboard prompt special keys
+kb.shift=shift
+kb.space=space
+kb.enter=enter
+
+# LED control app
+led.select_light=Select light
+led.effect=Effect
+led.color=Color
+led.color2=Color2
+led.speed=Speed
+led.brightness=Brightness
+led.brightness_all=Brightness (All Leds)
+led.info_brightness=Info brightness
+led.info_brightness_all=Info brightness (All Leds)
+led.trigger=Trigger
+led.f1_key=F1 key
+led.f2_key=F2 key
+led.top_bar=Top bar
+led.lr_triggers=L&R triggers
+led.joystick_l=Joystick L
+led.joystick_r=Joystick R
+led.logo=Logo
+# LED effect names — kept untranslated unless target language has natural equivalents.
+led.effect.linear=Linear
+led.effect.breathe=Breathe
+led.effect.interval_breathe=Interval Breathe
+led.effect.static=Static
+led.effect.blink1=Blink 1
+led.effect.blink2=Blink 2
+led.effect.blink3=Blink 3
+led.effect.rainbow=Rainbow
+led.effect.twinkle=Twinkle
+led.effect.fire=Fire
+led.effect.glitter=Glitter
+led.effect.neonglow=NeonGlow
+led.effect.firefly=Firefly
+led.effect.aurora=Aurora
+led.effect.reactive=Reactive
+led.effect.topbar_rainbow=Topbar Rainbow
+led.effect.topbar_night=Topbar night
+led.effect.lr_rainbow=LR Rainbow
+led.effect.lr_reactive=LR Reactive
+
+# minput tester labels for special non-letter buttons
+minput.vol_minus=VOL. -
+minput.vol_plus=VOL. +
+minput.quit=QUIT
+
+# Hardware hints (api.c GFX_blitHardwareGroup / GFX_blitHardwareHints)
+hw.brightness=BRIGHTNESS
+hw.color_temp=COLOR TEMP
+hw.mnu=MNU
+hw.brght=BRGHT
+hw.sel=SEL
+hw.cltmp=CLTMP
+
+# Misc fallback values
+val.none=none

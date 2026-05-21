@@ -390,7 +390,8 @@ std::string MenuList::getSelectedItemName() const
         return "";
 
     int selected_row = scope.selected - scope.start;
-    return items.at(selected_row)->getName();
+    // Use raw name (i18n key) so selection survives a language change.
+    return items.at(selected_row)->getRawName();
 }
 
 bool MenuList::selectByName(const std::string &name)
@@ -400,7 +401,7 @@ bool MenuList::selectByName(const std::string &name)
 
     int toSelect = -1;
     for (int i = 0; i < items.size() && toSelect < 0; i++)
-        if(items.at(i)->getName() == name)
+        if(items.at(i)->getRawName() == name)
             toSelect = i;
     //LOG_info("Found element %s (%d) at pos %d\n", name.c_str(), scope.selected - scope.start, toSelect);
     if (toSelect >= 0)
@@ -858,7 +859,7 @@ void MenuList::drawMain(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rec
     }
     else
     {
-        GFX_blitMessageCPP(font.large, "Empty folder", surface, dst);
+        GFX_blitMessageCPP(font.large, "generic.empty_folder", surface, dst);
     }
 }
 
@@ -904,7 +905,10 @@ void MenuList::showOverlay(const std::string& message, OverlayDismissMode dismis
 {
     {
         WriteLock w(overlayLock);
-        overlayMessage = message;
+        // T() translates i18n keys to their current-language string; falls back
+        // to the input verbatim when no translation entry exists, so callers
+        // may freely pass either keys or already-translated literals.
+        overlayMessage = T(message.c_str());
         overlayVisible = true;
         overlayDismissMode = dismissMode;
     }
@@ -958,10 +962,10 @@ static void drawOverlayLocal(SDL_Surface* screen) {
     
     if (overlayDismissMode != OverlayDismissMode::None) {
         if (overlayDismissMode == OverlayDismissMode::DismissOnB) {
-            char *hints[] = {(char *)("B"), (char *)("BACK"), NULL};
+            char *hints[] = {(char *)"B", (char *)T("btn.back"), NULL};
             GFX_blitButtonGroup(hints, 1, screen, 1);
         } else if (overlayDismissMode == OverlayDismissMode::DismissOnA) {
-            char *hints[] = {(char *)("A"), (char *)("OK"), NULL};
+            char *hints[] = {(char *)"A", (char *)T("btn.ok"), NULL};
             GFX_blitButtonGroup(hints, 1, screen, 1);
         }
     }

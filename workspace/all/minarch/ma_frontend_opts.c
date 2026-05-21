@@ -3,6 +3,7 @@
 #include "ma_cheats.h"
 #include "ra_integration.h"
 #include "notification.h"
+#include "i18n.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -140,7 +141,7 @@ static int OptionEmulator_optionDetail(MenuList* list, int i) {
 	}
 	else {
 		Option* option = OptionList_getOption(&config.core, item->key);
-		if (option->full) return Menu_messageWithFont(option->full, (char*[]){ "B","BACK", NULL }, font.medium);
+		if (option->full) return Menu_messageWithFont(option->full, (char*[]){ "B",T("btn.back"), NULL }, font.medium);
 		else return MENU_CALLBACK_NOP;
 	}
 }
@@ -216,10 +217,10 @@ int OptionEmulator_openMenu(MenuList* list, int index) {
 	}
 	else {
 		if (list->category) {
-			Menu_message("This category has no options.", (char*[]){ "B","BACK", NULL });
+			Menu_message(T("error.no_options_category"), (char*[]){ "B",T("btn.back"), NULL });
 		}
 		else {
-			Menu_message("This core has no options.", (char*[]){ "B","BACK", NULL });
+			Menu_message(T("error.no_options_core"), (char*[]){ "B",T("btn.back"), NULL });
 		}
 	}
 
@@ -293,6 +294,7 @@ static MenuList OptionControls_menu = {
 
 int OptionControls_openMenu(MenuList* list, int i) {
 	LOG_info("OptionControls_openMenu\n");
+	OptionControls_menu.desc = T("controls.set_hint");
 
 	if (OptionControls_menu.items==NULL) {
 
@@ -302,8 +304,8 @@ int OptionControls_openMenu(MenuList* list, int i) {
 
 		if (has_custom_controllers) {
 			MenuItem* item = &OptionControls_menu.items[k++];
-			item->name = "Controller";
-			item->desc = "Select the type of controller.";
+			item->name = T("controls.controller");
+			item->desc = T("controls.controller_desc");
 			item->value = gamepad_type;
 			item->values = gamepad_labels;
 			item->on_change = OptionControls_optionChanged;
@@ -393,13 +395,14 @@ static MenuList OptionShortcuts_menu = {
 };
 char* getSaveDesc(void) {
 	switch (config.loaded) {
-		case CONFIG_NONE:		return "Using defaults."; break;
-		case CONFIG_CONSOLE:	return "Using console config."; break;
-		case CONFIG_GAME:		return "Using game config."; break;
+		case CONFIG_NONE:		return T("state.cfg.defaults"); break;
+		case CONFIG_CONSOLE:	return T("state.cfg.console"); break;
+		case CONFIG_GAME:		return T("state.cfg.game"); break;
 	}
 	return NULL;
 }
 int OptionShortcuts_openMenu(MenuList* list, int i) {
+	OptionShortcuts_menu.desc = T("controls.set_hint");
 	if (OptionShortcuts_menu.items==NULL) {
 		// TODO: where do I free this? I guess I don't :sweat_smile:
 		OptionShortcuts_menu.items = calloc(SHORTCUT_COUNT+1, sizeof(MenuItem));
@@ -432,22 +435,22 @@ static int OptionSaveChanges_onConfirm(MenuList* list, int i) {
 	switch (i) {
 		case 0: {
 			Config_write(CONFIG_WRITE_ALL);
-			message = "Saved for console.";
+			message = T("state.msg.saved_console");
 			break;
 		}
 		case 1: {
 			Config_write(CONFIG_WRITE_GAME);
-			message = "Saved for game.";
+			message = T("state.msg.saved_game");
 			break;
 		}
 		default: {
 			Config_restore();
-			if (config.loaded) message = "Restored console defaults.";
-			else message = "Restored defaults.";
+			if (config.loaded) message = T("state.msg.restored_console");
+			else message = T("state.msg.restored_defaults");
 			break;
 		}
 	}
-	Menu_message(message, (char*[]){ "A","OKAY", NULL });
+	Menu_message(message, (char*[]){ "A",T("btn.okay"), NULL });
 	OptionSaveChanges_updateDesc();
 	return MENU_CALLBACK_EXIT;
 }
@@ -455,13 +458,16 @@ static MenuList OptionSaveChanges_menu = {
 	.type = MENU_LIST,
 	.on_confirm = OptionSaveChanges_onConfirm,
 	.items = (MenuItem[]){
-		{"Save for console"},
-		{"Save for game"},
-		{"Restore defaults"},
+		{NULL},
+		{NULL},
+		{NULL},
 		{NULL},
 	}
 };
 int OptionSaveChanges_openMenu(MenuList* list, int i) {
+	OptionSaveChanges_menu.items[0].name = T("menu.opt.save_for_console");
+	OptionSaveChanges_menu.items[1].name = T("menu.opt.save_for_game");
+	OptionSaveChanges_menu.items[2].name = T("menu.opt.restore_defaults");
 	OptionSaveChanges_updateDesc();
 	OptionSaveChanges_menu.desc = getSaveDesc();
 	Menu_options(&OptionSaveChanges_menu);
@@ -480,7 +486,7 @@ static int OptionCheats_optionChanged(MenuList* list, int i) {
 	// Block enabling cheats in RetroAchievements hardcore mode
 	if (RA_isHardcoreModeActive() && item->value) {
 		LOG_info("Cheat enable blocked - hardcore mode active\n");
-		Notification_push(NOTIFICATION_ACHIEVEMENT, "Cheats disabled in Hardcore mode", NULL);
+		Notification_push(NOTIFICATION_ACHIEVEMENT, T("error.cheats_disabled_hardcore"), NULL);
 		item->value = 0; // Revert the toggle
 		return MENU_CALLBACK_NOP;
 	}
@@ -494,7 +500,7 @@ static int OptionCheats_optionDetail(MenuList* list, int i) {
 	MenuItem* item = &list->items[i];
 	struct Cheat *cheat = &cheatcodes.cheats[i];
 	if (cheat->info)
-		return Menu_message((char*)cheat->info, (char*[]){ "B","BACK", NULL });
+		return Menu_message((char*)cheat->info, (char*[]){ "B",T("btn.back"), NULL });
 	else return MENU_CALLBACK_NOP;
 }
 
@@ -554,7 +560,7 @@ int OptionCheats_openMenu(MenuList* list, int i) {
 		char cheats_path[CHEAT_MAX_LIST_LENGTH] = {0};
 
 		// prepend title with bounds checking
-		const char* title = "No cheat file loaded.\n\n";
+		const char* title = T("error.no_cheat_file");
 		size_t title_len = strlen(title);
 
 		strcpy(cheats_path, title);  // Use strcpy for first string
@@ -589,7 +595,7 @@ int OptionCheats_openMenu(MenuList* list, int i) {
 			}
 		}
 
-		Menu_messageWithFont(cheats_path, (char*[]){ "B","BACK", NULL }, font.small);
+		Menu_messageWithFont(cheats_path, (char*[]){ "B",T("btn.back"), NULL }, font.small);
 	}
 
 	return MENU_CALLBACK_NOP;
@@ -646,7 +652,7 @@ static int OptionPragmas_openMenu(MenuList* list, int i) {
 	if (PragmasOptions_menu.items[0].name) {
 		Menu_options(&PragmasOptions_menu);
 	} else {
-		Menu_message("No extra settings found", (char*[]){"B", "BACK", NULL});
+		Menu_message(T("error.no_extras"), (char*[]){"B", T("btn.back"), NULL});
 	}
 
 	return MENU_CALLBACK_NOP;
@@ -692,7 +698,7 @@ int OptionShaders_openMenu(MenuList* list, int i) {
 
 	// Check if folder read failed or no files found
 	if (!filelist || filecount == 0) {
-		Menu_message("No shaders available\n/Shaders folder or shader files not found", (char*[]){"B", "BACK", NULL});
+		Menu_message(T("error.no_shaders"), (char*[]){"B", T("btn.back"), NULL});
 		return MENU_CALLBACK_NOP;
 	}
 
@@ -721,7 +727,7 @@ int OptionShaders_openMenu(MenuList* list, int i) {
 	if (ShaderOptions_menu.items[0].name) {
 		Menu_options(&ShaderOptions_menu);
 	} else {
-		Menu_message("No shaders available\n/Shaders folder or shader files not found", (char*[]){"B", "BACK", NULL});
+		Menu_message(T("error.no_shaders"), (char*[]){"B", T("btn.back"), NULL});
 	}
 
 	return MENU_CALLBACK_NOP;

@@ -8,6 +8,7 @@
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+#include "i18n.h"
 
 #include <sqlite3.h>
 #include <gametimedb.h>
@@ -273,7 +274,11 @@ void renderList(int count, int start, int end, int selected)
         serializeTime(average, entry->play_time_average);
         snprintf(plays, 24, "%d", entry->play_count);
 
-        const char *details[] = {"TOTAL ", total, "  AVERAGE ", average, "  # PLAYS ", plays};
+        char total_label[32], avg_label[32], plays_label[32];
+        snprintf(total_label, sizeof(total_label), "%s ", T("gametime.total"));
+        snprintf(avg_label, sizeof(avg_label), "  %s ", T("gametime.average"));
+        snprintf(plays_label, sizeof(plays_label), "  %s ", T("gametime.plays"));
+        const char *details[] = {total_label, total, avg_label, average, plays_label, plays};
         SDL_Rect detailsRect = {
             layout.list_display_start_x + num_width + thumbMargin + SCALE1(IMG_MAX_WIDTH), 
             layout.list_display_start_y + thumbMargin + textHeight + elemHeight * row, 
@@ -435,9 +440,9 @@ int main(int argc, char *argv[])
             if (show_setting)
                 GFX_blitHardwareHints(screen, show_setting);
             else
-                GFX_blitButtonGroup((char *[]){"U/D", "SCROLL", NULL}, 0, screen, 0);
+                GFX_blitButtonGroup((char *[]){"U/D", T("btn.scroll"), NULL}, 0, screen, 0);
 
-            GFX_blitButtonGroup((char *[]){"B", "BACK", NULL}, 1, screen, 1);
+            GFX_blitButtonGroup((char *[]){"B", T("btn.back"), NULL}, 1, screen, 1);
 
             GFX_flip(screen);
             dirty = 0;

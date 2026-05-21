@@ -1,0 +1,545 @@
+# NextUI — strings françaises
+# Format: clé=valeur
+# Encodage UTF-8. Les lignes vides et celles commençant par # sont ignorées.
+
+# ---------------------------------------------------------------------
+# Hints boutons (labels courts à côté des glyphes A/B/X/Y/MENU/POWER)
+# Conserver des labels TRÈS courts (≤7 lettres si possible) — la place est
+# contrainte sur les hints en bas d'écran.
+# ---------------------------------------------------------------------
+btn.back=RETOUR
+btn.okay=OK
+btn.open=OUVRIR
+btn.resume=REPRENDRE
+btn.remove=RETIRER
+btn.sleep=VEILLE
+btn.menu=MENU
+btn.power=POWER
+btn.info=INFO
+btn.mute=COUPER
+btn.unmute=RÉACTIVER
+btn.show_all=TOUT
+btn.show_locked=VERROUILLÉS
+
+# ---------------------------------------------------------------------
+# Launcher principal (nextui)
+# ---------------------------------------------------------------------
+launcher.recents=Récents
+launcher.games=Jeux
+launcher.wifi=WiFi
+launcher.bluetooth=Bluetooth
+launcher.sleep=Veille
+launcher.reboot=Redémarrer
+launcher.poweroff=Éteindre
+launcher.no_recents=Aucun récent
+launcher.empty_folder=Dossier vide
+launcher.no_preview=Aucun aperçu
+
+# ---------------------------------------------------------------------
+# Menu in-game (minarch / ma_menu)
+# ---------------------------------------------------------------------
+menu.continue=Reprendre
+menu.save=Sauvegarder
+menu.load=Charger
+menu.options=Options
+menu.quit=Quitter
+menu.reset=Réinitialiser
+menu.empty_slot=Emplacement vide
+menu.no_preview=Aucun aperçu
+menu.screenshot_saved=Capture enregistrée
+
+# Sous-menu Options
+menu.opt.frontend=Frontend
+menu.opt.emulator=Émulateur
+menu.opt.shaders=Shaders
+menu.opt.cheats=Cheats
+menu.opt.controls=Contrôles
+menu.opt.shortcuts=Raccourcis
+menu.opt.achievements=Succès
+menu.opt.save_changes=Enregistrer
+
+# Sous-menu Save changes
+menu.opt.save_for_console=Enregistrer pour la console
+menu.opt.save_for_game=Enregistrer pour le jeu
+menu.opt.restore_defaults=Valeurs par défaut
+
+# Statut config save-state
+state.cfg.defaults=Valeurs par défaut.
+state.cfg.console=Config console utilisée.
+state.cfg.game=Config jeu utilisée.
+
+state.msg.saved_console=Enregistré pour la console.
+state.msg.saved_game=Enregistré pour le jeu.
+state.msg.restored_console=Réglages console restaurés.
+state.msg.restored_defaults=Réglages par défaut restaurés.
+
+# Controls / hint
+controls.set_hint=A pour définir, X pour effacer.
+controls.controller=Manette
+controls.controller_desc=Sélectionne le type de manette.
+
+# Cheats / shaders / extras
+error.no_options_category=Aucune option dans cette catégorie.
+error.no_options_core=Ce core ne propose aucune option.
+error.no_extras=Aucun réglage supplémentaire.
+error.no_shaders=Aucun shader disponible\nDossier /Shaders ou fichiers introuvables
+error.no_cheat_file=Aucun fichier de cheat chargé.\n\n
+error.cheats_disabled_hardcore=Cheats désactivés en mode Hardcore
+
+# Succès (RetroAchievements)
+ach.no_for_game=Aucun succès pour ce jeu.\n\nCe ROM peut nécessiter un patch\nou ne pas être une version supportée.\n\nVoir retroachievements.org pour la\nliste des versions supportées.
+ach.no_available=Aucun succès disponible pour ce jeu.\n\nCe jeu n'a peut-être pas encore de succès.\n\nDétails sur retroachievements.org.
+ach.failed_load=Échec du chargement des succès
+ach.not_available=Liste des succès indisponible
+ach.none_found=Aucun succès trouvé
+ach.offline_pending=Débloqué hors-ligne — sync en attente
+ach.muted_silenced=Coupé — notifications silencieuses
+
+# ---------------------------------------------------------------------
+# Réglages (settings.cpp)
+# ---------------------------------------------------------------------
+# Sections
+settings.section.appearance=Apparence
+settings.section.display=Affichage
+settings.section.audio=Audio
+settings.section.system=Système
+settings.section.power=Alimentation
+settings.section.network=Réseau
+settings.section.language=Langue
+settings.section.advanced=Avancé
+
+# Boutons communs
+settings.reset_defaults=Réinitialiser
+settings.reset_defaults_desc=Restaure toutes les options de ce menu à leurs valeurs par défaut.
+
+# Apparence
+settings.appearance.font=Police
+settings.appearance.font_desc=La police utilisée pour tout le texte de l'interface.
+settings.appearance.show_battery_pct=Pourcentage de batterie
+settings.appearance.show_battery_pct_desc=Affiche la batterie en pourcentage dans la pilule d'état
+settings.appearance.show_anim=Animations de menu
+settings.appearance.show_anim_desc=Active ou désactive les animations de menu
+settings.appearance.transitions=Transitions de menu
+settings.appearance.transitions_desc=Style d'animation lors de la navigation entre les menus
+settings.appearance.art_radius=Rayon des coins (jaquettes)
+settings.appearance.art_radius_desc=Définit l'arrondi des coins des jaquettes de jeu
+settings.appearance.art_width=Largeur des jaquettes
+settings.appearance.art_width_desc=Pourcentage de la largeur d'écran utilisé pour la jaquette.\nDes éléments d'UI peuvent réduire cette valeur pour éviter le rognage.
+settings.appearance.show_folder_names=Noms de dossiers à la racine
+settings.appearance.show_folder_names_desc=Affiche les noms de dossiers dans le répertoire racine
+settings.appearance.show_recents=Afficher "Récents"
+settings.appearance.show_recents_desc=Affiche l'entrée "Récemment joué" dans la liste des jeux.
+settings.appearance.show_tools=Afficher "Outils"
+settings.appearance.show_tools_desc=Affiche l'entrée "Outils" dans la liste des jeux.
+settings.appearance.show_art=Afficher les jaquettes
+settings.appearance.show_art_desc=Affiche les jaquettes dans le menu principal
+settings.appearance.folder_bg=Fond du dossier pour les ROMs
+settings.appearance.folder_bg_desc=Si activé, utilise l'image de fond de l'émulateur. Sinon le fond par défaut.
+settings.appearance.qs_ui=Interface Quickswitcher
+settings.appearance.qs_ui_desc=Affiche/masque les éléments d'UI du Quickswitcher.\nMasqué, seules les images de fond seront dessinées.
+
+# Affichage
+settings.display.brightness=Luminosité
+settings.display.brightness_desc=Luminosité de l'écran (0 à 10)
+settings.display.colortemp=Température de couleur
+settings.display.colortemp_desc=Température de couleur (0 à 40)
+settings.display.contrast=Contraste
+settings.display.contrast_desc=Amélioration du contraste (-4 à 5)
+settings.display.saturation=Saturation
+settings.display.saturation_desc=Amélioration de la saturation (-5 à 5)
+settings.display.exposure=Exposition
+settings.display.exposure_desc=Amélioration de l'exposition (-4 à 5)
+
+# Audio
+settings.audio.volume=Volume
+settings.audio.volume_desc=Volume des haut-parleurs
+settings.audio.volume_muted=Coupé
+
+# Système
+settings.system.screen_timeout=Extinction écran
+settings.system.screen_timeout_desc=Durée d'inactivité avant extinction de l'écran (0-600s)
+settings.system.suspend_timeout=Mise en veille
+settings.system.suspend_timeout_desc=Délai avant veille profonde après l'extinction de l'écran (5-600s)
+settings.system.haptic=Retour haptique
+settings.system.haptic_desc=Active ou désactive le retour haptique pour certaines actions
+settings.system.default_view=Vue par défaut
+settings.system.default_view_desc=La vue initiale affichée au démarrage
+settings.system.view.content_list=Liste des contenus
+settings.system.view.game_switcher=Game Switcher
+settings.system.view.quick_menu=Menu rapide
+settings.system.clock_24h=Format 24h
+settings.system.clock_24h_desc=Affiche l'horloge au format 24 heures
+settings.system.show_clock=Afficher l'horloge
+settings.system.show_clock_desc=Affiche l'horloge dans la pilule d'état
+settings.system.auto_time=Heure automatique
+settings.system.auto_time_desc=Ajuste automatiquement l'heure système\nvia NTP (requiert un accès Internet)
+settings.system.timezone=Fuseau horaire
+settings.system.timezone_desc=Votre fuseau horaire
+settings.system.save_format=Format de sauvegarde
+settings.system.save_format_desc=Format des sauvegardes.\nMinUI: Jeu.gba.sav, Retroarch: Jeu.srm, Générique: Jeu.sav
+settings.system.save_state_format=Format des save states
+settings.system.save_state_format_desc=Format des save states. MinUI: Jeu.st0,\nRetroarch-ish: Jeu.state.0, Retroarch: Jeu.state0
+settings.system.extracted_name=Nom de fichier extrait
+settings.system.extracted_name_desc=Utilise le nom du fichier extrait plutôt que celui de l'archive.\nNe s'applique qu'aux cores qui ne gèrent pas les archives nativement
+settings.system.safe_poweroff=Extinction sûre
+settings.system.safe_poweroff_desc=Contourne la procédure d'extinction d'origine pour éviter le "limbo bug".\nDéconnecte la batterie via le PMIC directement.
+settings.system.fan_speed=Vitesse ventilateur
+settings.system.fan_speed_desc=Sélectionne la vitesse du ventilateur (Silencieux/Normal/Performance ou 0-100%)
+settings.system.fan.performance=Performance
+settings.system.fan.normal=Normal
+settings.system.fan.quiet=Silencieux
+
+# Couleurs
+settings.color.main=Couleur principale
+settings.color.main_desc=Couleur principale des éléments d'UI.
+settings.color.primary=Accent primaire
+settings.color.primary_desc=Couleur de mise en valeur des éléments importants.
+settings.color.secondary=Accent secondaire
+settings.color.secondary_desc=Couleur de mise en valeur secondaire.
+settings.color.hint=Indices boutons
+settings.color.hint_desc=Couleur des hints boutons et informations
+settings.color.list_text=Texte de liste
+settings.color.list_text_desc=Couleur du texte dans les listes
+settings.color.list_text_selected=Texte sélectionné
+settings.color.list_text_selected_desc=Couleur du texte sélectionné dans les listes
+settings.color.background=Couleur de fond
+settings.color.background_desc=Couleur de fond utilisée sans image de fond.
+
+# Valeurs génériques
+val.on=Activé
+val.off=Désactivé
+val.never=Jamais
+val.unchanged=Inchangé
+val.snappy=Vif
+val.comfy=Doux
+val.fullscreen=Plein écran
+val.fit=Adapter
+val.fill=Remplir
+
+# ---------------------------------------------------------------------
+# Menu Langue (nouveau)
+# ---------------------------------------------------------------------
+settings.language.title=Langue
+settings.language.desc=Langue de l'interface (menus et notifications).
+settings.language.restart_hint=Certains libellés ne changeront qu'au prochain redémarrage.
+
+# ---------------------------------------------------------------------
+# Bluetooth / WiFi
+# ---------------------------------------------------------------------
+bt.title=Bluetooth
+bt.scan=Rechercher des appareils
+bt.devices=Appareils
+bt.connecting=Connexion...
+bt.connected=Connecté
+bt.disconnected=Déconnecté
+bt.failed=Échec de la connexion
+bt.pairing=Appairage...
+bt.paired=Appairé
+bt.forget=Oublier l'appareil
+
+wifi.title=WiFi
+wifi.scan=Rechercher des réseaux
+wifi.networks=Réseaux
+wifi.connecting=Connexion...
+wifi.connected=Connecté
+wifi.disconnected=Déconnecté
+wifi.failed=Échec de la connexion
+wifi.password=Mot de passe
+wifi.forget=Oublier le réseau
+
+# =====================================================================
+# Phase 2: couverture complète settings.cpp
+# =====================================================================
+
+# --- Audio / volume / fan / mute (étiquettes communes) ---
+val.muted=Coupé
+
+# --- Labels formats de sauvegarde ---
+val.fmt.minui=MinUI (défaut)
+val.fmt.retroarch_compressed=Retroarch (compressé)
+val.fmt.retroarch_uncompressed=Retroarch (non compressé)
+val.fmt.generic=Générique
+val.fmt.retroarch_ish_compressed=Retroarch-ish (compressé)
+val.fmt.retroarch_ish_uncompressed=Retroarch-ish (non compressé)
+
+# --- Menu Notifications ---
+settings.notif.title=Notifications
+settings.notif.save_states=Save states
+settings.notif.save_states_desc=Notification lors de la sauvegarde d'un save state
+settings.notif.load_states=Chargement de save state
+settings.notif.load_states_desc=Notification lors du chargement d'un save state
+settings.notif.screenshots=Captures d'écran
+settings.notif.screenshots_desc=Notification lors d'une capture d'écran
+settings.notif.vol_display=Volume / Affichage
+settings.notif.vol_display_desc=Affiche un overlay pour le volume, la luminosité\net la température de couleur
+settings.notif.duration=Durée
+settings.notif.duration_desc=Temps d'affichage des notifications à l'écran
+
+# --- Interrupteur FN / mute ---
+settings.fn.title=Interrupteur FN
+settings.fn.main=Interrupteur FN
+settings.fn.main_desc=Réglages de l'interrupteur FN
+settings.mute.volume_toggled=Volume (interrupteur)
+settings.mute.volume_toggled_desc=Volume des haut-parleurs (0-20)
+settings.mute.fn_disables_led=FN coupe aussi les LED
+settings.mute.fn_disables_led_desc=L'interrupteur désactive également les LED
+settings.mute.brightness_toggled=Luminosité (interrupteur)
+settings.mute.brightness_toggled_desc=Luminosité de l'écran (0 à 10)
+settings.mute.colortemp_toggled=Température (interrupteur)
+settings.mute.colortemp_toggled_desc=Température de couleur (0 à 40)
+settings.mute.contrast_toggled=Contraste (interrupteur)
+settings.mute.contrast_toggled_desc=Amélioration du contraste (-4 à 5)
+settings.mute.saturation_toggled=Saturation (interrupteur)
+settings.mute.saturation_toggled_desc=Amélioration de la saturation (-5 à 5)
+settings.mute.exposure_toggled=Exposition (interrupteur)
+settings.mute.exposure_toggled_desc=Amélioration de l'exposition (-4 à 5)
+settings.mute.turbo.a=Turbo A
+settings.mute.turbo.a_desc=Active le tir turbo pour A
+settings.mute.turbo.b=Turbo B
+settings.mute.turbo.b_desc=Active le tir turbo pour B
+settings.mute.turbo.x=Turbo X
+settings.mute.turbo.x_desc=Active le tir turbo pour X
+settings.mute.turbo.y=Turbo Y
+settings.mute.turbo.y_desc=Active le tir turbo pour Y
+settings.mute.turbo.l1=Turbo L1
+settings.mute.turbo.l1_desc=Active le tir turbo pour L1
+settings.mute.turbo.l2=Turbo L2
+settings.mute.turbo.l2_desc=Active le tir turbo pour L2
+settings.mute.turbo.r1=Turbo R1
+settings.mute.turbo.r1_desc=Active le tir turbo pour R1
+settings.mute.turbo.r2=Turbo R2
+settings.mute.turbo.r2_desc=Active le tir turbo pour R2
+settings.mute.dpad_mode=Mode D-pad (interrupteur)
+settings.mute.dpad_mode_desc=Dpad : défaut. Joystick : le D-pad agit comme stick analogique.\nLes deux : entrées D-pad et joystick simultanées.
+val.dpad=D-pad
+val.joystick=Joystick
+val.both=Les deux
+
+# --- Menu RetroAchievements ---
+settings.ra.title=RetroAchievements
+settings.ra.in_game=RetroAchievements
+settings.ra.in_game_desc=Réglages du suivi des succès
+settings.ra.enable=Activer les succès
+settings.ra.enable_desc=Active l'intégration RetroAchievements
+settings.ra.username=Nom d'utilisateur
+settings.ra.username_desc=Nom d'utilisateur RetroAchievements
+settings.ra.password=Mot de passe
+settings.ra.password_desc=Mot de passe RetroAchievements
+settings.ra.not_set=(non défini)
+settings.ra.authenticate=S'authentifier
+settings.ra.authenticate_desc=Teste les identifiants et récupère le token API
+settings.ra.err_credentials=Erreur : nom d'utilisateur et mot de passe requis
+settings.ra.authenticating=Authentification...
+settings.ra.authenticated_as=Authentifié en tant que %s
+settings.ra.err_prefix=Erreur : %s
+settings.ra.status=Statut
+settings.ra.status_desc=État de l'authentification
+settings.ra.status_yes=Authentifié
+settings.ra.status_no=Non authentifié
+settings.ra.show_notif=Afficher les notifications
+settings.ra.show_notif_desc=Affiche les notifications de déblocage de succès
+settings.ra.notif_duration=Durée des notifications
+settings.ra.notif_duration_desc=Temps d'affichage des notifications de succès
+settings.ra.progress_duration=Durée de progression
+settings.ra.progress_duration_desc=Durée des mises à jour de progression (haut-gauche). Désactivé pour masquer.
+settings.ra.sort=Tri des succès
+settings.ra.sort_desc=Ordre de tri des succès dans le menu in-game
+settings.ra.sync=Synchroniser les déblocages hors-ligne
+settings.ra.sync_pending_fmt=%u en attente — envoyer au serveur RA
+settings.ra.sync_no_pending=Aucun déblocage en attente
+settings.ra.sync_not_auth=Non authentifié
+settings.ra.sync_inprogress_fmt=Synchronisation de %u succès%s...\n\n(0/%u)
+settings.ra.sync_progress_fmt=Synchronisation des succès...\n\n(%u/%u)
+settings.ra.sync_cancelling=Annulation de la synchronisation...
+settings.ra.sync_cancelled=Synchronisation annulée
+settings.ra.sync_cancelled_partial_fmt=Annulée : %u sur %u synchronisés
+settings.ra.sync_incomplete_fmt=Incomplet : %u synchronisés, réessayer plus tard
+settings.ra.sync_synced_fmt=%u succès%s synchronisés
+
+# Tri des succès (labels)
+ra.sort.unlocked_first=Débloqués en premier
+ra.sort.display_first=Ordre d'affichage (premier)
+ra.sort.display_last=Ordre d'affichage (dernier)
+ra.sort.won_most=Gagnés (le plus)
+ra.sort.won_least=Gagnés (le moins)
+ra.sort.points_most=Points (le plus)
+ra.sort.points_least=Points (le moins)
+ra.sort.title_az=Titre (A-Z)
+ra.sort.title_za=Titre (Z-A)
+ra.sort.type_asc=Type (croissant)
+ra.sort.type_desc=Type (décroissant)
+
+# --- Vue par défaut ---
+settings.system.view.content_list=Liste des contenus
+
+# --- Menu In-Game ---
+settings.ingame.title=En jeu
+settings.ingame.main=En jeu
+settings.ingame.main_desc=Réglages en jeu pour MinArch
+settings.ingame.notifications=Notifications
+settings.ingame.notifications_desc=Notifications de save states
+
+# --- Menu À propos ---
+settings.about.title=À propos
+settings.about.main=À propos
+settings.about.version=Version NextUI
+settings.about.platform=Plateforme
+settings.about.os_version=Version OS d'origine
+settings.about.busybox=Version Busybox
+settings.about.busybox_missing=Version BusyBox introuvable.
+
+# --- Menu principal ---
+settings.main.appearance=Apparence
+settings.main.appearance_desc=Personnalisation de l'UI
+settings.main.display=Affichage
+settings.main.system=Système
+settings.main.network=Réseau
+settings.main.bluetooth=Bluetooth
+
+# --- Avertissement OS d'origine ---
+settings.stock_warning=Modifications de l'OS d'origine détectées.\nCela peut causer de l'instabilité.\nEn cas de problème, restaurez un firmware\nd'origine propre.
+
+# --- Labels scaling (audio/vidéo) ---
+val.fullscreen=Plein écran
+val.fit=Adapter
+val.fill=Remplir
+
+# =====================================================================
+# Phase 3: btmenu.cpp + wifimenu.cpp
+# =====================================================================
+
+# Les deux menus partagent l'emplacement de premier niveau "Réseau".
+bt.network=Réseau
+bt.toggle=Bluetooth
+bt.toggle_desc=Active/désactive le Bluetooth
+bt.diagnostics=Diagnostics Bluetooth
+bt.diagnostics_desc=Active/désactive les logs Bluetooth
+bt.samplerate_max=Fréquence d'échantillonnage max
+bt.samplerate_max_desc=44100 Hz : meilleure compatibilité\n48000 Hz : meilleure qualité
+bt.enabling=Activation du Bluetooth...
+bt.disabling=Désactivation du Bluetooth...
+bt.options=Options
+bt.pair=Appairer
+bt.pair_desc=Appairer cet appareil.
+bt.pairing_overlay=Appairage...
+bt.forget_desc=Oublier cet appareil.
+bt.connect=Connecter
+bt.connect_desc=Connecter cet appareil.
+bt.connecting_overlay=Connexion...
+bt.disconnect=Déconnecter
+bt.disconnect_desc=Déconnecter cet appareil.
+
+wifi.network=Réseau
+wifi.toggle=WiFi
+wifi.toggle_desc=Active/désactive le WiFi
+wifi.diagnostics=Diagnostics WiFi
+wifi.diagnostics_desc=Active/désactive les logs WiFi
+wifi.enabling=Activation du WiFi...
+wifi.disabling=Désactivation du WiFi...
+wifi.options=Options
+wifi.connect_known=Connecter
+wifi.connect_known_desc=Se connecter à ce réseau.
+wifi.enter_pass=Saisir le mot de passe WiFi
+wifi.enter_pass_desc=Se connecter à ce réseau.
+wifi.connecting_overlay=Connexion...
+wifi.password_prompt=Saisir le mot de passe WiFi
+wifi.forget_desc=Supprime les identifiants enregistrés pour ce réseau.
+
+# =====================================================================
+# Phase 4 : couverture complète (tous modules restants)
+# =====================================================================
+
+# Messages Hardcore (save states)
+save.load_disabled_hc=Chargement de save state désactivé en mode Hardcore
+save.save_disabled_hc=Save states désactivés en mode Hardcore
+
+# Notifications succès supplémentaires
+ach.game_mastered=Jeu maîtrisé !
+
+# Hints boutons supplémentaires
+btn.cancel=ANNULER
+btn.set=DÉFINIR
+btn.apply=APPLIQUER
+btn.exit=QUITTER
+btn.enter=VALIDER
+btn.copy=COPIER
+btn.fine=PRÉCIS
+btn.coarse=RAPIDE
+btn.scroll=DÉFILER
+btn.zoom=ZOOM
+btn.select_light=Choisir LED
+btn.hr_24=24H
+btn.hr_12=12H
+btn.ok=OK
+
+# Horloge
+clock.am=AM
+clock.pm=PM
+
+# Temps de jeu
+gametime.total=TOTAL
+gametime.average=MOYENNE
+gametime.plays=# PARTIES
+
+# Fallback générique
+generic.empty_folder=Dossier vide
+
+# Clavier virtuel — touches spéciales
+kb.shift=maj
+kb.space=espace
+kb.enter=entrée
+
+# Contrôle des LED
+led.select_light=Choisir LED
+led.effect=Effet
+led.color=Couleur
+led.color2=Couleur 2
+led.speed=Vitesse
+led.brightness=Luminosité
+led.brightness_all=Luminosité (toutes LED)
+led.info_brightness=Luminosité info
+led.info_brightness_all=Luminosité info (toutes LED)
+led.trigger=Déclencheur
+led.f1_key=Touche F1
+led.f2_key=Touche F2
+led.top_bar=Barre du haut
+led.lr_triggers=Gâchettes L&R
+led.joystick_l=Joystick gauche
+led.joystick_r=Joystick droit
+led.logo=Logo
+# Noms d'effets LED — conservés en anglais (terminologie tech).
+led.effect.linear=Linear
+led.effect.breathe=Breathe
+led.effect.interval_breathe=Interval Breathe
+led.effect.static=Static
+led.effect.blink1=Blink 1
+led.effect.blink2=Blink 2
+led.effect.blink3=Blink 3
+led.effect.rainbow=Rainbow
+led.effect.twinkle=Twinkle
+led.effect.fire=Fire
+led.effect.glitter=Glitter
+led.effect.neonglow=NeonGlow
+led.effect.firefly=Firefly
+led.effect.aurora=Aurora
+led.effect.reactive=Reactive
+led.effect.topbar_rainbow=Topbar Rainbow
+led.effect.topbar_night=Topbar night
+led.effect.lr_rainbow=LR Rainbow
+led.effect.lr_reactive=LR Reactive
+
+# Testeur minput — labels des boutons non lettres
+minput.vol_minus=VOL. -
+minput.vol_plus=VOL. +
+minput.quit=QUITTER
+
+# Hints matériels (api.c GFX_blitHardwareGroup / GFX_blitHardwareHints)
+hw.brightness=LUMINOSITÉ
+hw.color_temp=TEMPÉRATURE
+hw.mnu=MNU
+hw.brght=LUMI
+hw.sel=SEL
+hw.cltmp=TEMP
+
+# Valeurs par défaut diverses
+val.none=aucun
