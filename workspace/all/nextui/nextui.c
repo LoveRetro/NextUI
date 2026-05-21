@@ -813,7 +813,7 @@ static Array* getQuickEntries(void) {
 		Array_push(entries, Entry_newNamed(FAUX_RECENT_PATH, ENTRY_DIR, T("launcher.recents")));
 
 	if (hasCollections())
-		Array_push(entries, Entry_new(COLLECTIONS_PATH, ENTRY_DIR));
+		Array_push(entries, Entry_newNamed(COLLECTIONS_PATH, ENTRY_DIR, T("launcher.collections")));
 
 	// Not sure we need this, its just a button press away (B)
 	Array_push(entries, Entry_newNamed(ROMS_PATH, ENTRY_DIR, T("launcher.games")));
@@ -822,7 +822,7 @@ static Array* getQuickEntries(void) {
     if (hasTools() && !simple_mode) {
 		char tools_path[256];
 		snprintf(tools_path, sizeof(tools_path), "%s/Tools/%s", SDCARD_PATH, PLATFORM);
-        Array_push(entries, Entry_new(tools_path, ENTRY_DIR));
+        Array_push(entries, Entry_newNamed(tools_path, ENTRY_DIR, T("launcher.tools")));
     }
 
 	return entries;
@@ -856,14 +856,14 @@ static Array* getRoot(void) {
     Array* root = Array_new();
 
     if (hasRecents() && CFG_getShowRecents())
-		Array_push(root, Entry_new(FAUX_RECENT_PATH, ENTRY_DIR));
+		Array_push(root, Entry_newNamed(FAUX_RECENT_PATH, ENTRY_DIR, T("launcher.recently_played")));
 
 	Array *entries = getRoms();
 
 	// Handle collections
 	if (hasCollections() && CFG_getShowCollections()) {
         if (entries->count) {
-            Array_push(root, Entry_new(COLLECTIONS_PATH, ENTRY_DIR));
+            Array_push(root, Entry_newNamed(COLLECTIONS_PATH, ENTRY_DIR, T("launcher.collections")));
         } else { // No visible systems, promote collections to root
 			Array *collections = getCollections();
 			Array_yoink(entries, collections);
@@ -877,7 +877,7 @@ static Array* getRoot(void) {
     if (hasTools() && CFG_getShowTools() && !simple_mode) {
 		char tools_path[256];
 		snprintf(tools_path, sizeof(tools_path), "%s/Tools/%s", SDCARD_PATH, PLATFORM);
-        Array_push(root, Entry_new(tools_path, ENTRY_DIR));
+        Array_push(root, Entry_newNamed(tools_path, ENTRY_DIR, T("launcher.tools")));
     }
 
     return root;

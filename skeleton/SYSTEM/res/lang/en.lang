@@ -637,3 +637,8 @@ frontend.lbl.rewind_compression.default=2 (default)
 frontend.lbl.rewind_compression.fast=4 (fast)
 frontend.lbl.rewind_compression.faster=8 (faster)
 frontend.lbl.rewind_compression.fastest=12 (fastest)
+
+# Root menu folder labels (main launcher)
+launcher.tools=Tools
+launcher.recently_played=Recently Played
+launcher.collections=Collections
