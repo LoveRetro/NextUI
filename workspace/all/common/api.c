@@ -2809,6 +2809,25 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	return total_consumed_frames;
 }
 
+// Grab the first external audio device (i.e. not "audiocodec") that we can find, or return NULL if we can't find one.
+// We could also drag this in via audiomon, but this is simpler and doesn't require changes to the core
+const char* GetAudioDeviceName(void)
+{
+#if defined(USE_SDL2)
+	int num_devices = SDL_GetNumAudioDevices(0);
+	for (int i = 0; i < num_devices; i++)
+	{
+		const char* device_name = SDL_GetAudioDeviceName(i, 0);
+		if (device_name && !strstr(device_name, "audiocodec"))
+		{
+			LOG_info("Found audio device: %s\n", device_name);
+			return device_name;
+		}
+	}
+#endif
+	return NULL;
+}
+
 void SND_init(double sample_rate, double frame_rate)
 { // plat_sound_init
 	LOG_info("SND_init\n");
@@ -2848,7 +2867,7 @@ void SND_init(double sample_rate, double frame_rate)
 	spec_in.callback = SND_audioCallback;
 
 #if defined(USE_SDL2)
-	snd.device_id = SDL_OpenAudioDevice(NULL, 0, &spec_in, &spec_out, SDL_AUDIO_ALLOW_ANY_CHANGE);
+	snd.device_id = SDL_OpenAudioDevice(GetAudioDeviceName(), 0, &spec_in, &spec_out, SDL_AUDIO_ALLOW_ANY_CHANGE);
 	if (snd.device_id <= 0)
 	{
 		LOG_info("SDL_OpenAudioDevice error: %s\n", SDL_GetError());
