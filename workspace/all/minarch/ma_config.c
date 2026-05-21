@@ -185,9 +185,8 @@ void Config_syncFrontend(char* key, int value) {
 			case FE_OPT_REWIND_COMPRESSION: rewind_cfg_compress = parsed; break;
 			case FE_OPT_REWIND_COMPRESSION_ACCEL: rewind_cfg_lz4_acceleration = parsed; break;
 		}
-		// Only call Rewind_init if core is initialized; early config reads happen before
-		// the core is ready and will be followed by an explicit Rewind_init later
-		if (core.initialized) {
+		// Defer Rewind_init until after the explicit init in main(), otherwise FBN crashes
+		if (rewind_init_ready) {
 			Rewind_init(core.serialize_size ? core.serialize_size() : 0);
 		}
 		if (i==FE_OPT_REWIND_ENABLE) {
