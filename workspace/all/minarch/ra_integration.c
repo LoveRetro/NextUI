@@ -44,7 +44,7 @@
  * Connectivity detection is two-tier:
  *
  *   1. Lightweight WiFi poll (every RA_WIFI_POLL_INTERVAL_MS, ~5 s):
- *      Calls PLAT_wifiConnected() to detect link-layer drops and
+ *      Calls PWR_isOnline() to detect link-layer drops and
  *      restores without any network I/O.  Runs on the main thread
  *      inside ra_process_deferred_flags(), Phase 3.
  *
@@ -2035,7 +2035,7 @@ void RA_init(void) {
 	bool launch_probe = false;
 	
 	RA_LOG_INFO("WiFi check: enabled=%d, connected=%d\n",
-	            wifi_enabled, wifi_enabled ? PLAT_wifiConnected() : 0);
+	            wifi_enabled, wifi_enabled ? PWR_isOnline() : 0);
 	
 	if (wifi_enabled) {
 		// WiFi is on — check if we have a cached login for offline-first startup
@@ -2069,14 +2069,14 @@ void RA_init(void) {
 		} else {
 			// No cache — must go online for login (current behavior with blocking wait)
 			RA_LOG_INFO("No cached login — online startup with WiFi wait\n");
-			if (!PLAT_wifiConnected()) {
+			if (!PWR_isOnline()) {
 				RA_LOG_DEBUG("WiFi enabled but not connected, waiting up to %dms...\n", RA_WIFI_WAIT_MAX_MS);
 				uint32_t start = SDL_GetTicks();
-				while (!PLAT_wifiConnected() &&
+				while (!PWR_isOnline() &&
 				       (SDL_GetTicks() - start) < RA_WIFI_WAIT_MAX_MS) {
 					SDL_Delay(RA_WIFI_WAIT_POLL_MS);
 				}
-				if (PLAT_wifiConnected()) {
+				if (PWR_isOnline()) {
 					RA_LOG_DEBUG("WiFi connected after %ums\n", SDL_GetTicks() - start);
 				} else {
 					RA_LOG_WARN("WiFi did not connect within %dms - cannot start online, no cache available\n", RA_WIFI_WAIT_MAX_MS);
@@ -2574,7 +2574,7 @@ static void action_sync_failed(const RAEvent* ev) {
  * Phase 2: Check main-thread-only deferred flags (offline notification,
  *          sync pending, sync apply, login retry, game load retry) and
  *          act on any that are set.
- * Phase 3: Lightweight WiFi connectivity poll — calls PLAT_wifiConnected()
+ * Phase 3: Lightweight WiFi connectivity poll — calls PWR_isOnline()
  *          to detect link-layer drops/restores without network I/O.
  */
 static void ra_process_deferred_flags(void) {
@@ -2723,7 +2723,7 @@ static void ra_process_deferred_flags(void) {
 		uint32_t now = SDL_GetTicks();
 		if (ra_client && now - last_wifi_poll >= RA_WIFI_POLL_INTERVAL_MS) {
 			last_wifi_poll = now;
-			bool wifi_up = PLAT_wifiConnected();
+			bool wifi_up = PWR_isOnline();
 			
 			if (!wifi_up && !RA_Offline_isOffline()) {
 				// WiFi dropped while we thought we were online
