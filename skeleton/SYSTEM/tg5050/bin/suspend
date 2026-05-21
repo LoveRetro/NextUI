@@ -6,9 +6,6 @@ exec 0<&-
 #logfile="/mnt/SDCARD/.userdata/tg5040/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
 #exec >> "$logfile" 2>&1
 
-wifid_running=
-bluetoothd_running=
-
 sleep_retval=
 
 asound_state_dir=/tmp/asound-suspend
@@ -20,21 +17,10 @@ before() {
 	# Subshell ensures a crashing hook cannot block suspend.
 	( "$SYSTEM_PATH/bin/run_hooks.sh" pre-sleep.d --sync-only ) >/dev/null 2>&1 || true
 
-	>&2 echo "Saving mixer state..."
-	mkdir -p "$asound_state_dir"
-	alsactl --file "$asound_state_dir/asound.state.pre" store || true
+	#>&2 echo "Saving mixer state..."
+	#mkdir -p "$asound_state_dir"
+	#alsactl --file "$asound_state_dir/asound.state.pre" store || true
 
-	if pgrep bluetoothd; then
-		bluetoothd_running=1
-		>&2 echo "Stopping bluetoothd..."
-		$SYSTEM_PATH/etc/bluetooth/bt_init.sh stop || true
-	fi
-
-	if pgrep wpa_supplicant; then
-		wifid_running=1
-		>&2 echo "Stopping wpa_supplicant..."
-		$SYSTEM_PATH/etc/wifi/wifi_init.sh stop || true
-	fi
 }
 
 after() {
@@ -42,16 +28,6 @@ after() {
 
 	# Run post-resume hooks in background immediately after wake.
 	( "$SYSTEM_PATH/bin/run_hooks.sh" post-resume.d ) >/dev/null 2>&1 &
-
-	if [ -n "$wifid_running" ]; then
-		>&2 echo "Starting wpa_supplicant..."
-		$SYSTEM_PATH/etc/wifi/wifi_init.sh start || true
-	fi
-
-	if [ -n "$bluetoothd_running" ]; then
-		>&2 echo "Starting bluetoothd..."
-		/etc/bluetooth/bt_init.sh start || true
-	fi
 
 	# >&2 echo "Restoring mixer state..."
 	# alsactl --file "$asound_state_dir/asound.state.post" store || true
