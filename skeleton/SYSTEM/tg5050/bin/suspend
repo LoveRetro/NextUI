@@ -3,12 +3,35 @@ set -uo pipefail
 set +e
 exec 0<&-
 
-#logfile="/mnt/SDCARD/.userdata/tg5040/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
-#exec >> "$logfile" 2>&1
+logfile="/mnt/SDCARD/.userdata/tg5040/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
+exec >> "$logfile" 2>&1
+
+wifid_running=
+bluetoothd_running=
 
 sleep_retval=
 
 asound_state_dir=/tmp/asound-suspend
+
+log_wakeup_sources() {
+	local label="$1"
+	>&2 echo "  [$label] wakeup_count: $(cat /sys/power/wakeup_count 2>/dev/null)"
+	if [ -f /sys/power/pm_wakeup_irq ]; then
+		>&2 echo "  [$label] last wakeup IRQ: $(cat /sys/power/pm_wakeup_irq 2>/dev/null)"
+	fi
+	if [ -f /sys/power/wake_lock ]; then
+		local locks
+		locks=$(cat /sys/power/wake_lock 2>/dev/null)
+		[ -n "$locks" ] && >&2 echo "  [$label] active wakelocks: $locks"
+	fi
+	if [ -r /sys/kernel/debug/wakeup_sources ]; then
+		>&2 echo "  [$label] wakeup sources (wakeup_count>0 | active | prevent_suspend>0):"
+		awk 'NR==1 || $4 != "0" || $6 != "0" || $10 != "0"' \
+			/sys/kernel/debug/wakeup_sources 2>/dev/null | head -20 >&2
+	fi
+	>&2 echo "  [$label] dmesg (last 10 lines):"
+	dmesg 2>/dev/null | tail -10 >&2
+}
 
 before() {
 	>&2 echo "Preparing for suspend..."
@@ -17,10 +40,27 @@ before() {
 	# Subshell ensures a crashing hook cannot block suspend.
 	( "$SYSTEM_PATH/bin/run_hooks.sh" pre-sleep.d --sync-only ) >/dev/null 2>&1 || true
 
+	log_wakeup_sources "before"
+
+	# Enable kernel PM debug messages so driver-level suspend rejections
+	# appear in dmesg.
+	echo 1 >/sys/power/pm_debug_messages 2>/dev/null || true
+
 	#>&2 echo "Saving mixer state..."
 	#mkdir -p "$asound_state_dir"
 	#alsactl --file "$asound_state_dir/asound.state.pre" store || true
 
+	#if pgrep bluetoothd; then
+	#	bluetoothd_running=1
+	#	>&2 echo "Stopping bluetoothd..."
+	#	$SYSTEM_PATH/etc/bluetooth/bt_init.sh stop || true
+	#fi
+
+	if pgrep wpa_supplicant; then
+		wifid_running=1
+		>&2 echo "Stopping wpa_supplicant..."
+		$SYSTEM_PATH/etc/wifi/wifi_init.sh stop || true
+	fi
 }
 
 after() {
@@ -28,6 +68,16 @@ after() {
 
 	# Run post-resume hooks in background immediately after wake.
 	( "$SYSTEM_PATH/bin/run_hooks.sh" post-resume.d ) >/dev/null 2>&1 &
+
+	if [ -n "$wifid_running" ]; then
+		>&2 echo "Starting wpa_supplicant..."
+		$SYSTEM_PATH/etc/wifi/wifi_init.sh start || true
+	fi
+
+	#if [ -n "$bluetoothd_running" ]; then
+	#	>&2 echo "Starting bluetoothd..."
+	#	/etc/bluetooth/bt_init.sh start || true
+	#fi
 
 	# >&2 echo "Restoring mixer state..."
 	# alsactl --file "$asound_state_dir/asound.state.post" store || true
@@ -41,6 +91,17 @@ sleep_max_tries=5
 for i in $(seq 1 $sleep_max_tries); do
 	>&2 echo "Deep sleep attempt $i of $sleep_max_tries"
 
+	# Synchronize with wakeup events: read wakeup_count and write it back.
+	# If a wakeup event occurred since reading, the write fails and we retry.
+	wakeup_count=$(cat /sys/power/wakeup_count 2>/dev/null)
+	if [ -n "$wakeup_count" ]; then
+		if ! echo "$wakeup_count" >/sys/power/wakeup_count 2>/dev/null; then
+			>&2 echo "Deep sleep: wakeup event detected before sleep (wakeup_count=$wakeup_count), retrying in 1 second"
+			sleep 1
+			continue
+		fi
+	fi
+
 	echo mem >/sys/power/state
 	sleep_retval=$?
 
@@ -50,6 +111,7 @@ for i in $(seq 1 $sleep_max_tries); do
 	fi
 
 	>&2 echo "Deep sleep failed: retrying in 3 seconds"
+	log_wakeup_sources "attempt $i"
 	sleep 3
 done
 
