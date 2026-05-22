@@ -57,7 +57,7 @@ start_bt() {
 	# JustWorksRepairing=always lets earbuds re-initiate the bond
 	# from their side after a reboot without user interaction.
 	if ! grep -q 'JustWorksRepairing = always' /etc/bluetooth/main.conf 2>/dev/null; then
-		sed -i 's/#JustWorksRepairing = never/JustWorksRepairing = always/' /etc/bluetooth/main.conf 2>/dev/null
+		sed -i 's/.*JustWorksRepairing.*/JustWorksRepairing = always/' /etc/bluetooth/main.conf 2>/dev/null
 	fi
 
 	# Start bluetooth daemon if not running
@@ -95,7 +95,6 @@ start_bt() {
 			for dev_dir in /var/lib/bluetooth/*/; do
 				for paired_dir in "${dev_dir}"*/; do
 					[ -f "${paired_dir}info" ] || continue
-					grep -q "^Trusted=true" "${paired_dir}info" || continue
 					grep -q "0000110b" "${paired_dir}info" || continue
 					mac=$(basename "${paired_dir%/}")
 					bluetoothctl connect "$mac" >/dev/null 2>&1

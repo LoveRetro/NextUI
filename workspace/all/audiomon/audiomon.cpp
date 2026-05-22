@@ -35,6 +35,19 @@ bool use_syslog = false;
 bool running = true;
 static std::string connected_a2dp_mac;
 
+static void initBtStateFromAsoundrc() {
+    std::ifstream f(AUDIO_FILE);
+    if (!f) return;
+    std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    auto pos = content.find("defaults.bluealsa.device \"");
+    if (pos == std::string::npos) return;
+    pos += strlen("defaults.bluealsa.device \"");
+    auto end = content.find("\"", pos);
+    if (end == std::string::npos) return;
+    connected_a2dp_mac = content.substr(pos, end - pos);
+    log("Restored BT state from .asoundrc: " + connected_a2dp_mac);
+}
+
 void log(const std::string& msg) {
     if (use_syslog) syslog(LOG_INFO, "%s", msg.c_str());
     else std::cout << msg << std::endl;
@@ -291,6 +304,7 @@ int main(int argc, char* argv[]) {
     InitSettings();
     // This will be updated as soon as something connects
     SetAudioSink(AUDIO_SINK_DEFAULT);
+    initBtStateFromAsoundrc();
 
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
