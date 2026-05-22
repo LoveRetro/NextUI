@@ -35,6 +35,11 @@ bool use_syslog = false;
 bool running = true;
 static std::string connected_a2dp_mac;
 
+void log(const std::string& msg) {
+    if (use_syslog) syslog(LOG_INFO, "%s", msg.c_str());
+    else std::cout << msg << std::endl;
+}
+
 static void initBtStateFromAsoundrc() {
     std::ifstream f(AUDIO_FILE);
     if (!f) return;
@@ -46,11 +51,6 @@ static void initBtStateFromAsoundrc() {
     if (end == std::string::npos) return;
     connected_a2dp_mac = content.substr(pos, end - pos);
     log("Restored BT state from .asoundrc: " + connected_a2dp_mac);
-}
-
-void log(const std::string& msg) {
-    if (use_syslog) syslog(LOG_INFO, "%s", msg.c_str());
-    else std::cout << msg << std::endl;
 }
 
 void ensureDirExists(const std::string& path) {
