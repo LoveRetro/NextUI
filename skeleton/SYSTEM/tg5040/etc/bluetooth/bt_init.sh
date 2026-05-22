@@ -77,6 +77,23 @@ start_bt() {
 		
 		# Set adapter name
 		bluetoothctl system-alias "$DEVICE_NAME" 2>/dev/null
+
+		# Proactively reconnect trusted A2DP audio devices after BT restart.
+		# Some headphones (e.g. Sony) won't fall back to JustWorks re-pairing
+		# when authentication fails; they expect the host to initiate using the
+		# stored link key. Runs in background to avoid blocking startup.
+		{
+			sleep 5
+			for dev_dir in /var/lib/bluetooth/*/; do
+				for paired_dir in "${dev_dir}"*/; do
+					[ -f "${paired_dir}info" ] || continue
+					grep -q "^Trusted=true" "${paired_dir}info" || continue
+					grep -q "0000110b" "${paired_dir}info" || continue
+					mac=$(basename "${paired_dir%/}")
+					bluetoothctl connect "$mac" >/dev/null 2>&1
+				done
+			done
+		} &
     }
 
 }
