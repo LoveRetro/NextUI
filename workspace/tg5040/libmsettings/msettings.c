@@ -1163,7 +1163,8 @@ void SetRawVolume(int val) { // in: 0-100
             const char *name = mixer_ctl_get_name(ctl);
             if (!name) continue;
 
-            if (strstr(name, "PCM") && (strstr(name, "Volume") || strstr(name, "volume"))) {
+            if ((strstr(name, "PCM") || strstr(name, "Playback")) 
+			&& (strstr(name, "Volume") || strstr(name, "volume"))) {
                 if (mixer_ctl_get_type(ctl) == MIXER_CTL_TYPE_INT) {
                     int min = mixer_ctl_get_range_min(ctl);
                     int max = mixer_ctl_get_range_max(ctl);

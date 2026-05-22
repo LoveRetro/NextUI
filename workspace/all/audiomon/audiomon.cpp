@@ -203,6 +203,7 @@ void handleDeviceConnected(DBusConnection* conn, const std::string& path) {
     std::string mac = pathToMac(path);
     if (hasUUID(conn, path, UUID_A2DP)) {
         log("Audio device connected: " + mac);
+        usleep(500000); // Wait a bit for the device to be fully ready before writing config
         writeAudioFile(mac, DEVICE_BLUETOOTH);
         SetAudioSink(AUDIO_SINK_BLUETOOTH);
     } else {
@@ -215,6 +216,10 @@ void handleDeviceDisconnected(DBusConnection* conn, const std::string& path) {
     if (hasUUID(conn, path, UUID_A2DP)) {
         log("Audio device disconnected: " + mac);
         clearAudioFile();
+        // In case BT just disconnected, chances are that bluealsa is throwing weird PCM errors
+        // on recovering the connection. It seems the only way to avoid this is to straight up kill and restart bluealsa...‚
+        system("killall bluealsa; bluealsa -p a2dp-source &");
+        
         // TODO: we could maintain a stack here, if USBC was connected before and restore that instead
         SetAudioSink(AUDIO_SINK_DEFAULT);
     }
