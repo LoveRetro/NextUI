@@ -110,6 +110,22 @@ static int parse_file(const char *path) {
         size_t vlen = strlen(v);
         strip_trailing_ws(v, &vlen);
 
+        /* Decode \n / \t / \\ escapes in place so multi-line dialog
+         * strings can sit on a single .lang line. Done after trimming
+         * so trailing literal whitespace is already gone. */
+        size_t r = 0, w = 0;
+        while (r < vlen) {
+            if (v[r] == '\\' && r + 1 < vlen) {
+                char nxt = v[r + 1];
+                if (nxt == 'n')      { v[w++] = '\n'; r += 2; continue; }
+                if (nxt == 't')      { v[w++] = '\t'; r += 2; continue; }
+                if (nxt == '\\')     { v[w++] = '\\'; r += 2; continue; }
+            }
+            v[w++] = v[r++];
+        }
+        v[w] = '\0';
+        vlen = w;
+
         table_insert(p, klen, v, vlen);
     }
     fclose(f);

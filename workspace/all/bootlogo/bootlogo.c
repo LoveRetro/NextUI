@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
                 SDL_BlitSurface(image, NULL, screen, &image_rect);
             }
 
-            GFX_blitButtonGroup((char *[]){"L/R", T("btn.scroll"), NULL}, 0, screen, 0);
+            GFX_blitButtonGroup((char *[]){T("btn.left_right"), T("btn.scroll"), NULL}, 0, screen, 0);
             GFX_blitButtonGroup((char *[]){"A", T("btn.set"), "B", T("btn.back"), NULL}, 1, screen, 1);
 
             GFX_flip(screen);

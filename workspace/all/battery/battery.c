@@ -768,7 +768,7 @@ int main(int argc, char *argv[])
             if (show_setting)
                 GFX_blitHardwareHints(screen, show_setting);
             else
-                GFX_blitButtonGroup((char *[]){"L/R", T("btn.scroll"), "L1/R1", T("btn.zoom"), NULL}, 0, screen, 0);
+                GFX_blitButtonGroup((char *[]){T("btn.left_right"), T("btn.scroll"), "L1/R1", T("btn.zoom"), NULL}, 0, screen, 0);
 
             GFX_blitButtonGroup((char *[]){"B", T("btn.back"), NULL}, 1, screen, 1);
 

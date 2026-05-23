@@ -422,7 +422,7 @@ int main(int argc, char *argv[])
                 char play_time_total_formatted[255];
                 serializeTime(play_time_total_formatted, play_time_total);
                 char display_name[256];
-                sprintf(display_name, "Time spent having fun: %s", play_time_total_formatted);
+                snprintf(display_name, sizeof(display_name), T("gametime.title_fmt"), play_time_total_formatted);
 
                 char title[256];
                 int text_width = GFX_truncateText(font.large, display_name, title, max_width, SCALE1(BUTTON_PADDING * 2));
@@ -440,7 +440,7 @@ int main(int argc, char *argv[])
             if (show_setting)
                 GFX_blitHardwareHints(screen, show_setting);
             else
-                GFX_blitButtonGroup((char *[]){"U/D", T("btn.scroll"), NULL}, 0, screen, 0);
+                GFX_blitButtonGroup((char *[]){T("btn.up_down"), T("btn.scroll"), NULL}, 0, screen, 0);
 
             GFX_blitButtonGroup((char *[]){"B", T("btn.back"), NULL}, 1, screen, 1);
 
