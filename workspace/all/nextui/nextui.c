@@ -2341,6 +2341,7 @@ int main (int argc, char *argv[]) {
 					restore_end = 0;
 				}
 				Entry_open(selected);
+				if (top->entries->count > 0) readyResume(top->entries->items[top->selected]);
 				dirty = 1;
 			}
 			else if (PAD_justPressed(BTN_RIGHT)) {
