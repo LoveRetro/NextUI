@@ -644,23 +644,19 @@ launcher.tools=Outils
 launcher.recently_played=Récemment joué
 launcher.collections=Collections
 
-# Noms affichés des paks / dossiers (traduits via Entry_new)
-# Le nom du dossier sert de clé ; ne traduire que ce qui a un équivalent FR
-# naturel — les noms propres (Pak Store, ScrapeGoat...) restent inchangés.
+# Noms affichés des paks / dossiers (traduits via Entry_new).
+# Règle : traduire UNIQUEMENT les paks fournis par NextUI core
+# (workspace/all/*). Les paks tiers (Updater, Aesthetics, Pak Store,
+# LED'oh!, ScrapeGoat, Files, Gallery, Remove Loading, Artwork Scraper,
+# Another Cheat Downloader, ...) gardent leur nom propre — c'est leur
+# identité chez leurs auteurs respectifs.
 Settings=Réglages
-Updater=Mise à jour
-Pak Store=Pak Store
-USB Mass Storage=Stockage USB
-LedControl=Contrôle LED
-Aesthetics=Apparence
-Bootlogo=Logo de démarrage
 Battery=Batterie
 Clock=Horloge
-Input=Contrôles
 Game Tracker=Temps de jeu
-Files=Fichiers
-Remove Loading=Retirer l'écran de chargement
-Artwork Scraper=Scraper de jaquettes
-ScrapeGoat=ScrapeGoat
-Another Cheat Downloader=Téléchargeur de cheats
-Gallery=Galerie
+Bootlogo=Logo de démarrage
+Input=Contrôles
+LedControl=Contrôle LED
+# USB Mass Storage est tiers mais le nom est un terme technique
+# standard ; traduit pour cohérence avec le reste de l'UI système.
+USB Mass Storage=Stockage USB

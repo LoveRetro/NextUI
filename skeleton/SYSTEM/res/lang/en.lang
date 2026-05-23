@@ -643,23 +643,15 @@ launcher.tools=Tools
 launcher.recently_played=Recently Played
 launcher.collections=Collections
 
-# Pak / folder display names (translated via Entry_new fallthrough)
-# Keys are the literal pak folder names so the English values match what
-# users see today; only fr.lang (and future locales) need to deviate.
+# Pak / folder display names — translated via Entry_new fallthrough.
+# Only NextUI-bundled paks (workspace/all/*) are listed here so that
+# locales (fr.lang, ...) can override them; third-party paks keep their
+# author-chosen name and aren't routed through translation.
 Settings=Settings
-Updater=Updater
-Pak Store=Pak Store
-USB Mass Storage=USB Mass Storage
-LedControl=LedControl
-Aesthetics=Aesthetics
-Bootlogo=Bootlogo
 Battery=Battery
 Clock=Clock
-Input=Input
 Game Tracker=Game Tracker
-Files=Files
-Remove Loading=Remove Loading
-Artwork Scraper=Artwork Scraper
-ScrapeGoat=ScrapeGoat
-Another Cheat Downloader=Another Cheat Downloader
-Gallery=Gallery
+Bootlogo=Bootlogo
+Input=Input
+LedControl=LedControl
+USB Mass Storage=USB Mass Storage
