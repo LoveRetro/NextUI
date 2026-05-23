@@ -671,3 +671,21 @@ battery.usage_fmt=Battery usage: Last %s
 battery.range.4h=4 hours
 battery.range.8h=8 hours
 battery.range.16h=16 hours
+
+# minui-presenter (used by Gallery, Artwork Scraper, Another Cheat Downloader, ...)
+mp.btn.action=ACTION
+mp.btn.select=SELECT
+mp.btn.back=BACK
+mp.btn.other=OTHER
+# Retranslate common pak-supplied labels so third-party paks inherit
+# localisation without needing to change their launch.sh.
+EXIT=EXIT
+QUIT=QUIT
+OKAY=OKAY
+CANCEL=CANCEL
+RETURN=RETURN
+APPLY=APPLY
+CONFIRM=CONFIRM
+DELETE=DELETE
+YES=YES
+NO=NO

@@ -675,3 +675,21 @@ battery.usage_fmt=Utilisation : %s
 battery.range.4h=4 dernières heures
 battery.range.8h=8 dernières heures
 battery.range.16h=16 dernières heures
+
+# minui-presenter (Gallery, Artwork Scraper, Another Cheat Downloader, ...)
+mp.btn.action=ACTION
+mp.btn.select=CHOISIR
+mp.btn.back=RETOUR
+mp.btn.other=AUTRE
+# Re-traductions de labels que les paks passent en argument :
+# permet de traduire les paks tiers sans modifier leur launch.sh.
+EXIT=QUITTER
+QUIT=QUITTER
+OKAY=OK
+CANCEL=ANNULER
+RETURN=RETOUR
+APPLY=APPLIQUER
+CONFIRM=CONFIRMER
+DELETE=SUPPRIMER
+YES=OUI
+NO=NON
