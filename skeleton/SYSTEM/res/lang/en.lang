@@ -655,3 +655,14 @@ Bootlogo=Bootlogo
 Input=Input
 LedControl=LedControl
 USB Mass Storage=USB Mass Storage
+
+# Battery tool (workspace/all/battery)
+battery.calculating=calculating
+battery.since_charge_fmt=Since Charge: %s
+battery.current_fmt=Current: %s
+battery.remaining_fmt=Remaining: %s
+battery.longest_fmt=Longest: %s
+battery.usage_fmt=Battery usage: Last %s
+battery.range.4h=4 hours
+battery.range.8h=8 hours
+battery.range.16h=16 hours

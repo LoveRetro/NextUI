@@ -660,3 +660,14 @@ LedControl=Contrôle LED
 # USB Mass Storage est tiers mais le nom est un terme technique
 # standard ; traduit pour cohérence avec le reste de l'UI système.
 USB Mass Storage=Stockage USB
+
+# Outil Batterie (workspace/all/battery)
+battery.calculating=calcul en cours
+battery.since_charge_fmt=Depuis la charge : %s
+battery.current_fmt=Actuel : %s
+battery.remaining_fmt=Restant : %s
+battery.longest_fmt=Plus long : %s
+battery.usage_fmt=Utilisation batterie : %s
+battery.range.4h=4 dern. h
+battery.range.8h=8 dern. h
+battery.range.16h=16 dern. h
