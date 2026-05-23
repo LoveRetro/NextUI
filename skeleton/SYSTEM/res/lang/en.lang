@@ -681,7 +681,9 @@ mp.btn.other=OTHER
 # localisation without needing to change their launch.sh.
 EXIT=EXIT
 QUIT=QUIT
+OK=OK
 OKAY=OKAY
+BACK=BACK
 CANCEL=CANCEL
 RETURN=RETURN
 APPLY=APPLY
@@ -689,3 +691,7 @@ CONFIRM=CONFIRM
 DELETE=DELETE
 YES=YES
 NO=NO
+
+# Common --message strings emitted by paks (Gallery, ...)
+No screenshots found=No screenshots found
+Screenshots directory not found=Screenshots directory not found

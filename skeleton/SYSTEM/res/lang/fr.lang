@@ -685,7 +685,9 @@ mp.btn.other=AUTRE
 # permet de traduire les paks tiers sans modifier leur launch.sh.
 EXIT=QUITTER
 QUIT=QUITTER
+OK=OK
 OKAY=OK
+BACK=RETOUR
 CANCEL=ANNULER
 RETURN=RETOUR
 APPLY=APPLIQUER
@@ -693,3 +695,7 @@ CONFIRM=CONFIRMER
 DELETE=SUPPRIMER
 YES=OUI
 NO=NON
+
+# Messages --message émis par les paks (Gallery, ...)
+No screenshots found=Aucune capture trouvée
+Screenshots directory not found=Dossier captures introuvable
