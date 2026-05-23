@@ -474,6 +474,8 @@ btn.ok=OK
 # Clock app
 clock.am=AM
 clock.pm=PM
+# Date field order. Values: YMD (ISO/default), DMY (FR/UK/...), MDY (US).
+clock.date_order=YMD
 
 # Game time tracker
 gametime.total=TOTAL

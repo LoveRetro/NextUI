@@ -1,6 +1,7 @@
 // loosely based on https://github.com/gameblabla/clock_sdl_app
 
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <msettings.h>
@@ -140,6 +141,16 @@ int main(int argc , char* argv[]) {
 	
 	int option_count = 7;
 
+	// Date field order is localised via the clock.date_order key.
+	// Values: "YMD" (default / ISO), "DMY" (FR/UK/...), "MDY" (US).
+	int date_order[3] = { CURSOR_YEAR, CURSOR_MONTH, CURSOR_DAY };
+	const char *date_order_str = T("clock.date_order");
+	if (strcmp(date_order_str, "DMY") == 0) {
+		date_order[0] = CURSOR_DAY; date_order[1] = CURSOR_MONTH; date_order[2] = CURSOR_YEAR;
+	} else if (strcmp(date_order_str, "MDY") == 0) {
+		date_order[0] = CURSOR_MONTH; date_order[1] = CURSOR_DAY; date_order[2] = CURSOR_YEAR;
+	}
+
 	int dirty = 1;
 	int show_setting = 0;
 	int was_online = PWR_isOnline();
@@ -266,12 +277,15 @@ int main(int argc , char* argv[]) {
 			// datetime
 			int x = ox;
 			int y = SCALE1((((FIXED_HEIGHT / FIXED_SCALE)-PILL_SIZE-DIGIT_HEIGHT)/2));
-			
-			x = blitNumber(year_selected, x,y);
-			x = blit(CHAR_SLASH, x,y);
-			x = blitNumber(month_selected, x,y);
-			x = blit(CHAR_SLASH, x,y);
-			x = blitNumber(day_selected, x,y);
+
+			for (int i = 0; i < 3; ++i) {
+				int field = date_order[i];
+				int value = (field == CURSOR_YEAR) ? (int)year_selected
+				          : (field == CURSOR_MONTH) ? month_selected
+				          : day_selected;
+				x = blitNumber(value, x, y);
+				if (i < 2) x = blit(CHAR_SLASH, x, y);
+			}
 			x += SCALE1(10); // space
 			
 			am_selected = hour_selected < 12;
@@ -304,9 +318,15 @@ int main(int argc , char* argv[]) {
 			// cursor
 			x = ox;
 			y += SCALE1(19);
-			if (select_cursor!=CURSOR_YEAR) {
-				x += SCALE1(50); // YYYY/
-				x += (select_cursor - 1) * SCALE1(30);
+			if (select_cursor <= CURSOR_DAY) {
+				int dx = 0;
+				for (int i = 0; i < 3; ++i) {
+					if (date_order[i] == select_cursor) { x += dx; break; }
+					dx += (date_order[i] == CURSOR_YEAR ? SCALE1(40) : SCALE1(20)) + SCALE1(10);
+				}
+			} else {
+				// after the date block (always 100 wide) + space
+				x += SCALE1(100) + SCALE1(10) + (select_cursor - CURSOR_HOUR) * SCALE1(30);
 			}
 			blitBar(x,y, (select_cursor==CURSOR_YEAR ? SCALE1(40) : (select_cursor==CURSOR_AMPM ? ampm_w : SCALE1(20))));
 		

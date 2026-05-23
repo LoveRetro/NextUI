@@ -475,6 +475,7 @@ btn.ok=OK
 # Horloge
 clock.am=AM
 clock.pm=PM
+clock.date_order=DMY
 
 # Temps de jeu
 gametime.total=TOTAL
