@@ -142,7 +142,11 @@ static Entry* Entry_new(char* path, int type) {
 	getDisplayName(path, display_name);
 	Entry* self = malloc(sizeof(Entry));
 	self->path = strdup(path);
-	self->name = strdup(display_name);
+	// Pass the derived name through T() so well-known pak / folder names
+	// (Settings, Updater, Pak Store, ...) can be localised via the .lang
+	// files. T() returns the input verbatim when no entry matches, so
+	// ROM / arbitrary folder names are unaffected.
+	self->name = strdup(T(display_name));
 	self->unique = NULL;
 	self->type = type;
 	self->alpha = 0;

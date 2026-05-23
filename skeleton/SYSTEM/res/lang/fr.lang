@@ -643,3 +643,24 @@ frontend.lbl.rewind_compression.fastest=12 (le plus rapide)
 launcher.tools=Outils
 launcher.recently_played=Récemment joué
 launcher.collections=Collections
+
+# Noms affichés des paks / dossiers (traduits via Entry_new)
+# Le nom du dossier sert de clé ; ne traduire que ce qui a un équivalent FR
+# naturel — les noms propres (Pak Store, ScrapeGoat...) restent inchangés.
+Settings=Réglages
+Updater=Mise à jour
+Pak Store=Pak Store
+USB Mass Storage=Stockage USB
+LedControl=Contrôle LED
+Aesthetics=Apparence
+Bootlogo=Logo de démarrage
+Battery=Batterie
+Clock=Horloge
+Input=Contrôles
+Game Tracker=Temps de jeu
+Files=Fichiers
+Remove Loading=Retirer l'écran de chargement
+Artwork Scraper=Scraper de jaquettes
+ScrapeGoat=ScrapeGoat
+Another Cheat Downloader=Téléchargeur de cheats
+Gallery=Galerie

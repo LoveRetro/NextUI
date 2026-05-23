@@ -8,8 +8,8 @@
 #include "utils.h"
 #include "i18n.h"
 
-#define I18N_BUCKETS    1024
-#define I18N_ARENA_SIZE (32 * 1024)
+#define I18N_BUCKETS    4096
+#define I18N_ARENA_SIZE (256 * 1024)
 #define I18N_LINE_MAX   1024
 
 typedef struct {
