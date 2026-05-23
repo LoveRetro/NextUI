@@ -660,6 +660,10 @@ LedControl=Contrôle LED
 # USB Mass Storage est tiers mais le nom est un terme technique
 # standard ; traduit pour cohérence avec le reste de l'UI système.
 USB Mass Storage=Stockage USB
+# Files / Gallery sont tiers mais leur nom est un descripteur générique
+# (pas une marque), équivalent direct en français.
+Files=Fichiers
+Gallery=Galerie
 
 # Outil Batterie (workspace/all/battery)
 battery.calculating=calcul en cours

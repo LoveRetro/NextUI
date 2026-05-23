@@ -644,9 +644,12 @@ launcher.recently_played=Recently Played
 launcher.collections=Collections
 
 # Pak / folder display names — translated via Entry_new fallthrough.
-# Only NextUI-bundled paks (workspace/all/*) are listed here so that
-# locales (fr.lang, ...) can override them; third-party paks keep their
-# author-chosen name and aren't routed through translation.
+# Rule of thumb: translate generic descriptive names (Files, Gallery,
+# Settings, ...) — they map cleanly across languages and read as
+# function labels, not brand names. Keep author-chosen brand names
+# untouched (Aesthetics, ScrapeGoat, LED'oh!, Pak Store, Updater, ...)
+# so the rest of the ecosystem (Discord, README, screenshots) keeps
+# referring to them consistently.
 Settings=Settings
 Battery=Battery
 Clock=Clock
@@ -655,6 +658,8 @@ Bootlogo=Bootlogo
 Input=Input
 LedControl=LedControl
 USB Mass Storage=USB Mass Storage
+Files=Files
+Gallery=Gallery
 
 # Battery tool (workspace/all/battery)
 battery.calculating=calculating
