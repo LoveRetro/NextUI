@@ -932,6 +932,15 @@ sg.tag.matching=matching
 sg.tag.art=art
 sg.tag.cht=cht
 sg.tag.pdf=pdf
+sg.cheat.fallback_name_fmt=Cheat %d
+sg.cheat.list_title_fmt=Cheats (%d)
+sg.tag.disabled=[disabled]
+sg.error.cache_inspect_failed_fmt=Failed to inspect cache entry:\n%s
+sg.error.cache_open_failed_fmt=Failed to open cache directory:\n%s
+sg.error.cache_rmdir_failed_fmt=Failed to remove cache directory:\n%s
+sg.error.cache_unlink_failed_fmt=Failed to remove cache file:\n%s
+sg.error.cheat_cache_open_failed_fmt=Failed to open cheat cache directory:\n%s
+sg.error.cheat_cache_rmdir_failed_fmt=Failed to remove cheat cache directory:\n%s
 
 # Aesthetics (https://github.com/redria7/nextui-aesthetics)
 ae.menu.download_themes=Download Themes
