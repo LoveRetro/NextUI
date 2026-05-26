@@ -166,9 +166,9 @@ static struct PWR_Context
 	int can_sleep;
 	int can_poweroff;
 	int can_autosleep;
-	int requested_sleep;
-	int requested_wake;
-	int resume_tick;
+	int requested_sleep; // unused?
+	int requested_wake; // unused?
+	int resume_tick; // unused?
 
 	pthread_t battery_pt;
 	SDL_atomic_t is_charging;
@@ -2809,6 +2809,25 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	return total_consumed_frames;
 }
 
+// Grab the first external audio device (i.e. not "audiocodec") that we can find, or return NULL if we can't find one.
+// We could also drag this in via audiomon, but this is simpler and doesn't require changes to the core
+const char* GetAudioDeviceName(void)
+{
+#if defined(USE_SDL2)
+	int num_devices = SDL_GetNumAudioDevices(0);
+	for (int i = 0; i < num_devices; i++)
+	{
+		const char* device_name = SDL_GetAudioDeviceName(i, 0);
+		if (device_name && !strstr(device_name, "audiocodec"))
+		{
+			LOG_info("Found audio device: %s\n", device_name);
+			return device_name;
+		}
+	}
+#endif
+	return NULL;
+}
+
 void SND_init(double sample_rate, double frame_rate)
 { // plat_sound_init
 	LOG_info("SND_init\n");
@@ -2848,7 +2867,7 @@ void SND_init(double sample_rate, double frame_rate)
 	spec_in.callback = SND_audioCallback;
 
 #if defined(USE_SDL2)
-	snd.device_id = SDL_OpenAudioDevice(NULL, 0, &spec_in, &spec_out, SDL_AUDIO_ALLOW_ANY_CHANGE);
+	snd.device_id = SDL_OpenAudioDevice(GetAudioDeviceName(), 0, &spec_in, &spec_out, SDL_AUDIO_ALLOW_ANY_CHANGE);
 	if (snd.device_id <= 0)
 	{
 		LOG_info("SDL_OpenAudioDevice error: %s\n", SDL_GetError());
@@ -2914,9 +2933,20 @@ void SND_quit(void)
 	}
 }
 
+// https://github.com/alsa-project/alsa-lib/blob/3592e5c7812bfddad932f176e257e8797d71a51b/MEMORY-LEAK#L10
+#ifndef __APPLE__
+extern int snd_config_update_free_global(void) __attribute__((weak));
+#endif
+
 void SND_resetAudio(double sample_rate, double frame_rate)
 {
 	SND_quit();
+
+#ifndef __APPLE__
+	if (snd_config_update_free_global)
+		snd_config_update_free_global();
+#endif
+
 	SND_init(sample_rate, frame_rate);
 }
 
@@ -3963,6 +3993,9 @@ static void PWR_enterSleep(void)
 }
 static void PWR_exitSleep(void)
 {
+	if (!GetHDMI())
+		PLAT_enableBacklight(1);
+
 	LEDS_popProfileOverride(LIGHT_PROFILE_SLEEP);
 
 	PWR_updateFrequency(-1, true);
@@ -3981,7 +4014,6 @@ static void PWR_exitSleep(void)
 		{
 			VIB_singlePulse(VIB_sleepStrength, VIB_sleepDuration_ms);
 		}
-		PLAT_enableBacklight(1);
 		SND_overrideMute(1);
 		SetVolume(GetVolume());
 	}
@@ -4042,7 +4074,6 @@ void PWR_sleep(void)
 
 	system("gametimectl.elf stop_all");
 
-	GFX_clear(gfx.screen);
 	PAD_reset();
 	PWR_enterSleep();
 	PWR_waitForWake();

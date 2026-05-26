@@ -33,6 +33,7 @@ enum DeviceType {
 
 bool use_syslog = false;
 bool running = true;
+static std::string connected_a2dp_mac;
 
 void log(const std::string& msg) {
     if (use_syslog) syslog(LOG_INFO, "%s", msg.c_str());
@@ -100,6 +101,22 @@ void clearAudioFile() {
     } else {
         log("Audio config file not present or failed to remove");
     }
+}
+
+void recoverPreviousConfig() {
+    std::ifstream f(AUDIO_FILE);
+    if (!f) return;
+
+    std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    auto pos = content.find("defaults.bluealsa.device \"");
+    if (pos == std::string::npos) return;
+
+    pos += strlen("defaults.bluealsa.device \"");
+    auto end = content.find("\"", pos);
+    if (end == std::string::npos) return;
+
+    connected_a2dp_mac = content.substr(pos, end - pos);
+    log("Restored BT state from .asoundrc: " + connected_a2dp_mac);
 }
 
 std::string pathToMac(const std::string& path) {
@@ -203,6 +220,8 @@ void handleDeviceConnected(DBusConnection* conn, const std::string& path) {
     std::string mac = pathToMac(path);
     if (hasUUID(conn, path, UUID_A2DP)) {
         log("Audio device connected: " + mac);
+        connected_a2dp_mac = mac;
+        usleep(500000); // Wait a bit for the device to be fully ready before writing config
         writeAudioFile(mac, DEVICE_BLUETOOTH);
         SetAudioSink(AUDIO_SINK_BLUETOOTH);
     } else {
@@ -212,9 +231,22 @@ void handleDeviceConnected(DBusConnection* conn, const std::string& path) {
 
 void handleDeviceDisconnected(DBusConnection* conn, const std::string& path) {
     std::string mac = pathToMac(path);
-    if (hasUUID(conn, path, UUID_A2DP)) {
+    // Use cached MAC rather than querying BlueZ: after an abrupt power-off the
+    // device's service cache may already be gone, causing hasUUID to return false
+    // and silently skip the audio switch-back.
+    if (hasUUID(conn, path, UUID_A2DP) || (!connected_a2dp_mac.empty() && mac == connected_a2dp_mac)) {
         log("Audio device disconnected: " + mac);
+        connected_a2dp_mac.clear();
         clearAudioFile();
+        // In case BT just disconnected, chances are that bluealsa is throwing weird PCM errors
+        // on recovering the connection. It seems the only way to avoid this is to straight up kill and restart bluealsa...‚
+        system("killall bluealsa");
+        for (int i = 0; i < 20; i++) {
+            if (system("pidof bluealsa > /dev/null 2>&1") != 0) break;
+            usleep(100000); // 100ms
+        }
+        system("bluealsa -p a2dp-source &");
+        
         // TODO: we could maintain a stack here, if USBC was connected before and restore that instead
         SetAudioSink(AUDIO_SINK_DEFAULT);
     }
@@ -285,6 +317,10 @@ int main(int argc, char* argv[]) {
     InitSettings();
     // This will be updated as soon as something connects
     SetAudioSink(AUDIO_SINK_DEFAULT);
+
+    // Recover any existing audio config from previous run (e.g. after a restart)
+    // This ensures we don't lose audio output if the daemon crashes or is restarted while a device is connected
+    recoverPreviousConfig();
 
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);

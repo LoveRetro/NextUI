@@ -44,6 +44,14 @@ start_bt() {
 		start_hci_attach
 	fi
 	
+	# Allow headsets to auto-reconnect without user re-pairing.
+	# XRadio BT firmware sets store_hint=0, so link keys are never
+	# persisted; JustWorksRepairing=always lets earbuds re-initiate
+	# the bond from their side after a reboot.
+	if ! grep -q 'JustWorksRepairing = always' /etc/bluetooth/main.conf 2>/dev/null; then
+		sed -i 's/#JustWorksRepairing = never/JustWorksRepairing = always/' /etc/bluetooth/main.conf 2>/dev/null
+	fi
+
 	# Start bluetooth daemon if not running
     d=`ps | grep bluetoothd | grep -v grep`
 	[ -z "$d" ] && {
@@ -69,6 +77,22 @@ start_bt() {
 		
 		# Set adapter name
 		bluetoothctl system-alias "$DEVICE_NAME" 2>/dev/null
+
+		# Proactively reconnect trusted A2DP audio devices after BT restart.
+		# Some headphones (e.g. Sony) won't fall back to JustWorks re-pairing
+		# when authentication fails; they expect the host to initiate using the
+		# stored link key. Runs in background to avoid blocking startup.
+		{
+			sleep 5
+			for dev_dir in /var/lib/bluetooth/*/; do
+				for paired_dir in "${dev_dir}"*/; do
+					[ -f "${paired_dir}info" ] || continue
+					grep -q "0000110b" "${paired_dir}info" || continue
+					mac=$(basename "${paired_dir%/}")
+					bluetoothctl connect "$mac" >/dev/null 2>&1
+				done
+			done
+		} &
     }
 
 }
