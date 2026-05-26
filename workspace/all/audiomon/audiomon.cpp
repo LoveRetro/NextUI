@@ -240,7 +240,12 @@ void handleDeviceDisconnected(DBusConnection* conn, const std::string& path) {
         clearAudioFile();
         // In case BT just disconnected, chances are that bluealsa is throwing weird PCM errors
         // on recovering the connection. It seems the only way to avoid this is to straight up kill and restart bluealsa...‚
-        system("killall bluealsa; bluealsa -p a2dp-source &");
+        system("killall bluealsa");
+        for (int i = 0; i < 20; i++) {
+            if (system("pidof bluealsa > /dev/null 2>&1") != 0) break;
+            usleep(100000); // 100ms
+        }
+        system("bluealsa -p a2dp-source &");
         
         // TODO: we could maintain a stack here, if USBC was connected before and restore that instead
         SetAudioSink(AUDIO_SINK_DEFAULT);
