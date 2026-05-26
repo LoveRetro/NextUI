@@ -163,6 +163,9 @@ typedef struct
 	int raProgressNotificationDuration; // Duration for progress notifications (0-5 seconds, 0 = disabled)
 	int raAchievementSortOrder; // Sort order for achievements list (RA_SORT_* enum)
 
+	// Language
+	char language[8]; // ISO-like code, e.g. "en", "fr"
+
 } NextUISettings;
 
 // Transition mode constants
@@ -399,6 +402,10 @@ int CFG_getRAProgressNotificationDuration(void);
 void CFG_setRAProgressNotificationDuration(int seconds);
 int CFG_getRAAchievementSortOrder(void);
 void CFG_setRAAchievementSortOrder(int sortOrder);
+
+// Language (i18n)
+const char* CFG_getLanguage(void);
+void        CFG_setLanguage(const char* code);
 
 void CFG_sync(void);
 void CFG_quit(void);

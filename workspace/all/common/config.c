@@ -93,6 +93,8 @@ void CFG_defaults(NextUISettings *cfg)
         .raProgressNotificationDuration = CFG_DEFAULT_RA_PROGRESS_NOTIFICATION_DURATION,
         .raAchievementSortOrder = CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER,
 
+        .language = "en",
+
 };
 
     *cfg = defaults;
@@ -405,6 +407,14 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             {
                 CFG_setRAAchievementSortOrder(temp_value);
                 continue;
+            }
+            {
+                char lang_buf[16];
+                if (sscanf(line, "language=%15s", lang_buf) == 1)
+                {
+                    CFG_setLanguage(lang_buf);
+                    continue;
+                }
             }
         }
         fclose(file);
@@ -1067,6 +1077,19 @@ void CFG_setRAAchievementSortOrder(int sortOrder)
     CFG_sync();
 }
 
+const char* CFG_getLanguage(void)
+{
+    return settings.language[0] ? settings.language : "en";
+}
+
+void CFG_setLanguage(const char* code)
+{
+    if (!code || !*code) code = "en";
+    strncpy(settings.language, code, sizeof(settings.language) - 1);
+    settings.language[sizeof(settings.language) - 1] = '\0';
+    CFG_sync();
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -1310,6 +1333,7 @@ void CFG_sync(void)
     fprintf(file, "raNotificationDuration=%i\n", settings.raNotificationDuration);
     fprintf(file, "raProgressNotificationDuration=%i\n", settings.raProgressNotificationDuration);
     fprintf(file, "raAchievementSortOrder=%i\n", settings.raAchievementSortOrder);
+    fprintf(file, "language=%s\n", CFG_getLanguage());
 
     fclose(file);
 }

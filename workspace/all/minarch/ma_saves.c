@@ -7,6 +7,7 @@
 #include "ma_internal.h"
 #include "ra_integration.h"
 #include "notification.h"
+#include "i18n.h"
 
 #ifdef HAS_SRM
 #include "streams/rzip_stream.h"
@@ -201,7 +202,7 @@ int State_read(void) { // from picoarch
 	// Block load states in RetroAchievements hardcore mode
 	if (RA_isHardcoreModeActive()) {
 		LOG_info("State load blocked - hardcore mode active\n");
-		Notification_push(NOTIFICATION_ACHIEVEMENT, "Load states disabled in Hardcore mode", NULL);
+		Notification_push(NOTIFICATION_ACHIEVEMENT, T("save.load_disabled_hc"), NULL);
 		return 0;
 	}
 
@@ -305,7 +306,7 @@ int State_write(void) { // from picoarch
 	// Block save states in RetroAchievements hardcore mode
 	if (RA_isHardcoreModeActive()) {
 		LOG_info("State save blocked - hardcore mode active\n");
-		Notification_push(NOTIFICATION_ACHIEVEMENT, "Save states disabled in Hardcore mode", NULL);
+		Notification_push(NOTIFICATION_ACHIEVEMENT, T("save.save_disabled_hc"), NULL);
 		return 0;
 	}
 

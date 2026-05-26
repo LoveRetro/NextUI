@@ -18,6 +18,7 @@
 
 #include "utils.h"
 #include "config.h"
+#include "i18n.h"
 
 #include <pthread.h>
 
@@ -350,6 +351,10 @@ SDL_Surface *GFX_init(int mode)
 	// tried adding to PWR_init() but that was no good (not sure why)
 	
 	CFG_init(GFX_loadSystemFont, GFX_updateColors);
+
+	// i18n loads the language saved in settings; falls back to English when
+	// the file is missing. Strings are dispatched at runtime via T("key").
+	I18N_init(CFG_getLanguage());
 
 	// by default, we will clear with whatever background color the user prefers
 	// if MODE_MENU /e.g. minarch, clear with default black)
@@ -2157,11 +2162,11 @@ void GFX_blitHardwareHints(SDL_Surface *dst, int show_setting)
 {
 
 	if (show_setting == 1)
-		GFX_blitButtonGroup((char *[]){BRIGHTNESS_BUTTON_LABEL, "BRIGHTNESS", NULL}, 0, dst, 0);
+		GFX_blitButtonGroup((char *[]){BRIGHTNESS_BUTTON_LABEL, T("hw.brightness"), NULL}, 0, dst, 0);
 	else if (show_setting == 3)
-		GFX_blitButtonGroup((char *[]){BRIGHTNESS_BUTTON_LABEL, "COLOR TEMP", NULL}, 0, dst, 0);
+		GFX_blitButtonGroup((char *[]){BRIGHTNESS_BUTTON_LABEL, T("hw.color_temp"), NULL}, 0, dst, 0);
 	else
-		GFX_blitButtonGroup((char *[]){"MNU", "BRGHT", "SEL", "CLTMP", NULL}, 0, dst, 0);
+		GFX_blitButtonGroup((char *[]){T("hw.mnu"), T("hw.brght"), T("hw.sel"), T("hw.cltmp"), NULL}, 0, dst, 0);
 }
 
 int GFX_blitButtonGroup(char **pairs, int primary, SDL_Surface *dst, int align_right)

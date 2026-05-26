@@ -1,0 +1,1071 @@
+# NextUI — strings françaises
+# Format: clé=valeur
+# Encodage UTF-8. Les lignes vides et celles commençant par # sont ignorées.
+
+# ---------------------------------------------------------------------
+# Hints boutons (labels courts à côté des glyphes A/B/X/Y/MENU/POWER)
+# Conserver des labels TRÈS courts (≤7 lettres si possible) — la place est
+# contrainte sur les hints en bas d'écran.
+# ---------------------------------------------------------------------
+btn.back=RETOUR
+btn.okay=OK
+btn.open=OUVRIR
+btn.resume=REPRENDRE
+btn.remove=RETIRER
+btn.sleep=VEILLE
+btn.menu=MENU
+btn.power=POWER
+btn.info=INFO
+btn.mute=COUPER
+btn.unmute=RÉACTIVER
+btn.show_all=TOUT
+btn.show_locked=VERROUILLÉS
+
+# ---------------------------------------------------------------------
+# Launcher principal (nextui)
+# ---------------------------------------------------------------------
+launcher.recents=Récents
+launcher.games=Jeux
+launcher.wifi=WiFi
+launcher.bluetooth=Bluetooth
+launcher.sleep=Veille
+launcher.reboot=Redémarrer
+launcher.poweroff=Éteindre
+launcher.no_recents=Aucun récent
+launcher.empty_folder=Dossier vide
+launcher.no_preview=Aucun aperçu
+
+# ---------------------------------------------------------------------
+# Menu in-game (minarch / ma_menu)
+# ---------------------------------------------------------------------
+menu.continue=Reprendre
+menu.save=Sauvegarder
+menu.load=Charger
+menu.options=Options
+menu.quit=Quitter
+menu.reset=Réinitialiser
+menu.empty_slot=Emplacement vide
+menu.no_preview=Aucun aperçu
+menu.screenshot_saved=Capture enregistrée
+
+# Sous-menu Options
+menu.opt.frontend=Frontend
+menu.opt.emulator=Émulateur
+menu.opt.shaders=Shaders
+menu.opt.cheats=Cheats
+menu.opt.controls=Contrôles
+menu.opt.shortcuts=Raccourcis
+menu.opt.achievements=Succès
+menu.opt.save_changes=Enregistrer
+
+# Sous-menu Save changes
+menu.opt.save_for_console=Enregistrer pour la console
+menu.opt.save_for_game=Enregistrer pour le jeu
+menu.opt.restore_defaults=Valeurs par défaut
+
+# Statut config save-state
+state.cfg.defaults=Valeurs par défaut.
+state.cfg.console=Config console utilisée.
+state.cfg.game=Config jeu utilisée.
+
+state.msg.saved_console=Enregistré pour la console.
+state.msg.saved_game=Enregistré pour le jeu.
+state.msg.restored_console=Réglages console restaurés.
+state.msg.restored_defaults=Réglages par défaut restaurés.
+
+# Controls / hint
+controls.set_hint=A pour définir, X pour effacer.
+controls.controller=Manette
+controls.controller_desc=Sélectionne le type de manette.
+
+# Cheats / shaders / extras
+error.no_options_category=Aucune option dans cette catégorie.
+error.no_options_core=Ce core ne propose aucune option.
+error.no_extras=Aucun réglage supplémentaire.
+error.no_shaders=Aucun shader disponible\nDossier /Shaders ou fichiers introuvables
+error.no_cheat_file=Aucun fichier de cheat chargé.\n\n
+error.cheats_disabled_hardcore=Cheats désactivés en mode Hardcore
+
+# Succès (RetroAchievements)
+ach.no_for_game=Aucun succès pour ce jeu.\n\nCe ROM peut nécessiter un patch\nou ne pas être une version supportée.\n\nVoir retroachievements.org pour la\nliste des versions supportées.
+ach.no_available=Aucun succès disponible pour ce jeu.\n\nCe jeu n'a peut-être pas encore de succès.\n\nDétails sur retroachievements.org.
+ach.failed_load=Échec du chargement des succès
+ach.not_available=Liste des succès indisponible
+ach.none_found=Aucun succès trouvé
+ach.offline_pending=Débloqué hors-ligne — sync en attente
+ach.muted_silenced=Coupé — notifications silencieuses
+
+# ---------------------------------------------------------------------
+# Réglages (settings.cpp)
+# ---------------------------------------------------------------------
+# Sections
+settings.section.appearance=Apparence
+settings.section.display=Affichage
+settings.section.audio=Audio
+settings.section.system=Système
+settings.section.power=Alimentation
+settings.section.network=Réseau
+settings.section.language=Langue
+settings.section.advanced=Avancé
+
+# Boutons communs
+settings.reset_defaults=Réinitialiser
+settings.reset_defaults_desc=Restaure toutes les options de ce menu à leurs valeurs par défaut.
+
+# Apparence
+settings.appearance.font=Police
+settings.appearance.font_desc=La police utilisée pour tout le texte de l'interface.
+settings.appearance.show_battery_pct=Pourcentage de batterie
+settings.appearance.show_battery_pct_desc=Affiche la batterie en pourcentage dans la pilule d'état
+settings.appearance.show_anim=Animations de menu
+settings.appearance.show_anim_desc=Active ou désactive les animations de menu
+settings.appearance.transitions=Transitions de menu
+settings.appearance.transitions_desc=Style d'animation lors de la navigation entre les menus
+settings.appearance.art_radius=Rayon des coins (jaquettes)
+settings.appearance.art_radius_desc=Définit l'arrondi des coins des jaquettes de jeu
+settings.appearance.art_width=Largeur des jaquettes
+settings.appearance.art_width_desc=Pourcentage de la largeur d'écran utilisé pour la jaquette.\nDes éléments d'UI peuvent réduire cette valeur pour éviter le rognage.
+settings.appearance.show_folder_names=Noms de dossiers à la racine
+settings.appearance.show_folder_names_desc=Affiche les noms de dossiers dans le répertoire racine
+settings.appearance.show_recents=Afficher "Récents"
+settings.appearance.show_recents_desc=Affiche l'entrée "Récemment joué" dans la liste des jeux.
+settings.appearance.show_tools=Afficher "Outils"
+settings.appearance.show_tools_desc=Affiche l'entrée "Outils" dans la liste des jeux.
+settings.appearance.show_art=Afficher les jaquettes
+settings.appearance.show_art_desc=Affiche les jaquettes dans le menu principal
+settings.appearance.folder_bg=Fond du dossier pour les ROMs
+settings.appearance.folder_bg_desc=Si activé, utilise l'image de fond de l'émulateur. Sinon le fond par défaut.
+settings.appearance.qs_ui=Interface Quickswitcher
+settings.appearance.qs_ui_desc=Affiche/masque les éléments d'UI du Quickswitcher.\nMasqué, seules les images de fond seront dessinées.
+
+# Affichage
+settings.display.brightness=Luminosité
+settings.display.brightness_desc=Luminosité de l'écran (0 à 10)
+settings.display.colortemp=Température de couleur
+settings.display.colortemp_desc=Température de couleur (0 à 40)
+settings.display.contrast=Contraste
+settings.display.contrast_desc=Amélioration du contraste (-4 à 5)
+settings.display.saturation=Saturation
+settings.display.saturation_desc=Amélioration de la saturation (-5 à 5)
+settings.display.exposure=Exposition
+settings.display.exposure_desc=Amélioration de l'exposition (-4 à 5)
+
+# Audio
+settings.audio.volume=Volume
+settings.audio.volume_desc=Volume des haut-parleurs
+settings.audio.volume_muted=Coupé
+
+# Système
+settings.system.screen_timeout=Extinction écran
+settings.system.screen_timeout_desc=Durée d'inactivité avant extinction de l'écran (0-600s)
+settings.system.suspend_timeout=Mise en veille
+settings.system.suspend_timeout_desc=Délai avant veille profonde après l'extinction de l'écran (5-600s)
+settings.system.haptic=Retour haptique
+settings.system.haptic_desc=Active ou désactive le retour haptique pour certaines actions
+settings.system.default_view=Vue par défaut
+settings.system.default_view_desc=La vue initiale affichée au démarrage
+settings.system.view.content_list=Liste des contenus
+settings.system.view.game_switcher=Game Switcher
+settings.system.view.quick_menu=Menu rapide
+settings.system.clock_24h=Format 24h
+settings.system.clock_24h_desc=Affiche l'horloge au format 24 heures
+settings.system.show_clock=Afficher l'horloge
+settings.system.show_clock_desc=Affiche l'horloge dans la pilule d'état
+settings.system.auto_time=Heure automatique
+settings.system.auto_time_desc=Ajuste automatiquement l'heure système\nvia NTP (requiert un accès Internet)
+settings.system.timezone=Fuseau horaire
+settings.system.timezone_desc=Votre fuseau horaire
+settings.system.save_format=Format de sauvegarde
+settings.system.save_format_desc=Format des sauvegardes.\nMinUI: Jeu.gba.sav, Retroarch: Jeu.srm, Générique: Jeu.sav
+settings.system.save_state_format=Format des save states
+settings.system.save_state_format_desc=Format des save states. MinUI: Jeu.st0,\nRetroarch-ish: Jeu.state.0, Retroarch: Jeu.state0
+settings.system.extracted_name=Nom de fichier extrait
+settings.system.extracted_name_desc=Utilise le nom du fichier extrait plutôt que celui de l'archive.\nNe s'applique qu'aux cores qui ne gèrent pas les archives nativement
+settings.system.safe_poweroff=Extinction sûre
+settings.system.safe_poweroff_desc=Contourne la procédure d'extinction d'origine pour éviter le "limbo bug".\nDéconnecte la batterie via le PMIC directement.
+settings.system.fan_speed=Vitesse ventilateur
+settings.system.fan_speed_desc=Sélectionne la vitesse du ventilateur (Silencieux/Normal/Performance ou 0-100%)
+settings.system.fan.performance=Performance
+settings.system.fan.normal=Normal
+settings.system.fan.quiet=Silencieux
+
+# Couleurs
+settings.color.main=Couleur principale
+settings.color.main_desc=Couleur principale des éléments d'UI.
+settings.color.primary=Accent primaire
+settings.color.primary_desc=Couleur de mise en valeur des éléments importants.
+settings.color.secondary=Accent secondaire
+settings.color.secondary_desc=Couleur de mise en valeur secondaire.
+settings.color.hint=Indices boutons
+settings.color.hint_desc=Couleur des hints boutons et informations
+settings.color.list_text=Texte de liste
+settings.color.list_text_desc=Couleur du texte dans les listes
+settings.color.list_text_selected=Texte sélectionné
+settings.color.list_text_selected_desc=Couleur du texte sélectionné dans les listes
+settings.color.background=Couleur de fond
+settings.color.background_desc=Couleur de fond utilisée sans image de fond.
+
+# Valeurs génériques
+val.on=Activé
+val.off=Désactivé
+val.never=Jamais
+val.unchanged=Inchangé
+val.snappy=Vif
+val.comfy=Doux
+val.fullscreen=Plein écran
+val.fit=Adapter
+val.fill=Remplir
+
+# ---------------------------------------------------------------------
+# Menu Langue (nouveau)
+# ---------------------------------------------------------------------
+settings.language.title=Langue
+settings.language.desc=Langue de l'interface (menus et notifications).
+settings.language.restart_hint=Certains libellés ne changeront qu'au prochain redémarrage.
+
+# ---------------------------------------------------------------------
+# Bluetooth / WiFi
+# ---------------------------------------------------------------------
+bt.title=Bluetooth
+bt.scan=Rechercher des appareils
+bt.devices=Appareils
+bt.connecting=Connexion...
+bt.connected=Connecté
+bt.disconnected=Déconnecté
+bt.failed=Échec de la connexion
+bt.pairing=Appairage...
+bt.paired=Appairé
+bt.forget=Oublier l'appareil
+
+wifi.title=WiFi
+wifi.scan=Rechercher des réseaux
+wifi.networks=Réseaux
+wifi.connecting=Connexion...
+wifi.connected=Connecté
+wifi.disconnected=Déconnecté
+wifi.failed=Échec de la connexion
+wifi.password=Mot de passe
+wifi.forget=Oublier le réseau
+
+# =====================================================================
+# Phase 2: couverture complète settings.cpp
+# =====================================================================
+
+# --- Audio / volume / fan / mute (étiquettes communes) ---
+val.muted=Coupé
+
+# --- Labels formats de sauvegarde ---
+val.fmt.minui=MinUI (défaut)
+val.fmt.retroarch_compressed=Retroarch (compressé)
+val.fmt.retroarch_uncompressed=Retroarch (non compressé)
+val.fmt.generic=Générique
+val.fmt.retroarch_ish_compressed=Retroarch-ish (compressé)
+val.fmt.retroarch_ish_uncompressed=Retroarch-ish (non compressé)
+
+# --- Menu Notifications ---
+settings.notif.title=Notifications
+settings.notif.save_states=Save states
+settings.notif.save_states_desc=Notification lors de la sauvegarde d'un save state
+settings.notif.load_states=Chargement de save state
+settings.notif.load_states_desc=Notification lors du chargement d'un save state
+settings.notif.screenshots=Captures d'écran
+settings.notif.screenshots_desc=Notification lors d'une capture d'écran
+settings.notif.vol_display=Volume / Affichage
+settings.notif.vol_display_desc=Affiche un overlay pour le volume, la luminosité\net la température de couleur
+settings.notif.duration=Durée
+settings.notif.duration_desc=Temps d'affichage des notifications à l'écran
+
+# --- Interrupteur FN / mute ---
+settings.fn.title=Interrupteur FN
+settings.fn.main=Interrupteur FN
+settings.fn.main_desc=Réglages de l'interrupteur FN
+settings.mute.volume_toggled=Volume (interrupteur)
+settings.mute.volume_toggled_desc=Volume des haut-parleurs (0-20)
+settings.mute.fn_disables_led=FN coupe aussi les LED
+settings.mute.fn_disables_led_desc=L'interrupteur désactive également les LED
+settings.mute.brightness_toggled=Luminosité (interrupteur)
+settings.mute.brightness_toggled_desc=Luminosité de l'écran (0 à 10)
+settings.mute.colortemp_toggled=Température (interrupteur)
+settings.mute.colortemp_toggled_desc=Température de couleur (0 à 40)
+settings.mute.contrast_toggled=Contraste (interrupteur)
+settings.mute.contrast_toggled_desc=Amélioration du contraste (-4 à 5)
+settings.mute.saturation_toggled=Saturation (interrupteur)
+settings.mute.saturation_toggled_desc=Amélioration de la saturation (-5 à 5)
+settings.mute.exposure_toggled=Exposition (interrupteur)
+settings.mute.exposure_toggled_desc=Amélioration de l'exposition (-4 à 5)
+settings.mute.turbo.a=Turbo A
+settings.mute.turbo.a_desc=Active le tir turbo pour A
+settings.mute.turbo.b=Turbo B
+settings.mute.turbo.b_desc=Active le tir turbo pour B
+settings.mute.turbo.x=Turbo X
+settings.mute.turbo.x_desc=Active le tir turbo pour X
+settings.mute.turbo.y=Turbo Y
+settings.mute.turbo.y_desc=Active le tir turbo pour Y
+settings.mute.turbo.l1=Turbo L1
+settings.mute.turbo.l1_desc=Active le tir turbo pour L1
+settings.mute.turbo.l2=Turbo L2
+settings.mute.turbo.l2_desc=Active le tir turbo pour L2
+settings.mute.turbo.r1=Turbo R1
+settings.mute.turbo.r1_desc=Active le tir turbo pour R1
+settings.mute.turbo.r2=Turbo R2
+settings.mute.turbo.r2_desc=Active le tir turbo pour R2
+settings.mute.dpad_mode=Mode D-pad (interrupteur)
+settings.mute.dpad_mode_desc=Dpad : défaut. Joystick : le D-pad agit comme stick analogique.\nLes deux : entrées D-pad et joystick simultanées.
+val.dpad=D-pad
+val.joystick=Joystick
+val.both=Les deux
+
+# --- Menu RetroAchievements ---
+settings.ra.title=RetroAchievements
+settings.ra.in_game=RetroAchievements
+settings.ra.in_game_desc=Réglages du suivi des succès
+settings.ra.enable=Activer les succès
+settings.ra.enable_desc=Active l'intégration RetroAchievements
+settings.ra.username=Nom d'utilisateur
+settings.ra.username_desc=Nom d'utilisateur RetroAchievements
+settings.ra.password=Mot de passe
+settings.ra.password_desc=Mot de passe RetroAchievements
+settings.ra.not_set=(non défini)
+settings.ra.authenticate=S'authentifier
+settings.ra.authenticate_desc=Teste les identifiants et récupère le token API
+settings.ra.err_credentials=Erreur : nom d'utilisateur et mot de passe requis
+settings.ra.authenticating=Authentification...
+settings.ra.authenticated_as=Authentifié en tant que %s
+settings.ra.err_prefix=Erreur : %s
+settings.ra.status=Statut
+settings.ra.status_desc=État de l'authentification
+settings.ra.status_yes=Authentifié
+settings.ra.status_no=Non authentifié
+settings.ra.show_notif=Afficher les notifications
+settings.ra.show_notif_desc=Affiche les notifications de déblocage de succès
+settings.ra.notif_duration=Durée des notifications
+settings.ra.notif_duration_desc=Temps d'affichage des notifications de succès
+settings.ra.progress_duration=Durée de progression
+settings.ra.progress_duration_desc=Durée des mises à jour de progression (haut-gauche). Désactivé pour masquer.
+settings.ra.sort=Tri des succès
+settings.ra.sort_desc=Ordre de tri des succès dans le menu in-game
+settings.ra.sync=Synchroniser les déblocages hors-ligne
+settings.ra.sync_pending_fmt=%u en attente — envoyer au serveur RA
+settings.ra.sync_no_pending=Aucun déblocage en attente
+settings.ra.sync_not_auth=Non authentifié
+settings.ra.sync_inprogress_fmt=Synchronisation de %u succès%s...\n\n(0/%u)
+settings.ra.sync_progress_fmt=Synchronisation des succès...\n\n(%u/%u)
+settings.ra.sync_cancelling=Annulation de la synchronisation...
+settings.ra.sync_cancelled=Synchronisation annulée
+settings.ra.sync_cancelled_partial_fmt=Annulée : %u sur %u synchronisés
+settings.ra.sync_incomplete_fmt=Incomplet : %u synchronisés, réessayer plus tard
+settings.ra.sync_synced_fmt=%u succès%s synchronisés
+
+# Tri des succès (labels)
+ra.sort.unlocked_first=Débloqués en premier
+ra.sort.display_first=Ordre d'affichage (premier)
+ra.sort.display_last=Ordre d'affichage (dernier)
+ra.sort.won_most=Gagnés (le plus)
+ra.sort.won_least=Gagnés (le moins)
+ra.sort.points_most=Points (le plus)
+ra.sort.points_least=Points (le moins)
+ra.sort.title_az=Titre (A-Z)
+ra.sort.title_za=Titre (Z-A)
+ra.sort.type_asc=Type (croissant)
+ra.sort.type_desc=Type (décroissant)
+
+# --- Vue par défaut ---
+settings.system.view.content_list=Liste des contenus
+
+# --- Menu In-Game ---
+settings.ingame.title=En jeu
+settings.ingame.main=En jeu
+settings.ingame.main_desc=Réglages en jeu pour MinArch
+settings.ingame.notifications=Notifications
+settings.ingame.notifications_desc=Notifications de save states
+
+# --- Menu À propos ---
+settings.about.title=À propos
+settings.about.main=À propos
+settings.about.version=Version NextUI
+settings.about.platform=Plateforme
+settings.about.os_version=Version OS d'origine
+settings.about.busybox=Version Busybox
+settings.about.busybox_missing=Version BusyBox introuvable.
+
+# --- Menu principal ---
+settings.main.appearance=Apparence
+settings.main.appearance_desc=Personnalisation de l'UI
+settings.main.display=Affichage
+settings.main.system=Système
+settings.main.network=Réseau
+settings.main.bluetooth=Bluetooth
+
+# --- Avertissement OS d'origine ---
+settings.stock_warning=Modifications de l'OS d'origine détectées.\nCela peut causer de l'instabilité.\nEn cas de problème, restaurez un firmware\nd'origine propre.
+
+# --- Labels scaling (audio/vidéo) ---
+val.fullscreen=Plein écran
+val.fit=Adapter
+val.fill=Remplir
+
+# =====================================================================
+# Phase 3: btmenu.cpp + wifimenu.cpp
+# =====================================================================
+
+# Les deux menus partagent l'emplacement de premier niveau "Réseau".
+bt.network=Réseau
+bt.toggle=Bluetooth
+bt.toggle_desc=Active/désactive le Bluetooth
+bt.diagnostics=Diagnostics Bluetooth
+bt.diagnostics_desc=Active/désactive les logs Bluetooth
+bt.samplerate_max=Fréquence d'échantillonnage max
+bt.samplerate_max_desc=44100 Hz : meilleure compatibilité\n48000 Hz : meilleure qualité
+bt.enabling=Activation du Bluetooth...
+bt.disabling=Désactivation du Bluetooth...
+bt.options=Options
+bt.pair=Appairer
+bt.pair_desc=Appairer cet appareil.
+bt.pairing_overlay=Appairage...
+bt.forget_desc=Oublier cet appareil.
+bt.connect=Connecter
+bt.connect_desc=Connecter cet appareil.
+bt.connecting_overlay=Connexion...
+bt.disconnect=Déconnecter
+bt.disconnect_desc=Déconnecter cet appareil.
+
+wifi.network=Réseau
+wifi.toggle=WiFi
+wifi.toggle_desc=Active/désactive le WiFi
+wifi.diagnostics=Diagnostics WiFi
+wifi.diagnostics_desc=Active/désactive les logs WiFi
+wifi.enabling=Activation du WiFi...
+wifi.disabling=Désactivation du WiFi...
+wifi.options=Options
+wifi.connect_known=Connecter
+wifi.connect_known_desc=Se connecter à ce réseau.
+wifi.enter_pass=Saisir le mot de passe WiFi
+wifi.enter_pass_desc=Se connecter à ce réseau.
+wifi.connecting_overlay=Connexion...
+wifi.password_prompt=Saisir le mot de passe WiFi
+wifi.forget_desc=Supprime les identifiants enregistrés pour ce réseau.
+
+# =====================================================================
+# Phase 4 : couverture complète (tous modules restants)
+# =====================================================================
+
+# Messages Hardcore (save states)
+save.load_disabled_hc=Chargement de save state désactivé en mode Hardcore
+save.save_disabled_hc=Save states désactivés en mode Hardcore
+
+# Notifications succès supplémentaires
+ach.game_mastered=Jeu maîtrisé !
+
+# Hints boutons supplémentaires
+btn.cancel=ANNULER
+btn.set=DÉFINIR
+btn.apply=APPLIQUER
+btn.exit=QUITTER
+btn.enter=VALIDER
+btn.copy=COPIER
+btn.fine=PRÉCIS
+btn.coarse=RAPIDE
+btn.scroll=DÉFILER
+btn.up_down=H/B
+btn.left_right=G/D
+btn.zoom=ZOOM
+btn.select_light=Choisir LED
+btn.hr_24=24H
+btn.hr_12=12H
+btn.ok=OK
+
+# Horloge
+clock.am=AM
+clock.pm=PM
+clock.date_order=DMY
+
+# Temps de jeu
+gametime.total=TOTAL
+gametime.average=MOYENNE
+gametime.plays=# PARTIES
+gametime.title_fmt=Temps de jeu total : %s
+
+# Fallback générique
+generic.empty_folder=Dossier vide
+
+# Clavier virtuel — touches spéciales
+kb.shift=maj
+kb.space=espace
+kb.enter=entrée
+
+# Contrôle des LED
+led.select_light=Choisir LED
+led.effect=Effet
+led.color=Couleur
+led.color2=Couleur 2
+led.speed=Vitesse
+led.brightness=Luminosité
+led.brightness_all=Luminosité (toutes LED)
+led.info_brightness=Luminosité info
+led.info_brightness_all=Luminosité info (toutes LED)
+led.trigger=Déclencheur
+led.f1_key=Touche F1
+led.f2_key=Touche F2
+led.top_bar=Barre du haut
+led.lr_triggers=Gâchettes L&R
+led.joystick_l=Joystick gauche
+led.joystick_r=Joystick droit
+led.logo=Logo
+# Noms d'effets LED — conservés en anglais (terminologie tech).
+led.effect.linear=Linear
+led.effect.breathe=Breathe
+led.effect.interval_breathe=Interval Breathe
+led.effect.static=Static
+led.effect.blink1=Blink 1
+led.effect.blink2=Blink 2
+led.effect.blink3=Blink 3
+led.effect.rainbow=Rainbow
+led.effect.twinkle=Twinkle
+led.effect.fire=Fire
+led.effect.glitter=Glitter
+led.effect.neonglow=NeonGlow
+led.effect.firefly=Firefly
+led.effect.aurora=Aurora
+led.effect.reactive=Reactive
+led.effect.topbar_rainbow=Topbar Rainbow
+led.effect.topbar_night=Topbar night
+led.effect.lr_rainbow=LR Rainbow
+led.effect.lr_reactive=LR Reactive
+
+# Testeur minput — labels des boutons non lettres
+minput.vol_minus=VOL. -
+minput.vol_plus=VOL. +
+minput.quit=QUITTER
+
+# Hints matériels (api.c GFX_blitHardwareGroup / GFX_blitHardwareHints)
+hw.brightness=LUMINOSITÉ
+hw.color_temp=TEMPÉRATURE
+hw.mnu=MNU
+hw.brght=LUMI
+hw.sel=SEL
+hw.cltmp=TEMP
+
+# Valeurs par défaut diverses
+val.none=aucun
+
+# =====================================================================
+# Phase 5 : Options Frontend in-game (ma_config.c)
+# =====================================================================
+frontend.opt.screen_scaling=Mise à l'échelle
+frontend.opt.screen_scaling.desc_overscan=Native : mise à l'échelle entière. Aspect : ratio rapporté par le core.\nAspect écran : ratio de l'écran.\nPlein écran : pixels non carrés. Recadré : entier puis rogné.
+frontend.opt.screen_scaling.desc_default=Native : mise à l'échelle entière.\nAspect : ratio rapporté par le core.\nAspect écran : ratio de l'écran.\nPlein écran : pixels non carrés.
+frontend.opt.resampling=Qualité du rééchantillonnage audio
+frontend.opt.resampling.desc=Une qualité plus élevée consomme plus de CPU
+frontend.opt.ambient=Mode ambiance
+frontend.opt.ambient.desc=Les LED suivent les couleurs de l'écran
+frontend.opt.effect=Effet d'écran
+frontend.opt.effect.desc=Grille simule une grille LCD.\nLigne simule les scanlines CRT.\nLes effets sont meilleurs en mise à l'échelle native.
+frontend.opt.overlay=Overlay
+frontend.opt.overlay.desc=Choisis un overlay PNG dans le dossier Overlays
+frontend.opt.offset_x=Décalage écran X
+frontend.opt.offset_x.desc=Décalage de X pixels
+frontend.opt.offset_y=Décalage écran Y
+frontend.opt.offset_y.desc=Décalage de Y pixels
+frontend.opt.sharpness=Netteté écran
+frontend.opt.sharpness.desc=LINEAR lisse les lignes, mais meilleur quand l'image finale est en haute résolution (core haute déf ou upscaling via shaders)
+frontend.opt.core_sync=Sync du core
+frontend.opt.core_sync.desc=Choisis la référence pour la fréquence d'images.\n"Native" utilise celle de l'émulateur,\n"Écran" celle de l'écran.
+frontend.opt.cpu_speed=Vitesse CPU
+frontend.opt.cpu_speed.desc=Choisis comment le CPU se met à l'échelle.\nAuto est recommandé.
+frontend.opt.debug_hud=HUD debug
+frontend.opt.debug_hud.desc=Affiche FPS, charge CPU,\nrésolution et infos du scaler.
+frontend.opt.max_ff=Vitesse max avance rapide
+frontend.opt.max_ff.desc=L'avance rapide ne dépassera pas la vitesse\nsélectionnée (peut être moins selon le jeu/émulateur).
+frontend.opt.ff_audio=Audio avance rapide
+frontend.opt.ff_audio.desc=Jouer ou couper l'audio pendant l'avance rapide.
+frontend.opt.rewind=Rewind
+frontend.opt.rewind.desc=Active le buffer de rewind en mémoire.\nUn raccourci doit être défini pour rembobiner en jeu.\nConsomme plus de CPU et de mémoire.
+frontend.opt.rewind_buffer=Buffer Rewind (Mo)
+frontend.opt.rewind_buffer.desc=Mémoire réservée aux snapshots de rewind.\nAugmente pour des durées de rewind plus longues.
+frontend.opt.rewind_interval=Intervalle Rewind
+frontend.opt.rewind_interval.desc=Intervalle entre les snapshots de rewind.\nDes intervalles courts améliorent la fluidité du rewind\nmais augmentent CPU et mémoire.
+frontend.opt.rewind_compression=Compression Rewind
+frontend.opt.rewind_compression.desc=Compresse les snapshots de rewind pour économiser de la mémoire au détriment du CPU.
+frontend.opt.rewind_compression_speed=Vitesse de compression Rewind
+frontend.opt.rewind_compression_speed.desc=Accélération LZ4 pour les snapshots de rewind.\nDes valeurs plus basses compressent plus mais consomment plus de CPU.
+frontend.opt.rewind_audio=Audio Rewind
+frontend.opt.rewind_audio.desc=Jouer ou couper l'audio pendant le rewind.
+frontend.opt.opt_shaders=Réglages shaders optionnels
+frontend.opt.opt_shaders.desc=Si les shaders ont des réglages supplémentaires, ils apparaîtront dans ce menu
+frontend.opt.shader_preset=Préréglage shaders/émulateur
+frontend.opt.shader_preset.desc=Charge une config shaders/émulateurs préfaite.\nPour tester un préréglage, quitte sans enregistrer !
+frontend.opt.shader_count=Nombre de shaders
+frontend.opt.shader_count.desc=Nombre de shaders, de 1 à 3
+frontend.opt.shader_1=Shader 1
+frontend.opt.shader_1.desc=Programme shader 1 à exécuter
+frontend.opt.shader_1_filter=Filtre shader 1
+frontend.opt.shader_1_source=Source shader 1
+frontend.opt.shader_1_texture=Type de texture shader 1
+frontend.opt.shader_1_scale=Échelle shader 1
+frontend.opt.shader_2=Shader 2
+frontend.opt.shader_2.desc=Programme shader 2 à exécuter
+frontend.opt.shader_2_filter=Filtre shader 2
+frontend.opt.shader_2_source=Source shader 2
+frontend.opt.shader_2_texture=Type de texture shader 2
+frontend.opt.shader_2_scale=Échelle shader 2
+frontend.opt.shader_3=Shader 3
+frontend.opt.shader_3.desc=Programme shader 3 à exécuter
+frontend.opt.shader_3_filter=Filtre shader 3
+frontend.opt.shader_3_source=Source shader 3
+frontend.opt.shader_3_texture=Type de texture shader 3
+frontend.opt.shader_3_scale=Échelle shader 3
+frontend.opt.shader_filter.desc=Méthode d'upscaling, NEAREST ou LINEAR
+frontend.opt.shader_source.desc=Choisit la source de résolution à mettre à l'échelle
+frontend.opt.shader_scale.desc=Met l'image à l'échelle x fois,\n"screen" l'adapte à la résolution de l'écran (peut affecter les perfs)
+
+# Labels d'options Frontend
+frontend.lbl.scaling.native=Native
+frontend.lbl.scaling.aspect=Aspect
+frontend.lbl.scaling.aspect_screen=Aspect écran
+frontend.lbl.scaling.fullscreen=Plein écran
+frontend.lbl.scaling.cropped=Recadré
+frontend.lbl.resample.low=Basse
+frontend.lbl.resample.medium=Moyenne
+frontend.lbl.resample.high=Haute
+frontend.lbl.resample.max=Max
+frontend.lbl.ambient.all=Tout
+frontend.lbl.ambient.top=Haut
+frontend.lbl.ambient.fn=FN
+frontend.lbl.ambient.lr=LR
+frontend.lbl.ambient.top_lr=Haut/LR
+frontend.lbl.effect.none=Aucun
+frontend.lbl.effect.line=Ligne
+frontend.lbl.effect.grid=Grille
+frontend.lbl.overlay.none=Aucun
+frontend.lbl.rewind_compression.best=1 (meilleur ratio)
+frontend.lbl.rewind_compression.default=2 (défaut)
+frontend.lbl.rewind_compression.fast=4 (rapide)
+frontend.lbl.rewind_compression.faster=8 (plus rapide)
+frontend.lbl.rewind_compression.fastest=12 (le plus rapide)
+
+# Libellés des dossiers du menu racine
+launcher.tools=Outils
+launcher.recently_played=Récemment joué
+launcher.collections=Collections
+
+# Noms affichés des paks / dossiers (traduits via Entry_new).
+# Règle : traduire UNIQUEMENT les paks fournis par NextUI core
+# (workspace/all/*). Les paks tiers (Updater, Aesthetics, Pak Store,
+# LED'oh!, ScrapeGoat, Files, Gallery, Remove Loading, Artwork Scraper,
+# Another Cheat Downloader, ...) gardent leur nom propre — c'est leur
+# identité chez leurs auteurs respectifs.
+Settings=Réglages
+Battery=Batterie
+Clock=Horloge
+Game Tracker=Temps de jeu
+Bootlogo=Logo de démarrage
+Input=Contrôles
+LedControl=Contrôle LED
+# USB Mass Storage est tiers mais le nom est un terme technique
+# standard ; traduit pour cohérence avec le reste de l'UI système.
+USB Mass Storage=Stockage USB
+# Files / Gallery sont tiers mais leur nom est un descripteur générique
+# (pas une marque), équivalent direct en français.
+Files=Fichiers
+Gallery=Galerie
+
+# Outil Batterie (workspace/all/battery)
+battery.calculating=calcul en cours
+battery.since_charge_fmt=Depuis la charge : %s
+battery.current_fmt=Actuel : %s
+battery.remaining_fmt=Restant : %s
+battery.longest_fmt=Plus long : %s
+battery.usage_fmt=Utilisation : %s
+battery.range.4h=4 dernières heures
+battery.range.8h=8 dernières heures
+battery.range.16h=16 dernières heures
+
+# minui-presenter (Gallery, Artwork Scraper, Another Cheat Downloader, ...)
+mp.btn.action=ACTION
+mp.btn.select=CHOISIR
+mp.btn.back=RETOUR
+mp.btn.other=AUTRE
+# Re-traductions de labels que les paks passent en argument :
+# permet de traduire les paks tiers sans modifier leur launch.sh.
+EXIT=QUITTER
+QUIT=QUITTER
+OK=OK
+OKAY=OK
+BACK=RETOUR
+CANCEL=ANNULER
+RETURN=RETOUR
+APPLY=APPLIQUER
+CONFIRM=CONFIRMER
+DELETE=SUPPRIMER
+YES=OUI
+NO=NON
+
+# Messages --message émis par les paks (Gallery, ...)
+No screenshots found=Aucune capture trouvée
+Screenshots directory not found=Dossier captures introuvable
+
+# Pak Store (https://github.com/LoveRetro/nextui-pak-store)
+ps.btn.continue=Continuer
+ps.btn.quit=Quitter
+ps.btn.select=Choisir
+ps.btn.view=Voir
+ps.btn.confirm=Confirmer
+ps.btn.back=Retour
+ps.btn.cancel=Annuler
+ps.btn.install=Installer
+ps.btn.update=Mettre à jour
+ps.btn.uninstall=Désinstaller
+ps.btn.cycle=Choisir
+ps.btn.save=Enregistrer
+ps.btn.settings=Réglages
+ps.btn.nevermind=Annuler
+ps.btn.yes=Oui
+ps.menu.updates_fmt=Mises à jour (%d)
+ps.menu.browse=Parcourir
+ps.menu.manage=Gérer les paks installés
+ps.no_paks=Aucun pak disponible
+ps.title.browse=Parcourir les paks
+ps.title.manage=Gérer les paks installés
+ps.title.updates=Mises à jour disponibles
+ps.title.settings=Réglages
+ps.settings.platform_filter=Filtre plateforme
+ps.settings.platform_filter.match=Cet appareil
+ps.settings.platform_filter.all=Tout
+ps.settings.debug_level=Niveau de logs
+ps.settings.debug_level.error=Erreur
+ps.settings.debug_level.info=Info
+ps.settings.debug_level.debug=Debug
+ps.settings.discover=Détecter les paks installés
+ps.settings.info=À propos
+ps.toggle.on=Activé
+ps.toggle.off=Désactivé
+ps.info.version=Version
+ps.info.commit=Commit
+ps.info.build_date=Date du build
+ps.info.community.title=Merci à la communauté
+ps.info.community.body=Pak Store existe grâce à l'incroyable communauté NextUI. Votre créativité, votre passion et votre dévouement à créer des paks géniaux rendent cette plateforme unique. Chaque émulateur, outil et amélioration que vous créez apporte de la joie à nos petites consoles rétro ! Merci de partager vos talents et de rendre NextUI meilleur pour tout le monde.
+ps.info.github_repo=Dépôt GitHub
+ps.pak.whats_new_fmt=Quoi de neuf dans %s ?
+ps.pak.description=Description
+ps.pak.screenshots=Captures d'écran
+ps.pak.info=Infos du pak
+ps.pak.author=Auteur
+ps.pak.version=Version
+ps.pak.current_version=Version actuelle
+ps.pak.changelog=Changelog
+ps.pak.repository=Dépôt du pak
+ps.updates.update_all=Tout mettre à jour
+ps.uninstall.confirm_fmt=Désinstaller\n %s ?
+ps.uninstall.in_progress_fmt=Désinstallation de %s...
+ps.uninstall.error_fmt=Impossible de désinstaller %s
+ps.install.success_fmt=%s installé !
+ps.install.extract_error_fmt=Impossible d'extraire %s
+ps.update.success_fmt=%s mis à jour !
+ps.update.overview_fmt=Les %d paks suivants vont être mis à jour !
+ps.update.overview_title=Aperçu des mises à jour
+ps.update.title_fmt=Mettre à jour %d paks
+ps.update.download_error_fmt=Échec du téléchargement de %s
+ps.update.extract_error_fmt=Impossible d'extraire %s
+ps.update.pak_store_restarting=Pak Store mis à jour ! Redémarrage...
+ps.update.pak_store_exiting=Pak Store mis à jour ! Fermeture...
+ps.update.all_success=Tous les paks ont été mis à jour !
+ps.script.running_fmt=Exécution du script %s...
+ps.unzip.in_progress_fmt=Décompression de %s...
+ps.unzip.error_fmt=Impossible de décompresser %s
+ps.category.experimental=Expérimental
+ps.experimental_unlocked=Paks expérimentaux débloqués.\nÀ utiliser à vos risques !\nFaites des sauvegardes !
+ps.storefront_error=Impossible de charger le Storefront !\nVérifiez votre connexion Wi-Fi.\nSi le problème persiste, consultez les logs.
+ps.splash.fetching=Chargement du Storefront...
+# Catégories du storefront (clé = nom anglais en snake_case minuscule)
+ps.cat.customization=Personnalisation
+ps.cat.developer_tools=Outils développeur
+ps.cat.emulators=Émulateurs
+ps.cat.file_management=Fichiers
+ps.cat.media=Multimédia
+ps.cat.miscellaneous_tools=Divers
+ps.cat.ports=Ports
+ps.cat.rom_management=Gestion des ROM
+ps.cat.streaming_game_clients=Streaming
+ps.cat.system=Système
+ps.btn.close=Fermer
+ps.btn.cancel_download=Annuler téléchargement
+ps.btn.cancel_all_downloads=Tout annuler
+ps.btn.show_speed=Afficher vitesse
+ps.btn.hide_speed=Masquer vitesse
+ps.download.title_fmt=Téléchargement %s %s...
+
+# ScrapeGoat (https://github.com/Helaas/nextui-scrapegoat-pak)
+sg.menu.artwork=Jaquettes
+sg.menu.cheats=Codes triche
+sg.menu.manuals=Manuels
+sg.menu.settings=Réglages
+sg.menu.api_usage=Utilisation API
+sg.btn.quit=QUITTER
+sg.btn.select=CHOISIR
+sg.btn.back=RETOUR
+sg.btn.continue=CONTINUER
+sg.btn.ok=OK
+sg.btn.cancel=ANNULER
+sg.btn.open=OUVRIR
+sg.btn.filter=FILTRER
+sg.btn.queue_all=AJOUTER TOUT
+sg.btn.track_progress=SUIVRE
+sg.btn.retry=RÉESSAYER
+sg.btn.yes=OUI
+sg.btn.no=NON
+sg.btn.save=ENREGISTRER
+sg.btn.start=DÉMARRER
+sg.btn.stop=ARRÊTER
+sg.btn.scan=SCANNER
+sg.btn.apply=APPLIQUER
+sg.btn.confirm=CONFIRMER
+sg.btn.edit=MODIFIER
+sg.btn.keep_open=GARDER OUVERT
+sg.title.settings=Réglages
+sg.title.artwork_priority=Priorité jaquettes
+sg.title.region_priority=Priorité région
+sg.settings.username=Utilisateur
+sg.settings.password=Mot de passe
+sg.settings.artwork_options=Options jaquettes
+sg.settings.manual_dir=Dossier des manuels
+sg.settings.clear_cheat_cache=Vider le cache des codes
+sg.settings.include_hidden=Inclure ROMs cachées/désactivées/vides
+sg.settings.artwork_priority=Priorité jaquettes
+sg.settings.region_priority=Priorité région
+sg.toggle.on=Activé
+sg.toggle.off=Désactivé
+sg.queue_all.missing_only=Ajouter manquants uniquement
+sg.queue_all.redownload_all=Re-télécharger tout (déjà installés inclus)
+sg.queue_all.already_installed_fmt=%d déjà installés
+sg.quit.keep_open=Garder ScrapeGoat ouvert
+sg.quit.exit_cancel=Quitter et annuler téléchargements
+sg.quit.exit_bg=Quitter en arrière-plan
+sg.quit.title_one=%d élément en file
+sg.quit.title_many_fmt=%d éléments en file
+sg.value.set=(défini)
+sg.value.not_set=(non défini)
+sg.progress.track=Suivre la progression
+sg.progress.with_total_fmt=Suivre la progression  (%d/%d)
+sg.progress.with_failed_fmt=Suivre la progression  (%d/%d, %d échecs)
+sg.filter.all=Tout
+sg.filter.missing=Manquant
+sg.filter.installed=Installé
+sg.mode.artwork=jaquettes
+sg.mode.cheats=codes triche
+sg.mode.manuals=manuels
+sg.type.artwork=Jaquette
+sg.type.cheat=Code triche
+sg.type.manual=Manuel
+sg.info.status=Statut
+sg.info.system=Système
+sg.info.type=Type
+sg.btn.queue=AJOUTER
+sg.btn.queued=AJOUTÉ
+sg.btn.redownload=RE-TÉLÉCHARGER
+sg.queue.added_fmt=%d ROMs ajoutées pour %s.
+sg.queue.queued_fmt=« %s » ajouté pour %s.
+sg.queue.requeued_fmt=« %s » re-ajouté pour %s.
+sg.queue.already_queued=Déjà en file.
+sg.error.no_roms=Aucune ROM trouvée dans ce système.
+sg.error.no_rom_folders=Aucun dossier de ROMs trouvé.
+sg.error.no_systems_artwork=Aucun système avec jaquettes disponibles.
+sg.error.no_systems_cheat=Aucun système avec codes triche disponibles.
+sg.error.no_systems_manual=Aucun système avec manuels disponibles.
+sg.error.oom=Mémoire insuffisante.
+sg.brief.no_api_data=Pas encore de données API. Les stats arrivent après la première recherche de jaquettes.
+sg.title.api_usage=Utilisation API
+sg.api.requests_today=Requêtes aujourd'hui
+sg.api.daily_limit=Limite journalière
+sg.api.remaining=Restant
+sg.api.threads=Threads
+sg.title.progress=Progression
+sg.title.bg_scraping=Scraping en arrière-plan
+sg.title.artwork_options=Options jaquettes
+sg.title.error=Erreur
+sg.queue.empty=AUCUN ÉLÉMENT EN FILE.
+sg.queue.empty_filter=AUCUN ÉLÉMENT NE CORRESPOND AU FILTRE.
+sg.queue.filter.all=TOUT
+sg.queue.filter.busy=EN COURS
+sg.queue.filter.done=FAIT
+sg.queue.filter.fail=ÉCHEC
+sg.status.queued=En file
+sg.status.searching=Recherche...
+sg.status.downloading=Téléchargement...
+sg.status.cloning=Clonage db...
+sg.status.matching=Correspondance...
+sg.status.done=Terminé
+sg.status.not_found=Introuvable
+sg.status.error=Erreur
+sg.status.skipped=Ignoré
+sg.btn.reorder=RÉORDONNER
+sg.btn.done=TERMINÉ
+sg.btn.clear=EFFACER
+sg.btn.exit=QUITTER
+sg.error.not_found_libretro=Introuvable dans la base libretro
+sg.error.not_found_screenscraper=Introuvable dans la base ScreenScraper.fr
+sg.error.unknown=Une erreur inconnue est survenue
+sg.error.queue_active_clear=Attends la fin de la file avant d'effacer le cache des codes.
+sg.error.clear_failed=Échec de l'effacement du cache des codes.
+sg.error.cache_cleared_stale=Cache effacé, mais l'état de la file en mémoire\nn'a pas pu être rafraîchi.\n\nRedémarre l'app avant de retélécharger\ndes codes.
+sg.error.bg_stop_failed=Échec de l'arrêt du scraping en arrière-plan.
+sg.error.bg_stop_timeout=Le scraping en arrière-plan n'a pas pu s'arrêter à temps.
+sg.error.handoff_failed=Échec de la reprise en premier plan.
+sg.error.handoff_timeout=Le scraping en arrière-plan n'a pas pu être repris à temps.
+sg.error.bg_queue_lost=Le scraping en arrière-plan s'est arrêté,\nmais la file n'a pas pu être restaurée.
+sg.error.bg_start_failed=Échec du démarrage du scraping en\narrière-plan. Essaie de quitter normalement.
+sg.warn.bg_still_active=Le scraping en arrière-plan est toujours actif.\n\nFerme ScrapeGoat et rouvre-le pour\nréessayer la reprise.
+sg.warn.no_internet=Aucune connexion internet détectée.\n\nLes codes déjà téléchargés peuvent\nêtre utilisés hors ligne.\n\nConnecte-toi au Wi-Fi pour scraper\ndes jaquettes/manuels ou télécharger\nde nouveaux codes.
+sg.warn.no_credentials=Aucun identifiant ScreenScraper.fr défini.\n\nLe scraping fonctionnera au rythme basique\n(~1 req/min, mono-thread).\n\nPour de meilleures vitesses, va dans\nles Réglages et ajoute tes identifiants.
+sg.warn.no_manual_dir=Dossier de téléchargement des manuels non défini.\n\nVa dans les Réglages et configure un\ndossier de téléchargement pour les manuels.\n\nIl te faudra aussi un Pak comme\nSDLReader pour lire les PDFs.
+sg.dialog.cancel_all=Annuler tous les téléchargements ?\n\nLes éléments en cours seront arrêtés\net les éléments en attente seront ignorés.
+sg.dialog.clear_cheat_cache=Effacer la base de codes triche ?\n\nCela supprime le dépôt git local.\nIl sera re-téléchargé à la prochaine utilisation.
+sg.dialog.stop_bg=Arrêter le scraping en arrière-plan ?\n\nLes éléments en cours seront arrêtés\net les éléments en attente seront ignorés.
+sg.dialog.exit_cancel=Quitter ScrapeGoat et annuler tous les téléchargements ?\n\nLes éléments en cours seront arrêtés\net les éléments en file seront ignorés.
+sg.dialog.bg_warning=Le scraping continue en arrière-plan\naprès la fermeture de ScrapeGoat.\n\nCela peut réduire les performances de jeu.\n\nLa veille met en pause les téléchargements.\nL'arrêt les stoppe.\n\nLa progression apparaît à la prochaine\nouverture de ScrapeGoat.
+sg.dialog.bg_warning_compact=Le scraping continue en arrière-plan\naprès la fermeture de ScrapeGoat.\nCela peut réduire les performances de jeu.\nLa veille met en pause les téléchargements.\nL'arrêt les stoppe.\nLa progression apparaît à la prochaine\nouverture de ScrapeGoat.
+sg.progress.clearing_cache=Effacement du cache...
+sg.daemon.resuming=Reprise du scraping en arrière-plan...
+sg.daemon.summary_fmt=%s.\n\n%d terminés, %d échecs sur %d total.
+sg.daemon.completed_label=Scraping en arrière-plan terminé
+sg.tag.queued=en file
+sg.tag.searching=recherche
+sg.tag.downloading=téléch.
+sg.tag.cloning=clonage
+sg.tag.matching=corresp.
+sg.tag.art=jaq
+sg.tag.cht=triche
+sg.tag.pdf=pdf
+sg.cheat.fallback_name_fmt=Code %d
+sg.cheat.list_title_fmt=Codes triche (%d)
+sg.tag.disabled=[désactivé]
+sg.error.cache_inspect_failed_fmt=Échec de l'inspection du cache :\n%s
+sg.error.cache_open_failed_fmt=Échec de l'ouverture du dossier cache :\n%s
+sg.error.cache_rmdir_failed_fmt=Échec de la suppression du dossier cache :\n%s
+sg.error.cache_unlink_failed_fmt=Échec de la suppression du fichier cache :\n%s
+sg.error.cheat_cache_open_failed_fmt=Échec de l'ouverture du cache des codes :\n%s
+sg.error.cheat_cache_rmdir_failed_fmt=Échec de la suppression du cache des codes :\n%s
+
+# Aesthetics (https://github.com/redria7/nextui-aesthetics)
+ae.menu.download_themes=Télécharger des thèmes
+ae.menu.manage_themes=Gérer les thèmes disponibles
+ae.menu.manage_current=Gérer le thème actuel
+ae.menu.decorations=Fonds d'écran & icônes
+ae.btn.quit=Quitter
+ae.btn.settings=Réglages
+ae.btn.select=Choisir
+ae.btn.cancel=Annuler
+ae.btn.back=Retour
+ae.btn.options=Options
+ae.btn.open_folder=Ouvrir dossier
+ae.btn.decoration_options=Options de décoration
+ae.btn.delete=Supprimer
+ae.btn.confirm=Confirmer
+ae.btn.save=Enregistrer
+ae.btn.apply=Appliquer
+ae.btn.clear=Effacer
+ae.btn.yes=Oui
+ae.btn.no=Non
+ae.btn.cycle=Choisir
+ae.btn.changed_mind=J'ai changé d'avis
+ae.btn.remove=Supprimer
+ae.btn.download=Télécharger
+ae.btn.redownload=Re-télécharger
+ae.btn.open=Ouvrir
+ae.btn.swap_aggregation=Changer regroupement
+ae.btn.toggle=Basculer
+ae.title.settings=Réglages Aesthetics
+ae.title.component_options=Options composants
+ae.title.download_themes=Thèmes disponibles
+ae.title.hidden_themes=Thèmes cachés
+ae.title.manage_themes=Gérer les thèmes
+ae.title.manage_components_prefix=Gérer
+ae.title.manage_components_suffix=composants
+ae.empty.no_decorations=Aucune décoration trouvée
+ae.empty.no_components=Aucun composant supporté !
+ae.empty.no_hidden_themes=Aucun thème caché !
+ae.empty.no_themes_manage=Aucun thème à gérer ! Enregistrez ou téléchargez-en.
+ae.help.decoration_list=Contrôles liste décorations
+ae.help.component_options=Options de gestion des composants
+ae.help.component_management=Contrôles gestion des composants
+ae.help.directory_list=Contrôles liste dossiers
+ae.help.deco_apply=Écran de confirmation pour appliquer la décoration sélectionnée
+ae.help.deco_delete=Écran de confirmation pour supprimer la décoration sélectionnée
+ae.help.deco_open=Ouvrir le regroupement pour voir les décorations disponibles
+ae.help.deco_swap=Changer le style de regroupement (console ou dossier)
+ae.help.save_components=Enregistrer les composants sélectionnés dans un thème
+ae.help.revert_components=Restaurer les composants sélectionnés aux réglages par défaut
+ae.help.apply_components=Appliquer les composants sélectionnés à l'appareil
+ae.help.delete_components=Supprimer les composants sélectionnés du thème
+ae.help.toggle=Basculer un composant pour l'inclure dans l'action sélectionnée
+ae.settings.log_level=Niveau de logs
+ae.settings.log_level.debug=Debug
+ae.settings.log_level.error=Erreur
+ae.settings.decoration_aggregation=Regroupement décorations
+ae.settings.aggregation.directory=Par dossier
+ae.settings.aggregation.console=Par console
+ae.info.file_type=Type de fichier
+ae.info.author=Auteur
+ae.info.last_updated=Mis à jour le
+ae.deco.icon=Icône
+ae.deco.wallpaper=Fond d'écran
+ae.deco.list_wallpaper=Fond d'écran de liste
+ae.label.current=Actuel
+ae.progress.unzipping=Décompression de
+ae.progress.downloading=Téléchargement de
+ae.progress.preview=Aperçu
+ae.error.fetch_dirs=Impossible de charger les dossiers !
+# Labels d'options de composants (clés = valeurs anglaises des const)
+Save | All=Enregistrer | Tout
+Save | + Active Consoles=Enregistrer | + Consoles actives
+Save | All | With Confirmations=Enregistrer | Tout | Avec confirmations
+Revert to Default | + Active Consoles=Restaurer | + Consoles actives
+Revert to Default | Empty Consoles Only=Restaurer | Consoles vides uniquement
+Revert to Default | All=Restaurer | Tout
+Revert to Default | All | With Confirmations=Restaurer | Tout | Avec confirmations
+Clear & Apply | + Active Consoles=Effacer & appliquer | + Consoles actives
+Clear & Apply | All=Effacer & appliquer | Tout
+Apply | + Active Consoles=Appliquer | + Consoles actives
+Apply | All=Appliquer | Tout
+Apply | Missing Only | + Active Consoles=Appliquer | Manquants uniquement | + Consoles actives
+Apply | Missing Only | All=Appliquer | Manquants uniquement | Tout
+Apply | All | With Confirmations=Appliquer | Tout | Avec confirmations
+Clear Wallpaper=Effacer fond d'écran
+Select Wallpaper=Choisir fond d'écran
+Clear List Wallpaper=Effacer fond de liste
+Select List Wallpaper=Choisir fond de liste
+Clear Default Wallpaper=Effacer fond par défaut
+Select Default Wallpaper=Choisir fond par défaut
+Clear Icon=Effacer icône
+Select Icon=Choisir icône
+Delete Theme=Supprimer thème
+Rename Theme=Renommer thème
+ae.dl.refresh_catalog=Rafraîchir les thèmes disponibles
+ae.dl.hidden_themes=Thèmes cachés
+ae.dl.help_no_entries=Si aucune entrée, vérifiez la connexion internet
+ae.dl.help_a=Voir les détails du thème avec option de téléchargement
+ae.dl.help_x=Cacher/révéler un thème
+ae.btn.hide_theme=Cacher
+ae.btn.unhide_theme=Révéler
+ae.btn.details=Détails
+ae.btn.trash_it=Poubelle !
+ae.msg.delete_theme_fmt=Supprimer le thème : %s ?
+ae.msg.deleted_fmt=%s supprimé
+ae.msg.delete_failed_fmt=Échec suppression de %s
+ae.msg.error_prefix=Erreur rencontrée :
+ae.msg.name_exists_fmt=%s\nce nom est déjà utilisé.\nChoisissez un autre nom.
+ae.msg.theme_renamed_fmt=Thème renommé : %s
+ae.msg.select_one_component=Sélectionnez au moins un composant !
+ae.msg.delete_components_fmt=Du thème %s\nSupprimer les composants :\n%s
+ae.msg.delete_components_failed_fmt=\nÉchec suppression de %d composants
+ae.msg.delete_components_done_fmt=%d composants supprimés%s
+ae.msg.update_error_fmt=Erreur pendant %s\nArrêt - %d mises à jour effectuées
+ae.msg.updates_done_fmt=%d mises à jour effectuées
+ae.msg.download_failed_fmt=Échec téléchargement/décompression %s :\n%s
+ae.msg.clear_deco_fmt=Effacer cette décoration depuis :\n%s
+ae.msg.deleted_path_fmt=Supprimé :\n%s
+ae.msg.delete_path_failed_fmt=Échec suppression :%s
+ae.msg.unsupported_action_fmt=Action non supportée %s !\nMerci de signaler le bug.
+ae.msg.delete_deco_fmt=Supprimer cette décoration depuis :\n%s
+ae.msg.copy_image_to_fmt=Copier l'image vers :\n%s
+ae.msg.copy_failed=Impossible de copier l'image !
+ae.msg.copy_success=Image copiée avec succès !

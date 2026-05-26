@@ -13,13 +13,13 @@ typedef std::shared_lock<Lock> ReadLock;
 using namespace Wifi;
 using namespace std::placeholders;
 
-Menu::Menu(const int &globalQuit, int &globalDirty) : MenuList(MenuItemType::Fixed, "Network", {}), globalQuit(globalQuit), globalDirty(globalDirty)
+Menu::Menu(const int &globalQuit, int &globalDirty) : MenuList(MenuItemType::Fixed, "wifi.network", {}), globalQuit(globalQuit), globalDirty(globalDirty)
 {
-    toggleItem = new MenuItem(ListItemType::Generic, "WiFi", "Enable/disable WiFi", {false, true}, {"Off", "On"},
+    toggleItem = new MenuItem(ListItemType::Generic, "wifi.toggle", "wifi.toggle_desc", {false, true}, {"val.off", "val.on"},
                               std::bind(&Menu::getWifToggleState, this),
                               std::bind(&Menu::setWifiToggleState, this, std::placeholders::_1),
                               std::bind(&Menu::resetWifiToggleState, this));
-    diagItem = new MenuItem(ListItemType::Generic, "WiFi diagnostics", "Enable/disable WiFi logging", {false, true}, {"Off", "On"},
+    diagItem = new MenuItem(ListItemType::Generic, "wifi.diagnostics", "wifi.diagnostics_desc", {false, true}, {"val.off", "val.on"},
                               std::bind(&Menu::getWifDiagnosticsState, this),
                               std::bind(&Menu::setWifiDiagnosticsState, this, std::placeholders::_1),
                               std::bind(&Menu::resetWifiDiagnosticsState, this));
@@ -60,7 +60,7 @@ std::any Menu::getWifToggleState() const
 void Menu::setWifiToggleState(const std::any &on)
 {
     auto state = std::any_cast<bool>(on);
-    ScopedOverlay overlay(state ? "Enabling WiFi..." : "Disabling WiFi...");
+    ScopedOverlay overlay(state ? "wifi.enabling" : "wifi.disabling");
     WIFI_enable(state);
 }
 
@@ -153,7 +153,7 @@ void Menu::updater()
 
                         MenuList *options;
                         if (connected)
-                            options = new MenuList(MenuItemType::List, "Options",
+                            options = new MenuList(MenuItemType::List, "wifi.options",
                                                 {
                                                     new MenuItem{ListItemType::Button, "Disconnect", "Disconnect from this network.",
                                                                     [&](AbstractMenuItem &item) -> InputReactionHint
@@ -162,9 +162,9 @@ void Menu::updater()
                                                 });
                         else 
                         if (hasCredentials)
-                            options = new MenuList(MenuItemType::List, "Options", { new ConnectKnownItem(r, selectionDirty), new ForgetItem(r, selectionDirty) });
+                            options = new MenuList(MenuItemType::List, "wifi.options", { new ConnectKnownItem(r, selectionDirty), new ForgetItem(r, selectionDirty) });
                         else
-                            options = new MenuList(MenuItemType::List, "Options", { new ConnectNewItem(r, selectionDirty) });
+                            options = new MenuList(MenuItemType::List, "wifi.options", { new ConnectNewItem(r, selectionDirty) });
 
                         auto itm = new NetworkItem{r, connected, options};
                         if(connected && !std::string(connection.ip).empty())
@@ -205,29 +205,29 @@ void Menu::updater()
 }
 
 ConnectKnownItem::ConnectKnownItem(WIFI_network n, bool& dirty)
-    : MenuItem(ListItemType::Button, "Connect", "Connect to this network.", [&](AbstractMenuItem &item) -> InputReactionHint{
-        ScopedOverlay overlay("Connecting...");
-        WIFI_connect(net.ssid, net.security); 
+    : MenuItem(ListItemType::Button, "wifi.connect_known", "wifi.connect_known_desc", [&](AbstractMenuItem &item) -> InputReactionHint{
+        ScopedOverlay overlay("wifi.connecting_overlay");
+        WIFI_connect(net.ssid, net.security);
         dirty = true;
         return Exit;
     }), net(n)
 {}
 
 ConnectNewItem::ConnectNewItem(WIFI_network n, bool& dirty)
-    : MenuItem(ListItemType::Button, "Enter WiFi passcode", "Connect to this network.", DeferToSubmenu, new KeyboardPrompt("Enter Wifi passcode", 
+    : MenuItem(ListItemType::Button, "wifi.enter_pass", "wifi.enter_pass_desc", DeferToSubmenu, new KeyboardPrompt("wifi.password_prompt",
         [&](AbstractMenuItem &item) -> InputReactionHint {
-            ScopedOverlay overlay("Connecting...");
-            WIFI_connectPass(net.ssid, net.security, item.getName().c_str()); 
+            ScopedOverlay overlay("wifi.connecting_overlay");
+            WIFI_connectPass(net.ssid, net.security, item.getName().c_str());
             dirty = true;
-            return Exit; 
+            return Exit;
         })), net(n)
 {}
 
 ForgetItem::ForgetItem(WIFI_network n, bool& dirty)
-    : MenuItem(ListItemType::Button, "Forget", "Removes credentials for this network.",
-        [&](AbstractMenuItem &item) -> InputReactionHint { 
-            WIFI_forget(net.ssid, net.security); 
-            dirty = true; 
+    : MenuItem(ListItemType::Button, "wifi.forget", "wifi.forget_desc",
+        [&](AbstractMenuItem &item) -> InputReactionHint {
+            WIFI_forget(net.ssid, net.security);
+            dirty = true;
             return Exit;
         }), net(n)
 {}

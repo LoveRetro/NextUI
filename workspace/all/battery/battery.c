@@ -8,6 +8,7 @@
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+#include "i18n.h"
 
 #include <sqlite3.h>
 #include <batmondb.h>
@@ -108,7 +109,8 @@ static int estimation_line_size = 0;
 static int begining_session_index;
 static char session_duration[10];
 static char current_percentage[10];
-static char session_left[12] = "calculating";
+// Buffer sized for translated "calculating" (e.g. FR "calcul en cours" = 15 chars).
+static char session_left[32] = "calculating";
 static char session_best[10];
 
 static void sigHandler(int sig)
@@ -465,16 +467,16 @@ void renderPage()
     drawBatteryIcon(0, (SDL_Rect){graph.layout.icon_x, graph.layout.icon4_y});
 
     char text_line[255];
-    sprintf(text_line, "Since Charge: %s", session_duration);
+    snprintf(text_line, sizeof(text_line), T("battery.since_charge_fmt"), session_duration);
     renderText(text_line, font.medium, COLOR_WHITE, &(SDL_Rect){graph.layout.label_session_x, graph.layout.label_session_y, graph.layout.label_size_x, graph.layout.label_size_y});
 
-    sprintf(text_line, "Current: %s", current_percentage);
+    snprintf(text_line, sizeof(text_line), T("battery.current_fmt"), current_percentage);
     renderText(text_line, font.medium, COLOR_WHITE, &(SDL_Rect){graph.layout.label_current_x, graph.layout.label_current_y, graph.layout.label_size_x, graph.layout.label_size_y});
 
-    sprintf(text_line, "Remaining: %s", session_left);
+    snprintf(text_line, sizeof(text_line), T("battery.remaining_fmt"), session_left);
     renderTextAlignRight(text_line, font.medium, COLOR_WHITE, &(SDL_Rect){graph.layout.label_left_x, graph.layout.label_left_y, graph.layout.label_size_x, graph.layout.label_size_y});
 
-    sprintf(text_line, "Longest: %s", session_best);
+    snprintf(text_line, sizeof(text_line), T("battery.longest_fmt"), session_best);
     renderTextAlignRight(text_line, font.medium, COLOR_WHITE, &(SDL_Rect){graph.layout.label_best_x, graph.layout.label_best_y, graph.layout.label_size_x, graph.layout.label_size_y});
 
     int half_line_width = (int)(GRAPH_LINE_WIDTH) / 2;
@@ -641,6 +643,10 @@ int main(int argc, char *argv[])
     device_model = PLAT_getModel();
 
     screen = GFX_init(MODE_MAIN);
+    // GFX_init has loaded the active language; refresh the "calculating"
+    // placeholder so it shows up translated until the real estimate is ready.
+    strncpy(session_left, T("battery.calculating"), sizeof(session_left) - 1);
+    session_left[sizeof(session_left) - 1] = '\0';
     PAD_init();
     PWR_init();
 
@@ -732,16 +738,16 @@ int main(int argc, char *argv[])
                 switch (current_zoom)
                 {
                 case 0:
-                    sprintf(display_name, "Battery usage: Last %s", "16 hours");
+                    snprintf(display_name, sizeof(display_name), T("battery.usage_fmt"), T("battery.range.16h"));
                     break;
                 case 1:
-                    sprintf(display_name, "Battery usage: Last %s", "8 hours");
+                    snprintf(display_name, sizeof(display_name), T("battery.usage_fmt"), T("battery.range.8h"));
                     break;
                 case 2:
-                    sprintf(display_name, "Battery usage: Last %s", "4 hours");
+                    snprintf(display_name, sizeof(display_name), T("battery.usage_fmt"), T("battery.range.4h"));
                     break;
                 default:
-                    sprintf(display_name, "Battery usage: Last %s", "8 hours");
+                    snprintf(display_name, sizeof(display_name), T("battery.usage_fmt"), T("battery.range.8h"));
                     break;
                 }
 
@@ -762,9 +768,9 @@ int main(int argc, char *argv[])
             if (show_setting)
                 GFX_blitHardwareHints(screen, show_setting);
             else
-                GFX_blitButtonGroup((char *[]){"L/R", "SCROLL", "L1/R1", "ZOOM", NULL}, 0, screen, 0);
+                GFX_blitButtonGroup((char *[]){T("btn.left_right"), T("btn.scroll"), "L1/R1", T("btn.zoom"), NULL}, 0, screen, 0);
 
-            GFX_blitButtonGroup((char *[]){"B", "BACK", NULL}, 1, screen, 1);
+            GFX_blitButtonGroup((char *[]){"B", T("btn.back"), NULL}, 1, screen, 1);
 
             GFX_flip(screen);
             dirty = 0;

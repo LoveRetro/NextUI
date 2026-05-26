@@ -5,6 +5,7 @@ extern "C"
 #include "sdl.h"
 #include "defines.h"
 #include "api.h"
+#include "i18n.h"
 }
 
 #include <cassert>
@@ -178,10 +179,15 @@ public:
 
     virtual InputReactionHint handleInput(int &dirty) { return Unhandled; };
 
-    const std::string &getName() const { return name; }
-    const std::string &getDesc() const { return desc; }
+    // getName/getDesc apply T() at each call so a language change is picked up
+    // live. Stored values are i18n keys (or literal English fallbacks); T()
+    // returns the key untouched when it has no matching translation entry.
+    std::string getName() const { return T(name.c_str()); }
+    std::string getDesc() const { return T(desc.c_str()); }
     void setDesc(const std::string &d) { desc = d; }
     const ListItemType getType() const { return type; }
+    // Raw internal name (i18n key) — for stable identity checks like selectByName.
+    const std::string &getRawName() const { return name; }
 
     virtual void drawCustomItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected) const {}
 
@@ -250,16 +256,21 @@ public:
 
     const std::any getValue() const override
     {
-        assert(valueIdx >= 0);
+        if (valueIdx < 0 || (size_t)valueIdx >= values.size()) return std::any{};
         return values[valueIdx];
     }
     const std::string getLabel() const override
     {
-        assert(valueIdx >= 0);
-        return labels[valueIdx];
+        if (valueIdx < 0 || (size_t)valueIdx >= labels.size()) return "";
+        return T(labels[valueIdx].c_str());
     }
     const std::vector<std::any> getValues() const override{ return values; }
-    const std::vector<std::string> getLabels() const override { return labels; }
+    const std::vector<std::string> getLabels() const override {
+        std::vector<std::string> out;
+        out.reserve(labels.size());
+        for (const auto &lbl : labels) out.push_back(T(lbl.c_str()));
+        return out;
+    }
 };
 
 // A menu item for text input that shows the current value and opens a keyboard when pressed.
@@ -352,8 +363,10 @@ public:
 
 // Moved here to ensure MenuList is fully defined
 struct ScopedOverlay {
-    ScopedOverlay(const std::string& message, OverlayDismissMode dismissMode = OverlayDismissMode::None) {
-        MenuList::showOverlay(message, dismissMode);
+    // Accept either a translation key or a literal string. T() returns the
+    // input unchanged when the key has no entry, so this is safe both ways.
+    ScopedOverlay(const std::string& key_or_message, OverlayDismissMode dismissMode = OverlayDismissMode::None) {
+        MenuList::showOverlay(T(key_or_message.c_str()), dismissMode);
     }
     ~ScopedOverlay() {
         MenuList::hideOverlay();

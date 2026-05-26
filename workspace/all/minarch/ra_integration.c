@@ -12,6 +12,7 @@
 #include "ra_sync.h"
 #include "defines.h"
 #include "api.h"
+#include "i18n.h"
 
 #define RA_UTIL_NEED_SDL
 #include "ra_util.h"
@@ -1371,7 +1372,7 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		break;
 		
 	case RC_CLIENT_EVENT_GAME_COMPLETED:
-		Notification_push(NOTIFICATION_ACHIEVEMENT, "Game Mastered!", NULL);
+		Notification_push(NOTIFICATION_ACHIEVEMENT, T("ach.game_mastered"), NULL);
 		RA_LOG_INFO("Game mastered!\n");
 		break;
 		

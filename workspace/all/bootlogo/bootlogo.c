@@ -9,6 +9,7 @@
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+#include "i18n.h"
 
 static bool quit = false;
 
@@ -179,8 +180,8 @@ int main(int argc, char *argv[])
                 SDL_BlitSurface(image, NULL, screen, &image_rect);
             }
 
-            GFX_blitButtonGroup((char *[]){"L/R", "SCROLL", NULL}, 0, screen, 0);
-            GFX_blitButtonGroup((char *[]){"A", "SET", "B", "BACK", NULL}, 1, screen, 1);
+            GFX_blitButtonGroup((char *[]){T("btn.left_right"), T("btn.scroll"), NULL}, 0, screen, 0);
+            GFX_blitButtonGroup((char *[]){"A", T("btn.set"), "B", T("btn.back"), NULL}, 1, screen, 1);
 
             GFX_flip(screen);
             dirty = 0;

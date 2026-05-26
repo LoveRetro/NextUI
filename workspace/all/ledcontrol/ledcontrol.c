@@ -5,6 +5,7 @@
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+#include "i18n.h"
 
 
 #define NUM_OPTIONS 4
@@ -16,18 +17,27 @@ const char *lightnames[4];
 const char *triggernames[] = {
     "B", "A", "Y", "X", "L", "R", "FN1", "FN2", "MENU", "SELECT", "START", "ALL", "LR", "DPAD"};
 
-const char *effect_names[] = {
-    "Linear", "Breathe", "Interval Breathe", "Static",
-    "Blink 1", "Blink 2", "Blink 3", "Rainbow", "Twinkle",
-    "Fire", "Glitter", "NeonGlow", "Firefly", "Aurora", "Reactive"};
-const char *topbar_effect_names[] = {
-    "Linear", "Breathe", "Interval Breathe", "Static",
-    "Blink 1", "Blink 2", "Blink 3", "Rainbow", "Twinkle",
-    "Fire", "Glitter", "NeonGlow", "Firefly", "Aurora", "Reactive", "Topbar Rainbow", "Topbar night"};
-const char *lr_effect_names[] = {
-    "Linear", "Breathe", "Interval Breathe", "Static",
-    "Blink 1", "Blink 2", "Blink 3", "Rainbow", "Twinkle",
-    "Fire", "Glitter", "NeonGlow", "Firefly", "Aurora", "Reactive", "LR Rainbow", "LR Reactive"};
+// Effect labels — populated at runtime via T(); fallback values are English.
+const char *effect_names[15];
+const char *topbar_effect_names[17];
+const char *lr_effect_names[17];
+
+static void init_effect_labels(void) {
+    const char *base[] = {
+        T("led.effect.linear"), T("led.effect.breathe"), T("led.effect.interval_breathe"), T("led.effect.static"),
+        T("led.effect.blink1"), T("led.effect.blink2"), T("led.effect.blink3"), T("led.effect.rainbow"), T("led.effect.twinkle"),
+        T("led.effect.fire"), T("led.effect.glitter"), T("led.effect.neonglow"), T("led.effect.firefly"), T("led.effect.aurora"), T("led.effect.reactive"),
+    };
+    for (int i = 0; i < 15; i++) {
+        effect_names[i] = base[i];
+        topbar_effect_names[i] = base[i];
+        lr_effect_names[i] = base[i];
+    }
+    topbar_effect_names[15] = T("led.effect.topbar_rainbow");
+    topbar_effect_names[16] = T("led.effect.topbar_night");
+    lr_effect_names[15] = T("led.effect.lr_rainbow");
+    lr_effect_names[16] = T("led.effect.lr_reactive");
+}
 
 void save_settings() {
     LOG_debug("saving settings plat\n");
@@ -219,15 +229,17 @@ int main(int argc, char *argv[])
 	InitSettings();
     PWR_setCPUSpeed(CPU_SPEED_AUTO);
 
+    SDL_Surface* screen = GFX_init(MODE_MAIN);
+    // GFX_init has loaded the language; we can use T() now.
+    init_effect_labels();
     if (is_brick) {
-        const char *brick_names[] = {"F1 key", "F2 key", "Top bar", "L&R triggers"};
+        const char *brick_names[] = {T("led.f1_key"), T("led.f2_key"), T("led.top_bar"), T("led.lr_triggers")};
         memcpy(lightnames, brick_names, sizeof(brick_names)); // Copy values
     } else {
-        const char *default_names[] = {"Joystick L","Joystick R", "Logo"};
+        const char *default_names[] = {T("led.joystick_l"), T("led.joystick_r"), T("led.logo")};
         memcpy(lightnames, default_names, sizeof(default_names)); // Copy values
     }
-    
-    SDL_Surface* screen = GFX_init(MODE_MAIN);
+
 	PAD_init();
 	PWR_init();
 
@@ -298,8 +310,8 @@ int main(int argc, char *argv[])
 
             if (show_setting) GFX_blitHardwareHints(screen, show_setting);
 
-            GFX_blitButtonGroup((char*[]){ "B","BACK", NULL }, 1, screen, 1);
-            GFX_blitButtonGroup((char*[]){ "L/R","Select light", NULL }, 0, screen, 0);
+            GFX_blitButtonGroup((char*[]){ "B",T("btn.back"), NULL }, 1, screen, 1);
+            GFX_blitButtonGroup((char*[]){ T("btn.left_right"),T("led.select_light"), NULL }, 0, screen, 0);
 
 
             int max_width = screen->w - SCALE1(PADDING * 2) - ow;
@@ -322,10 +334,10 @@ int main(int argc, char *argv[])
             // this stuff is really not multiplatform at all, need to figure out a way so its not so TrimUI specific
             const char *settings_labels[5]; // Define array with correct size
             if (is_brick) {
-                const char *brick_labels[] = {"Effect", "Color", "Speed", "Brightness", "Info brightness"};
+                const char *brick_labels[] = {T("led.effect"), T("led.color"), T("led.speed"), T("led.brightness"), T("led.info_brightness")};
                 memcpy(settings_labels, brick_labels, sizeof(brick_labels)); // Copy values
             } else {
-                const char *non_brick_labels[] = {"Effect", "Color", "Speed", "Brightness (All Leds)", "Info brightness (All Leds)"};
+                const char *non_brick_labels[] = {T("led.effect"), T("led.color"), T("led.speed"), T("led.brightness_all"), T("led.info_brightness_all")};
                 memcpy(settings_labels, non_brick_labels, sizeof(non_brick_labels)); // Copy values
             }
             int settings_values[5] = {
