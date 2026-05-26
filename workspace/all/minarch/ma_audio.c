@@ -4,7 +4,7 @@
 #include "ma_internal.h"
 #include "ma_audio.h"
 
-static bool resetAudio = false;
+static SDL_atomic_t resetAudio = {0};
 
 void Audio_onSinkChanged(int device, int watch_event) {
 	switch (watch_event) {
@@ -19,12 +19,11 @@ void Audio_onSinkChanged(int device, int watch_event) {
 	sleep(1); // give it a moment to apply before we reset the audio system, otherwise
 
 	
-	resetAudio = true;
+	SDL_AtomicSet(&resetAudio, 1);
 }
 
 void Audio_checkAndResetIfNeeded(void) {
-	if (!resetAudio) return;
-	resetAudio = false;
+	if (!SDL_AtomicCAS(&resetAudio, 1, 0)) return;
 	SetVolume(GetVolume());
 	SND_resetAudio(core.sample_rate, core.fps);
 }
