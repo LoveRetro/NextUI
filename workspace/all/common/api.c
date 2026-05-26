@@ -2934,14 +2934,18 @@ void SND_quit(void)
 }
 
 // https://github.com/alsa-project/alsa-lib/blob/3592e5c7812bfddad932f176e257e8797d71a51b/MEMORY-LEAK#L10
+#ifndef __APPLE__
 extern int snd_config_update_free_global(void) __attribute__((weak));
+#endif
 
 void SND_resetAudio(double sample_rate, double frame_rate)
 {
 	SND_quit();
 
+#ifndef __APPLE__
 	if (snd_config_update_free_global)
 		snd_config_update_free_global();
+#endif
 
 	SND_init(sample_rate, frame_rate);
 }
