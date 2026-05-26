@@ -485,12 +485,6 @@ void PLAT_bluetoothPair(char *addr) {
 	snprintf(cmd, sizeof(cmd), "bluetoothctl connect %s 2>/dev/null", addr);
 	system(cmd);
 	
-	// Connect after pairing to initiate A2DP audio profile.
-	// Some headsets (store_hint=0 controllers) disconnect ~2s after
-	// pairing if the host doesn't open the audio channel first.
-	snprintf(cmd, sizeof(cmd), "bluetoothctl connect %s 2>/dev/null", addr);
-	system(cmd);
-
 	// Remove from discovered list since it's now paired
 	bt_remove_discovered_device(addr);
 }
