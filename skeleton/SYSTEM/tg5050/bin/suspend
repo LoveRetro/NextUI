@@ -3,7 +3,7 @@ set -uo pipefail
 set +e
 exec 0<&-
 
-logfile="/mnt/SDCARD/.userdata/tg5040/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
+logfile="/mnt/SDCARD/.userdata/tg5050/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
 exec >> "$logfile" 2>&1
 
 wifid_running=
