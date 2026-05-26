@@ -51,6 +51,7 @@ static void initBtStateFromAsoundrc() {
     if (end == std::string::npos) return;
     connected_a2dp_mac = content.substr(pos, end - pos);
     log("Restored BT state from .asoundrc: " + connected_a2dp_mac);
+    SetAudioSink(AUDIO_SINK_BLUETOOTH);
 }
 
 void ensureDirExists(const std::string& path) {
