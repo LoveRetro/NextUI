@@ -33,6 +33,7 @@ enum DeviceType {
 
 bool use_syslog = false;
 bool running = true;
+static std::string connected_a2dp_mac;
 
 void log(const std::string& msg) {
     if (use_syslog) syslog(LOG_INFO, "%s", msg.c_str());
