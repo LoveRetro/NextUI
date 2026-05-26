@@ -9,7 +9,7 @@ exec >> "$logfile" 2>&1
 wifid_running=
 bluetoothd_running=
 
-sleep_retval=
+sleep_retval=1
 
 asound_state_dir=/tmp/asound-suspend
 
