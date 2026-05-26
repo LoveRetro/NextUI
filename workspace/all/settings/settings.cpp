@@ -10,6 +10,7 @@ extern "C"
 }
 
 #include <csignal>
+#include <dirent.h>
 #include <fstream>
 #include <memory>
 #include <sstream>
@@ -17,6 +18,7 @@ extern "C"
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <algorithm>
 #include "wifimenu.hpp"
 #include "btmenu.hpp"
 #include "keyboardprompt.hpp"
@@ -85,7 +87,43 @@ static const std::vector<std::string> color_strings = {
     "0x221100", "0x442200", "0x663300", "0x884400", "0xAA5500", "0xCC6600", "0xFF8833", "0xFF994D", "0xFFAA66", "0xFFBB80", "0xFFCC99", "0xFFDDB3",
     "0x000000", "0x141414", "0x282828", "0x3C3C3C", "0x505050", "0x646464", "0x8C8C8C", "0xA0A0A0", "0xB4B4B4", "0xC8C8C8", "0xDCDCDC", "0xFFFFFF"};
 
-static const std::vector<std::string> font_names = {"OG", "Next"};
+struct FontEntry {
+    std::string filename;
+    std::string label;
+};
+
+static std::vector<FontEntry> enumerateFonts() {
+    std::vector<FontEntry> fonts;
+    fonts.push_back({"font1.ttf", "Next"});
+    fonts.push_back({"font2.ttf", "OG"});
+
+    DIR *dir = opendir(RES_PATH);
+    if (dir) {
+        struct dirent *ent;
+        while ((ent = readdir(dir)) != NULL) {
+            if (ent->d_name[0] == '.') continue;
+            // skip built-in/system fonts (font1/font2 already added above)
+            if (strcmp(ent->d_name, "font1.ttf") == 0 || strcmp(ent->d_name, "font2.ttf") == 0)
+                continue;
+            if (strncmp(ent->d_name, "BPreplay", 8) == 0)
+                continue;
+            size_t len = strlen(ent->d_name);
+            if (len < 5) continue;
+            const char *ext = ent->d_name + len - 4;
+            if (strcasecmp(ext, ".ttf") != 0 && strcasecmp(ext, ".otf") != 0)
+                continue;
+
+            // build display name: strip extension, replace underscores
+            std::string label(ent->d_name, len - 4);
+            std::replace(label.begin(), label.end(), '_', ' ');
+
+            fonts.push_back({std::string(ent->d_name), label});
+        }
+        closedir(dir);
+    }
+
+    return fonts;
+}
 
 static const std::vector<std::any>    screen_timeout_secs = {0U, 5U, 10U, 15U, 30U, 45U, 60U, 90U, 120U, 240U, 360U, 600U};
 static const std::vector<std::string> screen_timeout_labels = {"Never", "5s", "10s", "15s", "30s", "45s", "60s", "90s", "2m", "4m", "6m", "10m"};
@@ -354,10 +392,17 @@ int main(int argc, char *argv[])
         }
 
         std::vector<AbstractMenuItem *> appearanceItems;
-        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Font", "The font to render all UI text.", {0, 1}, font_names,
-            []() -> std::any{ return CFG_getFontId(); },
-            [](const std::any &value){ CFG_setFontId(std::any_cast<int>(value)); },
-            []() { CFG_setFontId(CFG_DEFAULT_FONT_ID);}});
+        auto fonts = enumerateFonts();
+        std::vector<std::any> font_values;
+        std::vector<std::string> font_labels;
+        for (const auto &f : fonts) {
+            font_values.push_back(f.filename);
+            font_labels.push_back(f.label);
+        }
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Font", "The font to render all UI text.", font_values, font_labels,
+            []() -> std::any { return std::string(CFG_getFontFile()); },
+            [](const std::any &value) { CFG_setFontFile(std::any_cast<std::string>(value).c_str()); },
+            []() { CFG_setFontFile(CFG_DEFAULT_FONT_FILE); }});
         for (auto *item : colorMenuItems)
             appearanceItems.push_back(item);
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show battery percentage", "Show battery level as percent in the status pill", {false, true}, on_off,
