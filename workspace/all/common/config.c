@@ -31,6 +31,7 @@ void CFG_defaults(NextUISettings *cfg)
 
     NextUISettings defaults = {
         .fontFile = CFG_DEFAULT_FONT_FILE,
+        .fontStyle = CFG_DEFAULT_FONT_STYLE,
         .color1_255 = CFG_DEFAULT_COLOR1,
         .color2_255 = CFG_DEFAULT_COLOR2,
         .color3_255 = CFG_DEFAULT_COLOR3,
@@ -412,6 +413,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "raAchievementSortOrder=%i", &temp_value) == 1)
             {
                 CFG_setRAAchievementSortOrder(temp_value);
+                continue;
+            }
+            if (sscanf(line, "fontStyle=%i", &temp_value) == 1)
+            {
+                CFG_setFontStyle(temp_value);
                 continue;
             }
         }
@@ -1086,6 +1092,19 @@ void CFG_setRAAchievementSortOrder(int sortOrder)
     CFG_sync();
 }
 
+int CFG_getFontStyle(void)
+{
+    return settings.fontStyle;
+}
+
+void CFG_setFontStyle(int style)
+{
+    settings.fontStyle = clamp(style, 0x00, 0x01);
+    CFG_sync();
+    // reload the font to apply the new style (if the font supports it)
+    CFG_setFontFile(CFG_getFontFile());
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -1245,6 +1264,70 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getCurrentTimezone());
     }
+    else if (strcmp(key, "notifyManualSave") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getNotifyManualSave()));
+    }
+    else if (strcmp(key, "notifyLoad") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getNotifyLoad()));
+    }
+    else if (strcmp(key, "notifyScreenshot") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getNotifyScreenshot()));
+    }
+    else if (strcmp(key, "notifyAdjustments") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getNotifyAdjustments()));
+    }
+    else if (strcmp(key, "notifyDuration") == 0)
+    {
+        sprintf(value, "%i", CFG_getNotifyDuration());
+    }
+    else if (strcmp(key, "raEnable") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getRAEnable()));
+    }
+    else if (strcmp(key, "raUsername") == 0)
+    {
+        sprintf(value, "%s", CFG_getRAUsername());
+    }
+    else if (strcmp(key, "raHardcoreMode") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getRAHardcoreMode()));
+    }
+    else if (strcmp(key, "raToken") == 0)
+    {
+        sprintf(value, "%s", CFG_getRAToken());
+    }
+    else if (strcmp(key, "raServerUsername") == 0)
+    {
+        sprintf(value, "%s", CFG_getRAServerUsername());
+    }
+    else if (strcmp(key, "raAuthenticated") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getRAAuthenticated()));
+    }
+    else if (strcmp(key, "raShowNotifications") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getRAShowNotifications()));
+    }
+    else if (strcmp(key, "raNotificationDuration") == 0)
+    {
+        sprintf(value, "%i", CFG_getRANotificationDuration());
+    }
+    else if (strcmp(key, "raProgressNotificationDuration") == 0)
+    {
+        sprintf(value, "%i", CFG_getRAProgressNotificationDuration());
+    }
+    else if (strcmp(key, "raAchievementSortOrder") == 0)
+    {
+        sprintf(value, "%i", CFG_getRAAchievementSortOrder());
+    }
+    else if (strcmp(key, "fontStyle") == 0)
+    {
+        sprintf(value, "%i", CFG_getFontStyle());
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -1338,6 +1421,7 @@ void CFG_sync(void)
     fprintf(file, "raNotificationDuration=%i\n", settings.raNotificationDuration);
     fprintf(file, "raProgressNotificationDuration=%i\n", settings.raProgressNotificationDuration);
     fprintf(file, "raAchievementSortOrder=%i\n", settings.raAchievementSortOrder);
+    fprintf(file, "fontStyle=%i\n", settings.fontStyle);
 
     fclose(file);
 }
@@ -1388,6 +1472,22 @@ void CFG_print(void)
     printf("\t\"btMaxRate\": %i,\n", settings.bluetoothSamplerateLimit);
     printf("\t\"ntp\": %i,\n", settings.ntp);
     printf("\t\"currentTimezone\": %i,\n", settings.currentTimezone);
+    printf("\t\"notifyManualSave\": %i,\n", settings.notifyManualSave);
+    printf("\t\"notifyLoad\": %i,\n", settings.notifyLoad);
+    printf("\t\"notifyScreenshot\": %i,\n", settings.notifyScreenshot);
+    printf("\t\"notifyAdjustments\": %i,\n", settings.notifyAdjustments);
+    printf("\t\"notifyDuration\": %i,\n", settings.notifyDuration);
+    printf("\t\"raEnable\": %i,\n", settings.raEnable);
+    printf("\t\"raUsername\": \"%s\",\n", settings.raUsername);
+    printf("\t\"raHardcoreMode\": %i,\n", settings.raHardcoreMode);
+    printf("\t\"raToken\": \"%s\",\n", settings.raToken);
+    printf("\t\"raServerUsername\": \"%s\",\n", settings.raServerUsername);
+    printf("\t\"raAuthenticated\": %i,\n", settings.raAuthenticated);
+    printf("\t\"raShowNotifications\": %i,\n", settings.raShowNotifications);
+    printf("\t\"raNotificationDuration\": %i,\n", settings.raNotificationDuration);
+    printf("\t\"raProgressNotificationDuration\": %i,\n", settings.raProgressNotificationDuration);
+    printf("\t\"raAchievementSortOrder\": %i,\n", settings.raAchievementSortOrder);
+    printf("\t\"fontStyle\": %i,\n", settings.fontStyle);
 
     // meta, not a real setting
     printf("\t\"fontpath\": \"%s/%s\"\n", RES_PATH, CFG_getFontFile());
