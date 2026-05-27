@@ -13,9 +13,41 @@ sleep_retval=1
 
 asound_state_dir=/tmp/asound-suspend
 
+read_wakeup_count() {
+	local tmp="/tmp/wakeup_count.$$"
+	local pid
+
+	cat /sys/power/wakeup_count >"$tmp" 2>/dev/null &
+	pid=$!
+
+	# Guard against kernels that can block indefinitely on wakeup_count reads.
+	for _ in 1 2 3 4 5; do
+		kill -0 "$pid" 2>/dev/null || break
+		usleep 200000
+	done
+
+	if kill -0 "$pid" 2>/dev/null; then
+		kill -9 "$pid" 2>/dev/null
+		wait "$pid" 2>/dev/null
+		rm -f "$tmp"
+		return 1
+	fi
+
+	wait "$pid" 2>/dev/null
+	cat "$tmp" 2>/dev/null
+	rm -f "$tmp"
+	return 0
+}
+
 log_wakeup_sources() {
 	local label="$1"
-	>&2 echo "  [$label] wakeup_count: $(cat /sys/power/wakeup_count 2>/dev/null)"
+	local wakeup_count
+	wakeup_count="$(read_wakeup_count 2>/dev/null || true)"
+	if [ -n "$wakeup_count" ]; then
+		>&2 echo "  [$label] wakeup_count: $wakeup_count"
+	else
+		>&2 echo "  [$label] wakeup_count: unavailable (read timed out)"
+	fi
 	if [ -f /sys/power/pm_wakeup_irq ]; then
 		>&2 echo "  [$label] last wakeup IRQ: $(cat /sys/power/pm_wakeup_irq 2>/dev/null)"
 	fi
@@ -101,7 +133,7 @@ for i in $(seq 1 $sleep_max_tries); do
 
 	# Synchronize with wakeup events: read wakeup_count and write it back.
 	# If a wakeup event occurred since reading, the write fails and we retry.
-	wakeup_count=$(cat /sys/power/wakeup_count 2>/dev/null)
+	wakeup_count="$(read_wakeup_count 2>/dev/null || true)"
 	if [ -n "$wakeup_count" ]; then
 		if ! echo "$wakeup_count" >/sys/power/wakeup_count 2>/dev/null; then
 			>&2 echo "Deep sleep: wakeup event detected before sleep (wakeup_count=$wakeup_count), retrying in 1 second"
