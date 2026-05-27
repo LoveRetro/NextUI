@@ -1228,7 +1228,6 @@ void SetRawVolume(int val) { // in: 0-100
 			card_num = 0; // fallback to card 0 if we can't find it
 		}
 
-        // Speaker path: use direct lookup by name
 		struct mixer *mixer = mixer_open(card_num);
         if (!mixer) {
             printf("Failed to open mixer\n"); fflush(stdout);
