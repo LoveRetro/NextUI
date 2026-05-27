@@ -403,6 +403,10 @@ int main(int argc, char *argv[])
             []() -> std::any { return std::string(CFG_getFontFile()); },
             [](const std::any &value) { CFG_setFontFile(std::any_cast<std::string>(value).c_str()); },
             []() { CFG_setFontFile(CFG_DEFAULT_FONT_FILE); }});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Font style", "The style to render the UI font (e.g. bold)", std::vector<std::any>{0, 1}, std::vector<std::string>{"Normal", "Bold"},
+            []() -> std::any { return CFG_getFontStyle(); },
+            [](const std::any &value) { CFG_setFontStyle(std::any_cast<int>(value)); },
+            []() { CFG_setFontStyle(CFG_DEFAULT_FONT_STYLE); }});
         for (auto *item : colorMenuItems)
             appearanceItems.push_back(item);
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show battery percentage", "Show battery level as percent in the status pill", {false, true}, on_off,
