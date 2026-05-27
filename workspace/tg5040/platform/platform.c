@@ -332,9 +332,15 @@ void PLAT_setRumble(int strength) {
 }
 
 int PLAT_pickSampleRate(int requested, int max) {
-	// bluetooth: allow limiting the maximum to improve compatibility
-	if(PLAT_bluetoothConnected())
-		return MIN(requested, CFG_getBluetoothSamplingrateLimit());
+	// bluetooth: allow limiting the maximum to improve compatibility.
+	// Some cores request non-standard rates (>48k). For those, prefer 44.1k
+	// over 48k to avoid unstable A2DP renegotiation on certain headsets.
+	if(PLAT_bluetoothConnected()) {
+		int limit = MIN(max, CFG_getBluetoothSamplingrateLimit());
+		if (requested > 48000)
+			return MIN(44100, limit);
+		return MIN(requested, limit);
+	}
 
 	return MIN(requested, max);
 }

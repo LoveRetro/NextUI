@@ -117,6 +117,7 @@ void recoverPreviousConfig() {
 
     connected_a2dp_mac = content.substr(pos, end - pos);
     log("Restored BT state from .asoundrc: " + connected_a2dp_mac);
+    SetAudioSink(AUDIO_SINK_BLUETOOTH);
 }
 
 std::string pathToMac(const std::string& path) {
@@ -171,6 +172,36 @@ bool isUsbAudioDevice(struct udev_device* dev) {
     }
     
     return false;
+}
+
+// Returns false if the device is truly gone (query fails or Connected=false).
+// Used to filter out transient disconnects BlueZ emits during A2DP negotiation.
+bool isDeviceConnected(DBusConnection* conn, const std::string& path) {
+    DBusMessage* msg = dbus_message_new_method_call("org.bluez", path.c_str(),
+        "org.freedesktop.DBus.Properties", "Get");
+    if (!msg) return false;
+
+    const char* iface = "org.bluez.Device1";
+    const char* prop  = "Connected";
+    dbus_message_append_args(msg,
+        DBUS_TYPE_STRING, &iface,
+        DBUS_TYPE_STRING, &prop,
+        DBUS_TYPE_INVALID);
+
+    DBusMessage* reply = dbus_connection_send_with_reply_and_block(conn, msg, 1000, nullptr);
+    dbus_message_unref(msg);
+    if (!reply) return false;
+
+    DBusMessageIter iter, variant;
+    dbus_message_iter_init(reply, &iter);
+    dbus_message_iter_recurse(&iter, &variant);
+
+    dbus_bool_t connected = false;
+    if (dbus_message_iter_get_arg_type(&variant) == DBUS_TYPE_BOOLEAN)
+        dbus_message_iter_get_basic(&variant, &connected);
+
+    dbus_message_unref(reply);
+    return connected;
 }
 
 bool hasUUID(DBusConnection* conn, const std::string& path, const std::string& uuid) {
@@ -235,6 +266,13 @@ void handleDeviceDisconnected(DBusConnection* conn, const std::string& path) {
     // device's service cache may already be gone, causing hasUUID to return false
     // and silently skip the audio switch-back.
     if (hasUUID(conn, path, UUID_A2DP) || (!connected_a2dp_mac.empty() && mac == connected_a2dp_mac)) {
+        // BlueZ emits Connected=false/true in rapid succession during A2DP profile
+        // negotiation (e.g. JustWorksRepairing). Verify the device is truly gone
+        // before tearing down the transport keep-alive and audio routing.
+        if (isDeviceConnected(conn, path)) {
+            log("Transient disconnect for " + mac + " (device still connected per BlueZ), ignoring");
+            return;
+        }
         log("Audio device disconnected: " + mac);
         connected_a2dp_mac.clear();
         clearAudioFile();
@@ -245,7 +283,7 @@ void handleDeviceDisconnected(DBusConnection* conn, const std::string& path) {
             if (system("pidof bluealsa > /dev/null 2>&1") != 0) break;
             usleep(100000); // 100ms
         }
-        system("bluealsa -p a2dp-source &");
+        system("bluealsa -p a2dp-source --keep-alive=10 &");
         
         // TODO: we could maintain a stack here, if USBC was connected before and restore that instead
         SetAudioSink(AUDIO_SINK_DEFAULT);

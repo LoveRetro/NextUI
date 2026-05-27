@@ -2888,7 +2888,12 @@ void SND_init(double sample_rate, double frame_rate)
 
 	LOG_info("We now have audio device #%d\n", snd.device_id);
 
-	snd.frame_count = ((float)spec_out.freq / SCREEN_FPS) * 8; // buffer size based on sample rate out (times 12 samples headroom)
+	// Increase headroom for BT + high-rate cores (e.g. 65536 Hz GBA input)
+	// to reduce underruns/crackle after resampling.
+	int buffer_headroom = 8;
+	if (PLAT_btIsConnected() && sample_rate > 48000.0)
+		buffer_headroom = 12;
+	snd.frame_count = ((float)spec_out.freq / SCREEN_FPS) * buffer_headroom;
 	perf.buffer_size = snd.frame_count;
 	snd.sample_rate_in = sample_rate;
 	snd.sample_rate_out = spec_out.freq;

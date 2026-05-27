@@ -69,8 +69,7 @@ start_bt() {
 
 	a=`ps | grep bluealsa | grep -v grep`
 	[ -z "$a" ] && {
-		# bluealsa -p a2dp-source --keep-alive=-1 &
-		bluealsa -p a2dp-source &
+		bluealsa -p a2dp-source --keep-alive=10 &
 		sleep 1
 		# Power on adapter
 		bluetoothctl power on 2>/dev/null
