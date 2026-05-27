@@ -3,6 +3,17 @@
 bt_hciattach="hciattach"
 TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
 DEVICE_NAME="$TRIMUI_MODEL (NextUI)"
+RFKILL_BIN="/mnt/SDCARD/.system/tg5040/bin/rfkill.elf"
+
+unblock_bluetooth() {
+	if [ -x "$RFKILL_BIN" ]; then
+		"$RFKILL_BIN" unblock bluetooth
+	elif command -v rfkill.elf >/dev/null 2>&1; then
+		rfkill.elf unblock bluetooth
+	else
+		rfkill unblock bluetooth
+	fi
+}
 
 reset_bluetooth_power() {
 	echo 0 > /sys/class/rfkill/rfkill0/state;
@@ -36,7 +47,7 @@ start_hci_attach() {
 }
 
 start_bt() {
-	rfkill.elf unblock bluetooth
+	unblock_bluetooth
 
 	if [ -d "/sys/class/bluetooth/hci0" ];then
 		echo "Bluetooth init has been completed!!"
@@ -61,8 +72,7 @@ start_bt() {
 
 	a=`ps | grep bluealsa | grep -v grep`
 	[ -z "$a" ] && {
-		# bluealsa -p a2dp-source --keep-alive=-1 &
-		bluealsa -p a2dp-source &
+		bluealsa -p a2dp-source --keep-alive=10 &
 		sleep 1
 		# Power on adapter
 		bluetoothctl power on 2>/dev/null
@@ -98,7 +108,7 @@ start_bt() {
 }
 
 ble_start() {
-	rfkill.elf unblock bluetooth
+	unblock_bluetooth
 
 	if [ -d "/sys/class/bluetooth/hci0" ];then
 		echo "Bluetooth init has been completed!!"
