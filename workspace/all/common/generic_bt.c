@@ -697,7 +697,9 @@ static void *watcher_thread_func(void *arg) {
                 if (event->mask & (IN_MODIFY | IN_CLOSE_WRITE | IN_DELETE_SELF)) {
                     if (event->mask & IN_DELETE_SELF) {
                         remove_file_watch();
-						if (callback_fn) callback_fn(AUDIO_SINK_DEFAULT, FILEWATCH_DELETE);
+						// Deleting .asoundrc while a core is running can force an
+						// unsafe live audio sink transition. Ignore delete events;
+						// rely on subsequent create/modify when a new sink appears.
                     }
 					// No need to react to this, it usually comes paired with FILEWATCH_MODIFY
 					//else if (event->mask & IN_CLOSE_WRITE) {
