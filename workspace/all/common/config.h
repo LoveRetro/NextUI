@@ -86,6 +86,7 @@ typedef struct
 {
 	// Theme
 	char fontFile[256];
+	char themeFolder[256]; // empty means off
 	int fontStyle; // 0x00 = TTF_STYLE_NORMAL, 0x01 = TTF_STYLE_BOLD, etc.
 	uint32_t color1_255; // not screen mapped
 	uint32_t color2_255; // not screen mapped
@@ -172,6 +173,7 @@ typedef struct
 #define TRANSITION_COMFY  2
 
 #define CFG_DEFAULT_FONT_FILE "font1.ttf"  // Next
+#define CFG_DEFAULT_THEME_FOLDER ""
 #define CFG_DEFAULT_FONT_STYLE 0x01 // TTF_STYLE_BOLD (MinUI default)
 #define CFG_DEFAULT_COLOR1 0xffffffU
 #define CFG_DEFAULT_COLOR2 0x9b2257U
@@ -254,6 +256,8 @@ void CFG_get(const char *key, char * value);
 // Custom fonts go in RES_PATH alongside built-in fonts.
 const char* CFG_getFontFile(void);
 void CFG_setFontFile(const char* filename);
+const char* CFG_getThemeFolder(void);
+void CFG_setThemeFolder(const char* folder);
 // The font style to use for the UI font.
 int CFG_getFontStyle(void);
 void CFG_setFontStyle(int style);

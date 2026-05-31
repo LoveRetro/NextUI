@@ -31,6 +31,7 @@ void CFG_defaults(NextUISettings *cfg)
 
     NextUISettings defaults = {
         .fontFile = CFG_DEFAULT_FONT_FILE,
+        .themeFolder = CFG_DEFAULT_THEME_FOLDER,
         .fontStyle = CFG_DEFAULT_FONT_STYLE,
         .color1_255 = CFG_DEFAULT_COLOR1,
         .color2_255 = CFG_DEFAULT_COLOR2,
@@ -132,6 +133,13 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 else
                     CFG_setFontFile(value);
                 fontLoaded = true;
+                continue;
+            }
+            if (strncmp(line, "theme=", 6) == 0)
+            {
+                char *value = line + 6;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setThemeFolder(value);
                 continue;
             }
             if (sscanf(line, "color1=%x", &temp_color) == 1)
@@ -465,6 +473,23 @@ void CFG_setFontFile(const char* filename)
 
     if (settings.onFontChange)
         settings.onFontChange(fontPath);
+}
+
+const char* CFG_getThemeFolder(void)
+{
+    return settings.themeFolder;
+}
+
+// empty folder means theme off
+void CFG_setThemeFolder(const char* folder)
+{
+    if (!folder || !folder[0] || strchr(folder, '/')) {
+        strncpy(settings.themeFolder, CFG_DEFAULT_THEME_FOLDER, sizeof(settings.themeFolder) - 1);
+        settings.themeFolder[sizeof(settings.themeFolder) - 1] = '\0';
+    } else {
+        strncpy(settings.themeFolder, folder, sizeof(settings.themeFolder) - 1);
+        settings.themeFolder[sizeof(settings.themeFolder) - 1] = '\0';
+    }
 }
 
 uint32_t CFG_getColor(int color_id)
@@ -1328,6 +1353,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getFontStyle());
     }
+    else if (strcmp(key, "theme") == 0)
+    {
+        sprintf(value, "%s", CFG_getThemeFolder());
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -1367,6 +1396,9 @@ void CFG_sync(void)
         fprintf(file, "font=0\n");
     else
         fprintf(file, "font=%s\n", settings.fontFile);
+    // off stays out of the file so old installs stay the same
+    if (settings.themeFolder[0])
+        fprintf(file, "theme=%s\n", settings.themeFolder);
     fprintf(file, "color1=0x%06X\n", settings.color1_255);
     fprintf(file, "color2=0x%06X\n", settings.color2_255);
     fprintf(file, "color3=0x%06X\n", settings.color3_255);
@@ -1434,6 +1466,7 @@ void CFG_print(void)
         printf("\t\"font\": 0,\n");
     else
         printf("\t\"font\": 1,\n");
+    printf("\t\"theme\": \"%s\",\n", settings.themeFolder);
     printf("\t\"color1\": \"0x%06X\",\n", settings.color1_255);
     printf("\t\"color2\": \"0x%06X\",\n", settings.color2_255);
     printf("\t\"color3\": \"0x%06X\",\n", settings.color3_255);

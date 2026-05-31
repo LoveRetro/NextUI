@@ -136,6 +136,74 @@ typedef struct Entry {
 	int alpha; // index in parent Directory's alphas Array, which points to the index of an Entry in its entries Array :sweat_smile:
 } Entry;
 
+// theme bg.png replaces root bg.png when selected
+static void getDefaultBackgroundPath(char* out_path, size_t out_size) {
+	const char* theme = CFG_getThemeFolder();
+	if (theme && theme[0]) {
+		char theme_path[MAX_PATH];
+		snprintf(theme_path, sizeof(theme_path), SDCARD_PATH "/Themes/%s/bg.png", theme);
+		if (exists(theme_path)) {
+			snprintf(out_path, out_size, "%s", theme_path);
+			return;
+		}
+	}
+	snprintf(out_path, out_size, SDCARD_PATH "/bg.png");
+}
+
+// these menu folders use plain theme names
+static int getSpecialBackgroundName(char* folder_path, char* out_name) {
+	if (exactMatch(folder_path, COLLECTIONS_PATH))
+		strcpy(out_name, "Collections");
+	else if (exactMatch(folder_path, FAUX_RECENT_PATH))
+		strcpy(out_name, "Recently Played");
+	else if (exactMatch(folder_path, TOOLS_PATH))
+		strcpy(out_name, "Tools");
+	else
+		return 0;
+	return 1;
+}
+
+// pick a background without breaking old .media folders
+static int getBackgroundPath(char* out_path, size_t out_size, char* folder_path, int type, char* default_path) {
+	if (type == ENTRY_DIR)
+		snprintf(out_path, out_size, "%s/.media/bg.png", folder_path);
+	else if (type == ENTRY_ROM)
+		snprintf(out_path, out_size, "%s/.media/bglist.png", folder_path);
+	else {
+		snprintf(out_path, out_size, "%s", default_path);
+		return 0;
+	}
+
+	// old media backgrounds stay first for compatibility and per-folder overrides
+	if (exists(out_path)) return 1;
+
+	const char* theme = CFG_getThemeFolder();
+	if (theme && theme[0]) {
+		char theme_name[MAX_PATH];
+		char theme_path[MAX_PATH];
+		theme_name[0] = '\0';
+
+		if (!exactMatch(folder_path, ROMS_PATH) && prefixMatch(ROMS_PATH, folder_path))
+			getEmuName(folder_path, theme_name);
+		else
+			getSpecialBackgroundName(folder_path, theme_name);
+
+		if (theme_name[0]) {
+			if (type == ENTRY_DIR)
+				snprintf(theme_path, sizeof(theme_path), SDCARD_PATH "/Themes/%s/%s.png", theme, theme_name);
+			else
+				snprintf(theme_path, sizeof(theme_path), SDCARD_PATH "/Themes/%s/%s-list.png", theme, theme_name);
+			if (exists(theme_path)) {
+				snprintf(out_path, out_size, "%s", theme_path);
+				return 1;
+			}
+		}
+	}
+
+	snprintf(out_path, out_size, "%s", default_path);
+	return 0;
+}
+
 static Entry* Entry_new(char* path, int type) {
 	char display_name[256];
 	getDisplayName(path, display_name);
@@ -2950,7 +3018,7 @@ int main (int argc, char *argv[]) {
 
 				// load folder background
 				char defaultBgPath[512];
-				snprintf(defaultBgPath, sizeof(defaultBgPath), SDCARD_PATH "/bg.png");
+				getDefaultBackgroundPath(defaultBgPath, sizeof(defaultBgPath));
 
 				if(((entry->type == ENTRY_DIR || entry->type == ENTRY_ROM) && CFG_getRomsUseFolderBackground())) {
 					char *newBg = entry->type == ENTRY_DIR ? entry->path:rompath;
@@ -2958,14 +3026,9 @@ int main (int argc, char *argv[]) {
 						lastType = entry->type;
 						char tmppath[512];
 						strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
-						if (entry->type == ENTRY_DIR)
-							snprintf(tmppath, sizeof(tmppath), "%s/.media/bg.png", folderBgPath);
-						else if (entry->type == ENTRY_ROM)
-							snprintf(tmppath, sizeof(tmppath), "%s/.media/bglist.png", folderBgPath);
-						if(!exists(tmppath)) {
+						if(!getBackgroundPath(tmppath, sizeof(tmppath), folderBgPath, entry->type, defaultBgPath)) {
 							// Safeguard: If no background is available, still render the text to leave the user a way out
 							list_show_entry_names = true;
-							snprintf(tmppath, sizeof(tmppath), defaultBgPath, folderBgPath);
 						}
 						startLoadFolderBackground(tmppath, onBackgroundLoaded, NULL);
 					}
