@@ -6,13 +6,19 @@ extern "C"
 #include "api.h"
 #include "utils.h"
 #include "ra_auth.h"
+#include "ra_sync.h"
 }
 
 #include <csignal>
+#include <dirent.h>
 #include <fstream>
 #include <memory>
 #include <sstream>
 #include <regex>
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <algorithm>
 #include "wifimenu.hpp"
 #include "btmenu.hpp"
 #include "keyboardprompt.hpp"
@@ -81,7 +87,43 @@ static const std::vector<std::string> color_strings = {
     "0x221100", "0x442200", "0x663300", "0x884400", "0xAA5500", "0xCC6600", "0xFF8833", "0xFF994D", "0xFFAA66", "0xFFBB80", "0xFFCC99", "0xFFDDB3",
     "0x000000", "0x141414", "0x282828", "0x3C3C3C", "0x505050", "0x646464", "0x8C8C8C", "0xA0A0A0", "0xB4B4B4", "0xC8C8C8", "0xDCDCDC", "0xFFFFFF"};
 
-static const std::vector<std::string> font_names = {"OG", "Next"};
+struct FontEntry {
+    std::string filename;
+    std::string label;
+};
+
+static std::vector<FontEntry> enumerateFonts() {
+    std::vector<FontEntry> fonts;
+    fonts.push_back({"font1.ttf", "Next"});
+    fonts.push_back({"font2.ttf", "OG"});
+
+    DIR *dir = opendir(RES_PATH);
+    if (dir) {
+        struct dirent *ent;
+        while ((ent = readdir(dir)) != NULL) {
+            if (ent->d_name[0] == '.') continue;
+            // skip built-in/system fonts (font1/font2 already added above)
+            if (strcmp(ent->d_name, "font1.ttf") == 0 || strcmp(ent->d_name, "font2.ttf") == 0)
+                continue;
+            if (strncmp(ent->d_name, "BPreplay", 8) == 0)
+                continue;
+            size_t len = strlen(ent->d_name);
+            if (len < 5) continue;
+            const char *ext = ent->d_name + len - 4;
+            if (strcasecmp(ext, ".ttf") != 0 && strcasecmp(ext, ".otf") != 0)
+                continue;
+
+            // build display name: strip extension, replace underscores
+            std::string label(ent->d_name, len - 4);
+            std::replace(label.begin(), label.end(), '_', ' ');
+
+            fonts.push_back({std::string(ent->d_name), label});
+        }
+        closedir(dir);
+    }
+
+    return fonts;
+}
 
 static const std::vector<std::any>    screen_timeout_secs = {0U, 5U, 10U, 15U, 30U, 45U, 60U, 90U, 120U, 240U, 360U, 600U};
 static const std::vector<std::string> screen_timeout_labels = {"Never", "5s", "10s", "15s", "30s", "45s", "60s", "90s", "2m", "4m", "6m", "10m"};
@@ -281,7 +323,7 @@ int main(int argc, char *argv[])
         LOG_info("This is stock OS version %s\n", version);
         InitSettings();
 
-        PWR_setCPUSpeed(CPU_SPEED_MENU);
+        PWR_setCPUSpeed(CPU_SPEED_AUTO);
 
         Context ctx = {0};
         ctx.dirty = 1;
@@ -350,10 +392,21 @@ int main(int argc, char *argv[])
         }
 
         std::vector<AbstractMenuItem *> appearanceItems;
-        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Font", "The font to render all UI text.", {0, 1}, font_names,
-            []() -> std::any{ return CFG_getFontId(); },
-            [](const std::any &value){ CFG_setFontId(std::any_cast<int>(value)); },
-            []() { CFG_setFontId(CFG_DEFAULT_FONT_ID);}});
+        auto fonts = enumerateFonts();
+        std::vector<std::any> font_values;
+        std::vector<std::string> font_labels;
+        for (const auto &f : fonts) {
+            font_values.push_back(f.filename);
+            font_labels.push_back(f.label);
+        }
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Font", "The font to render all UI text.", font_values, font_labels,
+            []() -> std::any { return std::string(CFG_getFontFile()); },
+            [](const std::any &value) { CFG_setFontFile(std::any_cast<std::string>(value).c_str()); },
+            []() { CFG_setFontFile(CFG_DEFAULT_FONT_FILE); }});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Font style", "The style to render the UI font (e.g. bold)", std::vector<std::any>{0, 1}, std::vector<std::string>{"Normal", "Bold"},
+            []() -> std::any { return CFG_getFontStyle(); },
+            [](const std::any &value) { CFG_setFontStyle(std::any_cast<int>(value)); },
+            []() { CFG_setFontStyle(CFG_DEFAULT_FONT_STYLE); }});
         for (auto *item : colorMenuItems)
             appearanceItems.push_back(item);
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show battery percentage", "Show battery level as percent in the status pill", {false, true}, on_off,
@@ -776,6 +829,121 @@ int main(int argc, char *argv[])
             []() -> std::any { return CFG_getRAAchievementSortOrder(); },
             [](const std::any &value) { CFG_setRAAchievementSortOrder(std::any_cast<int>(value)); },
             []() { CFG_setRAAchievementSortOrder(CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER);}},
+            new MenuItem{ListItemType::Button, "Sync Offline Unlocks",
+            []() -> std::string {
+                uint32_t count = 0;
+                RA_Sync_hasPendingUnlocks(&count);
+                if (count > 0) {
+                    char buf[64];
+                    snprintf(buf, sizeof(buf), "%u pending \u2014 send to RA server", count);
+                    return std::string(buf);
+                }
+                return std::string("No pending unlocks");
+            }(),
+            [](AbstractMenuItem &item) -> InputReactionHint {
+                // Check authentication
+                if (!CFG_getRAAuthenticated() || strlen(CFG_getRAToken()) == 0) {
+                    item.setDesc("Not authenticated");
+                    return NoOp;
+                }
+
+                // Check for pending unlocks
+                uint32_t pending = 0;
+                if (!RA_Sync_hasPendingUnlocks(&pending) || pending == 0) {
+                    item.setDesc("No pending unlocks");
+                    return NoOp;
+                }
+
+                // Show initial overlay with cancel hint
+                char msg[128];
+                snprintf(msg, sizeof(msg), "Syncing %u achievement%s...\n\n(0/%u)",
+                         pending, pending == 1 ? "" : "s", pending);
+                MenuList::showOverlay(msg, OverlayDismissMode::None);
+
+                // Shared state between sync thread and main thread
+                SDL_atomic_t cancel;
+                SDL_AtomicSet(&cancel, 0);
+                std::atomic<bool> done{false};
+                std::mutex progress_mutex;
+                std::string progress_msg;
+                std::atomic<bool> progress_dirty{false};
+                RA_SyncResult sync_result = {0, 0, 0, 0};
+
+                // Progress callback updates shared message string
+                struct ProgressCtx {
+                    std::mutex* mutex;
+                    std::atomic<bool>* dirty;
+                    std::string* msg;
+                    uint32_t total;
+                };
+                ProgressCtx pctx = {&progress_mutex, &progress_dirty, &progress_msg, pending};
+
+                // Launch sync on background thread (game_id=0 for all games, NULL config for interactive defaults)
+                std::thread sync_thread([&]() {
+                    sync_result = RA_Sync_syncAll(0, NULL, &cancel,
+                        [](uint32_t current, uint32_t total, bool success, void* userdata) {
+                            auto* ctx = static_cast<ProgressCtx*>(userdata);
+                            char buf[128];
+                            snprintf(buf, sizeof(buf), "Syncing achievements...\n\n(%u/%u)",
+                                     current, ctx->total);
+                            {
+                                std::lock_guard<std::mutex> lock(*ctx->mutex);
+                                *ctx->msg = buf;
+                            }
+                            ctx->dirty->store(true);
+                        }, &pctx);
+                    done.store(true);
+                });
+
+                // Main thread: poll for B-button cancel and update overlay
+                while (!done.load()) {
+                    GFX_startFrame();
+                    PAD_poll();
+
+                    if (PAD_justPressed(BTN_B)) {
+                        SDL_AtomicSet(&cancel, 1);
+                        MenuList::showOverlay("Cancelling sync...", OverlayDismissMode::None);
+                    }
+
+                    // Update overlay if progress changed
+                    if (progress_dirty.exchange(false)) {
+                        std::string current_msg;
+                        {
+                            std::lock_guard<std::mutex> lock(progress_mutex);
+                            current_msg = progress_msg;
+                        }
+                        if (!SDL_AtomicGet(&cancel)) {
+                            MenuList::showOverlay(current_msg, OverlayDismissMode::None);
+                        }
+                    }
+
+                    GFX_sync();
+                }
+
+                sync_thread.join();
+                MenuList::hideOverlay();
+
+                // Update button description with result
+                if (SDL_AtomicGet(&cancel) && sync_result.synced == 0) {
+                    item.setDesc("Sync cancelled");
+                } else if (SDL_AtomicGet(&cancel) && sync_result.synced > 0) {
+                    snprintf(msg, sizeof(msg), "Cancelled: %u of %u synced",
+                             sync_result.synced, sync_result.total);
+                    item.setDesc(msg);
+                } else if (sync_result.failed > 0) {
+                    snprintf(msg, sizeof(msg), "Incomplete: %u synced, retry later",
+                             sync_result.synced);
+                    item.setDesc(msg);
+                } else if (sync_result.synced > 0) {
+                    snprintf(msg, sizeof(msg), "Synced %u achievement%s",
+                             sync_result.synced, sync_result.synced == 1 ? "" : "s");
+                    item.setDesc(msg);
+                } else {
+                    item.setDesc("No pending unlocks");
+                }
+
+                return NoOp;
+            }},
             new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu},
         });
 

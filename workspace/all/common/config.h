@@ -85,7 +85,8 @@ enum {
 typedef struct
 {
 	// Theme
-	int font;
+	char fontFile[256];
+	int fontStyle; // 0x00 = TTF_STYLE_NORMAL, 0x01 = TTF_STYLE_BOLD, etc.
 	uint32_t color1_255; // not screen mapped
 	uint32_t color2_255; // not screen mapped
 	uint32_t color3_255; // not screen mapped
@@ -156,6 +157,7 @@ typedef struct
 	char raPassword[128];
 	bool raHardcoreMode;
 	char raToken[64];           // API token (stored after successful auth)
+	char raServerUsername[64];  // Server's internal username (from avatar URL, used for sync hash)
 	bool raAuthenticated;       // Whether we have a valid token
 	bool raShowNotifications;   // Show achievement unlock notifications
 	int raNotificationDuration; // Duration for achievement notifications (1-5 seconds)
@@ -169,7 +171,8 @@ typedef struct
 #define TRANSITION_SNAPPY 1
 #define TRANSITION_COMFY  2
 
-#define CFG_DEFAULT_FONT_ID 1  // Next
+#define CFG_DEFAULT_FONT_FILE "font1.ttf"  // Next
+#define CFG_DEFAULT_FONT_STYLE 0x01 // TTF_STYLE_BOLD (MinUI default)
 #define CFG_DEFAULT_COLOR1 0xffffffU
 #define CFG_DEFAULT_COLOR2 0x9b2257U
 #define CFG_DEFAULT_COLOR3 0x1e2329U
@@ -229,6 +232,7 @@ typedef struct
 #define CFG_DEFAULT_RA_PASSWORD ""
 #define CFG_DEFAULT_RA_HARDCOREMODE false
 #define CFG_DEFAULT_RA_TOKEN ""
+#define CFG_DEFAULT_RA_SERVER_USERNAME ""
 #define CFG_DEFAULT_RA_AUTHENTICATED false
 #define CFG_DEFAULT_RA_SHOW_NOTIFICATIONS true
 #define CFG_DEFAULT_RA_NOTIFICATION_DURATION 3
@@ -245,11 +249,14 @@ void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
 void CFG_get(const char *key, char * value);
 // void CFG_defaults(NextUISettings*);
-//  The font id to use as the UI font.
-//  0 - Default MinUI font
-//  1 - Default NextUI font (default)
-int CFG_getFontId(void);
-void CFG_setFontId(int fontid);
+// The font filename to use as the UI font.
+// Built-in: "font1.ttf" (Next, default), "font2.ttf" (OG)
+// Custom fonts go in RES_PATH alongside built-in fonts.
+const char* CFG_getFontFile(void);
+void CFG_setFontFile(const char* filename);
+// The font style to use for the UI font.
+int CFG_getFontStyle(void);
+void CFG_setFontStyle(int style);
 // The colors to use for the UI. These are 0xRRGGBB values.
 // 0 - Color1 (primary hint/asset colour)
 // 1 - Color2 (accent colour)
@@ -379,6 +386,14 @@ bool CFG_getRAHardcoreMode(void);
 void CFG_setRAHardcoreMode(bool enable);
 const char* CFG_getRAToken(void);
 void CFG_setRAToken(const char* token);
+const char* CFG_getRAServerUsername(void);
+void CFG_setRAServerUsername(const char* username);
+// Extract the RA server's internal username from any string containing
+// "/UserPic/USERNAME.png" (e.g. an avatar URL or raw JSON) and persist
+// it via CFG_setRAServerUsername().  Returns true if a username was
+// extracted and stored; returns false (and leaves any existing stored
+// value untouched) if the pattern is missing or malformed.
+bool CFG_setRAServerUsernameFromAvatarUrl(const char* str);
 bool CFG_getRAAuthenticated(void);
 void CFG_setRAAuthenticated(bool authenticated);
 bool CFG_getRAShowNotifications(void);

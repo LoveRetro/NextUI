@@ -2259,6 +2259,7 @@ int main (int argc, char *argv[]) {
 	system("gametimectl.elf stop_all");
 
 	GFX_setVsync(VSYNC_STRICT);
+	PWR_setCPUSpeed(CPU_SPEED_AUTO);
 
 	PAD_reset();
 	GFX_clearLayers(LAYER_ALL);
@@ -2268,11 +2269,6 @@ int main (int argc, char *argv[]) {
 	int was_online = PWR_isOnline();
     int had_bt = PLAT_btIsConnected();
 	int had_sink = GetAudioSink();
-
-	pthread_t cpucheckthread = 0;
-	if (pthread_create(&cpucheckthread, NULL, PLAT_cpu_monitor, NULL) == 0) {
-		pthread_detach(cpucheckthread);
-	}
 
 	int selected_row = top->selected - top->start;
 	float targetY;
@@ -2345,6 +2341,7 @@ int main (int argc, char *argv[]) {
 					restore_end = 0;
 				}
 				Entry_open(selected);
+				if (top->entries->count > 0) readyResume(top->entries->items[top->selected]);
 				dirty = 1;
 			}
 			else if (PAD_justPressed(BTN_RIGHT)) {
@@ -2823,10 +2820,10 @@ int main (int argc, char *argv[]) {
 						SDL_FreeSurface(text);
 					}
 
-					if(can_resume) GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 0);
-					else GFX_blitButtonGroup((char*[]){ BTN_SLEEP==BTN_POWER?"POWER":"MENU","SLEEP",  NULL }, 0, screen, 0);
+					GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 0);
 
-					GFX_blitButtonGroup((char*[]){ "Y", "REMOVE", "A","RESUME", NULL }, 1, screen, 1);
+					if(can_resume) GFX_blitButtonGroup((char*[]){ "Y", "REMOVE", "A","RESUME", NULL }, 1, screen, 1);
+					else GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, 1, screen, 1);
 
 					if(has_preview) {
 						// lotta memory churn here

@@ -21,7 +21,8 @@ typedef enum {
     NOTIFICATION_SAVE_STATE,
     NOTIFICATION_LOAD_STATE,
     NOTIFICATION_SETTING,       // volume/brightness/colortemp adjustments
-    NOTIFICATION_ACHIEVEMENT,   // RetroAchievements unlocks
+    NOTIFICATION_ACHIEVEMENT,           // RetroAchievements unlocks
+    NOTIFICATION_OFFLINE_ACHIEVEMENT,   // Offline RA unlocks (shows wifi-off icon)
 } NotificationType;
 
 typedef enum {
@@ -131,7 +132,8 @@ int Notification_getSystemIndicatorWidth(void);
  * They update in-place and auto-hide after a timeout.
  * @param title Achievement title (copied internally)
  * @param progress Progress string like "50/100" (copied internally)
- * @param icon Optional badge icon (can be NULL). Caller retains ownership.
+ * @param icon Optional badge icon (can be NULL). A copy is made internally;
+ *             caller retains ownership of the passed surface.
  */
 void Notification_showProgressIndicator(const char* title, const char* progress, SDL_Surface* icon);
 

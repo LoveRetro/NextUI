@@ -22,12 +22,15 @@ SDL?=SDL
 TARGET = minarch
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 INCDIR = -I. -I./libretro-common/include/ -I../common/ -I../../$(PLATFORM)/platform/
-SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../common/notification.c ../../$(PLATFORM)/platform/platform.c
+SOURCE = $(TARGET).c ma_cheats.c ma_rewind.c ma_audio.c ma_input.c \
+         ma_options.c ma_frontend_opts.c ma_saves.c ma_video.c ma_core.c ma_game.c ma_environment.c ma_config.c ma_menu.c ma_runframe.c \
+         ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c \
+         ../common/notification.c ../../$(PLATFORM)/platform/platform.c
 
 # RA support
 ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355 desktop))
 # RA source files
-SOURCE += ../common/http.c ../common/ra_badges.c ra_integration.c chd_reader.c
+SOURCE += ../common/http.c ../common/ra_badges.c ../common/ra_offline.c ../common/ra_sync.c ../common/ra_event_queue.c ra_integration.c chd_reader.c
 endif
 
 CC = $(CROSS_COMPILE)gcc
@@ -69,7 +72,7 @@ endif
 
 # RA support: rcheevos and libchdr linking
 ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355 desktop))
-LDFLAGS += -lrcheevos -lchdr
+LDFLAGS += -lrcheevos -lchdr -lcrypto
 CFLAGS += -DRC_CLIENT_SUPPORTS_HASH -DHAS_CHEEVOS -DHAS_CHDR
 ifeq ($(PLATFORM), desktop)
 # Desktop needs rpath for local shared library lookup
@@ -100,12 +103,14 @@ ifeq ($(PLATFORM), desktop)
 all: clean libretro-common rcheevos libchdr $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
-else
+else ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))
+# Platforms with RA support
 all: clean libretro-common libsrm.a rcheevos libchdr $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
-	# This is a bandaid fix, needs to be cleaned up if/when we expand to other platforms.
+	cp -L $(PREFIX)/lib/libsamplerate.so.* build/$(PLATFORM)
+	cp -L $(PREFIX)/lib/libcrypto.so.* build/$(PLATFORM)
+	chmod a+r build/$(PLATFORM)/libcrypto.so.*
 ifeq ($(PLATFORM), my355)
-	cp -L $(PREFIX)/lib/libcrypto.so.3 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libsqlite3.so build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libffi.so.7 build/$(PLATFORM)
 	cp -L $(PREFIX)/lib/libtinyalsa.so.2 build/$(PLATFORM)
