@@ -92,6 +92,11 @@ struct FontEntry {
     std::string label;
 };
 
+struct ThemeEntry {
+    std::string folder;
+    std::string label;
+};
+
 static std::vector<FontEntry> enumerateFonts() {
     std::vector<FontEntry> fonts;
     fonts.push_back({"font1.ttf", "Next"});
@@ -123,6 +128,32 @@ static std::vector<FontEntry> enumerateFonts() {
     }
 
     return fonts;
+}
+
+static std::vector<ThemeEntry> enumerateThemes() {
+    std::vector<ThemeEntry> themes;
+    themes.push_back({"", "Off"});
+
+    // theme folders live at the sd root
+    DIR *dir = opendir(SDCARD_PATH "/Themes");
+    if (dir) {
+        struct dirent *ent;
+        while ((ent = readdir(dir)) != NULL) {
+            if (ent->d_name[0] == '.') continue;
+
+            char theme_path[MAX_PATH];
+            snprintf(theme_path, sizeof(theme_path), SDCARD_PATH "/Themes/%s", ent->d_name);
+            DIR *theme_dir = opendir(theme_path);
+            if (!theme_dir)
+                continue;
+            closedir(theme_dir);
+
+            themes.push_back({std::string(ent->d_name), std::string(ent->d_name)});
+        }
+        closedir(dir);
+    }
+
+    return themes;
 }
 
 static const std::vector<std::any>    screen_timeout_secs = {0U, 5U, 10U, 15U, 30U, 45U, 60U, 90U, 120U, 240U, 360U, 600U};
@@ -403,6 +434,17 @@ int main(int argc, char *argv[])
             []() -> std::any { return std::string(CFG_getFontFile()); },
             [](const std::any &value) { CFG_setFontFile(std::any_cast<std::string>(value).c_str()); },
             []() { CFG_setFontFile(CFG_DEFAULT_FONT_FILE); }});
+        auto themes = enumerateThemes();
+        std::vector<std::any> theme_values;
+        std::vector<std::string> theme_labels;
+        for (const auto &t : themes) {
+            theme_values.push_back(t.folder);
+            theme_labels.push_back(t.label);
+        }
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Theme", "Theme folder for menu backgrounds.", theme_values, theme_labels,
+            []() -> std::any { return std::string(CFG_getThemeFolder()); },
+            [](const std::any &value) { CFG_setThemeFolder(std::any_cast<std::string>(value).c_str()); },
+            []() { CFG_setThemeFolder(CFG_DEFAULT_THEME_FOLDER); }});
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Font style", "The style to render the UI font (e.g. bold)", std::vector<std::any>{0, 1}, std::vector<std::string>{"Normal", "Bold"},
             []() -> std::any { return CFG_getFontStyle(); },
             [](const std::any &value) { CFG_setFontStyle(std::any_cast<int>(value)); },
@@ -1012,7 +1054,17 @@ int main(int argc, char *argv[])
 
         ctx.menu = new MenuList(MenuItemType::List, "Main", mainItems);
 
-        SDL_Surface* bgbmp = IMG_Load(SDCARD_PATH "/bg.png");
+        char bg_path[MAX_PATH];
+        snprintf(bg_path, sizeof(bg_path), SDCARD_PATH "/bg.png");
+        const char* theme = CFG_getThemeFolder();
+        if (theme && theme[0]) {
+            char theme_bg_path[MAX_PATH];
+            snprintf(theme_bg_path, sizeof(theme_bg_path), SDCARD_PATH "/Themes/%s/bg.png", theme);
+            if (exists(theme_bg_path)) {
+                snprintf(bg_path, sizeof(bg_path), "%s", theme_bg_path);
+            }
+        }
+        SDL_Surface* bgbmp = IMG_Load(bg_path);
         SDL_Surface* convertedbg = SDL_ConvertSurfaceFormat(bgbmp, SDL_PIXELFORMAT_RGB565, 0);
         if (convertedbg) {
             SDL_FreeSurface(bgbmp);
