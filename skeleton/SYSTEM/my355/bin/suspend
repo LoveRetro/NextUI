@@ -21,6 +21,10 @@ fix_sleep_sound_bug() {
 before() {
     log "Preparing for suspend..."
 
+    # Run pre-sleep hooks synchronously before services are stopped.
+	# Subshell ensures a crashing hook cannot block suspend.
+	( "$SYSTEM_PATH/bin/run_hooks.sh" pre-sleep.d --sync-only ) >/dev/null 2>&1 || true
+
     # Probably not necessary and dangerous actually
     # log "Turning off input"
     # echo 0 > /sys/module/gpio_keys_polled/parameters/button_enable
@@ -34,6 +38,9 @@ before() {
 after() {
     # log "Turning on input"
     # echo 1 > /sys/module/gpio_keys_polled/parameters/button_enable
+
+    # Run post-resume hooks in background immediately after wake.
+	( "$SYSTEM_PATH/bin/run_hooks.sh" post-resume.d ) >/dev/null 2>&1 &
 
     log "Restoring brightness"
     # TODO save and restore backlight settings
