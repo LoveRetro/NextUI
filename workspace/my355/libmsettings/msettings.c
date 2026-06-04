@@ -215,29 +215,15 @@ void InitSettings(void) {
 			// load defaults
 			memcpy(settings, &DefaultSettings, shm_size);
 		}
-
-		// these shouldn't be persisted
-		// settings->jack = 0;
-		// settings->hdmi = 0;
-		int jack = JACK_enabled();
-		int hdmi = HDMI_enabled();
-
-		// both of these set volume
-		SetJack(jack);
-		SetHDMI(hdmi);
 	}
+
+	// Always re-set Jack and HDMI according to hardware state
+	settings->jack = JACK_enabled();
+	settings->hdmi = HDMI_enabled();
+
 	printf("brightness: %i (hdmi: %i)\nspeaker: %i (jack: %i)\n", settings->brightness, settings->hdmi, settings->speaker, settings->jack); 
 	fflush(stdout);
 	system("amixer");
-
-	int card_num = get_rockchip_card_num();
-	if (card_num < 0) card_num = 0;
-	struct mixer *mixer = mixer_open(card_num);
-	if (mixer) {
-		struct mixer_ctl *ctl = mixer_get_ctl_by_name(mixer, "Playback Path");
-		if (ctl) mixer_ctl_set_enum_by_string(ctl, GetJack() ? "HP" : "SPK");
-		mixer_close(mixer);
-	}
 
 	SetVolume(GetVolume());
 	SetBrightness(GetBrightness());
