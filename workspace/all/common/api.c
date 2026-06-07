@@ -3935,6 +3935,12 @@ void PWR_powerOff(int reboot)
 	}
 }
 
+// Suspend-inhibit lock files (see SystemDoc.md §5).
+// /tmp/stay_awake → block autosleep (no screen-off, no deep sleep)
+// /tmp/stay_alive → allow screen-off, block deep sleep
+static int hasStayAwake(void) { return access("/tmp/stay_awake", F_OK) == 0; }
+static int hasStayAlive(void) { return access("/tmp/stay_alive", F_OK) == 0; }
+
 static void PWR_enterSleep(void)
 {
 	SND_pauseAudio(true);
@@ -4014,6 +4020,11 @@ static void PWR_waitForWake(void)
 					sleep_ticks += 60000; // check again in a minute
 					continue;
 				}
+				if (hasStayAwake() || hasStayAlive())
+				{
+					sleep_ticks += 60000; // external lock-file override
+					continue;
+				}
 				if (PLAT_supportsDeepSleep())
 				{
 					int ret = PWR_deepSleep();
@@ -4090,7 +4101,7 @@ void PWR_enableAutosleep(void)
 }
 int PWR_preventAutosleep(void)
 {
-	return SDL_AtomicGet(&pwr.is_charging) || !pwr.can_autosleep || GetHDMI();
+	return SDL_AtomicGet(&pwr.is_charging) || !pwr.can_autosleep || GetHDMI() || hasStayAwake();
 }
 
 // updated by PWR_updateBatteryStatus()
