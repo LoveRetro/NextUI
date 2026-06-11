@@ -9,6 +9,7 @@ extern "C"
 #include "ra_sync.h"
 }
 
+#include <algorithm>
 #include <csignal>
 #include <cstdlib>
 #include <dirent.h>
@@ -180,28 +181,143 @@ static const std::vector<std::string> ra_sort_labels = {
 namespace {
     constexpr const char *DISPLAYCAL_CONFIG_PATH = USERDATA_PATH "/displaycal.cfg";
     constexpr const char *DISPLAYCAL_COMMAND = BIN_PATH "/displaycal.elf";
+    constexpr int DISPLAYCAL_DEFAULT_RED = 100;
+    constexpr int DISPLAYCAL_DEFAULT_GREEN = 92;
+    constexpr int DISPLAYCAL_DEFAULT_BLUE = 58;
 
-    static bool getDisplayCalEnabled()
+    enum class DisplayCalChannel
     {
+        Red,
+        Green,
+        Blue
+    };
+
+    struct DisplayCalConfig
+    {
+        bool enabled = true;
+        int red = DISPLAYCAL_DEFAULT_RED;
+        int green = DISPLAYCAL_DEFAULT_GREEN;
+        int blue = DISPLAYCAL_DEFAULT_BLUE;
+    };
+
+    static int clampDisplayCalGain(int value)
+    {
+        return std::max(0, std::min(200, value));
+    }
+
+    static int parseDisplayCalGain(const char *value)
+    {
+        return clampDisplayCalGain((int)(std::atof(value) * 100.0 + 0.5));
+    }
+
+    static std::string formatDisplayCalGain(int value)
+    {
+        char label[8];
+        snprintf(label, sizeof(label), "%.2f", clampDisplayCalGain(value) / 100.0);
+        return label;
+    }
+
+    static const std::vector<std::any> &displayCalGainValues()
+    {
+        static const std::vector<std::any> values = [] {
+            std::vector<std::any> result;
+            for (int i = 0; i <= 200; i++)
+                result.push_back(i);
+            return result;
+        }();
+        return values;
+    }
+
+    static const std::vector<std::string> &displayCalGainLabels()
+    {
+        static const std::vector<std::string> labels = [] {
+            std::vector<std::string> result;
+            for (int i = 0; i <= 200; i++)
+                result.push_back(formatDisplayCalGain(i));
+            return result;
+        }();
+        return labels;
+    }
+
+    static DisplayCalConfig loadDisplayCalConfig()
+    {
+        DisplayCalConfig config;
         std::ifstream file(DISPLAYCAL_CONFIG_PATH);
         if (!file)
-            return true;
+            return config;
 
         std::string line;
         while (std::getline(file, line))
         {
             if (line.rfind("enabled=", 0) == 0)
-                return std::atoi(line.c_str() + 8) != 0;
+                config.enabled = std::atoi(line.c_str() + 8) != 0;
+            else if (line.rfind("red=", 0) == 0)
+                config.red = parseDisplayCalGain(line.c_str() + 4);
+            else if (line.rfind("green=", 0) == 0)
+                config.green = parseDisplayCalGain(line.c_str() + 6);
+            else if (line.rfind("blue=", 0) == 0)
+                config.blue = parseDisplayCalGain(line.c_str() + 5);
         }
 
-        return true;
+        return config;
+    }
+
+    static void saveDisplayCalConfig(const DisplayCalConfig &config)
+    {
+        std::ofstream file(DISPLAYCAL_CONFIG_PATH, std::ios::trunc);
+        if (!file)
+            return;
+
+        file << "enabled=" << (config.enabled ? 1 : 0) << "\n";
+        file << "red=" << formatDisplayCalGain(config.red) << "\n";
+        file << "green=" << formatDisplayCalGain(config.green) << "\n";
+        file << "blue=" << formatDisplayCalGain(config.blue) << "\n";
+    }
+
+    static bool getDisplayCalEnabled()
+    {
+        return loadDisplayCalConfig().enabled;
     }
 
     static void setDisplayCalEnabled(bool enabled)
     {
-        std::ofstream file(DISPLAYCAL_CONFIG_PATH, std::ios::trunc);
-        if (file)
-            file << "enabled=" << (enabled ? 1 : 0) << "\n";
+        DisplayCalConfig config = loadDisplayCalConfig();
+        config.enabled = enabled;
+        saveDisplayCalConfig(config);
+    }
+
+    static int getDisplayCalGain(DisplayCalChannel channel)
+    {
+        DisplayCalConfig config = loadDisplayCalConfig();
+        switch (channel)
+        {
+        case DisplayCalChannel::Red:
+            return config.red;
+        case DisplayCalChannel::Green:
+            return config.green;
+        case DisplayCalChannel::Blue:
+            return config.blue;
+        }
+        return 100;
+    }
+
+    static void setDisplayCalGain(DisplayCalChannel channel, int value)
+    {
+        DisplayCalConfig config = loadDisplayCalConfig();
+        value = clampDisplayCalGain(value);
+        switch (channel)
+        {
+        case DisplayCalChannel::Red:
+            config.red = value;
+            break;
+        case DisplayCalChannel::Green:
+            config.green = value;
+            break;
+        case DisplayCalChannel::Blue:
+            config.blue = value;
+            break;
+        }
+        saveDisplayCalConfig(config);
     }
 
     static void applyDisplayCalConfig()
@@ -216,9 +332,34 @@ namespace {
         applyDisplayCalConfig();
     }
 
+    static void saveAndApplyDisplayCalGain(DisplayCalChannel channel, int value)
+    {
+        setDisplayCalGain(channel, value);
+        if (getDisplayCalEnabled())
+            applyDisplayCalConfig();
+    }
+
     static void resetDisplayCal()
     {
-        saveAndApplyDisplayCalEnabled(true);
+        saveDisplayCalConfig(DisplayCalConfig{});
+        applyDisplayCalConfig();
+    }
+
+    static void resetDisplayCalGain(DisplayCalChannel channel)
+    {
+        switch (channel)
+        {
+        case DisplayCalChannel::Red:
+            setDisplayCalGain(channel, DISPLAYCAL_DEFAULT_RED);
+            break;
+        case DisplayCalChannel::Green:
+            setDisplayCalGain(channel, DISPLAYCAL_DEFAULT_GREEN);
+            break;
+        case DisplayCalChannel::Blue:
+            setDisplayCalGain(channel, DISPLAYCAL_DEFAULT_BLUE);
+            break;
+        }
+        applyDisplayCalConfig();
     }
 
     struct ColorDef { int id; const char *name; const char *desc; uint32_t defaultColor; };
@@ -535,6 +676,21 @@ int main(int argc, char *argv[])
                 { return getDisplayCalEnabled(); }, [](const std::any &value)
                 { saveAndApplyDisplayCalEnabled(std::any_cast<bool>(value)); },
                 []() { resetDisplayCal(); }});
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "Red gain", "White point correction red channel gain", displayCalGainValues(), displayCalGainLabels(), []() -> std::any
+                { return getDisplayCalGain(DisplayCalChannel::Red); }, [](const std::any &value)
+                { saveAndApplyDisplayCalGain(DisplayCalChannel::Red, std::any_cast<int>(value)); },
+                []() { resetDisplayCalGain(DisplayCalChannel::Red); }});
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "Green gain", "White point correction green channel gain", displayCalGainValues(), displayCalGainLabels(), []() -> std::any
+                { return getDisplayCalGain(DisplayCalChannel::Green); }, [](const std::any &value)
+                { saveAndApplyDisplayCalGain(DisplayCalChannel::Green, std::any_cast<int>(value)); },
+                []() { resetDisplayCalGain(DisplayCalChannel::Green); }});
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "Blue gain", "White point correction blue channel gain", displayCalGainValues(), displayCalGainLabels(), []() -> std::any
+                { return getDisplayCalGain(DisplayCalChannel::Blue); }, [](const std::any &value)
+                { saveAndApplyDisplayCalGain(DisplayCalChannel::Blue, std::any_cast<int>(value)); },
+                []() { resetDisplayCalGain(DisplayCalChannel::Blue); }});
         }
 
         if(deviceInfo.hasContrastSaturation())
