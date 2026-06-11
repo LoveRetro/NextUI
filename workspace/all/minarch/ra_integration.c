@@ -1317,10 +1317,16 @@ static void ra_event_handler(const rc_client_event_t* event, rc_client_t* client
 		break;
 		
 	case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_SHOW:
+		if (CFG_getRAShowChallengeIndicators()) {
+			Notification_showChallengeIndicator(event->achievement->id);
+		}
 		RA_LOG_DEBUG("Challenge started: %s\n", event->achievement->title);
 		break;
-		
+
 	case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_HIDE:
+		// Always hide (even if indicators were toggled off mid-challenge) so a
+		// stale indicator can't get stuck on screen.
+		Notification_hideChallengeIndicator(event->achievement->id);
 		RA_LOG_DEBUG("Challenge ended: %s\n", event->achievement->title);
 		break;
 		

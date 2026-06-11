@@ -437,6 +437,7 @@ SDL_Surface *GFX_init(int mode)
 	asset_rects[ASSET_WIFI_OFF] = (SDL_Rect){SCALE4(40, 104, 12, 12)};
 	asset_rects[ASSET_CHECKCIRCLE] = (SDL_Rect){SCALE4(1, 117, 10, 10)};
 	asset_rects[ASSET_LOCK] = (SDL_Rect){SCALE4(12, 116, 8, 11)};
+	asset_rects[ASSET_TROPHY] = (SDL_Rect){SCALE4(78, 117, 10, 11)};
 	asset_rects[ASSET_HOLE] = (SDL_Rect){SCALE4(1, 63, 20, 20)};
 	asset_rects[ASSET_GAMEPAD] = (SDL_Rect){SCALE4(91, 51, 17, 10)};
 	asset_rects[ASSET_SETTINGS] = (SDL_Rect){SCALE4(21, 117, 10, 10)};
