@@ -239,6 +239,19 @@ static const rc_client_achievement_t** ach_menu_achievements = NULL; // Flattene
 static int ach_menu_count = 0;
 static bool ach_filter_locked_only = false;  // Y button toggle: show all or locked only
 
+// Active-challenge achievement ids for the current menu open. Active challenges
+// are pinned to the top of the list and flagged with a trophy in the row.
+#define ACH_MAX_CHALLENGE 16
+static uint32_t ach_challenge_ids[ACH_MAX_CHALLENGE];
+static int ach_challenge_count = 0;
+
+static bool ach_is_active_challenge(uint32_t id) {
+	for (int i = 0; i < ach_challenge_count; i++) {
+		if (ach_challenge_ids[i] == id) return true;
+	}
+	return false;
+}
+
 // Achievement sorting comparison function
 static int ach_compare_unlocked_first(const void* a, const void* b) {
 	const rc_client_achievement_t* achA = *(const rc_client_achievement_t**)a;
@@ -544,9 +557,10 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 	}
 	ach_menu_count = 0;
 
-	// Create achievement list grouped by lock state
+	// Group by progress so rcheevos surfaces a separate ACTIVE_CHALLENGE bucket
+	// (achievements whose trigger is currently primed). We pin those to the top.
 	ach_menu_list = (const rc_client_achievement_list_t*)RA_createAchievementList(
-		RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE, RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_LOCK_STATE);
+		RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE, RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_PROGRESS);
 
 	if (!ach_menu_list) {
 		Menu_message("Failed to load achievements", (char*[]){"B","BACK", NULL});
@@ -568,18 +582,41 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 		return MENU_CALLBACK_NOP;
 	}
 
-	// Create flattened array of all achievement pointers
+	// Create flattened array of all achievement pointers.
+	// Two passes so active challenges stay pinned at the top:
+	//   1. ACTIVE_CHALLENGE bucket entries, in rcheevos' natural order (no sort)
+	//   2. everything else
+	// Only the second pass is sorted by the user's chosen order, so the pinned
+	// challenges remain at the top regardless of sort.
 	const rc_client_achievement_t** all_achievements = calloc(total_achievements, sizeof(rc_client_achievement_t*));
 	int idx = 0;
+	ach_challenge_count = 0;
+
+	// Pass 1: pinned active challenges
 	for (uint32_t b = 0; b < ach_menu_list->num_buckets && idx < total_achievements; b++) {
 		const rc_client_achievement_bucket_t* bucket = &ach_menu_list->buckets[b];
+		if (bucket->bucket_type != RC_CLIENT_ACHIEVEMENT_BUCKET_ACTIVE_CHALLENGE) continue;
+		for (uint32_t a = 0; a < bucket->num_achievements && idx < total_achievements; a++) {
+			all_achievements[idx++] = bucket->achievements[a];
+			if (ach_challenge_count < ACH_MAX_CHALLENGE) {
+				ach_challenge_ids[ach_challenge_count++] = bucket->achievements[a]->id;
+			}
+		}
+	}
+	int challenge_pin_count = idx;
+
+	// Pass 2: all other buckets
+	for (uint32_t b = 0; b < ach_menu_list->num_buckets && idx < total_achievements; b++) {
+		const rc_client_achievement_bucket_t* bucket = &ach_menu_list->buckets[b];
+		if (bucket->bucket_type == RC_CLIENT_ACHIEVEMENT_BUCKET_ACTIVE_CHALLENGE) continue;
 		for (uint32_t a = 0; a < bucket->num_achievements && idx < total_achievements; a++) {
 			all_achievements[idx++] = bucket->achievements[a];
 		}
 	}
 
-	// Sort achievements according to settings
-	ach_sort_achievements(all_achievements, total_achievements);
+	// Sort only the non-pinned tail according to settings
+	ach_sort_achievements(all_achievements + challenge_pin_count,
+	                      total_achievements - challenge_pin_count);
 
 	// Custom menu loop with X (mute) and Y (filter) support
 	int dirty = 1;
@@ -752,6 +789,7 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 				const rc_client_achievement_t* ach = filtered[j];
 				bool is_muted = RA_isAchievementMuted(ach->id);
 				bool is_offline_pending = RA_isAchievementOfflinePending(ach->id);
+				bool is_challenge = ach_is_active_challenge(ach->id);
 				bool is_selected = (row == selected_row);
 				SDL_Color text_color = COLOR_WHITE;
 
@@ -784,7 +822,11 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 					if (is_offline_pending) {
 						offline_width = SCALE1(12) + SCALE1(4);  // wifi-off icon + gap
 					}
-					int pill_width = opt_pad + badge_display_size + SCALE1(6) + mute_width + offline_width + title_width + opt_pad;
+					int challenge_width = 0;
+					if (is_challenge) {
+						challenge_width = SCALE1(10) + SCALE1(4);  // trophy icon + gap
+					}
+					int pill_width = opt_pad + badge_display_size + SCALE1(6) + mute_width + offline_width + challenge_width + title_width + opt_pad;
 					
 					GFX_blitPillDark(ASSET_BUTTON, screen, &(SDL_Rect){
 						ox, oy + SCALE1(row * BUTTON_SIZE), pill_width, row_height
@@ -822,6 +864,15 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 						GFX_blitAssetColor(ASSET_WIFI_OFF, NULL, screen,
 						                   &(SDL_Rect){text_x, wifi_y}, THEME_COLOR5_255);
 						text_x += offline_width;
+					}
+
+					// Active-challenge trophy prefix
+					if (is_challenge) {
+						int trophy_h = SCALE1(11);
+						int trophy_y = oy + SCALE1(row * BUTTON_SIZE) + (row_height - trophy_h) / 2;
+						GFX_blitAssetColor(ASSET_TROPHY, NULL, screen,
+						                   &(SDL_Rect){text_x, trophy_y}, THEME_COLOR5_255);
+						text_x += challenge_width;
 					}
 
 					// Title text
@@ -866,6 +917,15 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 						GFX_blitAssetColor(ASSET_WIFI_OFF, NULL, screen,
 						                   &(SDL_Rect){text_x, wifi_y}, RGB_WHITE);
 						text_x += wifi_size + SCALE1(4);
+					}
+
+					// Active-challenge trophy prefix
+					if (is_challenge) {
+						int trophy_h = SCALE1(11);
+						int trophy_y = oy + SCALE1(row * BUTTON_SIZE) + (row_height - trophy_h) / 2;
+						GFX_blitAssetColor(ASSET_TROPHY, NULL, screen,
+						                   &(SDL_Rect){text_x, trophy_y}, RGB_WHITE);
+						text_x += SCALE1(10) + SCALE1(4);
 					}
 
 					// Title text (white for unselected)
