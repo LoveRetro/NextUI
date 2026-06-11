@@ -10,6 +10,7 @@ extern "C"
 }
 
 #include <csignal>
+#include <cstdlib>
 #include <dirent.h>
 #include <fstream>
 #include <memory>
@@ -177,6 +178,49 @@ static const std::vector<std::string> ra_sort_labels = {
 };
 
 namespace {
+    constexpr const char *DISPLAYCAL_CONFIG_PATH = USERDATA_PATH "/displaycal.cfg";
+    constexpr const char *DISPLAYCAL_COMMAND = BIN_PATH "/displaycal.elf";
+
+    static bool getDisplayCalEnabled()
+    {
+        std::ifstream file(DISPLAYCAL_CONFIG_PATH);
+        if (!file)
+            return true;
+
+        std::string line;
+        while (std::getline(file, line))
+        {
+            if (line.rfind("enabled=", 0) == 0)
+                return std::atoi(line.c_str() + 8) != 0;
+        }
+
+        return true;
+    }
+
+    static void setDisplayCalEnabled(bool enabled)
+    {
+        std::ofstream file(DISPLAYCAL_CONFIG_PATH, std::ios::trunc);
+        if (file)
+            file << "enabled=" << (enabled ? 1 : 0) << "\n";
+    }
+
+    static void applyDisplayCalConfig()
+    {
+        std::string cmd = std::string("\"") + DISPLAYCAL_COMMAND + "\" apply \"" + DISPLAYCAL_CONFIG_PATH + "\" > /dev/null 2>&1";
+        std::system(cmd.c_str());
+    }
+
+    static void saveAndApplyDisplayCalEnabled(bool enabled)
+    {
+        setDisplayCalEnabled(enabled);
+        applyDisplayCalConfig();
+    }
+
+    static void resetDisplayCal()
+    {
+        saveAndApplyDisplayCalEnabled(true);
+    }
+
     struct ColorDef { int id; const char *name; const char *desc; uint32_t defaultColor; };
     static const ColorDef g_colorDefs[] = {
         {1, "Main Color",             "The color used to render main UI elements.",                         CFG_DEFAULT_COLOR1},
@@ -284,6 +328,10 @@ namespace {
 
         bool hasExposure() const {
             return m_platform == tg5040;
+        }
+
+        bool hasDisplayColorCorrection() const {
+            return m_platform == tg5040 && m_model == Brick;
         }
 
         bool hasActiveCooling() const {
@@ -478,6 +526,15 @@ int main(int argc, char *argv[])
                 { return GetColortemp(); }, [](const std::any &value)
                 { SetColortemp(std::any_cast<int>(value)); },
                 []() { SetColortemp(SETTINGS_DEFAULT_COLORTEMP);}});
+        }
+
+        if(deviceInfo.hasDisplayColorCorrection())
+        {
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "White point correction", "Corrects the Brick display white point", {false, true}, on_off, []() -> std::any
+                { return getDisplayCalEnabled(); }, [](const std::any &value)
+                { saveAndApplyDisplayCalEnabled(std::any_cast<bool>(value)); },
+                []() { resetDisplayCal(); }});
         }
 
         if(deviceInfo.hasContrastSaturation())

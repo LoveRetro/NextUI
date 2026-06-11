@@ -109,6 +109,7 @@ ifneq (,$(filter $(PLATFORM),tg5040 tg5050))
 ifeq ($(PLATFORM), tg5040)
 	# Limbo fix
 	cp ./workspace/$(PLATFORM)/poweroff_next/build/$(PLATFORM)/poweroff_next.elf ./build/SYSTEM/$(PLATFORM)/bin/poweroff_next
+	cp ./workspace/$(PLATFORM)/displaycal/build/$(PLATFORM)/displaycal.elf ./build/SYSTEM/$(PLATFORM)/bin/
 endif
 endif
 ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))

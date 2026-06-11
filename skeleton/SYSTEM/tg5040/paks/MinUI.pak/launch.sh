@@ -103,6 +103,10 @@ syslogd -S
 export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/trimui/lib:$LD_LIBRARY_PATH
 export PATH=$SYSTEM_PATH/bin:/usr/trimui/bin:$PATH
 
+if [ "$DEVICE" = "brick" ] && [ -x "$SYSTEM_PATH/bin/displaycal.elf" ]; then
+	"$SYSTEM_PATH/bin/displaycal.elf" apply "$USERDATA_PATH/displaycal.cfg" > /dev/null 2>&1
+fi
+
 # leds_off
 echo 0 > /sys/class/led_anim/max_scale
 if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
