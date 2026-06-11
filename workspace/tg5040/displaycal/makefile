@@ -22,7 +22,7 @@ TARGET = displaycal
 SOURCE = $(TARGET).c
 
 CC = $(CROSS_COMPILE)gcc
-CFLAGS = -mcpu=cortex-a53 -flto $(OPT) -std=gnu99
+CFLAGS = -mcpu=cortex-a53 -flto $(OPT) -std=gnu99 -I../../all/common
 LDFLAGS = -lm -s
 
 PRODUCT = build/$(PLATFORM)/$(TARGET).elf

@@ -8,16 +8,14 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include "displaycal.h"
+
 #define DISP_LCD_SET_GAMMA_TABLE          0x10b
 #define DISP_LCD_GAMMA_CORRECTION_ENABLE  0x10c
 #define DISP_LCD_GAMMA_CORRECTION_DISABLE 0x10d
 
 #define DISPLAYCAL_LUT_ENTRIES 256
 #define DISPLAYCAL_LUT_BYTES   (DISPLAYCAL_LUT_ENTRIES * 4)
-
-#define DEFAULT_RED_GAIN   1.0000000000000000
-#define DEFAULT_GREEN_GAIN 0.9200000000000000
-#define DEFAULT_BLUE_GAIN  0.5800000000000000
 
 typedef struct {
 	int enabled;
@@ -30,13 +28,13 @@ typedef struct {
 } DisplayCalConfig;
 
 static void init_config(DisplayCalConfig *config) {
-	config->enabled = 1;
-	config->screen = 0;
-	config->strength = 1.0;
-	config->red_gain = DEFAULT_RED_GAIN;
-	config->green_gain = DEFAULT_GREEN_GAIN;
-	config->blue_gain = DEFAULT_BLUE_GAIN;
-	strcpy(config->format, "rgb");
+	config->enabled = DISPLAYCAL_DEFAULT_ENABLED;
+	config->screen = DISPLAYCAL_DEFAULT_SCREEN;
+	config->strength = DISPLAYCAL_DEFAULT_STRENGTH;
+	config->red_gain = DISPLAYCAL_DEFAULT_RED_GAIN;
+	config->green_gain = DISPLAYCAL_DEFAULT_GREEN_GAIN;
+	config->blue_gain = DISPLAYCAL_DEFAULT_BLUE_GAIN;
+	strcpy(config->format, DISPLAYCAL_DEFAULT_FORMAT);
 }
 
 static double clamp_unit(double v) {

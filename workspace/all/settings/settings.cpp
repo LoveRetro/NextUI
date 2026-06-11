@@ -5,11 +5,11 @@ extern "C"
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+#include "displaycal.h"
 #include "ra_auth.h"
 #include "ra_sync.h"
 }
 
-#include <algorithm>
 #include <csignal>
 #include <cstdlib>
 #include <dirent.h>
@@ -179,11 +179,13 @@ static const std::vector<std::string> ra_sort_labels = {
 };
 
 namespace {
-    constexpr const char *DISPLAYCAL_CONFIG_PATH = USERDATA_PATH "/displaycal.cfg";
+    constexpr const char *DISPLAYCAL_CONFIG_PATH = USERDATA_PATH "/" DISPLAYCAL_CONFIG_FILENAME;
     constexpr const char *DISPLAYCAL_COMMAND = BIN_PATH "/displaycal.elf";
-    constexpr int DISPLAYCAL_DEFAULT_RED = 100;
-    constexpr int DISPLAYCAL_DEFAULT_GREEN = 92;
-    constexpr int DISPLAYCAL_DEFAULT_BLUE = 58;
+
+    constexpr int displayCalGainToValue(double value)
+    {
+        return (int)(value * DISPLAYCAL_GAIN_SCALE + 0.5);
+    }
 
     enum class DisplayCalChannel
     {
@@ -194,20 +196,20 @@ namespace {
 
     struct DisplayCalConfig
     {
-        bool enabled = true;
-        int red = DISPLAYCAL_DEFAULT_RED;
-        int green = DISPLAYCAL_DEFAULT_GREEN;
-        int blue = DISPLAYCAL_DEFAULT_BLUE;
+        bool enabled = DISPLAYCAL_DEFAULT_ENABLED != 0;
+        int red = displayCalGainToValue(DISPLAYCAL_DEFAULT_RED_GAIN);
+        int green = displayCalGainToValue(DISPLAYCAL_DEFAULT_GREEN_GAIN);
+        int blue = displayCalGainToValue(DISPLAYCAL_DEFAULT_BLUE_GAIN);
     };
 
     static int clampDisplayCalGain(int value)
     {
-        return std::max(0, std::min(200, value));
+        return std::max(DISPLAYCAL_GAIN_MIN, std::min(DISPLAYCAL_GAIN_MAX, value));
     }
 
     static int parseDisplayCalGain(const char *value)
     {
-        return clampDisplayCalGain((int)(std::atof(value) * 100.0 + 0.5));
+        return clampDisplayCalGain(displayCalGainToValue(std::atof(value)));
     }
 
     static std::string formatDisplayCalGain(int value)
@@ -221,7 +223,7 @@ namespace {
     {
         static const std::vector<std::any> values = [] {
             std::vector<std::any> result;
-            for (int i = 0; i <= 200; i++)
+            for (int i = DISPLAYCAL_GAIN_MIN; i <= DISPLAYCAL_GAIN_MAX; i++)
                 result.push_back(i);
             return result;
         }();
@@ -232,7 +234,7 @@ namespace {
     {
         static const std::vector<std::string> labels = [] {
             std::vector<std::string> result;
-            for (int i = 0; i <= 200; i++)
+            for (int i = DISPLAYCAL_GAIN_MIN; i <= DISPLAYCAL_GAIN_MAX; i++)
                 result.push_back(formatDisplayCalGain(i));
             return result;
         }();
@@ -350,13 +352,13 @@ namespace {
         switch (channel)
         {
         case DisplayCalChannel::Red:
-            setDisplayCalGain(channel, DISPLAYCAL_DEFAULT_RED);
+            setDisplayCalGain(channel, displayCalGainToValue(DISPLAYCAL_DEFAULT_RED_GAIN));
             break;
         case DisplayCalChannel::Green:
-            setDisplayCalGain(channel, DISPLAYCAL_DEFAULT_GREEN);
+            setDisplayCalGain(channel, displayCalGainToValue(DISPLAYCAL_DEFAULT_GREEN_GAIN));
             break;
         case DisplayCalChannel::Blue:
-            setDisplayCalGain(channel, DISPLAYCAL_DEFAULT_BLUE);
+            setDisplayCalGain(channel, displayCalGainToValue(DISPLAYCAL_DEFAULT_BLUE_GAIN));
             break;
         }
         applyDisplayCalConfig();
