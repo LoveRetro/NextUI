@@ -194,7 +194,7 @@ static int disable_gamma(int fd, int screen) {
 	return 0;
 }
 
-static int apply_table(int fd, int screen, uint32_t table[DISPLAYCAL_LUT_ENTRIES]) {
+static int set_gamma_table(int fd, int screen, uint32_t table[DISPLAYCAL_LUT_ENTRIES]) {
 	unsigned long set_param[4] = {
 		(unsigned long)screen,
 		(unsigned long)table,
@@ -207,6 +207,10 @@ static int apply_table(int fd, int screen, uint32_t table[DISPLAYCAL_LUT_ENTRIES
 		return -1;
 	}
 
+	return 0;
+}
+
+static int enable_gamma(int fd, int screen) {
 	unsigned long enable_param[4] = { (unsigned long)screen, 0, 0, 0 };
 	if (ioctl(fd, DISP_LCD_GAMMA_CORRECTION_ENABLE, enable_param) < 0) {
 		fprintf(stderr, "displaycal: enable gamma failed: %s\n", strerror(errno));
@@ -216,6 +220,20 @@ static int apply_table(int fd, int screen, uint32_t table[DISPLAYCAL_LUT_ENTRIES
 	return 0;
 }
 
+static int apply_table(int fd, int screen, uint32_t table[DISPLAYCAL_LUT_ENTRIES]) {
+	if (set_gamma_table(fd, screen, table) < 0)
+		return -1;
+	return enable_gamma(fd, screen);
+}
+
+static int reset_table_and_disable(int fd, int screen) {
+	uint32_t table[DISPLAYCAL_LUT_ENTRIES];
+	fill_identity_table(table);
+	if (set_gamma_table(fd, screen, table) < 0)
+		return -1;
+	return disable_gamma(fd, screen);
+}
+
 static int apply_config(const DisplayCalConfig *config) {
 	int fd = open_disp();
 	if (fd < 0)
@@ -223,7 +241,7 @@ static int apply_config(const DisplayCalConfig *config) {
 
 	int ret = 0;
 	if (!config->enabled) {
-		ret = disable_gamma(fd, config->screen);
+		ret = reset_table_and_disable(fd, config->screen);
 	} else {
 		uint32_t table[DISPLAYCAL_LUT_ENTRIES];
 		fill_linear_gain_table(table, config);
@@ -251,7 +269,7 @@ static int disable_screen(int screen) {
 	if (fd < 0)
 		return -1;
 
-	int ret = disable_gamma(fd, screen);
+	int ret = reset_table_and_disable(fd, screen);
 	close(fd);
 	return ret;
 }
