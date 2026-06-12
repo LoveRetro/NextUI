@@ -19,29 +19,25 @@
 
 typedef struct {
 	int enabled;
-	int screen;
-	double strength;
 	double red_gain;
 	double green_gain;
 	double blue_gain;
-	char format[4];
 } DisplayCalConfig;
 
 static void init_config(DisplayCalConfig *config) {
 	config->enabled = DISPLAYCAL_DEFAULT_ENABLED;
-	config->screen = DISPLAYCAL_DEFAULT_SCREEN;
-	config->strength = DISPLAYCAL_DEFAULT_STRENGTH;
 	config->red_gain = DISPLAYCAL_DEFAULT_RED_GAIN;
 	config->green_gain = DISPLAYCAL_DEFAULT_GREEN_GAIN;
 	config->blue_gain = DISPLAYCAL_DEFAULT_BLUE_GAIN;
-	strcpy(config->format, DISPLAYCAL_DEFAULT_FORMAT);
 }
 
-static double clamp_unit(double v) {
-	if (v < 0.0)
-		return 0.0;
-	if (v > 1.0)
+static double clamp_gain(double v) {
+	if (isnan(v))
 		return 1.0;
+	if (v < (double)DISPLAYCAL_GAIN_MIN / DISPLAYCAL_GAIN_SCALE)
+		return (double)DISPLAYCAL_GAIN_MIN / DISPLAYCAL_GAIN_SCALE;
+	if (v > (double)DISPLAYCAL_GAIN_MAX / DISPLAYCAL_GAIN_SCALE)
+		return (double)DISPLAYCAL_GAIN_MAX / DISPLAYCAL_GAIN_SCALE;
 	return v;
 }
 
@@ -67,68 +63,17 @@ static double linear_to_srgb(double c) {
 	return 1.055 * pow(c, 1.0 / 2.4) - 0.055;
 }
 
-static double mix_gain(double gain, double strength) {
-	return 1.0 + (gain - 1.0) * clamp_unit(strength);
-}
-
-static char *trim_token(char *s) {
-	while (*s == ' ' || *s == '\t' || *s == '\n' || *s == '\r')
-		s++;
-
-	char *end = s + strlen(s);
-	while (end > s) {
-		char c = end[-1];
-		if (c != ' ' && c != '\t' && c != '\n' && c != '\r')
-			break;
-		*--end = '\0';
-	}
-
-	return s;
-}
-
 static int streq(const char *a, const char *b) {
 	return strcmp(a, b) == 0;
 }
 
-static int valid_format(const char *format) {
-	return streq(format, "rgb") ||
-		streq(format, "bgr") ||
-		streq(format, "grb") ||
-		streq(format, "gbr") ||
-		streq(format, "rbg") ||
-		streq(format, "brg");
-}
-
-static uint32_t pack_rgb(int r, int g, int b, const char *format) {
-	uint32_t rr = (uint32_t)r & 0xff;
-	uint32_t gg = (uint32_t)g & 0xff;
-	uint32_t bb = (uint32_t)b & 0xff;
-
-	if (streq(format, "bgr"))
-		return (bb << 16) | (gg << 8) | rr;
-	if (streq(format, "grb"))
-		return (gg << 16) | (rr << 8) | bb;
-	if (streq(format, "gbr"))
-		return (gg << 16) | (bb << 8) | rr;
-	if (streq(format, "rbg"))
-		return (rr << 16) | (bb << 8) | gg;
-	if (streq(format, "brg"))
-		return (bb << 16) | (rr << 8) | gg;
-
-	return (rr << 16) | (gg << 8) | bb;
-}
-
 static void fill_linear_gain_table(uint32_t table[DISPLAYCAL_LUT_ENTRIES], const DisplayCalConfig *config) {
-	double red_gain = mix_gain(config->red_gain, config->strength);
-	double green_gain = mix_gain(config->green_gain, config->strength);
-	double blue_gain = mix_gain(config->blue_gain, config->strength);
-
 	for (int i = 0; i < DISPLAYCAL_LUT_ENTRIES; i++) {
 		double linear = srgb_to_linear(i / 255.0);
-		int r = clamp_u8(linear_to_srgb(linear * red_gain) * 255.0);
-		int g = clamp_u8(linear_to_srgb(linear * green_gain) * 255.0);
-		int b = clamp_u8(linear_to_srgb(linear * blue_gain) * 255.0);
-		table[i] = pack_rgb(r, g, b, config->format);
+		uint32_t r = clamp_u8(linear_to_srgb(linear * config->red_gain) * 255.0);
+		uint32_t g = clamp_u8(linear_to_srgb(linear * config->green_gain) * 255.0);
+		uint32_t b = clamp_u8(linear_to_srgb(linear * config->blue_gain) * 255.0);
+		table[i] = (r << 16) | (g << 8) | b;
 	}
 }
 
@@ -147,32 +92,21 @@ static void load_config(DisplayCalConfig *config, const char *path) {
 
 	char line[160];
 	while (fgets(line, sizeof(line), file)) {
-		char *comment = strchr(line, '#');
-		if (comment)
-			*comment = '\0';
+		// discard the tail of an overlong line so it is not parsed as its own line
+		if (!strchr(line, '\n')) {
+			int c;
+			while ((c = fgetc(file)) != EOF && c != '\n')
+				;
+		}
 
-		char *sep = strchr(line, '=');
-		if (!sep)
-			continue;
-
-		*sep = '\0';
-		char *key = trim_token(line);
-		char *value = trim_token(sep + 1);
-
-		if (streq(key, "enabled"))
-			config->enabled = atoi(value) ? 1 : 0;
-		else if (streq(key, "screen"))
-			config->screen = atoi(value);
-		else if (streq(key, "strength"))
-			config->strength = atof(value);
-		else if (streq(key, "red") || streq(key, "r") || streq(key, "red_gain"))
-			config->red_gain = atof(value);
-		else if (streq(key, "green") || streq(key, "g") || streq(key, "green_gain"))
-			config->green_gain = atof(value);
-		else if (streq(key, "blue") || streq(key, "b") || streq(key, "blue_gain"))
-			config->blue_gain = atof(value);
-		else if (streq(key, "format") && valid_format(value))
-			snprintf(config->format, sizeof(config->format), "%s", value);
+		if (strncmp(line, "enabled=", 8) == 0)
+			config->enabled = atoi(line + 8) ? 1 : 0;
+		else if (strncmp(line, "red=", 4) == 0)
+			config->red_gain = clamp_gain(atof(line + 4));
+		else if (strncmp(line, "green=", 6) == 0)
+			config->green_gain = clamp_gain(atof(line + 6));
+		else if (strncmp(line, "blue=", 5) == 0)
+			config->blue_gain = clamp_gain(atof(line + 5));
 	}
 
 	fclose(file);
@@ -241,11 +175,11 @@ static int apply_config(const DisplayCalConfig *config) {
 
 	int ret = 0;
 	if (!config->enabled) {
-		ret = reset_table_and_disable(fd, config->screen);
+		ret = reset_table_and_disable(fd, 0);
 	} else {
 		uint32_t table[DISPLAYCAL_LUT_ENTRIES];
 		fill_linear_gain_table(table, config);
-		ret = apply_table(fd, config->screen, table);
+		ret = apply_table(fd, 0, table);
 	}
 
 	close(fd);
@@ -276,12 +210,9 @@ static int disable_screen(int screen) {
 
 static void print_status(const DisplayCalConfig *config) {
 	printf("enabled=%d\n", config->enabled);
-	printf("screen=%d\n", config->screen);
-	printf("strength=%.6f\n", config->strength);
-	printf("red=%.16f\n", config->red_gain);
-	printf("green=%.16f\n", config->green_gain);
-	printf("blue=%.16f\n", config->blue_gain);
-	printf("format=%s\n", config->format);
+	printf("red=%.2f\n", config->red_gain);
+	printf("green=%.2f\n", config->green_gain);
+	printf("blue=%.2f\n", config->blue_gain);
 }
 
 static void usage(const char *argv0) {
