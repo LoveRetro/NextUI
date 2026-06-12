@@ -40,6 +40,11 @@ before() {
 after() {
 	>&2 echo "Resumed from suspend."
 
+	# The disp driver may reset the gamma LUT across suspend; re-apply correction.
+	if [ "${DEVICE:-}" = "brick" ] && [ -x "$SYSTEM_PATH/bin/displaycal.elf" ]; then
+		"$SYSTEM_PATH/bin/displaycal.elf" apply "$USERDATA_PATH/displaycal.cfg" >/dev/null 2>&1 || true
+	fi
+
 	# Run post-resume hooks in background immediately after wake.
 	( "$SYSTEM_PATH/bin/run_hooks.sh" post-resume.d ) >/dev/null 2>&1 &
 
