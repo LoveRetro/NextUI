@@ -1570,9 +1570,10 @@ int hostGame_common(LinkType type, void* list, int i) {
 
 int hostGameHotspot_common(LinkType type, const char* game_name, uint32_t crc) {
 #ifndef HAS_WIFIMG
+    (void)type; (void)game_name; (void)crc;
     minarch_menuMessage("WiFi not available\non this platform.", (char*[]){ "A","OKAY", NULL });
     return MENU_CALLBACK_NOP;
-#endif
+#else
 
     // Show initial message
     GFX_setMode(MODE_MAIN);
@@ -1767,6 +1768,7 @@ int hostGameHotspot_common(LinkType type, const char* game_name, uint32_t crc) {
 
     GFX_setMode(MODE_MENU);
     return MENU_CALLBACK_NOP;
+#endif // HAS_WIFIMG
 }
 
 int hostGameWiFi_common(LinkType type, const char* game_name, uint32_t crc) {
@@ -2155,6 +2157,11 @@ int joinGameWiFi_common(LinkType type) {
 }
 
 int joinGame_Hotspot_common(LinkType type) {
+#ifndef HAS_WIFIMG
+    (void)type;
+    minarch_menuMessage("WiFi not available\non this platform.", (char*[]){ "A","OKAY", NULL });
+    return MENU_CALLBACK_NOP;
+#else
     // Note: ensureWifiEnabled() already called by joinGame_common()
 
     // Link-type specific setup
@@ -2484,6 +2491,7 @@ int joinGame_Hotspot_common(LinkType type) {
 
     *force_resume_flag = 1;
     return MENU_CALLBACK_EXIT;
+#endif // HAS_WIFIMG
 }
 
 int joinGame_common(LinkType type, void* list, int i) {
