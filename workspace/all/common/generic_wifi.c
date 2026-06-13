@@ -479,6 +479,76 @@ void PLAT_wifiForget(char *ssid, WifiSecurityType sec)
 	}
 }
 
+// Forget (remove) every configured network whose SSID starts with `prefix`.
+// Used to purge accumulated netplay hotspot entries: each join adds and saves a
+// uniquely-named hotspot network (e.g. NextUI-AB12), and sessions that end without
+// a clean teardown (failed join, crash, power-off) never remove theirs, so the
+// wpa_supplicant config grows without bound. Returns the number removed.
+int PLAT_wifiForgetPrefix(const char *prefix)
+{
+	if (!CFG_getWifi()) {
+		LOG_error("PLAT_wifiForgetPrefix: wifi is currently disabled.\n");
+		return 0;
+	}
+	if (!prefix || !prefix[0]) return 0;
+
+	char list_results[8192];
+	char cmd[128];
+	snprintf(cmd, sizeof(cmd), "%s list_networks 2>/dev/null", WPA_CLI_CMD);
+	if (wifi_run_cmd(cmd, list_results, sizeof(list_results)) != 0) {
+		wifilog("PLAT_wifiForgetPrefix: failed to get network list\n");
+		return 0;
+	}
+
+	size_t prefix_len = strlen(prefix);
+	int ids[128];
+	int n_ids = 0;
+
+	// Skip the header line ("network id / ssid / bssid / flags").
+	const char *current = strchr(list_results, '\n');
+	current = current ? current + 1 : NULL;
+
+	char line[256];
+	while (current && *current && n_ids < (int)(sizeof(ids) / sizeof(ids[0]))) {
+		const char *next = strchr(current, '\n');
+		size_t len = next ? (size_t)(next - current) : strlen(current);
+		if (len >= sizeof(line)) len = sizeof(line) - 1;
+		memcpy(line, current, len);
+		line[len] = '\0';
+
+		char *saveptr = NULL;
+		char *token_id   = strtok_r(line, "\t", &saveptr);
+		char *token_ssid = strtok_r(NULL, "\t", &saveptr);
+
+		if (token_id && token_ssid && strncmp(token_ssid, prefix, prefix_len) == 0) {
+			ids[n_ids++] = atoi(token_id);
+		}
+
+		current = next ? next + 1 : NULL;
+	}
+
+	if (n_ids == 0) return 0;
+
+	// remove_network does not renumber the remaining networks, so removing by the
+	// ids we collected up front is safe.
+	for (int i = 0; i < n_ids; i++) {
+		snprintf(cmd, sizeof(cmd), "%s remove_network %d 2>/dev/null", WPA_CLI_CMD, ids[i]);
+		system(cmd);
+	}
+	system(WPA_CLI_CMD " save_config 2>/dev/null");
+	wifilog("PLAT_wifiForgetPrefix: removed %d network(s) matching '%s'\n", n_ids, prefix);
+	return n_ids;
+}
+
+// Re-enable all configured networks. select_network (used for netplay hotspot join)
+// disables every network except the chosen one; this restores the others so the
+// saved config isn't left with home/other networks stuck disabled. Caller persists.
+void PLAT_wifiEnableAll(void)
+{
+	if (!CFG_getWifi()) return;
+	system(WPA_CLI_CMD " enable_network all 2>/dev/null");
+}
+
 void PLAT_wifiConnect(char *ssid, WifiSecurityType sec)
 {
 	PLAT_wifiConnectPass(ssid, sec, NULL);
@@ -583,6 +653,29 @@ void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pa
 	}
 	
 	LOG_error("PLAT_wifiConnectPass: connection timeout after 5 seconds\n");
+}
+
+void PLAT_wifiSelectOnly(const char *ssid)
+{
+	if (!CFG_getWifi()) {
+		LOG_error("PLAT_wifiSelectOnly: wifi is currently disabled.\n");
+		return;
+	}
+	if (!ssid || !ssid[0]) return;
+
+	int network_id = wifi_find_network_id(ssid);
+	if (network_id < 0) {
+		wifilog("PLAT_wifiSelectOnly: network %s not found\n", ssid);
+		return;
+	}
+
+	// select_network enables this network and disables all others, then triggers
+	// (re)association. Intentionally NOT followed by save_config: the disable of the
+	// other networks is a runtime-only state, restored when the wifi stack restarts.
+	char cmd[128];
+	snprintf(cmd, sizeof(cmd), "%s select_network %d 2>/dev/null", WPA_CLI_CMD, network_id);
+	system(cmd);
+	wifilog("PLAT_wifiSelectOnly: selected network %s (id=%d)\n", ssid, network_id);
 }
 
 void PLAT_wifiDisconnect()

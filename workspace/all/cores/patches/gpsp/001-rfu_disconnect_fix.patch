@@ -1,0 +1,100 @@
+diff --git a/libretro/libretro.c b/libretro/libretro.c
+index 5f02c09..80969b3 100644
+--- a/libretro/libretro.c
++++ b/libretro/libretro.c
+@@ -512,7 +512,13 @@ static bool netpacket_connected(uint16_t client_id) {
+   return true;
+ }
+ 
++// Forward declaration for RFU disconnect
++void rfu_net_disconnect(void);
++
+ static void netpacket_disconnected(uint16_t client_id) {
++  // Force RFU state to IDLE so the game receives disconnect notification
++  // This fixes CLIENT getting stuck when HOST disconnects during gameplay
++  rfu_net_disconnect();
+   netplay_num_clients--;
+ }
+ 
+diff --git a/rfu.c b/rfu.c
+index d5add44..2b7a8c0 100644
+--- a/rfu.c
++++ b/rfu.c
+@@ -119,6 +119,9 @@ static u32 rfu_prev_data;
+ static u32 rfu_comstate, rfu_cnt, rfu_state;
+ static u32 rfu_buf[255];
+ static u8 rfu_cmd, rfu_plen;
++// Flag to force disconnect response on next command
++static bool rfu_disconnect_pending = false;
++
+ static u32 rfu_timeout_cycles, rfu_resp_timeout;
+ static u8 rfu_timeout, rfu_rtx_max;
+ 
+@@ -242,6 +245,9 @@ void rfu_reset() {
+   // Clear all the received broadcasts.
+   memset(&rfu_peer_bcst, 0, sizeof(rfu_peer_bcst));
+ 
++  // Clear any pending disconnect from previous session
++  rfu_disconnect_pending = false;
++
+   // Re-seed random gen.  cpu_ticks is determined by the GBA program and
+   // is therefore replay-reproducible; time(NULL) is not, and would break
+   // record/replay or netplay rollback if used here.  The seed only needs
+@@ -250,6 +256,24 @@ void rfu_reset() {
+   rand_seed(cpu_ticks);
+ }
+ 
++// Called when the network link is lost (netpacket disconnect callback).
++// Clears connection state and sets disconnect pending flag.
++// The next RFU command will be forced to WAIT, triggering disconnect response.
++void rfu_net_disconnect(void) {
++  RFU_DEBUG_LOG("RFU net disconnect! state=%d comstate=%d\n", rfu_state, rfu_comstate);
++
++  // Clear all connection data based on current role
++  if (rfu_state == RFU_STATE_HOST) {
++    memset(&rfu_host.clients, 0, sizeof(rfu_host.clients));
++  } else if (rfu_state == RFU_STATE_CLIENT) {
++    memset(&rfu_client, 0, sizeof(rfu_client));
++  }
++
++  // Force IDLE state and mark disconnect pending
++  rfu_state = RFU_STATE_IDLE;
++  rfu_disconnect_pending = true;
++}
++
+ static u16 new_devid() {
+   while (1) {
+     /* Mix in cpu_ticks (deterministic) rather than time(NULL) so the
+@@ -598,9 +622,17 @@ u32 rfu_transfer(u32 sent_value) {
+   case RFU_COMSTATE_WAITCMD:
+     // Wait for a new command, verify its header.
+     if ((sent_value >> 16) == 0x9966) {
+-      rfu_plen = (u8)(sent_value >> 8);
+-      rfu_cmd  = (u8)(sent_value);
+-      rfu_cnt = 0;
++      // Check for pending disconnect - force WAIT command to trigger disconnect response
++      if (rfu_disconnect_pending && rfu_state == RFU_STATE_IDLE) {
++        rfu_cmd = RFU_CMD_WAIT;
++        rfu_plen = 0;
++        rfu_cnt = 0;
++        rfu_disconnect_pending = false;
++      } else {
++        rfu_plen = (u8)(sent_value >> 8);
++        rfu_cmd  = (u8)(sent_value);
++        rfu_cnt = 0;
++      }
+       if (!rfu_plen) {
+         // Returns error code or response length
+         s32 ret = rfu_process_command();
+diff --git a/serial.h b/serial.h
+index 9f8c3d0..ce471b9 100644
+--- a/serial.h
++++ b/serial.h
+@@ -43,6 +43,7 @@ void serial_set_irq_cycles(u32 v);
+ void rfu_reset(void);
+ bool rfu_update(unsigned cycles);
+ u32 rfu_transfer(u32 value);
++void rfu_net_disconnect(void);
+ void rfu_frame_update(void);
+ void rfu_net_receive(const void* buf, size_t len, uint16_t client_id);
+ 

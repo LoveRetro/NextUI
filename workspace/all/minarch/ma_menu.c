@@ -22,6 +22,7 @@
 #include "ma_video.h"
 #include "ma_frontend_opts.h"
 #include "ma_menu.h"
+#include "netplay_helper.h" // netplay menu hooks + minarch.h accessor prototypes
 
 ///////////////////////////////
 
@@ -113,7 +114,7 @@ void MSG_quit(void) {
 
 ///////////////////////////////////////
 
-#define MENU_ITEM_COUNT 5
+#define MENU_ITEM_COUNT 6
 #define MENU_SLOT_COUNT 8
 
 enum {
@@ -121,6 +122,7 @@ enum {
 	ITEM_SAVE,
 	ITEM_LOAD,
 	ITEM_OPTS,
+	ITEM_NETPLAY,
 	ITEM_QUIT,
 };
 
@@ -162,9 +164,14 @@ static struct {
 		[ITEM_SAVE] = "Save",
 		[ITEM_LOAD] = "Load",
 		[ITEM_OPTS] = "Options",
+		[ITEM_NETPLAY] = "Netplay",
 		[ITEM_QUIT] = "Quit",
 	}
 };
+
+// Accessor for external modules (netplay) that need the paused-menu backdrop.
+// Lives here because `menu` is file-static; prototype is in minarch.h.
+SDL_Surface* minarch_getMenuBitmap(void) { return menu.bitmap; }
 
 void Menu_init(void) {
 	menu.overlay = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE,
@@ -1646,6 +1653,9 @@ void Menu_screenshot(void) {
 	}
 }
 void Menu_saveState(void) {
+	// Block save states during multiplayer - causes connection breaks
+	if (Multiplayer_isActive()) { return;}
+
 	// LOG_info("Menu_saveState\n");
 	Menu_updateState();
 	
@@ -1685,6 +1695,9 @@ void Menu_saveState(void) {
 	}
 }
 void Menu_loadState(void) {
+	// Block load states during multiplayer - causes connection breaks
+	if (Multiplayer_isActive()) { return; }
+
 	Menu_updateState();
 
 	if (menu.save_exists) {
@@ -1792,15 +1805,26 @@ void Menu_loop(void) {
 		uint32_t now = SDL_GetTicks();
 
 		PAD_poll();
-		
+
+		if (Netplay_isConnected()) {
+			Netplay_pollWhilePaused();
+		}
+		int mp_active = Multiplayer_isActive();
+
 		if (PAD_justPressed(BTN_UP)) {
-			selected -= 1;
-			if (selected<0) selected += MENU_ITEM_COUNT;
+			do {
+				selected -= 1;
+				if (selected<0) selected += MENU_ITEM_COUNT;
+			} while ((!core.show_netplay && selected == ITEM_NETPLAY) ||
+			         (mp_active && (selected == ITEM_SAVE || selected == ITEM_LOAD)));
 			dirty = 1;
 		}
 		else if (PAD_justPressed(BTN_DOWN)) {
-			selected += 1;
-			if (selected>=MENU_ITEM_COUNT) selected -= MENU_ITEM_COUNT;
+			do {
+				selected += 1;
+				if (selected>=MENU_ITEM_COUNT) selected -= MENU_ITEM_COUNT;
+			} while ((!core.show_netplay && selected == ITEM_NETPLAY) ||
+			         (mp_active && (selected == ITEM_SAVE || selected == ITEM_LOAD)));
 			dirty = 1;
 		}
 		else if (PAD_justPressed(BTN_LEFT)) {
@@ -1888,7 +1912,19 @@ void Menu_loop(void) {
 					}
 				}
 				break;
+				case ITEM_NETPLAY:
+					{
+					LinkType link_type = core.has_netpacket ? LINK_TYPE_GBALINK :
+					                     core.has_gblink ? LINK_TYPE_GBLINK : LINK_TYPE_NETPLAY;
+					if (Netplay_menu_link(link_type)) {
+						status = STATUS_CONT;
+						show_menu = 0;
+					}
+					dirty = 1;
+				}
+				break;
 				case ITEM_QUIT:
+					Netplay_quitAll();
 					status = STATUS_QUIT;
 					show_menu = 0;
 					quit = 1; // TODO: tmp?

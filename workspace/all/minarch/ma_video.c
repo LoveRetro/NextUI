@@ -5,6 +5,10 @@
 #include "scaler.h"
 #include "ma_video.h"
 
+// When set, video_refresh_callback drops the frame. minarch_forceCoreOptionUpdate()
+// uses this to run one core frame purely to trigger check_variables() without flashing.
+int skip_video_output = 0;
+
 
 static const char* bitmap_font[] = {
 	['0'] = 
@@ -949,6 +953,9 @@ void video_refresh_callback(const void* data, unsigned width, unsigned height, s
 
 	// Early exit if quitting to avoid rendering stale frames
 	if (quit) return;
+
+	// Suppress output for forced option-update frames (minarch_forceCoreOptionUpdate)
+	if (skip_video_output) return;
 
 	// Allocate RGBA buffer if needed
 	if (!rgbaData || rgbaDataSize != width * height) {

@@ -5,6 +5,7 @@
 #include "ma_input.h"
 #include "ra_integration.h"
 #include "ma_environment.h"
+#include "gbalink.h"
 
 static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
 	// TODO: handle other args? not sure I can
@@ -401,6 +402,15 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 			cb->version_minor = 0;
 		}
 
+		return true;
+	}
+	case RETRO_ENVIRONMENT_SET_NETPACKET_INTERFACE: {
+		const struct retro_netpacket_callback *cb =
+			(const struct retro_netpacket_callback *)data;
+		if (cb) {
+			core.has_netpacket = true;
+			GBALink_setCoreCallbacks(cb);
+		}
 		return true;
 	}
 	default:

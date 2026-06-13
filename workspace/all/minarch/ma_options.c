@@ -5,6 +5,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+// Core option batching (toggled via minarch_beginOptionsBatch/endOptionsBatch).
+// While batching, OptionList_setOptionValue records that something changed but
+// defers config.core.changed until the batch ends, so a burst of related option
+// writes triggers a single core variable re-read instead of one per write.
+int option_batch_mode = 0;
+int option_batch_changed = 0;
+
 int Option_getValueIndex(Option* item, const char* value) {
 	if (!value || !item || !item->values) return 0;
 	int i = 0;
@@ -312,7 +319,8 @@ void OptionList_setOptionValue(OptionList* list, const char* key, const char* va
 	Option* item = OptionList_getOption(list, key);
 	if (item) {
 		Option_setValue(item, value);
-		list->changed = 1;
+		if (option_batch_mode) option_batch_changed = 1;
+		else list->changed = 1;
 		// LOG_info("\tSET %s (%s) TO %s (%s)\n", item->name, item->key, item->labels[item->value], item->values[item->value]);
 		// if (list->on_set) list->on_set(list, key);
 

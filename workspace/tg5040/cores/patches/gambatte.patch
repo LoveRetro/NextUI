@@ -2,7 +2,7 @@ diff --git forkSrcPrefix/Makefile.libretro forkDstPrefix/Makefile.libretro
 index ffaba21e7a88f90786d818ab550b68acd05738bf..2095b2f843eaf6be9abec24ce3da69b551da86a6 100644
 --- forkSrcPrefix/Makefile.libretro
 +++ forkDstPrefix/Makefile.libretro
-@@ -381,6 +381,19 @@ else ifeq ($(platform), gcw0)
+@@ -381,6 +381,20 @@ else ifeq ($(platform), gcw0)
     CFLAGS += -fomit-frame-pointer -ffast-math -march=mips32 -mtune=mips32r2 -mhard-float
     CXXFLAGS += $(CFLAGS)
  
@@ -18,6 +18,7 @@ index ffaba21e7a88f90786d818ab550b68acd05738bf..2095b2f843eaf6be9abec24ce3da69b5
 +	CFLAGS += -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a
 +	CFLAGS += -fomit-frame-pointer -ffast-math -fPIC -flto
 +	CXXFLAGS += $(CFLAGS)
++	HAVE_NETWORK = 1
 +
  # RETROFW
  else ifeq ($(platform), retrofw)

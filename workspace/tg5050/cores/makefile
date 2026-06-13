@@ -65,6 +65,11 @@ fceumm_REPO = https://github.com/libretro/libretro-fceumm
 
 gambatte_REPO = https://github.com/libretro/gambatte-libretro
 
+# Pinned: upstream gpsp rfu.c drifts (rfu_reset/new_devid reworked) and breaks
+# the all/cores/patches/gpsp/* netplay patches. When bumping this hash, regen
+# 001-rfu_disconnect_fix.patch against the new source in the same change.
+gpsp_HASH = 2db57b11a437c4432ab69823bdcd951181de6213
+
 mednafen_supafaust_REPO = https://github.com/libretro/supafaust
 
 pcsx_rearmed_MAKEFILE = Makefile.libretro

@@ -792,12 +792,20 @@ int PLAT_wifiConnection(struct WIFI_connection *connection_info);
 bool PLAT_wifiHasCredentials(char *ssid, WifiSecurityType sec);
 // forgets the credentials for this SSID, if saved
 void PLAT_wifiForget(char *ssid, WifiSecurityType sec);
+// forgets every saved network whose SSID starts with prefix; returns the count removed
+int PLAT_wifiForgetPrefix(const char *prefix);
+// re-enables all configured networks (undoes a prior select_network exclusivity)
+void PLAT_wifiEnableAll(void);
 // attempt to connect to this SSID, using, stored credentials.
 // \sa PLAT_wifiHasCredentials
 void PLAT_wifiConnect(char *ssid, WifiSecurityType sec);
-// attempt to connect to this SSID with password given. 
+// attempt to connect to this SSID with password given.
 // If successful, stores credentials with wpa_supplicant.
 void PLAT_wifiConnectPass(const char *ssid, WifiSecurityType sec, const char* pass);
+// exclusively select an already-configured SSID (select_network: enables it and
+// disables all other configured networks for this session, so a higher-priority
+// saved network can't win the association). Used by netplay hotspot join.
+void PLAT_wifiSelectOnly(const char *ssid);
 // disconnect from any active network
 void PLAT_wifiDisconnect();
 // enable wifi diagnostic logging
@@ -814,8 +822,11 @@ void PLAT_wifiDiagnosticsEnable(bool on);
 #define WIFI_connectionInfo PLAT_wifiConnection
 #define WIFI_isKnown PLAT_wifiHasCredentials
 #define WIFI_forget PLAT_wifiForget
+#define WIFI_forgetPrefix PLAT_wifiForgetPrefix
+#define WIFI_enableAll PLAT_wifiEnableAll
 #define WIFI_connect PLAT_wifiConnect
 #define WIFI_connectPass PLAT_wifiConnectPass
+#define WIFI_selectOnly PLAT_wifiSelectOnly
 #define WIFI_disconnect PLAT_wifiDisconnect
 #define WIFI_diagnosticsEnabled PLAT_wifiDiagnosticsEnabled
 #define WIFI_diagnosticsEnable PLAT_wifiDiagnosticsEnable

@@ -1,5 +1,6 @@
 #include "ma_internal.h"
 #include "ma_input.h"
+#include "netplay_helper.h" // Netplay_*/Multiplayer_*/NETPLAY_* used in input callbacks
 
 #include <string.h>
 
@@ -14,6 +15,9 @@ int setFastForward(int enable) {
 
 static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
 static int ignore_menu = 0;
+
+// Expose the current local button bitmask to minarch.c's netplay input sync.
+uint32_t Input_getButtons(void) { return buttons; }
 void input_poll_callback(void) {
 	PAD_poll();
 
@@ -30,6 +34,7 @@ void input_poll_callback(void) {
 	if (PAD_isPressed(BTN_MENU) && PAD_isPressed(BTN_SELECT)) {
 		ignore_menu = 1;
 		newScreenshot = 1;
+		Netplay_quitAll();
 		quit = 1;
 		Menu_saveState();
 		putFile(GAME_SWITCHER_PERSIST_PATH, game.path + strlen(SDCARD_PATH));
@@ -51,6 +56,11 @@ void input_poll_callback(void) {
 		int btn = 1 << mapping->local;
 		if (btn==BTN_NONE) continue; // not bound
 		if (!mapping->mod || PAD_isPressed(BTN_MENU)) {
+			// Skip FF/rewind for multiplayer
+			if (i==SHORTCUT_TOGGLE_FF || i==SHORTCUT_HOLD_FF ||
+			    i==SHORTCUT_HOLD_REWIND || i==SHORTCUT_TOGGLE_REWIND) {
+				if (Multiplayer_isActive()) continue;
+			}
 			if (i==SHORTCUT_TOGGLE_FF) {
 				if (PAD_justPressed(btn)) {
 					toggled_ff_on = setFastForward(!fast_forward);
@@ -149,11 +159,13 @@ void input_poll_callback(void) {
 						break;
 					case SHORTCUT_RESET_GAME: core.reset(); break;
 					case SHORTCUT_SAVE_QUIT:
+						Netplay_quitAll();
 						newScreenshot = 1;
 						quit = 1;
 						Menu_saveState();
 						break;
 					case SHORTCUT_GAMESWITCHER:
+						Netplay_quitAll();
 						newScreenshot = 1;
 						quit = 1;
 						Menu_saveState();
@@ -218,18 +230,24 @@ void input_poll_callback(void) {
 
 }
 int16_t input_state_callback(unsigned port, unsigned device, unsigned index, unsigned id) {
-	if (port==0 && device==RETRO_DEVICE_JOYPAD && index==0) {
-		if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return buttons;
-		return (buttons >> id) & 1;
+	uint32_t player_buttons = Netplay_getPlayerButtons(port, buttons);
+
+	// Digital joypad inputs
+	if (device == RETRO_DEVICE_JOYPAD && index == 0) {
+		if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return player_buttons;
+		return (player_buttons >> id) & 1;
 	}
-	else if (port==0 && device==RETRO_DEVICE_ANALOG) {
-		if (index==RETRO_DEVICE_INDEX_ANALOG_LEFT) {
-			if (id==RETRO_DEVICE_ID_ANALOG_X) return pad.laxis.x;
-			else if (id==RETRO_DEVICE_ID_ANALOG_Y) return pad.laxis.y;
-		}
-		else if (index==RETRO_DEVICE_INDEX_ANALOG_RIGHT) {
-			if (id==RETRO_DEVICE_ID_ANALOG_X) return pad.raxis.x;
-			else if (id==RETRO_DEVICE_ID_ANALOG_Y) return pad.raxis.y;
+	// Analog inputs (local only - no netplay analog support)
+	else if (port == 0 && device == RETRO_DEVICE_ANALOG) {
+		if (!Netplay_isActive() || Netplay_getMode() == NETPLAY_HOST) {
+			if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT) {
+				if (id == RETRO_DEVICE_ID_ANALOG_X) return pad.laxis.x;
+				else if (id == RETRO_DEVICE_ID_ANALOG_Y) return pad.laxis.y;
+			}
+			else if (index == RETRO_DEVICE_INDEX_ANALOG_RIGHT) {
+				if (id == RETRO_DEVICE_ID_ANALOG_X) return pad.raxis.x;
+				else if (id == RETRO_DEVICE_ID_ANALOG_Y) return pad.raxis.y;
+			}
 		}
 	}
 	return 0;

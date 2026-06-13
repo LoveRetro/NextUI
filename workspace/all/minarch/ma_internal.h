@@ -56,6 +56,10 @@ struct Core {
 	size_t (*get_memory_size)(unsigned id);
 
 	retro_core_options_update_display_callback_t update_visibility_callback;
+
+	bool has_netpacket; // Netpacket interface (for GBA Link support)
+	bool show_netplay; // Whether to show netplay menu (false for cores that don't support it like mGBA)
+	bool has_gblink; // GB Link support (gambatte core)
 };
 
 struct Game {
@@ -127,6 +131,17 @@ extern int rewind_cfg_audio;
 extern int rewind_cfg_compress;
 extern int rewind_cfg_lz4_acceleration;
 extern int rewind_init_ready;
+
+// Core option batching (defined in ma_options.c, used by minarch.c netplay accessors).
+// While in batch mode, OptionList_setOptionValue defers config.core.changed so a
+// run of related option writes triggers a single core re-read.
+extern int option_batch_mode;
+extern int option_batch_changed;
+
+// Suppress video output for one forced core frame (defined in ma_video.c).
+// Used by minarch_forceCoreOptionUpdate() to run a frame purely to trigger
+// the core's check_variables() without flashing a frame on screen.
+extern int skip_video_output;
 
 #include "ma_rewind.h"
 

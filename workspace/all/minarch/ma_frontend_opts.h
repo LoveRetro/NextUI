@@ -9,11 +9,14 @@
 typedef struct MenuList MenuList;
 typedef struct MenuItem MenuItem;
 
+#ifndef MENU_CALLBACK_CODES_DEFINED
+#define MENU_CALLBACK_CODES_DEFINED
 enum {
 	MENU_CALLBACK_NOP,
 	MENU_CALLBACK_EXIT,
 	MENU_CALLBACK_NEXT_ITEM,
 };
+#endif
 
 typedef int (*MenuList_callback_t)(MenuList* list, int i);
 

@@ -3,6 +3,12 @@
 
 #include <SDL2/SDL_image.h>
 
+#include "scaler.h"
+#include "minarch.h"
+#include "netplay.h"
+#include "gbalink.h"
+#include "gblink.h"
+#include "netplay_helper.h"
 #include "notification.h"
 #include "ra_integration.h"
 
@@ -257,8 +263,26 @@ int main(int argc , char* argv[]) {
 	while (!quit) {
 		GFX_startFrame();
 
-		run_frame();
-		
+		// Netplay: synchronize inputs BEFORE running the core. If we're still waiting
+		// on the peer this frame, poll input (so menu/quit stay responsive) and skip it.
+		if (!Netplay_update((uint16_t)Input_getButtons(), core.serialize_size, core.serialize, core.unserialize)) {
+			input_poll_callback();
+			continue;
+		}
+
+		GBALink_update();
+		GBALink_pollAndDeliverPackets();
+		GBLink_pollConnectionState(); // GB Link: detect connect/disconnect from the socket table
+
+		if (Multiplayer_isActive()) {
+			core.run(); // link/netplay drives timing; rewind & FF are disabled
+		} else {
+			run_frame();
+		}
+		if (Netplay_isActive()) {
+			Netplay_postFrame();
+		}
+
 		// Process RetroAchievements for this frame
 		RA_doFrame();
 		
@@ -312,13 +336,29 @@ int main(int argc , char* argv[]) {
 		}
 
 		if (show_menu) {
+			if (Netplay_isConnected()) {
+				Netplay_pause();
+			}
 			PWR_updateFrequency(PWR_UPDATE_FREQ,1);
 			Menu_loop();
 			// Process RA async operations while menu is shown
 			RA_idle();
+			if (Netplay_isPaused()) {
+				Netplay_resume();
+			}
 			PWR_updateFrequency(PWR_UPDATE_FREQ_INGAME,0);
 			has_pending_opt_change = config.core.changed;
 			chooseSyncRef();
+
+			// Clear FF/rewind state if multiplayer is now active
+			if (Multiplayer_isActive()) {
+				fast_forward = setFastForward(0);
+				ff_toggled = 0;
+				ff_hold_active = 0;
+				rewind_toggle = 0;
+				rewind_pressed = 0;
+				rewinding = 0;
+			}
 		}
 
 		Audio_checkAndResetIfNeeded();
@@ -344,10 +384,14 @@ int main(int argc , char* argv[]) {
 	PLAT_clearTurbo();
 
 	Menu_quit();
+	
 	QuitSettings();
 
 finish:
-    Perf_setCPUMonitorEnabled(0);
+
+	Netplay_quitAll();
+	
+	Perf_setCPUMonitorEnabled(0);
 
 	// Unload game and shutdown RetroAchievements before Notification_quit —
 	// RA background threads (sync, badge downloads) may call notification
@@ -375,4 +419,82 @@ finish:
 	GFX_quit();
 	Menu_waitScreenshot();
 	return EXIT_SUCCESS;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Accessor functions for external modules
+//////////////////////////////////////////////////////////////////////////////
+
+// Screen/display accessors
+SDL_Surface* minarch_getScreen(void) { return screen; }
+int minarch_getDeviceWidth(void) { return DEVICE_WIDTH; }
+int minarch_getDeviceHeight(void) { return DEVICE_HEIGHT; }
+// minarch_getMenuBitmap() is defined in ma_menu.c, which owns the menu state.
+
+// Game state accessors
+const char* minarch_getCoreTag(void) { return core.tag; }
+const char* minarch_getGameName(void) { return game.name; }
+void* minarch_getGameData(void) { return game.data; }
+size_t minarch_getGameSize(void) { return game.size; }
+
+// Core option accessors
+char* minarch_getCoreOptionValue(const char* key) {
+	return OptionList_getOptionValue(&config.core, key);
+}
+void minarch_setCoreOptionValue(const char* key, const char* value) {
+	OptionList_setOptionValue(&config.core, key, value);
+}
+
+// Sleep state accessors
+void minarch_beforeSleep(void) { Menu_beforeSleep(); }
+void minarch_afterSleep(void) { Menu_afterSleep(); }
+
+// Platform accessors
+void minarch_hdmimon(void) { hdmimon(); }
+
+// Menu accessors
+int minarch_menuMessage(char* message, char** pairs) { return Menu_message(message, pairs); }
+
+// Save current config to file (used before core reset to preserve option changes)
+void minarch_saveConfig(void) { Config_write(CONFIG_WRITE_ALL); }
+
+//////////////////////////////////////////////////////////////////////////////
+// Utility/API functions for external modules
+//////////////////////////////////////////////////////////////////////////////
+
+void minarch_beginOptionsBatch(void) {
+	option_batch_mode = 1;
+	option_batch_changed = 0;
+}
+void minarch_endOptionsBatch(void) {
+	option_batch_mode = 0;
+	if (option_batch_changed) {
+		config.core.changed = 1;
+		option_batch_changed = 0;
+	}
+}
+
+// Force core to process option changes immediately (used by gblink.c and netplay_helper.c)
+// Runs one frame with video output suppressed to trigger check_variables()
+void minarch_forceCoreOptionUpdate(void) {
+	skip_video_output = 1;
+	core.run();
+	skip_video_output = 0;
+}
+
+
+// Reload the game to reinitialize core state (e.g., for gpSP serial mode changes)
+// Unloads and reloads the ROM so the core re-reads options during load_game()
+void minarch_reloadGame(void) {
+	SRAM_write();
+	core.unload_game();
+
+	struct retro_game_info game_info;
+	game_info.path = game.tmp_path[0] ? game.tmp_path : game.path;
+	game_info.data = game.data;
+	game_info.size = game.size;
+	core.load_game(&game_info);
+
+	SRAM_read();
+	Core_updateAVInfo();
 }

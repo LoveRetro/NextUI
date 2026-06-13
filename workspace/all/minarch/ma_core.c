@@ -9,6 +9,7 @@
 #include "ma_input.h"
 #include "ma_cheats.h"
 #include "ma_core.h"
+#include "netplay_helper.h" // CoreLinkSupport / checkCoreLinkSupport
 
 
 void Core_getName(char* in_name, char* out_name) {
@@ -130,12 +131,22 @@ int Core_updateAVInfo(void) {
 
 void Core_load(void) {
 	LOG_info("Core_load\n");
+
+	core.has_netpacket = false;
+	core.has_gblink = false;
+	core.show_netplay = false;
+
 	struct retro_game_info game_info;
 	game_info.path = game.tmp_path[0]?game.tmp_path:game.path;
 	game_info.data = game.data;
 	game_info.size = game.size;
 	LOG_info("game path: %s (%i)\n", game_info.path, game.size);
 	core.load_game(&game_info);
+
+	CoreLinkSupport link_support = checkCoreLinkSupport(core.name);
+	core.show_netplay = link_support.show_netplay;
+	core.has_netpacket = link_support.has_netpacket;
+	core.has_gblink = link_support.has_gblink;
 
 	if (Cheats_load())
 		Core_applyCheats(&cheatcodes);
