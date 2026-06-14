@@ -1078,10 +1078,14 @@ void SetRawExposure(int val){
 void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain) {
 	printf("SetRawDisplayCal(%i,%i,%i,%i)\n", enabled, red_gain, green_gain, blue_gain); fflush(stdout);
 
-	if (enabled)
-		DisplayCal_enableWithValues(red_gain, green_gain, blue_gain);
-	else
-		DisplayCal_disable();
+	int ret = enabled
+		? DisplayCal_enableWithValues(red_gain, green_gain, blue_gain)
+		: DisplayCal_disable();
+	if (ret != 0) {
+		fprintf(stderr, "SetRawDisplayCal failed to %s display calibration: %i\n",
+			enabled ? "enable" : "disable", ret);
+		fflush(stderr);
+	}
 }
 
 void SetRawColortemp(int val) { // 0 - 255
