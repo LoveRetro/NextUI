@@ -504,7 +504,7 @@ int main(int argc, char *argv[])
         const int defaultDisplayCalBlueGain = deviceInfo.defaultDisplayCalBlueGain();
         displayItems.push_back(
             new MenuItem{ListItemType::Generic, "White point correction", "Corrects the display white point to better match the sRGB standard.", {false, true}, on_off, []() -> std::any
-            { return GetDisplayCalEnabled(); }, [](const std::any &value)
+            { return GetDisplayCalEnabled() != 0; }, [](const std::any &value)
             { SetDisplayCalEnabled(std::any_cast<bool>(value)); },
             [defaultDisplayCalEnabled]() { SetDisplayCalEnabled(defaultDisplayCalEnabled); }});
         displayItems.push_back(
