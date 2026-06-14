@@ -128,8 +128,8 @@ apply_displaycal() {
 	display_cal_green=$(nextval_number displayCalGreen)
 	display_cal_blue=$(nextval_number displayCalBlue)
 	display_cal_red=${display_cal_red:-100}
-	display_cal_green=${display_cal_green:-100}
-	display_cal_blue=${display_cal_blue:-60}
+	display_cal_green=${display_cal_green:-92}
+	display_cal_blue=${display_cal_blue:-58}
 	"$SYSTEM_PATH/bin/displaycal.elf" enable \
 		"$(displaycal_gain "$display_cal_red")" \
 		"$(displaycal_gain "$display_cal_green")" \
