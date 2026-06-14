@@ -6,6 +6,10 @@
 #define SETTINGS_DEFAULT_CONTRAST 0
 #define SETTINGS_DEFAULT_SATURATION 0
 #define SETTINGS_DEFAULT_EXPOSURE 0
+#define SETTINGS_DEFAULT_DISPLAYCAL_ENABLED 0
+#define SETTINGS_DEFAULT_DISPLAYCAL_RED_GAIN 100
+#define SETTINGS_DEFAULT_DISPLAYCAL_GREEN_GAIN 100
+#define SETTINGS_DEFAULT_DISPLAYCAL_BLUE_GAIN 100
 #define SETTINGS_DEFAULT_VOLUME 8
 #define SETTINGS_DEFAULT_HEADPHONE_VOLUME 4
 #define SETTINGS_DEFAULT_FAN_SPEED -2 // Default fan curve
@@ -21,6 +25,10 @@ int GetColortemp(void);
 int GetContrast(void);
 int GetSaturation(void);
 int GetExposure(void);
+int GetDisplayCalEnabled(void);
+int GetDisplayCalRedGain(void);
+int GetDisplayCalGreenGain(void);
+int GetDisplayCalBlueGain(void);
 int GetVolume(void);
 int GetFanSpeed(void);
 
@@ -29,6 +37,7 @@ void SetRawColortemp(int value); // 0-255
 void SetRawContrast(int value); // 0-100
 void SetRawSaturation(int value); // 0-100
 void SetRawExposure(int value); // 0-100
+void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain);
 void SetRawVolume(int value); // 0-100
 void SetRawFanSpeed(int value); // 0-31, -1/-2-3 for auto low/med/high
 
@@ -37,6 +46,10 @@ void SetColortemp(int value); // 0-40
 void SetContrast(int value); // -4-5
 void SetSaturation(int value); // -5-5
 void SetExposure(int value); // -4-5
+void SetDisplayCalEnabled(int value); // 0-1
+void SetDisplayCalRedGain(int value); // 0-200, 100 is neutral
+void SetDisplayCalGreenGain(int value); // 0-200, 100 is neutral
+void SetDisplayCalBlueGain(int value); // 0-200, 100 is neutral
 void SetVolume(int value); // 0-20
 void SetFanSpeed(int value); // 0-100, -1 for auto
 

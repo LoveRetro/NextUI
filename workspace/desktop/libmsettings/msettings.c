@@ -137,10 +137,45 @@ typedef struct SettingsV9 {
 	int jack; 
 } SettingsV9;
 
+typedef struct SettingsV10 {
+	int version; // future proofing
+	int brightness;
+	int colortemperature;
+	int headphones;
+	int speaker;
+	int mute;
+	int contrast;
+	int saturation;
+	int exposure;
+	int toggled_brightness;
+	int toggled_colortemperature;
+	int toggled_contrast;
+	int toggled_saturation;
+	int toggled_exposure;
+	int toggled_volume;
+	int disable_dpad_on_mute;
+	int emulate_joystick_on_mute;
+	int turbo_a;
+	int turbo_b;
+	int turbo_x;
+	int turbo_y;
+	int turbo_l1;
+	int turbo_l2;
+	int turbo_r1;
+	int turbo_r2;
+	int unused[2]; // for future use
+	// NOTE: doesn't really need to be persisted but still needs to be shared
+	int jack;
+	int displaycal_enabled;
+	int displaycal_red_gain;
+	int displaycal_green_gain;
+	int displaycal_blue_gain;
+} SettingsV10;
+
 // When incrementing SETTINGS_VERSION, update the Settings typedef and add
 // backwards compatibility to InitSettings!
-#define SETTINGS_VERSION 9
-typedef SettingsV9 Settings;
+#define SETTINGS_VERSION 10
+typedef SettingsV10 Settings;
 static Settings DefaultSettings = {
 	.version = SETTINGS_VERSION,
 	.brightness = SETTINGS_DEFAULT_BRIGHTNESS,
@@ -168,6 +203,10 @@ static Settings DefaultSettings = {
 	.turbo_r1 = 0,
 	.turbo_r2 = 0,
 	.jack = 0,
+	.displaycal_enabled = SETTINGS_DEFAULT_DISPLAYCAL_ENABLED,
+	.displaycal_red_gain = SETTINGS_DEFAULT_DISPLAYCAL_RED_GAIN,
+	.displaycal_green_gain = SETTINGS_DEFAULT_DISPLAYCAL_GREEN_GAIN,
+	.displaycal_blue_gain = SETTINGS_DEFAULT_DISPLAYCAL_BLUE_GAIN,
 };
 static Settings* msettings;
 
@@ -204,7 +243,15 @@ void InitSettings(void){
 				memcpy(msettings, &DefaultSettings, sizeof(Settings));
 				
 				// overwrite with migrated data
-				if(version==8) {
+				if(version==9) {
+					printf("Found settings v9.\n");
+					SettingsV9 old;
+					read(fd, &old, sizeof(SettingsV9));
+
+					memcpy(msettings, &old, sizeof(SettingsV9));
+					msettings->version = SETTINGS_VERSION;
+				}
+				else if(version==8) {
 					printf("Found settings v8.\n");
 					SettingsV8 old;
 					read(fd, &old, sizeof(SettingsV8));
@@ -325,6 +372,8 @@ void InitSettings(void){
 		// load defaults
 		memcpy(msettings, &DefaultSettings, sizeof(Settings));
 	}
+
+	SetDisplayCalEnabled(GetDisplayCalEnabled());
 }
 static inline void SaveSettings(void) {
 	FILE *file = fopen(SettingsPath, "w");
@@ -350,6 +399,10 @@ int GetColortemp(void) { return 0; }
 int GetContrast(void) { return 0; }
 int GetSaturation(void) { return 0; }
 int GetExposure(void) { return 0; }
+int GetDisplayCalEnabled(void) { return msettings->displaycal_enabled; }
+int GetDisplayCalRedGain(void) { return msettings->displaycal_red_gain; }
+int GetDisplayCalGreenGain(void) { return msettings->displaycal_green_gain; }
+int GetDisplayCalBlueGain(void) { return msettings->displaycal_blue_gain; }
 int GetVolume(void) { return 0; }
 
 int GetMutedBrightness(void) { return 0; }
@@ -387,6 +440,9 @@ void SetMuteTurboR1(int value) {}
 void SetMuteTurboR2(int value) {}
 
 void SetRawBrightness(int value) {}
+void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain) {
+	printf("SetRawDisplayCal(%i,%i,%i,%i)\n", enabled, red_gain, green_gain, blue_gain); fflush(stdout);
+}
 void SetRawVolume(int value){}
 
 void SetBrightness(int value) {}
@@ -394,6 +450,32 @@ void SetColortemp(int value) {}
 void SetContrast(int value) {}
 void SetSaturation(int value) {}
 void SetExposure(int value) {}
+void SetDisplayCalEnabled(int value) {
+	msettings->displaycal_enabled = value ? 1 : 0;
+	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	SaveSettings();
+}
+void SetDisplayCalRedGain(int value) {
+	if (value < 0) value = 0;
+	if (value > 200) value = 200;
+	msettings->displaycal_red_gain = value;
+	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	SaveSettings();
+}
+void SetDisplayCalGreenGain(int value) {
+	if (value < 0) value = 0;
+	if (value > 200) value = 200;
+	msettings->displaycal_green_gain = value;
+	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	SaveSettings();
+}
+void SetDisplayCalBlueGain(int value) {
+	if (value < 0) value = 0;
+	if (value > 200) value = 200;
+	msettings->displaycal_blue_gain = value;
+	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	SaveSettings();
+}
 void SetVolume(int value) {}
 
 int GetJack(void) { return 0; }

@@ -17,7 +17,6 @@ CFLAGS  += -pg
 LDFLAGS += -pg
 endif
 
-#CFLAGS = -g
 #LDFLAGS = -ldl -lrt -s
 LDFLAGS = -ldl
 

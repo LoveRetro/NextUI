@@ -260,8 +260,6 @@ int scaleContrast(int);
 int scaleSaturation(int);
 int scaleExposure(int);
 int scaleVolume(int);
-int clampDisplayCalGain(int);
-int supportsDisplayCal(void);
 
 void disableDpad(int);
 void emulateJoystick(int);
@@ -318,6 +316,29 @@ int peekVersion(const char *filename) {
 
 static int is_brick = 0;
 
+static int defaultDisplayCalEnabledForDevice(void) {
+	return is_brick ? 1 : SETTINGS_DEFAULT_DISPLAYCAL_ENABLED;
+}
+
+static int defaultDisplayCalRedGainForDevice(void) {
+	return 100;
+}
+
+static int defaultDisplayCalGreenGainForDevice(void) {
+	return is_brick ? 92 : SETTINGS_DEFAULT_DISPLAYCAL_GREEN_GAIN;
+}
+
+static int defaultDisplayCalBlueGainForDevice(void) {
+	return is_brick ? 58 : SETTINGS_DEFAULT_DISPLAYCAL_BLUE_GAIN;
+}
+
+static void applyDisplayCalDefaultsForDevice(Settings *target) {
+	target->displaycal_enabled = defaultDisplayCalEnabledForDevice();
+	target->displaycal_red_gain = defaultDisplayCalRedGainForDevice();
+	target->displaycal_green_gain = defaultDisplayCalGreenGainForDevice();
+	target->displaycal_blue_gain = defaultDisplayCalBlueGainForDevice();
+}
+
 void InitSettings(void) {	
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
@@ -348,6 +369,7 @@ void InitSettings(void) {
 				else {
 					// initialize with defaults
 					memcpy(settings, &DefaultSettings, shm_size);
+					applyDisplayCalDefaultsForDevice(settings);
 
 					// overwrite with migrated data
 					if(version==10) {
@@ -357,6 +379,7 @@ void InitSettings(void) {
 
 						memcpy(settings, &old, sizeof(SettingsV10));
 						settings->version = SETTINGS_VERSION;
+						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==9) {
 						printf("Found settings v9.\n");
@@ -393,6 +416,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
+						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==8) {
 						printf("Found settings v8.\n");
@@ -418,6 +442,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
+						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==7) {
 						printf("Found settings v7.\n");
@@ -442,6 +467,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
+						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==6) {
 						printf("Found settings v6.\n");
@@ -459,6 +485,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
+						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==5) {
 						printf("Found settings v5.\n");
@@ -472,6 +499,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
+						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==4) {
 						printf("Found settings v4.\n");
@@ -486,6 +514,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
+						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==3) {
 						printf("Found settings v3.\n");
@@ -497,6 +526,7 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
+						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else {
 						printf("Found unsupported settings version: %i.\n", version);
@@ -508,11 +538,13 @@ void InitSettings(void) {
 			else {
 				// load defaults
 				memcpy(settings, &DefaultSettings, shm_size);
+				applyDisplayCalDefaultsForDevice(settings);
 			}
 		}
 		else {
 			// load defaults
 			memcpy(settings, &DefaultSettings, shm_size);
+			applyDisplayCalDefaultsForDevice(settings);
 		}
 		
 		// these shouldn't be persisted
@@ -737,17 +769,17 @@ void SetDisplayCalEnabled(int value) {
 	SaveSettings();
 }
 void SetDisplayCalRedGain(int value) {
-	settings->displaycal_red_gain = clampDisplayCalGain(value);
+	settings->displaycal_red_gain = DisplayCal_clampGainValue(value);
 	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
 	SaveSettings();
 }
 void SetDisplayCalGreenGain(int value) {
-	settings->displaycal_green_gain = clampDisplayCalGain(value);
+	settings->displaycal_green_gain = DisplayCal_clampGainValue(value);
 	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
 	SaveSettings();
 }
 void SetDisplayCalBlueGain(int value) {
-	settings->displaycal_blue_gain = clampDisplayCalGain(value);
+	settings->displaycal_blue_gain = DisplayCal_clampGainValue(value);
 	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
 	SaveSettings();
 }
@@ -1019,14 +1051,6 @@ void turboR2(int value) {
 
 int scaleVolume(int value) {
 	return value * 5; // scale 0-20 to 0-100
-}
-
-int clampDisplayCalGain(int value) {
-	return DisplayCal_clampGainValue(value);
-}
-
-int supportsDisplayCal(void) {
-	return is_brick;
 }
 
 int scaleBrightness(int value) {
@@ -1381,9 +1405,6 @@ void SetRawExposure(int val){
 }
 void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain) {
 	printf("SetRawDisplayCal(%i,%i,%i,%i)\n", enabled, red_gain, green_gain, blue_gain); fflush(stdout);
-
-	if (!supportsDisplayCal())
-		return;
 
 	if (enabled)
 		DisplayCal_enableWithValues(red_gain, green_gain, blue_gain);
