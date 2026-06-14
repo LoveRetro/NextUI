@@ -14,6 +14,7 @@
 #define DISP_LCD_GAMMA_CORRECTION_ENABLE  0x10c
 #define DISP_LCD_GAMMA_CORRECTION_DISABLE 0x10d
 
+#define DISPLAYCAL_VERSION "1.0.0"
 #define DISPLAYCAL_LUT_ENTRIES 256
 #define DISPLAYCAL_LUT_BYTES   (DISPLAYCAL_LUT_ENTRIES * 4)
 
@@ -160,16 +161,36 @@ static int disable_screen(int screen) {
 
 static void usage(const char *argv0) {
 	fprintf(stderr,
+		"displaycal %s\n"
 		"Usage:\n"
 		"  %s enable [red] [green] [blue]\n"
-		"  %s disable\n",
-		argv0, argv0);
+		"  %s disable\n"
+		"  %s --version\n"
+		"\n"
+		"Gain range: %.2f to %.2f\n"
+		"Suggested Brick gains: %.2f %.2f %.2f\n",
+		DISPLAYCAL_VERSION,
+		argv0, argv0, argv0,
+		(double)DISPLAYCAL_GAIN_MIN / DISPLAYCAL_GAIN_SCALE,
+		(double)DISPLAYCAL_GAIN_MAX / DISPLAYCAL_GAIN_SCALE,
+		DISPLAYCAL_DEFAULT_RED_GAIN,
+		DISPLAYCAL_DEFAULT_GREEN_GAIN,
+		DISPLAYCAL_DEFAULT_BLUE_GAIN);
 }
 
 int main(int argc, char **argv) {
 	if (argc < 2) {
 		usage(argv[0]);
 		return 2;
+	}
+
+	if (streq(argv[1], "--version")) {
+		if (argc != 2) {
+			usage(argv[0]);
+			return 2;
+		}
+		printf("displaycal %s\n", DISPLAYCAL_VERSION);
+		return 0;
 	}
 
 	if (streq(argv[1], "enable")) {
