@@ -1,4 +1,5 @@
 #include "msettings.h"
+#include "displaycal.h"
 
 // desktop
 #include <stdio.h>
@@ -461,22 +462,19 @@ void SetDisplayCalEnabled(int value) {
 	SaveSettings();
 }
 void SetDisplayCalRedGain(int value) {
-	if (value < 0) value = 0;
-	if (value > 200) value = 200;
+	value = DisplayCal_clampGainValue(value);
 	msettings->displaycal_red_gain = value;
 	applyDisplayCalSettings();
 	SaveSettings();
 }
 void SetDisplayCalGreenGain(int value) {
-	if (value < 0) value = 0;
-	if (value > 200) value = 200;
+	value = DisplayCal_clampGainValue(value);
 	msettings->displaycal_green_gain = value;
 	applyDisplayCalSettings();
 	SaveSettings();
 }
 void SetDisplayCalBlueGain(int value) {
-	if (value < 0) value = 0;
-	if (value > 200) value = 200;
+	value = DisplayCal_clampGainValue(value);
 	msettings->displaycal_blue_gain = value;
 	applyDisplayCalSettings();
 	SaveSettings();

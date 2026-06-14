@@ -10,7 +10,13 @@ extern "C" {
 #endif
 
 // Clamp a display calibration gain value to the supported 0-200 range.
-int DisplayCal_clampGainValue(int value);
+static inline int DisplayCal_clampGainValue(int value) {
+	if (value < DISPLAYCAL_GAIN_MIN)
+		return DISPLAYCAL_GAIN_MIN;
+	if (value > DISPLAYCAL_GAIN_MAX)
+		return DISPLAYCAL_GAIN_MAX;
+	return value;
+}
 
 // Apply the LUT using integer red, green, and blue gains in the 0-200 range.
 // A value of 100 is neutral.

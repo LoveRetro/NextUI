@@ -22,14 +22,6 @@ typedef struct {
 	double blue_gain;
 } DisplayCalGains;
 
-int DisplayCal_clampGainValue(int value) {
-	if (value < DISPLAYCAL_GAIN_MIN)
-		return DISPLAYCAL_GAIN_MIN;
-	if (value > DISPLAYCAL_GAIN_MAX)
-		return DISPLAYCAL_GAIN_MAX;
-	return value;
-}
-
 static unsigned char clamp_u8(double value) {
 	if (value < 0.0)
 		return 0;
