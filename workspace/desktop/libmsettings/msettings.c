@@ -386,7 +386,8 @@ static inline void SaveSettings(void) {
 	}
 }
 static inline void applyDisplayCalSettings(void) {
-	SetRawDisplayCal(msettings->displaycal_enabled, msettings->displaycal_red_gain, msettings->displaycal_green_gain, msettings->displaycal_blue_gain);
+	if (msettings->displaycal_enabled)
+		SetRawDisplayCal(1, msettings->displaycal_red_gain, msettings->displaycal_green_gain, msettings->displaycal_blue_gain);
 }
 void QuitSettings(void){
 	SaveSettings();
@@ -456,9 +457,16 @@ void SetColortemp(int value) {}
 void SetContrast(int value) {}
 void SetSaturation(int value) {}
 void SetExposure(int value) {}
-void SetDisplayCalEnabled(int value) {
-	msettings->displaycal_enabled = value ? 1 : 0;
-	applyDisplayCalSettings();
+void SetDisplayCalEnabled(int is_enabled) {
+	int was_enabled = msettings->displaycal_enabled;
+	is_enabled = (is_enabled != 0);
+	msettings->displaycal_enabled = is_enabled;
+
+	// Disabling only needs raw writes when we are turning an active LUT off.
+	if (is_enabled)
+		applyDisplayCalSettings();
+	else if (was_enabled)
+		SetRawDisplayCal(0, msettings->displaycal_red_gain, msettings->displaycal_green_gain, msettings->displaycal_blue_gain);
 	SaveSettings();
 }
 void SetDisplayCalRedGain(int value) {

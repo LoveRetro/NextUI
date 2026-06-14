@@ -566,7 +566,8 @@ static inline void SaveSettings(void) {
 }
 
 static inline void applyDisplayCalSettings(void) {
-	SetRawDisplayCal(settings->displaycal_enabled, settings->displaycal_red_gain, settings->displaycal_green_gain, settings->displaycal_blue_gain);
+	if (settings->displaycal_enabled)
+		SetRawDisplayCal(1, settings->displaycal_red_gain, settings->displaycal_green_gain, settings->displaycal_blue_gain);
 }
 
 ///////// Getters exposed in public API
@@ -752,10 +753,16 @@ void SetExposure(int value){
 	settings->exposure = value;
 	SaveSettings();
 }
-void SetDisplayCalEnabled(int value) {
-	value = value ? 1 : 0;
-	settings->displaycal_enabled = value;
-	applyDisplayCalSettings();
+void SetDisplayCalEnabled(int is_enabled) {
+	int was_enabled = settings->displaycal_enabled;
+	is_enabled = (is_enabled != 0);
+	settings->displaycal_enabled = is_enabled;
+
+	// Disabling only needs hardware writes when we are turning an active LUT off.
+	if (is_enabled)
+		applyDisplayCalSettings();
+	else if (was_enabled)
+		SetRawDisplayCal(0, settings->displaycal_red_gain, settings->displaycal_green_gain, settings->displaycal_blue_gain);
 	SaveSettings();
 }
 void SetDisplayCalRedGain(int value) {
