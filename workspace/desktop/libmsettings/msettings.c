@@ -204,10 +204,10 @@ static Settings DefaultSettings = {
 	.turbo_r1 = 0,
 	.turbo_r2 = 0,
 	.jack = 0,
-	.displaycal_enabled = SETTINGS_DEFAULT_DISPLAYCAL_ENABLED,
-	.displaycal_red_gain = SETTINGS_DEFAULT_DISPLAYCAL_RED_GAIN,
-	.displaycal_green_gain = SETTINGS_DEFAULT_DISPLAYCAL_GREEN_GAIN,
-	.displaycal_blue_gain = SETTINGS_DEFAULT_DISPLAYCAL_BLUE_GAIN,
+	.displaycal_enabled = DISPLAYCAL_DEFAULT_ENABLED,
+	.displaycal_red_gain = DISPLAYCAL_DEFAULT_RED_GAIN,
+	.displaycal_green_gain = DISPLAYCAL_DEFAULT_GREEN_GAIN,
+	.displaycal_blue_gain = DISPLAYCAL_DEFAULT_BLUE_GAIN,
 };
 static Settings* msettings;
 
