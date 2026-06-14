@@ -172,10 +172,46 @@ typedef struct SettingsV10 {
 	int audiosink; // was bluetooth true/false before
 } SettingsV10;
 
+typedef struct SettingsV11 {
+	int version; // future proofing
+	int brightness;
+	int colortemperature;
+	int headphones;
+	int speaker;
+	int mute;
+	int contrast;
+	int saturation;
+	int exposure;
+	int toggled_brightness;
+	int toggled_colortemperature;
+	int toggled_contrast;
+	int toggled_saturation;
+	int toggled_exposure;
+	int toggled_volume;
+	int disable_dpad_on_mute;
+	int emulate_joystick_on_mute;
+	int turbo_a;
+	int turbo_b;
+	int turbo_x;
+	int turbo_y;
+	int turbo_l1;
+	int turbo_l2;
+	int turbo_r1;
+	int turbo_r2;
+	int unused[2]; // for future use
+	// NOTE: doesn't really need to be persisted but still needs to be shared
+	int jack;
+	int audiosink; // was bluetooth true/false before
+	int displaycal_enabled;
+	int displaycal_red_gain;
+	int displaycal_green_gain;
+	int displaycal_blue_gain;
+} SettingsV11;
+
 // When incrementing SETTINGS_VERSION, update the Settings typedef and add
 // backwards compatibility to InitSettings!
-#define SETTINGS_VERSION 10
-typedef SettingsV10 Settings;
+#define SETTINGS_VERSION 11
+typedef SettingsV11 Settings;
 static Settings DefaultSettings = {
 	.version = SETTINGS_VERSION,
 	.brightness = SETTINGS_DEFAULT_BRIGHTNESS,
@@ -204,6 +240,10 @@ static Settings DefaultSettings = {
 	.turbo_r2 = 0,
 	.jack = 0,
 	.audiosink = AUDIO_SINK_DEFAULT,
+	.displaycal_enabled = SETTINGS_DEFAULT_DISPLAYCAL_ENABLED,
+	.displaycal_red_gain = SETTINGS_DEFAULT_DISPLAYCAL_RED_GAIN,
+	.displaycal_green_gain = SETTINGS_DEFAULT_DISPLAYCAL_GREEN_GAIN,
+	.displaycal_blue_gain = SETTINGS_DEFAULT_DISPLAYCAL_BLUE_GAIN,
 };
 static Settings* settings;
 
@@ -219,6 +259,7 @@ int scaleContrast(int);
 int scaleSaturation(int);
 int scaleExposure(int);
 int scaleVolume(int);
+int clampDisplayCalGain(int);
 
 void disableDpad(int);
 void emulateJoystick(int);
@@ -307,7 +348,15 @@ void InitSettings(void) {
 					memcpy(settings, &DefaultSettings, shm_size);
 
 					// overwrite with migrated data
-					if(version==9) {
+					if(version==10) {
+						printf("Found settings v10.\n");
+						SettingsV10 old;
+						read(fd, &old, sizeof(SettingsV10));
+
+						memcpy(settings, &old, sizeof(SettingsV10));
+						settings->version = SETTINGS_VERSION;
+					}
+					else if(version==9) {
 						printf("Found settings v9.\n");
 						SettingsV9 old;
 						read(fd, &old, sizeof(SettingsV9));
@@ -541,6 +590,22 @@ int GetExposure(void)
 
 	return settings->exposure;
 }
+int GetDisplayCalEnabled(void)
+{
+	return settings->displaycal_enabled;
+}
+int GetDisplayCalRedGain(void)
+{
+	return settings->displaycal_red_gain;
+}
+int GetDisplayCalGreenGain(void)
+{
+	return settings->displaycal_green_gain;
+}
+int GetDisplayCalBlueGain(void)
+{
+	return settings->displaycal_blue_gain;
+}
 // monitored and set by thread in keymon
 int GetJack(void) {
 	return settings->jack;
@@ -664,6 +729,26 @@ void SetExposure(int value){
 	settings->exposure = value;
 	SaveSettings();
 }
+void SetDisplayCalEnabled(int value) {
+	settings->displaycal_enabled = value ? 1 : 0;
+	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	SaveSettings();
+}
+void SetDisplayCalRedGain(int value) {
+	settings->displaycal_red_gain = clampDisplayCalGain(value);
+	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	SaveSettings();
+}
+void SetDisplayCalGreenGain(int value) {
+	settings->displaycal_green_gain = clampDisplayCalGain(value);
+	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	SaveSettings();
+}
+void SetDisplayCalBlueGain(int value) {
+	settings->displaycal_blue_gain = clampDisplayCalGain(value);
+	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	SaveSettings();
+}
 void SetVolume(int value) // 0-20
 {
 	if (settings->mute && GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
@@ -702,6 +787,7 @@ void SetMute(int value) {
 	SetContrast(GetContrast());
 	SetSaturation(GetSaturation());
 	SetExposure(GetExposure());
+	SetDisplayCalEnabled(GetDisplayCalEnabled());
 
 	if(is_brick && GetMuteDisablesDpad())
 		disableDpad(settings->mute);
@@ -931,6 +1017,10 @@ void turboR2(int value) {
 
 int scaleVolume(int value) {
 	return value * 5; // scale 0-20 to 0-100
+}
+
+int clampDisplayCalGain(int value) {
+	return DisplayCal_clampGainValue(value);
 }
 
 int scaleBrightness(int value) {
@@ -1282,4 +1372,15 @@ void SetRawExposure(int val){
 		fprintf(fd, "%i", val);
 		fclose(fd);
 	}
+}
+void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain) {
+	printf("SetRawDisplayCal(%i,%i,%i,%i)\n", enabled, red_gain, green_gain, blue_gain); fflush(stdout);
+
+	if (!is_brick)
+		return;
+
+	if (enabled)
+		DisplayCal_enableWithValues(red_gain, green_gain, blue_gain);
+	else
+		DisplayCal_disable();
 }

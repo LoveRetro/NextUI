@@ -1,11 +1,17 @@
 #ifndef __msettings_h__
 #define __msettings_h__
 
+#include "displaycal.h"
+
 #define SETTINGS_DEFAULT_BRIGHTNESS 2
 #define SETTINGS_DEFAULT_COLORTEMP 20
 #define SETTINGS_DEFAULT_CONTRAST 0
 #define SETTINGS_DEFAULT_SATURATION 0
 #define SETTINGS_DEFAULT_EXPOSURE 0
+#define SETTINGS_DEFAULT_DISPLAYCAL_ENABLED DISPLAYCAL_DEFAULT_ENABLED
+#define SETTINGS_DEFAULT_DISPLAYCAL_RED_GAIN DISPLAYCAL_DEFAULT_RED_GAIN_VALUE
+#define SETTINGS_DEFAULT_DISPLAYCAL_GREEN_GAIN DISPLAYCAL_DEFAULT_GREEN_GAIN_VALUE
+#define SETTINGS_DEFAULT_DISPLAYCAL_BLUE_GAIN DISPLAYCAL_DEFAULT_BLUE_GAIN_VALUE
 #define SETTINGS_DEFAULT_VOLUME 8
 #define SETTINGS_DEFAULT_HEADPHONE_VOLUME 4
 #define SETTINGS_DEFAULT_FAN_SPEED 0
@@ -21,6 +27,10 @@ int GetColortemp(void);
 int GetContrast(void);
 int GetSaturation(void);
 int GetExposure(void);
+int GetDisplayCalEnabled(void);
+int GetDisplayCalRedGain(void);
+int GetDisplayCalGreenGain(void);
+int GetDisplayCalBlueGain(void);
 int GetVolume(void);
 
 void SetRawBrightness(int value); // 0-255
@@ -28,6 +38,7 @@ void SetRawColortemp(int value); // 0-255
 void SetRawContrast(int value); // 0-100
 void SetRawSaturation(int value); // 0-100
 void SetRawExposure(int value); // 0-100
+void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain);
 void SetRawVolume(int value); // 0-100
 
 void SetBrightness(int value); // 0-10
@@ -35,6 +46,10 @@ void SetColortemp(int value); // 0-40
 void SetContrast(int value); // -4-5
 void SetSaturation(int value); // -5-5
 void SetExposure(int value); // -4-5
+void SetDisplayCalEnabled(int value); // 0-1
+void SetDisplayCalRedGain(int value); // 0-200
+void SetDisplayCalGreenGain(int value); // 0-200
+void SetDisplayCalBlueGain(int value); // 0-200
 void SetVolume(int value); // 0-20
 
 int GetJack(void);

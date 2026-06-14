@@ -103,41 +103,6 @@ syslogd -S
 export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/trimui/lib:$LD_LIBRARY_PATH
 export PATH=$SYSTEM_PATH/bin:/usr/trimui/bin:$PATH
 
-nextval_number() {
-	"$SYSTEM_PATH/bin/nextval.elf" "$1" | sed -n 's/.*: \([0-9]*\).*/\1/p'
-}
-
-displaycal_gain() {
-	value=${1:-0}
-	printf '%d.%02d' "$((value / 100))" "$((value % 100))"
-}
-
-apply_displaycal() {
-	if [ "$DEVICE" != "brick" ] || [ ! -x "$SYSTEM_PATH/bin/displaycal.elf" ]; then
-		return
-	fi
-
-	display_cal_enabled=$(nextval_number displayCalEnabled)
-	display_cal_enabled=${display_cal_enabled:-1}
-	if [ "$display_cal_enabled" -eq 0 ]; then
-		"$SYSTEM_PATH/bin/displaycal.elf" disable > /dev/null 2>&1
-		return
-	fi
-
-	display_cal_red=$(nextval_number displayCalRed)
-	display_cal_green=$(nextval_number displayCalGreen)
-	display_cal_blue=$(nextval_number displayCalBlue)
-	display_cal_red=${display_cal_red:-100}
-	display_cal_green=${display_cal_green:-92}
-	display_cal_blue=${display_cal_blue:-58}
-	"$SYSTEM_PATH/bin/displaycal.elf" enable \
-		"$(displaycal_gain "$display_cal_red")" \
-		"$(displaycal_gain "$display_cal_green")" \
-		"$(displaycal_gain "$display_cal_blue")" > /dev/null 2>&1
-}
-
-apply_displaycal
-
 # leds_off
 echo 0 > /sys/class/led_anim/max_scale
 if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then

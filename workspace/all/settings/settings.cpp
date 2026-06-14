@@ -179,8 +179,6 @@ static const std::vector<std::string> ra_sort_labels = {
 };
 
 namespace {
-    constexpr const char *DISPLAYCAL_COMMAND = BIN_PATH "/displaycal.elf";
-
     enum class DisplayCalChannel
     {
         Red,
@@ -190,13 +188,13 @@ namespace {
 
     static int clampDisplayCalGain(int value)
     {
-        return std::max(DISPLAYCAL_GAIN_MIN, std::min(DISPLAYCAL_GAIN_MAX, value));
+        return DisplayCal_clampGainValue(value);
     }
 
     static std::string formatDisplayCalGain(int value)
     {
         char label[8];
-        snprintf(label, sizeof(label), "%.2f", clampDisplayCalGain(value) / 100.0);
+        DisplayCal_formatGainValue(value, label, sizeof(label));
         return label;
     }
 
@@ -224,7 +222,7 @@ namespace {
 
     static bool getDisplayCalEnabled()
     {
-        return CFG_getDisplayCalEnabled();
+        return GetDisplayCalEnabled();
     }
 
     static int getDisplayCalGain(DisplayCalChannel channel)
@@ -232,13 +230,13 @@ namespace {
         switch (channel)
         {
         case DisplayCalChannel::Red:
-            return CFG_getDisplayCalRedGain();
+            return GetDisplayCalRedGain();
         case DisplayCalChannel::Green:
-            return CFG_getDisplayCalGreenGain();
+            return GetDisplayCalGreenGain();
         case DisplayCalChannel::Blue:
-            return CFG_getDisplayCalBlueGain();
+            return GetDisplayCalBlueGain();
         }
-        return CFG_DEFAULT_DISPLAYCAL_RED_GAIN;
+        return SETTINGS_DEFAULT_DISPLAYCAL_RED_GAIN;
     }
 
     static int defaultDisplayCalGain(DisplayCalChannel channel)
@@ -246,39 +244,18 @@ namespace {
         switch (channel)
         {
         case DisplayCalChannel::Red:
-            return CFG_DEFAULT_DISPLAYCAL_RED_GAIN;
+            return SETTINGS_DEFAULT_DISPLAYCAL_RED_GAIN;
         case DisplayCalChannel::Green:
-            return CFG_DEFAULT_DISPLAYCAL_GREEN_GAIN;
+            return SETTINGS_DEFAULT_DISPLAYCAL_GREEN_GAIN;
         case DisplayCalChannel::Blue:
-            return CFG_DEFAULT_DISPLAYCAL_BLUE_GAIN;
+            return SETTINGS_DEFAULT_DISPLAYCAL_BLUE_GAIN;
         }
-        return CFG_DEFAULT_DISPLAYCAL_RED_GAIN;
-    }
-
-    static void applyDisplayCalFromSettings()
-    {
-        std::string cmd;
-        if (CFG_getDisplayCalEnabled())
-        {
-            cmd = std::string("\"") + DISPLAYCAL_COMMAND + "\" enable "
-                + formatDisplayCalGain(CFG_getDisplayCalRedGain()) + " "
-                + formatDisplayCalGain(CFG_getDisplayCalGreenGain()) + " "
-                + formatDisplayCalGain(CFG_getDisplayCalBlueGain()) + " > /dev/null 2>&1";
-        }
-        else
-        {
-            cmd = std::string("\"") + DISPLAYCAL_COMMAND + "\" disable > /dev/null 2>&1";
-        }
-
-        int ret = std::system(cmd.c_str());
-        if (ret != 0)
-            LOG_error("displaycal apply failed (%d)\n", ret);
+        return SETTINGS_DEFAULT_DISPLAYCAL_RED_GAIN;
     }
 
     static void setDisplayCalEnabled(bool enabled)
     {
-        CFG_setDisplayCalEnabled(enabled);
-        applyDisplayCalFromSettings();
+        SetDisplayCalEnabled(enabled);
     }
 
     static void setDisplayCalGain(DisplayCalChannel channel, int value)
@@ -286,16 +263,15 @@ namespace {
         switch (channel)
         {
         case DisplayCalChannel::Red:
-            CFG_setDisplayCalRedGain(value);
+            SetDisplayCalRedGain(value);
             break;
         case DisplayCalChannel::Green:
-            CFG_setDisplayCalGreenGain(value);
+            SetDisplayCalGreenGain(value);
             break;
         case DisplayCalChannel::Blue:
-            CFG_setDisplayCalBlueGain(value);
+            SetDisplayCalBlueGain(value);
             break;
         }
-        applyDisplayCalFromSettings();
     }
 
     static void resetDisplayCalGain(DisplayCalChannel channel)
@@ -616,7 +592,7 @@ int main(int argc, char *argv[])
                 new MenuItem{ListItemType::Generic, "White point correction", "Corrects the Brick display white point", {false, true}, on_off, []() -> std::any
                 { return getDisplayCalEnabled(); }, [](const std::any &value)
                 { setDisplayCalEnabled(std::any_cast<bool>(value)); },
-                []() { setDisplayCalEnabled(CFG_DEFAULT_DISPLAYCAL_ENABLED); }});
+                []() { setDisplayCalEnabled(SETTINGS_DEFAULT_DISPLAYCAL_ENABLED); }});
 
             struct DisplayCalGainDef { DisplayCalChannel channel; const char *name; const char *desc; };
             static const DisplayCalGainDef gainDefs[] = {

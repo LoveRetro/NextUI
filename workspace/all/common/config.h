@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "displaycal.h"
-
 // portability, deprecated
 extern uint32_t THEME_COLOR1_255;
 extern uint32_t THEME_COLOR2_255;
@@ -121,12 +119,6 @@ typedef struct
 	bool showQuickSwitcherUi;
 	int defaultView;
 
-	// Display calibration
-	bool displayCalEnabled;
-	int displayCalRedGain;
-	int displayCalGreenGain;
-	int displayCalBlueGain;
-
 	// Mute switch
 	bool muteLeds;
 
@@ -226,11 +218,6 @@ typedef struct
 #define CFG_DEFAULT_BLUETOOTH_MAXRATE 48000
 #define CFG_DEFAULT_NTP false
 #define CFG_DEFAULT_TIMEZONE 320 // Europe/Berlin
-#define CFG_DEFAULT_DISPLAYCAL_ENABLED (DISPLAYCAL_DEFAULT_ENABLED != 0)
-#define CFG_DEFAULT_DISPLAYCAL_RED_GAIN ((int)(DISPLAYCAL_DEFAULT_RED_GAIN * DISPLAYCAL_GAIN_SCALE + 0.5))
-#define CFG_DEFAULT_DISPLAYCAL_GREEN_GAIN ((int)(DISPLAYCAL_DEFAULT_GREEN_GAIN * DISPLAYCAL_GAIN_SCALE + 0.5))
-#define CFG_DEFAULT_DISPLAYCAL_BLUE_GAIN ((int)(DISPLAYCAL_DEFAULT_BLUE_GAIN * DISPLAYCAL_GAIN_SCALE + 0.5))
-
 // Notification defaults
 #define CFG_DEFAULT_NOTIFY_MANUAL_SAVE true
 #define CFG_DEFAULT_NOTIFY_LOAD true
@@ -355,15 +342,6 @@ void CFG_setDefaultView(int view);
 // Quick switcher UI painting on/off
 bool CFG_getShowQuickswitcherUI(void);
 void CFG_setShowQuickswitcherUI(bool on);
-// Display calibration for devices that support it.
-bool CFG_getDisplayCalEnabled(void);
-void CFG_setDisplayCalEnabled(bool enabled);
-int CFG_getDisplayCalRedGain(void);
-void CFG_setDisplayCalRedGain(int gain);
-int CFG_getDisplayCalGreenGain(void);
-void CFG_setDisplayCalGreenGain(int gain);
-int CFG_getDisplayCalBlueGain(void);
-void CFG_setDisplayCalBlueGain(int gain);
 // WiFi diagnostic logging on/off
 bool CFG_getWifiDiagnostics(void);
 void CFG_setWifiDiagnostics(bool on);
