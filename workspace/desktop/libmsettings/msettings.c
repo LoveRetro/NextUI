@@ -212,6 +212,8 @@ static Settings* msettings;
 
 static char SettingsPath[256];
 
+static inline void applyDisplayCalSettings(void);
+
 ///////////////////////////////////////
 
 int peekVersion(const char *filename) {
@@ -373,7 +375,7 @@ void InitSettings(void){
 		memcpy(msettings, &DefaultSettings, sizeof(Settings));
 	}
 
-	SetDisplayCalEnabled(GetDisplayCalEnabled());
+	applyDisplayCalSettings();
 }
 static inline void SaveSettings(void) {
 	FILE *file = fopen(SettingsPath, "w");
@@ -381,6 +383,9 @@ static inline void SaveSettings(void) {
 		fwrite(msettings, sizeof(Settings), 1, file);
 		fclose(file);
 	}
+}
+static inline void applyDisplayCalSettings(void) {
+	SetRawDisplayCal(msettings->displaycal_enabled, msettings->displaycal_red_gain, msettings->displaycal_green_gain, msettings->displaycal_blue_gain);
 }
 void QuitSettings(void){
 	SaveSettings();
@@ -452,28 +457,28 @@ void SetSaturation(int value) {}
 void SetExposure(int value) {}
 void SetDisplayCalEnabled(int value) {
 	msettings->displaycal_enabled = value ? 1 : 0;
-	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	applyDisplayCalSettings();
 	SaveSettings();
 }
 void SetDisplayCalRedGain(int value) {
 	if (value < 0) value = 0;
 	if (value > 200) value = 200;
 	msettings->displaycal_red_gain = value;
-	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	applyDisplayCalSettings();
 	SaveSettings();
 }
 void SetDisplayCalGreenGain(int value) {
 	if (value < 0) value = 0;
 	if (value > 200) value = 200;
 	msettings->displaycal_green_gain = value;
-	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	applyDisplayCalSettings();
 	SaveSettings();
 }
 void SetDisplayCalBlueGain(int value) {
 	if (value < 0) value = 0;
 	if (value > 200) value = 200;
 	msettings->displaycal_blue_gain = value;
-	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	applyDisplayCalSettings();
 	SaveSettings();
 }
 void SetVolume(int value) {}

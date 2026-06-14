@@ -580,6 +580,10 @@ static inline void SaveSettings(void) {
 	}
 }
 
+static inline void applyDisplayCalSettings(void) {
+	SetRawDisplayCal(settings->displaycal_enabled, settings->displaycal_red_gain, settings->displaycal_green_gain, settings->displaycal_blue_gain);
+}
+
 ///////// Getters exposed in public API
 
 int GetBrightness(void) { // 0-10
@@ -764,23 +768,27 @@ void SetExposure(int value){
 	SaveSettings();
 }
 void SetDisplayCalEnabled(int value) {
-	settings->displaycal_enabled = value ? 1 : 0;
-	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	value = value ? 1 : 0;
+	settings->displaycal_enabled = value;
+	applyDisplayCalSettings();
 	SaveSettings();
 }
 void SetDisplayCalRedGain(int value) {
-	settings->displaycal_red_gain = DisplayCal_clampGainValue(value);
-	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	value = DisplayCal_clampGainValue(value);
+	settings->displaycal_red_gain = value;
+	applyDisplayCalSettings();
 	SaveSettings();
 }
 void SetDisplayCalGreenGain(int value) {
-	settings->displaycal_green_gain = DisplayCal_clampGainValue(value);
-	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	value = DisplayCal_clampGainValue(value);
+	settings->displaycal_green_gain = value;
+	applyDisplayCalSettings();
 	SaveSettings();
 }
 void SetDisplayCalBlueGain(int value) {
-	settings->displaycal_blue_gain = DisplayCal_clampGainValue(value);
-	SetRawDisplayCal(GetDisplayCalEnabled(), GetDisplayCalRedGain(), GetDisplayCalGreenGain(), GetDisplayCalBlueGain());
+	value = DisplayCal_clampGainValue(value);
+	settings->displaycal_blue_gain = value;
+	applyDisplayCalSettings();
 	SaveSettings();
 }
 void SetVolume(int value) // 0-20
@@ -821,7 +829,7 @@ void SetMute(int value) {
 	SetContrast(GetContrast());
 	SetSaturation(GetSaturation());
 	SetExposure(GetExposure());
-	SetDisplayCalEnabled(GetDisplayCalEnabled());
+	applyDisplayCalSettings();
 
 	if(is_brick && GetMuteDisablesDpad())
 		disableDpad(settings->mute);
