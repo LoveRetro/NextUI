@@ -288,9 +288,8 @@ namespace {
             return m_platform == tg5040;
         }
 
-        // Exposed on all platforms; desktop raw apply only logs.
         bool hasDisplayCal() const {
-            return true;
+            return m_platform == tg5040;
         }
 
         bool hasActiveCooling() const {

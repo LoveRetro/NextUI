@@ -260,6 +260,7 @@ void InitSettings(void) {
 	}
 
 	// This will implicitly update all other settings based on FN switch state
+	settings->displaycal_enabled = 0;
 	SetMute(settings->mute);
 
 	SetFanSpeed(settings->fanSpeed);
@@ -281,8 +282,7 @@ static inline void SaveSettings(void) {
 }
 
 static inline void applyDisplayCalSettings(void) {
-	if (settings->displaycal_enabled)
-		SetRawDisplayCal(1, settings->displaycal_red_gain, settings->displaycal_green_gain, settings->displaycal_blue_gain);
+	// tg5050 does not expose /dev/disp, so display calibration is unsupported.
 }
 
 ///////// Getters exposed in public API
@@ -472,15 +472,8 @@ void SetExposure(int value){
 	SaveSettings();
 }
 void SetDisplayCalEnabled(int is_enabled) {
-	int was_enabled = settings->displaycal_enabled;
-	is_enabled = (is_enabled != 0);
-	settings->displaycal_enabled = is_enabled;
-
-	// Disabling only needs hardware writes when we are turning an active LUT off.
-	if (is_enabled)
-		applyDisplayCalSettings();
-	else if (was_enabled)
-		SetRawDisplayCal(0, settings->displaycal_red_gain, settings->displaycal_green_gain, settings->displaycal_blue_gain);
+	(void)is_enabled;
+	settings->displaycal_enabled = 0;
 	SaveSettings();
 }
 void SetDisplayCalRedGain(int value) {
@@ -1083,16 +1076,11 @@ void SetRawExposure(int val){
 }
 
 void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain) {
-	printf("SetRawDisplayCal(%i,%i,%i,%i)\n", enabled, red_gain, green_gain, blue_gain); fflush(stdout);
-
-	int ret = enabled
-		? DisplayCal_enableWithValues(red_gain, green_gain, blue_gain)
-		: DisplayCal_disable();
-	if (ret != 0) {
-		fprintf(stderr, "SetRawDisplayCal failed to %s display calibration: %i\n",
-			enabled ? "enable" : "disable", ret);
-		fflush(stderr);
-	}
+	(void)enabled;
+	(void)red_gain;
+	(void)green_gain;
+	(void)blue_gain;
+	printf("SetRawDisplayCal unsupported on tg5050\n"); fflush(stdout);
 }
 
 void SetRawColortemp(int val) { // 0 - 255
