@@ -55,6 +55,7 @@ void CFG_defaults(NextUISettings *cfg)
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
         .defaultView = CFG_DEFAULT_VIEW,
         .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
+
         .muteLeds = CFG_DEFAULT_MUTELEDS,
 
         .screenTimeoutSecs = CFG_DEFAULT_SCREENTIMEOUTSECS,

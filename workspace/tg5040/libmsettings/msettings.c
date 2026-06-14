@@ -12,6 +12,7 @@
 #include <string.h>
 #include <tinyalsa/mixer.h>
 
+#include "displaycal.h"
 #include "msettings.h"
 
 ///////////////////////////////////////
@@ -260,6 +261,7 @@ int scaleSaturation(int);
 int scaleExposure(int);
 int scaleVolume(int);
 int clampDisplayCalGain(int);
+int supportsDisplayCal(void);
 
 void disableDpad(int);
 void emulateJoystick(int);
@@ -1023,6 +1025,10 @@ int clampDisplayCalGain(int value) {
 	return DisplayCal_clampGainValue(value);
 }
 
+int supportsDisplayCal(void) {
+	return is_brick;
+}
+
 int scaleBrightness(int value) {
 	int raw;
 	if (is_brick) {
@@ -1376,7 +1382,7 @@ void SetRawExposure(int val){
 void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain) {
 	printf("SetRawDisplayCal(%i,%i,%i,%i)\n", enabled, red_gain, green_gain, blue_gain); fflush(stdout);
 
-	if (!is_brick)
+	if (!supportsDisplayCal())
 		return;
 
 	if (enabled)

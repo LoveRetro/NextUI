@@ -16,21 +16,11 @@
 #define DISPLAYCAL_LUT_ENTRIES 256
 #define DISPLAYCAL_LUT_BYTES   (DISPLAYCAL_LUT_ENTRIES * 4)
 
-void DisplayCal_initGains(DisplayCalGains *gains) {
-	gains->red_gain = DISPLAYCAL_DEFAULT_RED_GAIN;
-	gains->green_gain = DISPLAYCAL_DEFAULT_GREEN_GAIN;
-	gains->blue_gain = DISPLAYCAL_DEFAULT_BLUE_GAIN;
-}
-
-double DisplayCal_clampGain(double value) {
-	if (isnan(value))
-		return 1.0;
-	if (value < (double)DISPLAYCAL_GAIN_MIN / DISPLAYCAL_GAIN_SCALE)
-		return (double)DISPLAYCAL_GAIN_MIN / DISPLAYCAL_GAIN_SCALE;
-	if (value > (double)DISPLAYCAL_GAIN_MAX / DISPLAYCAL_GAIN_SCALE)
-		return (double)DISPLAYCAL_GAIN_MAX / DISPLAYCAL_GAIN_SCALE;
-	return value;
-}
+typedef struct {
+	double red_gain;
+	double green_gain;
+	double blue_gain;
+} DisplayCalGains;
 
 int DisplayCal_clampGainValue(int value) {
 	if (value < DISPLAYCAL_GAIN_MIN)
@@ -138,7 +128,7 @@ static int reset_table_and_disable(int fd, int screen) {
 	return disable_gamma(fd, screen);
 }
 
-int DisplayCal_applyGains(const DisplayCalGains *gains) {
+static int apply_gains(const DisplayCalGains *gains) {
 	int fd = open_disp();
 	if (fd < 0)
 		return -1;
@@ -156,7 +146,7 @@ int DisplayCal_enableWithValues(int red_gain, int green_gain, int blue_gain) {
 		.green_gain = (double)DisplayCal_clampGainValue(green_gain) / DISPLAYCAL_GAIN_SCALE,
 		.blue_gain = (double)DisplayCal_clampGainValue(blue_gain) / DISPLAYCAL_GAIN_SCALE,
 	};
-	return DisplayCal_applyGains(&gains);
+	return apply_gains(&gains);
 }
 
 int DisplayCal_disable(void) {

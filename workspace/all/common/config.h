@@ -218,6 +218,7 @@ typedef struct
 #define CFG_DEFAULT_BLUETOOTH_MAXRATE 48000
 #define CFG_DEFAULT_NTP false
 #define CFG_DEFAULT_TIMEZONE 320 // Europe/Berlin
+
 // Notification defaults
 #define CFG_DEFAULT_NOTIFY_MANUAL_SAVE true
 #define CFG_DEFAULT_NOTIFY_LOAD true

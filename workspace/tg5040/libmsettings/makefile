@@ -24,12 +24,10 @@ build:
 	mkdir -p "$(PREFIX_LOCAL)/include"
 	mkdir -p "$(PREFIX_LOCAL)/lib"
 	cp "$(TARGET).h" "$(PREFIX_LOCAL)/include"
-	cp "../../all/common/displaycal.h" "$(PREFIX_LOCAL)/include"
 	cp "lib$(TARGET).so" "$(PREFIX_LOCAL)/lib"
 
 clean:
 	rm -f *.o
 	rm -f "lib$(TARGET).so"
 	rm -f $(PREFIX_LOCAL)/include/$(TARGET).h
-	rm -f $(PREFIX_LOCAL)/include/displaycal.h
 	rm -f $(PREFIX_LOCAL)/lib/lib$(TARGET).so

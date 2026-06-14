@@ -5,7 +5,9 @@ extern "C"
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+#ifdef HAS_DISPLAYCAL
 #include "displaycal.h"
+#endif
 #include "ra_auth.h"
 #include "ra_sync.h"
 }
@@ -179,6 +181,7 @@ static const std::vector<std::string> ra_sort_labels = {
 };
 
 namespace {
+#ifdef HAS_DISPLAYCAL
     enum class DisplayCalChannel
     {
         Red,
@@ -278,6 +281,7 @@ namespace {
     {
         setDisplayCalGain(channel, defaultDisplayCalGain(channel));
     }
+#endif
 
     struct ColorDef { int id; const char *name; const char *desc; uint32_t defaultColor; };
     static const ColorDef g_colorDefs[] = {
@@ -586,10 +590,11 @@ int main(int argc, char *argv[])
                 []() { SetColortemp(SETTINGS_DEFAULT_COLORTEMP);}});
         }
 
+#ifdef HAS_DISPLAYCAL
         if(deviceInfo.hasDisplayColorCorrection())
         {
             displayItems.push_back(
-                new MenuItem{ListItemType::Generic, "White point correction", "Corrects the Brick display white point", {false, true}, on_off, []() -> std::any
+                new MenuItem{ListItemType::Generic, "White point correction", "Corrects the display white point", {false, true}, on_off, []() -> std::any
                 { return getDisplayCalEnabled(); }, [](const std::any &value)
                 { setDisplayCalEnabled(std::any_cast<bool>(value)); },
                 []() { setDisplayCalEnabled(SETTINGS_DEFAULT_DISPLAYCAL_ENABLED); }});
@@ -610,6 +615,7 @@ int main(int argc, char *argv[])
                     [channel]() { resetDisplayCalGain(channel); }});
             }
         }
+#endif
 
         if(deviceInfo.hasContrastSaturation())
         {
