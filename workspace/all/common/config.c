@@ -55,6 +55,10 @@ void CFG_defaults(NextUISettings *cfg)
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
         .defaultView = CFG_DEFAULT_VIEW,
         .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
+        .displayCalEnabled = CFG_DEFAULT_DISPLAYCAL_ENABLED,
+        .displayCalRedGain = CFG_DEFAULT_DISPLAYCAL_RED_GAIN,
+        .displayCalGreenGain = CFG_DEFAULT_DISPLAYCAL_GREEN_GAIN,
+        .displayCalBlueGain = CFG_DEFAULT_DISPLAYCAL_BLUE_GAIN,
 
         .muteLeds = CFG_DEFAULT_MUTELEDS,
 
@@ -295,6 +299,26 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "quickSwitcherUi=%i", &temp_value) == 1)
             {
                 CFG_setShowQuickswitcherUI(temp_value);
+                continue;
+            }
+            if (sscanf(line, "displayCalEnabled=%i", &temp_value) == 1)
+            {
+                settings.displayCalEnabled = (bool)temp_value;
+                continue;
+            }
+            if (sscanf(line, "displayCalRed=%i", &temp_value) == 1)
+            {
+                settings.displayCalRedGain = clamp(temp_value, DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX);
+                continue;
+            }
+            if (sscanf(line, "displayCalGreen=%i", &temp_value) == 1)
+            {
+                settings.displayCalGreenGain = clamp(temp_value, DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX);
+                continue;
+            }
+            if (sscanf(line, "displayCalBlue=%i", &temp_value) == 1)
+            {
+                settings.displayCalBlueGain = clamp(temp_value, DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX);
                 continue;
             }
             if (sscanf(line, "wifiDiagnostics=%i", &temp_value) == 1)
@@ -805,6 +829,50 @@ void CFG_setShowQuickswitcherUI(bool on)
     CFG_sync();
 }
 
+bool CFG_getDisplayCalEnabled(void)
+{
+    return settings.displayCalEnabled;
+}
+
+void CFG_setDisplayCalEnabled(bool enabled)
+{
+    settings.displayCalEnabled = enabled;
+    CFG_sync();
+}
+
+int CFG_getDisplayCalRedGain(void)
+{
+    return settings.displayCalRedGain;
+}
+
+void CFG_setDisplayCalRedGain(int gain)
+{
+    settings.displayCalRedGain = clamp(gain, DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX);
+    CFG_sync();
+}
+
+int CFG_getDisplayCalGreenGain(void)
+{
+    return settings.displayCalGreenGain;
+}
+
+void CFG_setDisplayCalGreenGain(int gain)
+{
+    settings.displayCalGreenGain = clamp(gain, DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX);
+    CFG_sync();
+}
+
+int CFG_getDisplayCalBlueGain(void)
+{
+    return settings.displayCalBlueGain;
+}
+
+void CFG_setDisplayCalBlueGain(int gain)
+{
+    settings.displayCalBlueGain = clamp(gain, DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX);
+    CFG_sync();
+}
+
 bool CFG_getWifiDiagnostics(void)
 {
     return settings.wifiDiagnostics;
@@ -1240,6 +1308,22 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getShowQuickswitcherUI()));
     }
+    else if (strcmp(key, "displayCalEnabled") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getDisplayCalEnabled()));
+    }
+    else if (strcmp(key, "displayCalRed") == 0)
+    {
+        sprintf(value, "%i", CFG_getDisplayCalRedGain());
+    }
+    else if (strcmp(key, "displayCalGreen") == 0)
+    {
+        sprintf(value, "%i", CFG_getDisplayCalGreenGain());
+    }
+    else if (strcmp(key, "displayCalBlue") == 0)
+    {
+        sprintf(value, "%i", CFG_getDisplayCalBlueGain());
+    }
     else if (strcmp(key, "wifiDiagnostics") == 0)
     {
         sprintf(value, "%i", (int)(CFG_getWifiDiagnostics()));
@@ -1374,6 +1458,10 @@ void CFG_sync(void)
     fprintf(file, "color5=0x%06X\n", settings.color5_255);
     fprintf(file, "color6=0x%06X\n", settings.color6_255);
     fprintf(file, "color7=0x%06X\n", settings.color7_255);
+    fprintf(file, "displayCalEnabled=%i\n", settings.displayCalEnabled);
+    fprintf(file, "displayCalRed=%i\n", settings.displayCalRedGain);
+    fprintf(file, "displayCalGreen=%i\n", settings.displayCalGreenGain);
+    fprintf(file, "displayCalBlue=%i\n", settings.displayCalBlueGain);
     fprintf(file, "radius=%i\n", settings.thumbRadius);
     fprintf(file, "showclock=%i\n", settings.showClock);
     fprintf(file, "clock24h=%i\n", settings.clock24h);
@@ -1441,6 +1529,10 @@ void CFG_print(void)
     printf("\t\"color5\": \"0x%06X\",\n", settings.color5_255);
     printf("\t\"color6\": \"0x%06X\",\n", settings.color6_255);
     printf("\t\"color7\": \"0x%06X\",\n", settings.color7_255);
+    printf("\t\"displayCalEnabled\": %i,\n", settings.displayCalEnabled);
+    printf("\t\"displayCalRed\": %i,\n", settings.displayCalRedGain);
+    printf("\t\"displayCalGreen\": %i,\n", settings.displayCalGreenGain);
+    printf("\t\"displayCalBlue\": %i,\n", settings.displayCalBlueGain);
     printf("\t\"radius\": %i,\n", settings.thumbRadius);
     printf("\t\"showclock\": %i,\n", settings.showClock);
     printf("\t\"clock24h\": %i,\n", settings.clock24h);

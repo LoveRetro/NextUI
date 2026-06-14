@@ -10,7 +10,6 @@ extern "C"
 #include "ra_sync.h"
 }
 
-#include <cmath>
 #include <csignal>
 #include <cstdlib>
 #include <dirent.h>
@@ -180,14 +179,7 @@ static const std::vector<std::string> ra_sort_labels = {
 };
 
 namespace {
-    constexpr const char *DISPLAYCAL_CONFIG_PATH = USERDATA_PATH "/" DISPLAYCAL_CONFIG_FILENAME;
     constexpr const char *DISPLAYCAL_COMMAND = BIN_PATH "/displaycal.elf";
-    constexpr Uint32 DISPLAYCAL_APPLY_DELAY_MS = 250;
-
-    constexpr int displayCalGainToValue(double value)
-    {
-        return (int)(value * DISPLAYCAL_GAIN_SCALE + 0.5);
-    }
 
     enum class DisplayCalChannel
     {
@@ -196,42 +188,9 @@ namespace {
         Blue
     };
 
-    struct DisplayCalConfig
-    {
-        bool enabled = DISPLAYCAL_DEFAULT_ENABLED != 0;
-        int red = displayCalGainToValue(DISPLAYCAL_DEFAULT_RED_GAIN);
-        int green = displayCalGainToValue(DISPLAYCAL_DEFAULT_GREEN_GAIN);
-        int blue = displayCalGainToValue(DISPLAYCAL_DEFAULT_BLUE_GAIN);
-    };
-
-    static int DisplayCalConfig::*displayCalField(DisplayCalChannel channel)
-    {
-        switch (channel)
-        {
-        case DisplayCalChannel::Red:
-            return &DisplayCalConfig::red;
-        case DisplayCalChannel::Green:
-            return &DisplayCalConfig::green;
-        case DisplayCalChannel::Blue:
-            return &DisplayCalConfig::blue;
-        }
-        return &DisplayCalConfig::red;
-    }
-
     static int clampDisplayCalGain(int value)
     {
         return std::max(DISPLAYCAL_GAIN_MIN, std::min(DISPLAYCAL_GAIN_MAX, value));
-    }
-
-    static int parseDisplayCalGain(const char *value)
-    {
-        // clamp as a double: out-of-range double-to-int conversion is UB
-        double gain = std::atof(value);
-        if (std::isnan(gain))
-            gain = 1.0;
-        gain = std::max((double)DISPLAYCAL_GAIN_MIN / DISPLAYCAL_GAIN_SCALE,
-            std::min((double)DISPLAYCAL_GAIN_MAX / DISPLAYCAL_GAIN_SCALE, gain));
-        return displayCalGainToValue(gain);
     }
 
     static std::string formatDisplayCalGain(int value)
@@ -263,103 +222,85 @@ namespace {
         return labels;
     }
 
-    static DisplayCalConfig loadDisplayCalConfig()
-    {
-        DisplayCalConfig config;
-        std::ifstream file(DISPLAYCAL_CONFIG_PATH);
-        if (!file)
-            return config;
-
-        std::string line;
-        while (std::getline(file, line))
-        {
-            if (line.rfind("enabled=", 0) == 0)
-                config.enabled = std::atoi(line.c_str() + 8) != 0;
-            else if (line.rfind("red=", 0) == 0)
-                config.red = parseDisplayCalGain(line.c_str() + 4);
-            else if (line.rfind("green=", 0) == 0)
-                config.green = parseDisplayCalGain(line.c_str() + 6);
-            else if (line.rfind("blue=", 0) == 0)
-                config.blue = parseDisplayCalGain(line.c_str() + 5);
-        }
-
-        return config;
-    }
-
-    static void saveDisplayCalConfig(const DisplayCalConfig &config)
-    {
-        std::ofstream file(DISPLAYCAL_CONFIG_PATH, std::ios::trunc);
-        if (!file)
-            return;
-
-        file << "enabled=" << (config.enabled ? 1 : 0) << "\n";
-        file << "red=" << formatDisplayCalGain(config.red) << "\n";
-        file << "green=" << formatDisplayCalGain(config.green) << "\n";
-        file << "blue=" << formatDisplayCalGain(config.blue) << "\n";
-    }
-
-    // Setters only update this cache and mark it dirty; displayCalTick() persists
-    // and applies once the user pauses, so scrubbing a gain slider doesn't fork
-    // displaycal.elf and rewrite the config file on every key-repeat tick.
-    static DisplayCalConfig &displayCalConfig()
-    {
-        static DisplayCalConfig config = loadDisplayCalConfig();
-        return config;
-    }
-
-    static bool displayCalDirty = false;
-    static Uint32 displayCalLastChange = 0;
-
-    static void markDisplayCalDirty()
-    {
-        displayCalDirty = true;
-        displayCalLastChange = SDL_GetTicks();
-    }
-
     static bool getDisplayCalEnabled()
     {
-        return displayCalConfig().enabled;
-    }
-
-    static void setDisplayCalEnabled(bool enabled)
-    {
-        displayCalConfig().enabled = enabled;
-        markDisplayCalDirty();
+        return CFG_getDisplayCalEnabled();
     }
 
     static int getDisplayCalGain(DisplayCalChannel channel)
     {
-        return displayCalConfig().*displayCalField(channel);
+        switch (channel)
+        {
+        case DisplayCalChannel::Red:
+            return CFG_getDisplayCalRedGain();
+        case DisplayCalChannel::Green:
+            return CFG_getDisplayCalGreenGain();
+        case DisplayCalChannel::Blue:
+            return CFG_getDisplayCalBlueGain();
+        }
+        return CFG_DEFAULT_DISPLAYCAL_RED_GAIN;
     }
 
-    static void setDisplayCalGain(DisplayCalChannel channel, int value)
+    static int defaultDisplayCalGain(DisplayCalChannel channel)
     {
-        displayCalConfig().*displayCalField(channel) = clampDisplayCalGain(value);
-        markDisplayCalDirty();
+        switch (channel)
+        {
+        case DisplayCalChannel::Red:
+            return CFG_DEFAULT_DISPLAYCAL_RED_GAIN;
+        case DisplayCalChannel::Green:
+            return CFG_DEFAULT_DISPLAYCAL_GREEN_GAIN;
+        case DisplayCalChannel::Blue:
+            return CFG_DEFAULT_DISPLAYCAL_BLUE_GAIN;
+        }
+        return CFG_DEFAULT_DISPLAYCAL_RED_GAIN;
     }
 
-    static void resetDisplayCalGain(DisplayCalChannel channel)
+    static void applyDisplayCalFromSettings()
     {
-        setDisplayCalGain(channel, DisplayCalConfig{}.*displayCalField(channel));
-    }
+        std::string cmd;
+        if (CFG_getDisplayCalEnabled())
+        {
+            cmd = std::string("\"") + DISPLAYCAL_COMMAND + "\" enable "
+                + formatDisplayCalGain(CFG_getDisplayCalRedGain()) + " "
+                + formatDisplayCalGain(CFG_getDisplayCalGreenGain()) + " "
+                + formatDisplayCalGain(CFG_getDisplayCalBlueGain()) + " > /dev/null 2>&1";
+        }
+        else
+        {
+            cmd = std::string("\"") + DISPLAYCAL_COMMAND + "\" disable > /dev/null 2>&1";
+        }
 
-    static void applyDisplayCalConfig()
-    {
-        std::string cmd = std::string("\"") + DISPLAYCAL_COMMAND + "\" apply \"" + DISPLAYCAL_CONFIG_PATH + "\" > /dev/null";
         int ret = std::system(cmd.c_str());
         if (ret != 0)
             LOG_error("displaycal apply failed (%d)\n", ret);
     }
 
-    static void displayCalTick(bool force = false)
+    static void setDisplayCalEnabled(bool enabled)
     {
-        if (!displayCalDirty)
-            return;
-        if (!force && SDL_GetTicks() - displayCalLastChange < DISPLAYCAL_APPLY_DELAY_MS)
-            return;
-        displayCalDirty = false;
-        saveDisplayCalConfig(displayCalConfig());
-        applyDisplayCalConfig();
+        CFG_setDisplayCalEnabled(enabled);
+        applyDisplayCalFromSettings();
+    }
+
+    static void setDisplayCalGain(DisplayCalChannel channel, int value)
+    {
+        switch (channel)
+        {
+        case DisplayCalChannel::Red:
+            CFG_setDisplayCalRedGain(value);
+            break;
+        case DisplayCalChannel::Green:
+            CFG_setDisplayCalGreenGain(value);
+            break;
+        case DisplayCalChannel::Blue:
+            CFG_setDisplayCalBlueGain(value);
+            break;
+        }
+        applyDisplayCalFromSettings();
+    }
+
+    static void resetDisplayCalGain(DisplayCalChannel channel)
+    {
+        setDisplayCalGain(channel, defaultDisplayCalGain(channel));
     }
 
     struct ColorDef { int id; const char *name; const char *desc; uint32_t defaultColor; };
@@ -675,7 +616,7 @@ int main(int argc, char *argv[])
                 new MenuItem{ListItemType::Generic, "White point correction", "Corrects the Brick display white point", {false, true}, on_off, []() -> std::any
                 { return getDisplayCalEnabled(); }, [](const std::any &value)
                 { setDisplayCalEnabled(std::any_cast<bool>(value)); },
-                []() { setDisplayCalEnabled(DisplayCalConfig{}.enabled); }});
+                []() { setDisplayCalEnabled(CFG_DEFAULT_DISPLAYCAL_ENABLED); }});
 
             struct DisplayCalGainDef { DisplayCalChannel channel; const char *name; const char *desc; };
             static const DisplayCalGainDef gainDefs[] = {
@@ -1254,8 +1195,6 @@ int main(int argc, char *argv[])
 
             ctx.menu->handleInput(ctx.dirty, appQuit);
 
-            displayCalTick();
-
             PWR_update(&ctx.dirty, &ctx.show_setting, nullptr, nullptr);
 
             int is_online = PWR_isOnline();
@@ -1332,8 +1271,6 @@ int main(int argc, char *argv[])
             else
                 GFX_sync();
         }
-
-        displayCalTick(true);
 
         delete ctx.menu;
         delete appearanceMenu;

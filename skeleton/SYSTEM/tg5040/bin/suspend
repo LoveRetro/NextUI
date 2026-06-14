@@ -13,6 +13,39 @@ sleep_retval=
 
 asound_state_dir=/tmp/asound-suspend
 
+nextval_number() {
+	"$SYSTEM_PATH/bin/nextval.elf" "$1" | sed -n 's/.*: \([0-9]*\).*/\1/p'
+}
+
+displaycal_gain() {
+	value=${1:-0}
+	printf '%d.%02d' "$((value / 100))" "$((value % 100))"
+}
+
+apply_displaycal() {
+	if [ "${DEVICE:-}" != "brick" ] || [ ! -x "$SYSTEM_PATH/bin/displaycal.elf" ]; then
+		return
+	fi
+
+	display_cal_enabled=$(nextval_number displayCalEnabled)
+	display_cal_enabled=${display_cal_enabled:-1}
+	if [ "$display_cal_enabled" -eq 0 ]; then
+		"$SYSTEM_PATH/bin/displaycal.elf" disable >/dev/null 2>&1 || true
+		return
+	fi
+
+	display_cal_red=$(nextval_number displayCalRed)
+	display_cal_green=$(nextval_number displayCalGreen)
+	display_cal_blue=$(nextval_number displayCalBlue)
+	display_cal_red=${display_cal_red:-100}
+	display_cal_green=${display_cal_green:-100}
+	display_cal_blue=${display_cal_blue:-60}
+	"$SYSTEM_PATH/bin/displaycal.elf" enable \
+		"$(displaycal_gain "$display_cal_red")" \
+		"$(displaycal_gain "$display_cal_green")" \
+		"$(displaycal_gain "$display_cal_blue")" >/dev/null 2>&1 || true
+}
+
 before() {
 	>&2 echo "Preparing for suspend..."
 
@@ -41,9 +74,7 @@ after() {
 	>&2 echo "Resumed from suspend."
 
 	# The disp driver may reset the gamma LUT across suspend; re-apply correction.
-	if [ "${DEVICE:-}" = "brick" ] && [ -x "$SYSTEM_PATH/bin/displaycal.elf" ]; then
-		"$SYSTEM_PATH/bin/displaycal.elf" apply "$USERDATA_PATH/displaycal.cfg" >/dev/null 2>&1 || true
-	fi
+	apply_displaycal
 
 	# Run post-resume hooks in background immediately after wake.
 	( "$SYSTEM_PATH/bin/run_hooks.sh" post-resume.d ) >/dev/null 2>&1 &
