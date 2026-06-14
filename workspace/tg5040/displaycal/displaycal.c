@@ -14,7 +14,7 @@
 #define DISP_LCD_GAMMA_CORRECTION_ENABLE  0x10c
 #define DISP_LCD_GAMMA_CORRECTION_DISABLE 0x10d
 
-#define DISPLAYCAL_VERSION "1.0.0"
+#define DISPLAYCAL_VERSION "1.0.1"
 #define DISPLAYCAL_LUT_ENTRIES 256
 #define DISPLAYCAL_LUT_BYTES   (DISPLAYCAL_LUT_ENTRIES * 4)
 
@@ -162,6 +162,8 @@ static int disable_screen(int screen) {
 static void usage(const char *argv0) {
 	fprintf(stderr,
 		"displaycal %s\n"
+		"Adjust the LCD panel white point in hardware with zero performance cost.\n"
+		"\n"
 		"Usage:\n"
 		"  %s enable [red] [green] [blue]\n"
 		"  %s disable\n"
