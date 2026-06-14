@@ -494,21 +494,6 @@ int main(int argc, char *argv[])
                 { return GetDisplayCalEnabled() != 0; }, [](const std::any &value)
                 { SetDisplayCalEnabled(std::any_cast<bool>(value)); },
                 [defaultDisplayCal]() { SetDisplayCalEnabled(defaultDisplayCal.enabled); }});
-            displayItems.push_back(
-                new MenuItem{ListItemType::Generic, "Red gain", "White point correction red channel gain (0 to 200, 100 is neutral)", DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX, "", []() -> std::any
-                { return GetDisplayCalRedGain(); }, [](const std::any &value)
-                { SetDisplayCalRedGain(std::any_cast<int>(value)); },
-                [defaultDisplayCal]() { SetDisplayCalRedGain(defaultDisplayCal.red_gain); }});
-            displayItems.push_back(
-                new MenuItem{ListItemType::Generic, "Green gain", "White point correction green channel gain (0 to 200, 100 is neutral)", DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX, "", []() -> std::any
-                { return GetDisplayCalGreenGain(); }, [](const std::any &value)
-                { SetDisplayCalGreenGain(std::any_cast<int>(value)); },
-                [defaultDisplayCal]() { SetDisplayCalGreenGain(defaultDisplayCal.green_gain); }});
-            displayItems.push_back(
-                new MenuItem{ListItemType::Generic, "Blue gain", "White point correction blue channel gain (0 to 200, 100 is neutral)", DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX, "", []() -> std::any
-                { return GetDisplayCalBlueGain(); }, [](const std::any &value)
-                { SetDisplayCalBlueGain(std::any_cast<int>(value)); },
-                [defaultDisplayCal]() { SetDisplayCalBlueGain(defaultDisplayCal.blue_gain); }});
         }
 
         if(deviceInfo.hasContrastSaturation())
@@ -532,6 +517,25 @@ int main(int argc, char *argv[])
                 { return GetExposure(); }, [](const std::any &value)
                 { SetExposure(std::any_cast<int>(value)); },
                 []() { SetExposure(SETTINGS_DEFAULT_EXPOSURE);}});
+        }
+        if(deviceInfo.hasDisplayCal())
+        {
+            const DisplayCalDefaults defaultDisplayCal = DisplayCal_getDefaultSettings(deviceInfo.getModel() == DeviceInfo::Brick);
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "Red gain", "White point correction red channel gain (0 to 200)", DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX, "", []() -> std::any
+                { return GetDisplayCalRedGain(); }, [](const std::any &value)
+                { SetDisplayCalRedGain(std::any_cast<int>(value)); },
+                [defaultDisplayCal]() { SetDisplayCalRedGain(defaultDisplayCal.red_gain); }});
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "Green gain", "White point correction green channel gain (0 to 200)", DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX, "", []() -> std::any
+                { return GetDisplayCalGreenGain(); }, [](const std::any &value)
+                { SetDisplayCalGreenGain(std::any_cast<int>(value)); },
+                [defaultDisplayCal]() { SetDisplayCalGreenGain(defaultDisplayCal.green_gain); }});
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "Blue gain", "White point correction blue channel gain (0 to 200)", DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX, "", []() -> std::any
+                { return GetDisplayCalBlueGain(); }, [](const std::any &value)
+                { SetDisplayCalBlueGain(std::any_cast<int>(value)); },
+                [defaultDisplayCal]() { SetDisplayCalBlueGain(defaultDisplayCal.blue_gain); }});
         }
         displayItems.push_back(
             new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu});
