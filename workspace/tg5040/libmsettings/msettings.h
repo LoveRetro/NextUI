@@ -45,9 +45,9 @@ void SetContrast(int value); // -4-5
 void SetSaturation(int value); // -5-5
 void SetExposure(int value); // -4-5
 void SetDisplayCalEnabled(int value); // 0-1
-void SetDisplayCalRedGain(int value); // 0-200
-void SetDisplayCalGreenGain(int value); // 0-200
-void SetDisplayCalBlueGain(int value); // 0-200
+void SetDisplayCalRedGain(int value); // 0-200, 100 is neutral
+void SetDisplayCalGreenGain(int value); // 0-200, 100 is neutral
+void SetDisplayCalBlueGain(int value); // 0-200, 100 is neutral
 void SetVolume(int value); // 0-20
 
 int GetJack(void);

@@ -30,11 +30,6 @@ int DisplayCal_clampGainValue(int value) {
 	return value;
 }
 
-void DisplayCal_formatGainValue(int value, char *output, size_t output_size) {
-	value = DisplayCal_clampGainValue(value);
-	snprintf(output, output_size, "%d.%02d", value / DISPLAYCAL_GAIN_SCALE, value % DISPLAYCAL_GAIN_SCALE);
-}
-
 static unsigned char clamp_u8(double value) {
 	if (value < 0.0)
 		return 0;

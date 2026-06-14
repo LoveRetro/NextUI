@@ -181,35 +181,6 @@ static const std::vector<std::string> ra_sort_labels = {
 };
 
 namespace {
-#ifdef HAS_DISPLAYCAL
-    static std::string formatDisplayCalGain(int value)
-    {
-        char label[8];
-        DisplayCal_formatGainValue(value, label, sizeof(label));
-        return label;
-    }
-
-    struct DisplayCalGainOptions
-    {
-        std::vector<std::any> values;
-        std::vector<std::string> labels;
-    };
-
-    static const DisplayCalGainOptions &displayCalGainOptions()
-    {
-        static const DisplayCalGainOptions options = [] {
-            DisplayCalGainOptions result;
-            for (int i = DISPLAYCAL_GAIN_MIN; i <= DISPLAYCAL_GAIN_MAX; i++)
-            {
-                result.values.push_back(i);
-                result.labels.push_back(formatDisplayCalGain(i));
-            }
-            return result;
-        }();
-        return options;
-    }
-#endif
-
     struct ColorDef { int id; const char *name; const char *desc; uint32_t defaultColor; };
     static const ColorDef g_colorDefs[] = {
         {1, "Main Color",             "The color used to render main UI elements.",                         CFG_DEFAULT_COLOR1},
@@ -520,24 +491,23 @@ int main(int argc, char *argv[])
 #ifdef HAS_DISPLAYCAL
         if(deviceInfo.hasDisplayColorCorrection())
         {
-            const auto &gainOptions = displayCalGainOptions();
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "White point correction", "Corrects the display white point to better match the sRGB standard.", {false, true}, on_off, []() -> std::any
                 { return GetDisplayCalEnabled(); }, [](const std::any &value)
                 { SetDisplayCalEnabled(std::any_cast<bool>(value)); },
                 []() { SetDisplayCalEnabled(SETTINGS_DEFAULT_DISPLAYCAL_ENABLED); }});
             displayItems.push_back(
-                new MenuItem{ListItemType::Generic, "Red gain", "White point correction red channel gain", gainOptions.values, gainOptions.labels, []() -> std::any
+                new MenuItem{ListItemType::Generic, "Red gain", "White point correction red channel gain (0 to 200, 100 is neutral)", DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX, "", []() -> std::any
                 { return GetDisplayCalRedGain(); }, [](const std::any &value)
                 { SetDisplayCalRedGain(std::any_cast<int>(value)); },
                 []() { SetDisplayCalRedGain(SETTINGS_DEFAULT_DISPLAYCAL_RED_GAIN); }});
             displayItems.push_back(
-                new MenuItem{ListItemType::Generic, "Green gain", "White point correction green channel gain", gainOptions.values, gainOptions.labels, []() -> std::any
+                new MenuItem{ListItemType::Generic, "Green gain", "White point correction green channel gain (0 to 200, 100 is neutral)", DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX, "", []() -> std::any
                 { return GetDisplayCalGreenGain(); }, [](const std::any &value)
                 { SetDisplayCalGreenGain(std::any_cast<int>(value)); },
                 []() { SetDisplayCalGreenGain(SETTINGS_DEFAULT_DISPLAYCAL_GREEN_GAIN); }});
             displayItems.push_back(
-                new MenuItem{ListItemType::Generic, "Blue gain", "White point correction blue channel gain", gainOptions.values, gainOptions.labels, []() -> std::any
+                new MenuItem{ListItemType::Generic, "Blue gain", "White point correction blue channel gain (0 to 200, 100 is neutral)", DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX, "", []() -> std::any
                 { return GetDisplayCalBlueGain(); }, [](const std::any &value)
                 { SetDisplayCalBlueGain(std::any_cast<int>(value)); },
                 []() { SetDisplayCalBlueGain(SETTINGS_DEFAULT_DISPLAYCAL_BLUE_GAIN); }});
