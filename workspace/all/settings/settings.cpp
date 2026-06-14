@@ -489,7 +489,7 @@ int main(int argc, char *argv[])
 
         if(deviceInfo.hasDisplayCal())
         {
-            const DisplayCalDefaults defaultDisplayCal = DisplayCal_getDefaultSettings(deviceInfo.getModel() == Brick);
+            const DisplayCalDefaults defaultDisplayCal = DisplayCal_getDefaultSettings(deviceInfo.getModel() == DeviceInfo::Brick);
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "White point correction", "Corrects the display white point to better match the sRGB standard.", {false, true}, on_off, []() -> std::any
                 { return GetDisplayCalEnabled() != 0; }, [](const std::any &value)
