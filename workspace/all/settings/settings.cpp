@@ -181,7 +181,7 @@ static const std::vector<std::string> ra_sort_labels = {
 namespace {
     struct ColorDef { int id; const char *name; const char *desc; uint32_t defaultColor; };
     static const ColorDef g_colorDefs[] = {
-        {1, "Main Color",             "The color used to render main UI elements.",                         CFG_DEFAULT_COLOR1},
+        {1, "Main Color",             "The color used to render main UI elements.",                          CFG_DEFAULT_COLOR1},
         {2, "Primary Accent Color",   "The color used to highlight important things in the user interface.", CFG_DEFAULT_COLOR2},
         {3, "Secondary Accent Color", "A secondary highlight color.",                                        CFG_DEFAULT_COLOR3},
         {6, "Hint info Color",        "Color for button hints and info",                                     CFG_DEFAULT_COLOR6},
@@ -375,7 +375,7 @@ int main(int argc, char *argv[])
             return [id, defaultColor]() { CFG_setColor(id, defaultColor); };
         };
 
-        // Pre-create one RGB picker per color setting (reused across opens)
+        // Pre-create one RGBA picker per color setting (reused across opens)
         std::vector<std::unique_ptr<ColorPickerMenu>> pickers;
         pickers.reserve(std::size(g_colorDefs));
         for (const auto &def : g_colorDefs)
@@ -1092,7 +1092,7 @@ int main(int argc, char *argv[])
                     SDL_BlitSurface(bgbmp, NULL, ctx.screen, &image_rect);
                 } else {
                     uint32_t bgc = CFG_getColor(COLOR_BACKGROUND);
-                    SDL_FillRect(ctx.screen, NULL, SDL_MapRGB(ctx.screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
+                    SDL_FillRect(ctx.screen, NULL, SDL_MapRGBA(ctx.screen->format, (bgc >> 24) & 0xFF, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
                 }
 
                 int ow = 0;

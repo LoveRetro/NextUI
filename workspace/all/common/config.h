@@ -173,13 +173,13 @@ typedef struct
 
 #define CFG_DEFAULT_FONT_FILE "font1.ttf"  // Next
 #define CFG_DEFAULT_FONT_STYLE 0x01 // TTF_STYLE_BOLD (MinUI default)
-#define CFG_DEFAULT_COLOR1 0xffffffU
-#define CFG_DEFAULT_COLOR2 0x9b2257U
-#define CFG_DEFAULT_COLOR3 0x1e2329U
-#define CFG_DEFAULT_COLOR4 0xffffffU
-#define CFG_DEFAULT_COLOR5 0x000000U
-#define CFG_DEFAULT_COLOR6 0xffffffU
-#define CFG_DEFAULT_COLOR7 0x000000U
+#define CFG_DEFAULT_COLOR1 0xffffffffU
+#define CFG_DEFAULT_COLOR2 0x9b2257ffU
+#define CFG_DEFAULT_COLOR3 0x1e2329ffU
+#define CFG_DEFAULT_COLOR4 0xffffffffU
+#define CFG_DEFAULT_COLOR5 0x000000ffU
+#define CFG_DEFAULT_COLOR6 0xffffffffU
+#define CFG_DEFAULT_COLOR7 0x000000ffU
 #define CFG_DEFAULT_COLOR_MAIN CFG_DEFAULT_COLOR1
 #define CFG_DEFAULT_COLOR_ACCENT CFG_DEFAULT_COLOR2
 #define CFG_DEFAULT_COLOR_ACCENT2 CFG_DEFAULT_COLOR3
@@ -257,7 +257,7 @@ void CFG_setFontFile(const char* filename);
 // The font style to use for the UI font.
 int CFG_getFontStyle(void);
 void CFG_setFontStyle(int style);
-// The colors to use for the UI. These are 0xRRGGBB values.
+// The colors to use for the UI. These are packed 0xRRGGBBAA values.
 // 0 - Color1 (primary hint/asset colour)
 // 1 - Color2 (accent colour)
 // 2 - Color3 (secondary accent colour

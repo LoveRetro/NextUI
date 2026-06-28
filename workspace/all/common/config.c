@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
 #include <unistd.h>
 #include "defines.h"
 #include "utils.h"
@@ -93,10 +94,32 @@ void CFG_defaults(NextUISettings *cfg)
         .raNotificationDuration = CFG_DEFAULT_RA_NOTIFICATION_DURATION,
         .raProgressNotificationDuration = CFG_DEFAULT_RA_PROGRESS_NOTIFICATION_DURATION,
         .raAchievementSortOrder = CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER,
-
-};
+    };
 
     *cfg = defaults;
+}
+
+static inline uint32_t parseHexColor(const char *hexColor) {
+    // Accept both legacy RGB (RRGGBB) and RGBA (RRGGBBAA) text formats.
+    // Decide by input hex digit count, not numeric value.
+    uint32_t value = HexToUint32_unmapped(hexColor);
+
+    const char *p = hexColor;
+    while (*p == ' ' || *p == '\t') p++;
+    if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X'))
+        p += 2;
+
+    size_t digits = 0;
+    while (isxdigit((unsigned char)p[digits]))
+        digits++;
+
+    if (digits <= 6) {
+        // Legacy RGB -> packed RGBA with opaque alpha.
+        return (value << 8) | 0xFF;
+    }
+
+    // 8+ hex digits are treated as explicit packed RGBA.
+    return value;
 }
 
 void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
@@ -134,41 +157,53 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 fontLoaded = true;
                 continue;
             }
-            if (sscanf(line, "color1=%x", &temp_color) == 1)
+            if(strncmp(line, "color1=", 7) == 0)
             {
-                char hexColor[7];
-                snprintf(hexColor, sizeof(hexColor), "%06x", temp_color);
-                CFG_setColor(1, HexToUint32_unmapped(hexColor));
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(1, parseHexColor(value));
                 continue;
             }
-            if (sscanf(line, "color2=%x", &temp_color) == 1)
+            if (strncmp(line, "color2=", 7) == 0)
             {
-                CFG_setColor(2, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(2, parseHexColor(value));
                 continue;
             }
-            if (sscanf(line, "color3=%x", &temp_color) == 1)
+            if (strncmp(line, "color3=", 7) == 0)
             {
-                CFG_setColor(3, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(3, parseHexColor(value));
                 continue;
             }
-            if (sscanf(line, "color4=%x", &temp_color) == 1)
+            if (strncmp(line, "color4=", 7) == 0)
             {
-                CFG_setColor(4, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(4, parseHexColor(value));
                 continue;
             }
-            if (sscanf(line, "color5=%x", &temp_color) == 1)
+            if (strncmp(line, "color5=", 7) == 0)
             {
-                CFG_setColor(5, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(5, parseHexColor(value));
                 continue;
             }
-            if (sscanf(line, "color6=%x", &temp_color) == 1)
+            if (strncmp(line, "color6=", 7) == 0)
             {
-                CFG_setColor(6, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(6, parseHexColor(value));
                 continue;
             }
-            if (sscanf(line, "color7=%x", &temp_color) == 1)
+            if (strncmp(line, "color7=", 7) == 0)
             {
-                CFG_setColor(7, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(7, parseHexColor(value));
                 continue;
             }
             if (sscanf(line, "radius=%i", &temp_value) == 1)
@@ -1118,31 +1153,31 @@ void CFG_get(const char *key, char *value)
     }
     else if (strcmp(key, "color1") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_MAIN));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_MAIN));
     }
     else if (strcmp(key, "color2") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_ACCENT));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_ACCENT));
     }
     else if (strcmp(key, "color3") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_ACCENT2));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_ACCENT2));
     }
     else if (strcmp(key, "color4") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_LIST_TEXT));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_LIST_TEXT));
     }
     else if (strcmp(key, "color5") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_LIST_TEXT_SELECTED));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_LIST_TEXT_SELECTED));
     }
     else if (strcmp(key, "color6") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_HINT));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_HINT));
     }
     else if (strcmp(key, "color7") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(COLOR_BACKGROUND));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_BACKGROUND));
     }
     else if (strcmp(key, "radius") == 0)
     {
@@ -1367,13 +1402,13 @@ void CFG_sync(void)
         fprintf(file, "font=0\n");
     else
         fprintf(file, "font=%s\n", settings.fontFile);
-    fprintf(file, "color1=0x%06X\n", settings.color1_255);
-    fprintf(file, "color2=0x%06X\n", settings.color2_255);
-    fprintf(file, "color3=0x%06X\n", settings.color3_255);
-    fprintf(file, "color4=0x%06X\n", settings.color4_255);
-    fprintf(file, "color5=0x%06X\n", settings.color5_255);
-    fprintf(file, "color6=0x%06X\n", settings.color6_255);
-    fprintf(file, "color7=0x%06X\n", settings.color7_255);
+    fprintf(file, "color1=0x%08X\n", settings.color1_255);
+    fprintf(file, "color2=0x%08X\n", settings.color2_255);
+    fprintf(file, "color3=0x%08X\n", settings.color3_255);
+    fprintf(file, "color4=0x%08X\n", settings.color4_255);
+    fprintf(file, "color5=0x%08X\n", settings.color5_255);
+    fprintf(file, "color6=0x%08X\n", settings.color6_255);
+    fprintf(file, "color7=0x%08X\n", settings.color7_255);
     fprintf(file, "radius=%i\n", settings.thumbRadius);
     fprintf(file, "showclock=%i\n", settings.showClock);
     fprintf(file, "clock24h=%i\n", settings.clock24h);
@@ -1434,13 +1469,13 @@ void CFG_print(void)
         printf("\t\"font\": 0,\n");
     else
         printf("\t\"font\": 1,\n");
-    printf("\t\"color1\": \"0x%06X\",\n", settings.color1_255);
-    printf("\t\"color2\": \"0x%06X\",\n", settings.color2_255);
-    printf("\t\"color3\": \"0x%06X\",\n", settings.color3_255);
-    printf("\t\"color4\": \"0x%06X\",\n", settings.color4_255);
-    printf("\t\"color5\": \"0x%06X\",\n", settings.color5_255);
-    printf("\t\"color6\": \"0x%06X\",\n", settings.color6_255);
-    printf("\t\"color7\": \"0x%06X\",\n", settings.color7_255);
+    printf("\t\"color1\": \"0x%08X\",\n", settings.color1_255);
+    printf("\t\"color2\": \"0x%08X\",\n", settings.color2_255);
+    printf("\t\"color3\": \"0x%08X\",\n", settings.color3_255);
+    printf("\t\"color4\": \"0x%08X\",\n", settings.color4_255);
+    printf("\t\"color5\": \"0x%08X\",\n", settings.color5_255);
+    printf("\t\"color6\": \"0x%08X\",\n", settings.color6_255);
+    printf("\t\"color7\": \"0x%08X\",\n", settings.color7_255);
     printf("\t\"radius\": %i,\n", settings.thumbRadius);
     printf("\t\"showclock\": %i,\n", settings.showClock);
     printf("\t\"clock24h\": %i,\n", settings.clock24h);

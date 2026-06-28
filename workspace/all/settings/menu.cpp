@@ -684,18 +684,19 @@ void MenuList::drawFixed(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Re
 // TODO: expose API functions that do the same
 namespace
 {
-    static inline void rgb_unpack(uint32_t col, int *r, int *g, int *b)
+    static inline void rgba_unpack(uint32_t col, int *r, int *g, int *b, int *a)
     {
-        *r = (col >> 16) & 0xff;
-        *g = (col >> 8) & 0xff;
-        *b = col & 0xff;
+        *r = (col >> 24) & 0xff;
+        *g = (col >> 16) & 0xff;
+        *b = (col >> 8) & 0xff;
+        *a = col & 0xff;
     }
 
     static inline uint32_t mapUint(SDL_Surface *surface, uint32_t col)
     {
-        int r, g, b;
-        rgb_unpack(col, &r, &g, &b);
-        return SDL_MapRGB(surface->format, r, g, b);
+        int r, g, b, a;
+        rgba_unpack(col, &r, &g, &b, &a);
+        return SDL_MapRGBA(surface->format, r, g, b, a);
     }
 }
 
@@ -740,7 +741,7 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
             // Rerender the label from the live hex value
             SDL_FreeSurface(text);
             char hexLabel[12];
-            snprintf(hexLabel, sizeof(hexLabel), "0x%06X", rawColor);
+            snprintf(hexLabel, sizeof(hexLabel), "0x%08X", rawColor);
             text = TTF_RenderUTF8_Blended(font.tiny, hexLabel, text_color_value);
             SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + mw - text->w - SCALE1(OPTION_PADDING + COLOR_PADDING + FONT_TINY), dst.y + ((dst.h - text->h) / 2)});
         }
