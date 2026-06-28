@@ -13,6 +13,7 @@
 #include <tinyalsa/mixer.h>
 
 #include "msettings.h"
+#include "displaycal.h"
 
 ///////////////////////////////////////
 
@@ -47,10 +48,45 @@ typedef struct SettingsV1 {
 	int fanSpeed; // 0-100, -1 for auto
 } SettingsV1;
 
+typedef struct SettingsV2 {
+	int version; // future proofing
+	int brightness;
+	int colortemperature;
+	int headphones;
+	int speaker;
+	int mute;
+	int contrast;
+	int saturation;
+	int exposure;
+	int toggled_brightness;
+	int toggled_colortemperature;
+	int toggled_contrast;
+	int toggled_saturation;
+	int toggled_exposure;
+	int toggled_volume;
+	int turbo_a;
+	int turbo_b;
+	int turbo_x;
+	int turbo_y;
+	int turbo_l1;
+	int turbo_l2;
+	int turbo_r1;
+	int turbo_r2;
+	int unused[2]; // for future use
+	// NOTE: doesn't really need to be persisted but still needs to be shared
+	int jack;
+	int audiosink; // was bluetooth true/false before
+	int fanSpeed; // 0-100, -1 for auto
+	int displaycal_enabled;
+	int displaycal_red_gain;
+	int displaycal_green_gain;
+	int displaycal_blue_gain;
+} SettingsV2;
+
 // When incrementing SETTINGS_VERSION, update the Settings typedef and add
 // backwards compatibility to InitSettings!
-#define SETTINGS_VERSION 1
-typedef SettingsV1 Settings;
+#define SETTINGS_VERSION 2
+typedef SettingsV2 Settings;
 static Settings DefaultSettings = {
 	.version = SETTINGS_VERSION,
 	.brightness = SETTINGS_DEFAULT_BRIGHTNESS,
@@ -78,6 +114,10 @@ static Settings DefaultSettings = {
 	.jack = 0,
 	.audiosink = AUDIO_SINK_DEFAULT,
 	.fanSpeed = SETTINGS_DEFAULT_FAN_SPEED,
+	.displaycal_enabled = DISPLAYCAL_DEFAULT_ENABLED,
+	.displaycal_red_gain = DISPLAYCAL_DEFAULT_RED_GAIN,
+	.displaycal_green_gain = DISPLAYCAL_DEFAULT_GREEN_GAIN,
+	.displaycal_blue_gain = DISPLAYCAL_DEFAULT_BLUE_GAIN,
 };
 static Settings* settings;
 
@@ -177,8 +217,12 @@ void InitSettings(void) {
 					memcpy(settings, &DefaultSettings, shm_size);
 
 					// overwrite with migrated data
-					if(version == 42) {
-						// do migration (TODO when needed)
+					if(version == 1) {
+						SettingsV1 old;
+						read(fd, &old, sizeof(SettingsV1));
+
+						memcpy(settings, &old, sizeof(SettingsV1));
+						settings->version = SETTINGS_VERSION;
 					}
 					else {
 						printf("Found unsupported settings version: %i.\n", version);
@@ -216,6 +260,7 @@ void InitSettings(void) {
 	}
 
 	// This will implicitly update all other settings based on FN switch state
+	settings->displaycal_enabled = 0;
 	SetMute(settings->mute);
 
 	SetFanSpeed(settings->fanSpeed);
@@ -234,6 +279,10 @@ static inline void SaveSettings(void) {
 		close(fd);
 		sync();
 	}
+}
+
+static inline void applyDisplayCalSettings(void) {
+	// tg5050 does not expose /dev/disp, so display calibration is unsupported.
 }
 
 ///////// Getters exposed in public API
@@ -279,6 +328,22 @@ int GetExposure(void)
 		return GetMutedExposure();
 
 	return settings->exposure;
+}
+int GetDisplayCalEnabled(void)
+{
+	return settings->displaycal_enabled;
+}
+int GetDisplayCalRedGain(void)
+{
+	return settings->displaycal_red_gain;
+}
+int GetDisplayCalGreenGain(void)
+{
+	return settings->displaycal_green_gain;
+}
+int GetDisplayCalBlueGain(void)
+{
+	return settings->displaycal_blue_gain;
 }
 // monitored and set by thread in keymon
 int GetJack(void) {
@@ -406,6 +471,29 @@ void SetExposure(int value){
 	settings->exposure = value;
 	SaveSettings();
 }
+void SetDisplayCalEnabled(int is_enabled) {
+	(void)is_enabled;
+	settings->displaycal_enabled = 0;
+	SaveSettings();
+}
+void SetDisplayCalRedGain(int value) {
+	value = DisplayCal_clampGainValue(value);
+	settings->displaycal_red_gain = value;
+	applyDisplayCalSettings();
+	SaveSettings();
+}
+void SetDisplayCalGreenGain(int value) {
+	value = DisplayCal_clampGainValue(value);
+	settings->displaycal_green_gain = value;
+	applyDisplayCalSettings();
+	SaveSettings();
+}
+void SetDisplayCalBlueGain(int value) {
+	value = DisplayCal_clampGainValue(value);
+	settings->displaycal_blue_gain = value;
+	applyDisplayCalSettings();
+	SaveSettings();
+}
 void SetVolume(int value) { // 0-20
 	if (settings->mute && GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 		return SetRawVolume(scaleVolume(GetMutedVolume()));
@@ -443,6 +531,7 @@ void SetMute(int value) {
 	SetContrast(GetContrast());
 	SetSaturation(GetSaturation());
 	SetExposure(GetExposure());
+	applyDisplayCalSettings();
 
 	if(GetMuteTurboA())
 		turboA(settings->mute);
@@ -984,6 +1073,14 @@ void SetRawExposure(int val){
 		fprintf(fd, "%i", val);
 		fclose(fd);
 	}
+}
+
+void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain) {
+	(void)enabled;
+	(void)red_gain;
+	(void)green_gain;
+	(void)blue_gain;
+	printf("SetRawDisplayCal unsupported on tg5050\n"); fflush(stdout);
 }
 
 void SetRawColortemp(int val) { // 0 - 255

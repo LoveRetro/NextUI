@@ -12,8 +12,8 @@ TARGET=msettings
 
 CC = $(CROSS_COMPILE)gcc
 
-CFLAGS = 
-LDFLAGS = -ltinyalsa -ldl -lrt -s
+CFLAGS = -I../../all/common
+LDFLAGS = -ltinyalsa -ldl -lrt -lm -s
 #LDFLAGS = -ldl -lrt -s
 
 OPTM=-Ofast
