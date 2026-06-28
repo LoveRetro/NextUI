@@ -150,6 +150,10 @@ static const std::vector<std::string> progress_duration_labels = {"Off", "1s", "
 static const std::vector<std::any>    transition_mode_values = {(int)TRANSITION_OFF, (int)TRANSITION_SNAPPY, (int)TRANSITION_COMFY};
 static const std::vector<std::string> transition_mode_labels = {"Off", "Snappy", "Comfy"};
 
+// Game switcher curtain opacity options (0-100)
+static const std::vector<std::any>    curtain_opacity_values = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+static const std::vector<std::string> curtain_opacity_labels = {"Off", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"};
+
 // RetroAchievements sort order options
 static const std::vector<std::any> ra_sort_values = {
     (int)RA_SORT_UNLOCKED_FIRST,
@@ -460,6 +464,10 @@ int main(int argc, char *argv[])
             []() -> std::any{ return CFG_getShowQuickswitcherUI(); },
             [](const std::any &value){ CFG_setShowQuickswitcherUI(std::any_cast<bool>(value)); },
             []() { CFG_setShowQuickswitcherUI(CFG_DEFAULT_SHOWQUICKWITCHERUI);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Game switcher curtain opacity", "Show/hide curtain overlay. Helps UI elements to \nstand out when using transparent backgrounds.", curtain_opacity_values, curtain_opacity_labels, 
+            []() -> std::any{ return CFG_getGameSwitcherCurtain(); },
+            [](const std::any &value){ CFG_setGameSwitcherCurtain(std::any_cast<int>(value)); },
+            []() { CFG_setGameSwitcherCurtain(CFG_DEFAULT_GAMESWITCHER_CURTAIN);}});
         // not needed anymore
         // new MenuItem{ListItemType::Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
         // { return CFG_getGameSwitcherScaling(); },

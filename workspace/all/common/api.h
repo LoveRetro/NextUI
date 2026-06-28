@@ -357,6 +357,8 @@ void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_
 
 int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
 void GFX_blitHardwareHints(SDL_Surface* dst, int show_setting);
+void GFX_blitTopCurtain(SDL_Surface* dst);
+void GFX_blitBottomCurtain(SDL_Surface* dst);
 
 typedef enum {
 	INDICATOR_BRIGHTNESS = 1,

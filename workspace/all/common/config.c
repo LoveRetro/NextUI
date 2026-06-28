@@ -56,6 +56,7 @@ void CFG_defaults(NextUISettings *cfg)
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
         .defaultView = CFG_DEFAULT_VIEW,
         .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
+        .gameSwitcherCurtain = CFG_DEFAULT_GAMESWITCHER_CURTAIN,
 
         .muteLeds = CFG_DEFAULT_MUTELEDS,
 
@@ -453,6 +454,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "fontStyle=%i", &temp_value) == 1)
             {
                 CFG_setFontStyle(temp_value);
+                continue;
+            }
+            if (sscanf(line, "gameSwitcherCurtain=%i", &temp_value) == 1)
+            {
+                CFG_setGameSwitcherCurtain(temp_value);
                 continue;
             }
         }
@@ -1140,6 +1146,17 @@ void CFG_setFontStyle(int style)
     CFG_setFontFile(CFG_getFontFile());
 }
 
+int CFG_getGameSwitcherCurtain(void)
+{
+    return settings.gameSwitcherCurtain;
+}
+
+void CFG_setGameSwitcherCurtain(int opacity)
+{
+    settings.gameSwitcherCurtain = clamp(opacity, 0, 100);
+    CFG_sync();
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -1363,6 +1380,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getFontStyle());
     }
+    else if (strcmp(key, "gameSwitcherCurtain") == 0)
+    {
+        sprintf(value, "%i", CFG_getGameSwitcherCurtain());
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -1457,6 +1478,7 @@ void CFG_sync(void)
     fprintf(file, "raProgressNotificationDuration=%i\n", settings.raProgressNotificationDuration);
     fprintf(file, "raAchievementSortOrder=%i\n", settings.raAchievementSortOrder);
     fprintf(file, "fontStyle=%i\n", settings.fontStyle);
+    fprintf(file, "gameSwitcherCurtain=%i\n", settings.gameSwitcherCurtain);
 
     fclose(file);
 }
@@ -1523,6 +1545,7 @@ void CFG_print(void)
     printf("\t\"raProgressNotificationDuration\": %i,\n", settings.raProgressNotificationDuration);
     printf("\t\"raAchievementSortOrder\": %i,\n", settings.raAchievementSortOrder);
     printf("\t\"fontStyle\": %i,\n", settings.fontStyle);
+    printf("\t\"gameSwitcherCurtain\": %i,\n", settings.gameSwitcherCurtain);
 
     // meta, not a real setting
     printf("\t\"fontpath\": \"%s/%s\"\n", RES_PATH, CFG_getFontFile());

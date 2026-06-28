@@ -2338,6 +2338,26 @@ int GFX_blitButtonGroup(char **pairs, int primary, SDL_Surface *dst, int align_r
 	return ow;
 }
 
+void GFX_blitTopCurtain(SDL_Surface* dst)
+{
+	// blit a top curtain to the screen, which is a semi-transparent black rectangle at the top of the screen
+	int opacity = CFG_getGameSwitcherCurtain() * 255 / 100; // convert percentage to 0-255 range
+	if(opacity <= 0)
+		return; // no need to draw if fully transparent
+	SDL_Rect rect = {0, 0, dst->w, SCALE1(PADDING+PILL_SIZE+PADDING)};
+	GFX_fillRectBlend(dst, &rect, SDL_MapRGBA(dst->format, 0, 0, 0, opacity));
+}
+
+void GFX_blitBottomCurtain(SDL_Surface* dst)
+{
+	// blit a bottom curtain to the screen, which is a semi-transparent black rectangle at the bottom of the screen
+	int opacity = CFG_getGameSwitcherCurtain() * 255 / 100; // convert percentage to 0-255 range
+	if(opacity <= 0)
+		return; // no need to draw if fully transparent
+	SDL_Rect rect = {0, dst->h - SCALE1(PADDING+PILL_SIZE+PADDING), dst->w, SCALE1(PADDING+PILL_SIZE+PADDING)};
+	GFX_fillRectBlend(dst, &rect, SDL_MapRGBA(dst->format, 0, 0, 0, opacity));
+}
+
 #define MAX_TEXT_LINES 16
 void GFX_sizeText(TTF_Font *font, const char *str, int leading, int *w, int *h)
 {
