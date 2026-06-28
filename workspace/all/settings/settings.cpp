@@ -486,16 +486,6 @@ int main(int argc, char *argv[])
                 []() { SetColortemp(SETTINGS_DEFAULT_COLORTEMP);}});
         }
 
-        if(deviceInfo.hasDisplayCal())
-        {
-            const DisplayCalDefaults defaultDisplayCal = DisplayCal_getDefaultSettings(deviceInfo.getModel() == DeviceInfo::Brick);
-            displayItems.push_back(
-                new MenuItem{ListItemType::Generic, "White point correction", "Corrects the display white point to better match the sRGB standard.", {false, true}, on_off, []() -> std::any
-                { return GetDisplayCalEnabled() != 0; }, [](const std::any &value)
-                { SetDisplayCalEnabled(std::any_cast<bool>(value)); },
-                [defaultDisplayCal]() { SetDisplayCalEnabled(defaultDisplayCal.enabled); }});
-        }
-
         if(deviceInfo.hasContrastSaturation())
         {
             displayItems.push_back(
@@ -520,7 +510,14 @@ int main(int argc, char *argv[])
         }
         if(deviceInfo.hasDisplayCal())
         {
-            const DisplayCalDefaults defaultDisplayCal = DisplayCal_getDefaultSettings(deviceInfo.getModel() == DeviceInfo::Brick);
+            const DisplayCalDefaults defaultDisplayCal = DisplayCal_getDefaultSettings(
+                deviceInfo.getModel() == DeviceInfo::Brick ? DISPLAYCAL_PRESET_BRICK : 
+                deviceInfo.getModel() == DeviceInfo::SmartPro ? DISPLAYCAL_PRESET_SMARTPRO : DISPLAYCAL_PRESET_DEFAULT);
+            displayItems.push_back(
+                new MenuItem{ListItemType::Generic, "White point correction", "Corrects the display white point to better match the \nsRGB standard, at the expense of some peak brightness.", {false, true}, on_off, []() -> std::any
+                { return GetDisplayCalEnabled() != 0; }, [](const std::any &value)
+                { SetDisplayCalEnabled(std::any_cast<bool>(value)); },
+                [defaultDisplayCal]() { SetDisplayCalEnabled(defaultDisplayCal.enabled); }});
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "Red gain", "White point correction red channel gain (0 to 200)", DISPLAYCAL_GAIN_MIN, DISPLAYCAL_GAIN_MAX, "", []() -> std::any
                 { return GetDisplayCalRedGain(); }, [](const std::any &value)

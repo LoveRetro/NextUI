@@ -315,9 +315,13 @@ int peekVersion(const char *filename) {
 }
 
 static int is_brick = 0;
+static int is_smartpro = 0;
 
 static void applyDisplayCalDefaultsForDevice(Settings *target) {
-	DisplayCalDefaults defaults = DisplayCal_getDefaultSettings(is_brick);
+	DisplayCalDefaults defaults = DisplayCal_getDefaultSettings(
+		  is_brick ? DISPLAYCAL_PRESET_BRICK 
+		: is_smartpro ? DISPLAYCAL_PRESET_SMARTPRO 
+		: DISPLAYCAL_PRESET_DEFAULT);
 	target->displaycal_enabled = defaults.enabled;
 	target->displaycal_red_gain = defaults.red_gain;
 	target->displaycal_green_gain = defaults.green_gain;
@@ -327,6 +331,7 @@ static void applyDisplayCalDefaultsForDevice(Settings *target) {
 void InitSettings(void) {	
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
+	is_smartpro = exactMatch("smartpro", device);
 	
 	sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));
 	
@@ -354,7 +359,6 @@ void InitSettings(void) {
 				else {
 					// initialize with defaults
 					memcpy(settings, &DefaultSettings, shm_size);
-					applyDisplayCalDefaultsForDevice(settings);
 
 					// overwrite with migrated data
 					if(version==10) {
@@ -364,7 +368,6 @@ void InitSettings(void) {
 
 						memcpy(settings, &old, sizeof(SettingsV10));
 						settings->version = SETTINGS_VERSION;
-						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==9) {
 						printf("Found settings v9.\n");
@@ -401,7 +404,6 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==8) {
 						printf("Found settings v8.\n");
@@ -427,7 +429,6 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==7) {
 						printf("Found settings v7.\n");
@@ -452,7 +453,6 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==6) {
 						printf("Found settings v6.\n");
@@ -470,7 +470,6 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==5) {
 						printf("Found settings v5.\n");
@@ -484,7 +483,6 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==4) {
 						printf("Found settings v4.\n");
@@ -499,7 +497,6 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else if(version==3) {
 						printf("Found settings v3.\n");
@@ -511,7 +508,6 @@ void InitSettings(void) {
 						settings->speaker = old.speaker;
 						settings->mute = old.mute;
 						settings->jack = old.jack;
-						applyDisplayCalDefaultsForDevice(settings);
 					}
 					else {
 						printf("Found unsupported settings version: %i.\n", version);
@@ -523,13 +519,11 @@ void InitSettings(void) {
 			else {
 				// load defaults
 				memcpy(settings, &DefaultSettings, shm_size);
-				applyDisplayCalDefaultsForDevice(settings);
 			}
 		}
 		else {
 			// load defaults
 			memcpy(settings, &DefaultSettings, shm_size);
-			applyDisplayCalDefaultsForDevice(settings);
 		}
 		
 		// these shouldn't be persisted
@@ -545,6 +539,8 @@ void InitSettings(void) {
 		system("amixer sset 'digital volume' 0"); // 100%
 		system("amixer sset 'DAC Swap' Off"); // Fix L/R channels
 	}
+
+	applyDisplayCalDefaultsForDevice(settings);
 
 	// This will implicitly update all other settings based on FN switch state
 	SetMute(settings->mute);

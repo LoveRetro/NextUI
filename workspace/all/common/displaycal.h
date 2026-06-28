@@ -8,10 +8,16 @@
 #define DISPLAYCAL_DEFAULT_RED_GAIN 100
 #define DISPLAYCAL_DEFAULT_GREEN_GAIN 100
 #define DISPLAYCAL_DEFAULT_BLUE_GAIN 100
+
 #define DISPLAYCAL_BRICK_DEFAULT_ENABLED 1
 #define DISPLAYCAL_BRICK_DEFAULT_RED_GAIN DISPLAYCAL_DEFAULT_RED_GAIN
 #define DISPLAYCAL_BRICK_DEFAULT_GREEN_GAIN 92
 #define DISPLAYCAL_BRICK_DEFAULT_BLUE_GAIN 58
+
+#define DISPLAYCAL_SMARTPRO_DEFAULT_ENABLED 1
+#define DISPLAYCAL_SMARTPRO_DEFAULT_RED_GAIN DISPLAYCAL_DEFAULT_RED_GAIN
+#define DISPLAYCAL_SMARTPRO_DEFAULT_GREEN_GAIN 77
+#define DISPLAYCAL_SMARTPRO_DEFAULT_BLUE_GAIN 50
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,12 +30,41 @@ typedef struct DisplayCalDefaults {
 	int blue_gain;
 } DisplayCalDefaults;
 
-static inline DisplayCalDefaults DisplayCal_getDefaultSettings(int use_brick_overrides) {
+// TrimUI Brick, measured with X-Rite i1Display Pro, calibrated to sRGB D65 2.2
+static const struct DisplayCalDefaults DisplayCalDefaults_Brick = {
+	DISPLAYCAL_BRICK_DEFAULT_ENABLED,
+	DISPLAYCAL_BRICK_DEFAULT_RED_GAIN,
+	DISPLAYCAL_BRICK_DEFAULT_GREEN_GAIN,
+	DISPLAYCAL_BRICK_DEFAULT_BLUE_GAIN
+};
+
+// TrimUI Smart Pro, measured with Spyder 5 Pro and slightly modified by eye to match the Brick
+static const struct DisplayCalDefaults DisplayCalDefaults_SmartPro = {
+	DISPLAYCAL_SMARTPRO_DEFAULT_ENABLED,
+	DISPLAYCAL_SMARTPRO_DEFAULT_RED_GAIN,
+	DISPLAYCAL_SMARTPRO_DEFAULT_GREEN_GAIN,
+	DISPLAYCAL_SMARTPRO_DEFAULT_BLUE_GAIN
+};
+
+enum DisplayCalPreset {
+	DISPLAYCAL_PRESET_DEFAULT = 0,
+	DISPLAYCAL_PRESET_BRICK,
+	DISPLAYCAL_PRESET_SMARTPRO
+};
+
+static inline DisplayCalDefaults DisplayCal_getDefaultSettings(enum DisplayCalPreset preset) {
+	if(preset == DISPLAYCAL_PRESET_SMARTPRO) {
+		return DisplayCalDefaults_SmartPro;
+	}
+	if(preset == DISPLAYCAL_PRESET_BRICK) {
+		return DisplayCalDefaults_Brick;
+	}
+	// Default preset
 	DisplayCalDefaults defaults = {
-		use_brick_overrides ? DISPLAYCAL_BRICK_DEFAULT_ENABLED : DISPLAYCAL_DEFAULT_ENABLED,
-		use_brick_overrides ? DISPLAYCAL_BRICK_DEFAULT_RED_GAIN : DISPLAYCAL_DEFAULT_RED_GAIN,
-		use_brick_overrides ? DISPLAYCAL_BRICK_DEFAULT_GREEN_GAIN : DISPLAYCAL_DEFAULT_GREEN_GAIN,
-		use_brick_overrides ? DISPLAYCAL_BRICK_DEFAULT_BLUE_GAIN : DISPLAYCAL_DEFAULT_BLUE_GAIN,
+		DISPLAYCAL_DEFAULT_ENABLED,
+		DISPLAYCAL_DEFAULT_RED_GAIN,
+		DISPLAYCAL_DEFAULT_GREEN_GAIN,
+		DISPLAYCAL_DEFAULT_BLUE_GAIN,
 	};
 	return defaults;
 }
