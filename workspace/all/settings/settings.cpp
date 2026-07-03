@@ -150,6 +150,10 @@ static const std::vector<std::string> progress_duration_labels = {"Off", "1s", "
 static const std::vector<std::any>    transition_mode_values = {(int)TRANSITION_OFF, (int)TRANSITION_SNAPPY, (int)TRANSITION_COMFY};
 static const std::vector<std::string> transition_mode_labels = {"Off", "Snappy", "Comfy"};
 
+// Game switcher curtain opacity options (0-100)
+static const std::vector<std::any>    curtain_opacity_values = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+static const std::vector<std::string> curtain_opacity_labels = {"Off", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"};
+
 // RetroAchievements sort order options
 static const std::vector<std::any> ra_sort_values = {
     (int)RA_SORT_UNLOCKED_FIRST,
@@ -181,7 +185,7 @@ static const std::vector<std::string> ra_sort_labels = {
 namespace {
     struct ColorDef { int id; const char *name; const char *desc; uint32_t defaultColor; };
     static const ColorDef g_colorDefs[] = {
-        {1, "Main Color",             "The color used to render main UI elements.",                         CFG_DEFAULT_COLOR1},
+        {1, "Main Color",             "The color used to render main UI elements.",                          CFG_DEFAULT_COLOR1},
         {2, "Primary Accent Color",   "The color used to highlight important things in the user interface.", CFG_DEFAULT_COLOR2},
         {3, "Secondary Accent Color", "A secondary highlight color.",                                        CFG_DEFAULT_COLOR3},
         {6, "Hint info Color",        "Color for button hints and info",                                     CFG_DEFAULT_COLOR6},
@@ -375,7 +379,7 @@ int main(int argc, char *argv[])
             return [id, defaultColor]() { CFG_setColor(id, defaultColor); };
         };
 
-        // Pre-create one RGB picker per color setting (reused across opens)
+        // Pre-create one RGBA picker per color setting (reused across opens)
         std::vector<std::unique_ptr<ColorPickerMenu>> pickers;
         pickers.reserve(std::size(g_colorDefs));
         for (const auto &def : g_colorDefs)
@@ -460,6 +464,10 @@ int main(int argc, char *argv[])
             []() -> std::any{ return CFG_getShowQuickswitcherUI(); },
             [](const std::any &value){ CFG_setShowQuickswitcherUI(std::any_cast<bool>(value)); },
             []() { CFG_setShowQuickswitcherUI(CFG_DEFAULT_SHOWQUICKWITCHERUI);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Game switcher curtain opacity", "Show/hide curtain overlay. Helps UI elements to \nstand out when using transparent backgrounds.", curtain_opacity_values, curtain_opacity_labels, 
+            []() -> std::any{ return CFG_getGameSwitcherCurtain(); },
+            [](const std::any &value){ CFG_setGameSwitcherCurtain(std::any_cast<int>(value)); },
+            []() { CFG_setGameSwitcherCurtain(CFG_DEFAULT_GAMESWITCHER_CURTAIN);}});
         // not needed anymore
         // new MenuItem{ListItemType::Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
         // { return CFG_getGameSwitcherScaling(); },
@@ -1092,7 +1100,7 @@ int main(int argc, char *argv[])
                     SDL_BlitSurface(bgbmp, NULL, ctx.screen, &image_rect);
                 } else {
                     uint32_t bgc = CFG_getColor(COLOR_BACKGROUND);
-                    SDL_FillRect(ctx.screen, NULL, SDL_MapRGB(ctx.screen->format, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
+                    SDL_FillRect(ctx.screen, NULL, SDL_MapRGBA(ctx.screen->format, (bgc >> 24) & 0xFF, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
                 }
 
                 int ow = 0;

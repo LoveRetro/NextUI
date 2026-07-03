@@ -2,13 +2,15 @@
 
 #include <cmath>
 
-static constexpr int NUM_SLIDERS = 3;
+static constexpr int NUM_SLIDERS = 4;
 
-static void decodeColor(uint32_t c, int &r, int &g, int &b)
+static void decodeColor(uint32_t c, int &r, int &g, int &b, int &a)
 {
-    r = (c >> 16) & 0xFF;
-    g = (c >> 8)  & 0xFF;
-    b =  c        & 0xFF;
+    auto col = uintToColour(c);
+    a = col.a;
+    r = col.r;
+    g = col.g;
+    b = col.b;
 }
 
 ///////////////////////////////////////////////////////////
@@ -20,12 +22,12 @@ ColorPickerMenu::ColorPickerMenu(uint32_t initialColor, ValueSetCallback on_set,
       presets(std::move(presets)), label_(std::move(label)), originalColor_(initialColor),
       selected(0)
 {
-    decodeColor(initialColor, r, g, b);
+    decodeColor(initialColor, r, g, b, a);
 }
 
 void ColorPickerMenu::reset(uint32_t color, std::vector<ColorPreset> newPresets, std::string label)
 {
-    decodeColor(color, r, g, b);
+    decodeColor(color, r, g, b, a);
     originalColor_ = color;
     selected = 0;
     presets = std::move(newPresets);
@@ -34,7 +36,8 @@ void ColorPickerMenu::reset(uint32_t color, std::vector<ColorPreset> newPresets,
 
 uint32_t ColorPickerMenu::currentColor() const
 {
-    return ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;
+    // in rgba format
+    return ((r & 0xFF) << 24) | ((g & 0xFF) << 16) | ((b & 0xFF) << 8) | (a & 0xFF);
 }
 
 void ColorPickerMenu::applyColor()
@@ -67,7 +70,7 @@ InputReactionHint ColorPickerMenu::handleInput(int &dirty, int &quit)
     }
     else if (PAD_justPressed(BTN_B))
     {
-        decodeColor(originalColor_, r, g, b);
+        decodeColor(originalColor_, r, g, b, a);
         applyColor();
         dirty = 1;
         quit = 1;
@@ -83,7 +86,7 @@ InputReactionHint ColorPickerMenu::handleInput(int &dirty, int &quit)
 
     if (selected < NUM_SLIDERS)
     {
-        int *channels[] = {&r, &g, &b};
+        int *channels[] = {&r, &g, &b, &a};
         int *channel = channels[selected];
         if (PAD_justRepeated(BTN_LEFT))
         {
@@ -120,7 +123,7 @@ InputReactionHint ColorPickerMenu::handleInput(int &dirty, int &quit)
         if (PAD_justPressed(BTN_X) && presetIdx < (int)presets.size())
         {
             const auto &preset = presets[presetIdx];
-            decodeColor(preset.color, r, g, b);
+            decodeColor(preset.color, r, g, b, a);
             applyColor();
             selected = 0;
             dirty = 1;
@@ -167,11 +170,55 @@ static void drawRoundedRect(SDL_Surface *surface, const SDL_Rect &rect, int radi
     }
 }
 
+static void drawRoundedAlphaRect(SDL_Surface *surface, const SDL_Rect &rect, int radius,
+                                 uint32_t outer, uint32_t middle, uint32_t fill)
+{
+    if (rect.w <= 0 || rect.h <= 0) return;
+
+    SDL_Surface *tmp = SDL_CreateRGBSurfaceWithFormat(0, rect.w, rect.h,
+                                                      32, SDL_PIXELFORMAT_ARGB8888);
+    if (!tmp) return;
+
+    SDL_SetSurfaceBlendMode(tmp, SDL_BLENDMODE_BLEND);
+    SDL_FillRect(tmp, nullptr, SDL_MapRGBA(tmp->format, 0, 0, 0, 0));
+
+    auto remap = [&](uint32_t c) -> uint32_t {
+        uint8_t rr, gg, bb, aa;
+        SDL_GetRGBA(c, surface->format, &rr, &gg, &bb, &aa);
+        return SDL_MapRGBA(tmp->format, rr, gg, bb, aa);
+    };
+
+    SDL_Rect r0 = {0, 0, rect.w, rect.h};
+    drawSolidRoundedRect(tmp, r0, radius, remap(outer));
+    if (rect.w > 2 && rect.h > 2)
+    {
+        SDL_Rect r1 = {1, 1, rect.w - 2, rect.h - 2};
+        drawSolidRoundedRect(tmp, r1, std::max(0, radius - 1), remap(middle));
+    }
+    if (rect.w > 4 && rect.h > 4)
+    {
+        SDL_Rect r2 = {2, 2, rect.w - 4, rect.h - 4};
+        drawSolidRoundedRect(tmp, r2, std::max(0, radius - 2), remap(fill));
+    }
+
+    SDL_Rect dst = rect;
+    SDL_BlitSurface(tmp, nullptr, surface, &dst);
+    SDL_FreeSurface(tmp);
+}
+
 static void drawGradientCapsule(SDL_Surface *surface, const SDL_Rect &bar,
-                                 int r, int g, int b, int channel)
+                                 int r, int g, int b, int a, int channel)
 {
     if (bar.w <= 0 || bar.h <= 0) return;
     const int R = bar.h / 2;
+
+    // SDL_FillRect does not alpha blend into destination surfaces. Build the
+    // gradient into an ARGB temp surface, then alpha-blit it onto destination.
+    SDL_Surface *grad = SDL_CreateRGBSurfaceWithFormat(0, bar.w, bar.h,
+                                                       32, SDL_PIXELFORMAT_ARGB8888);
+    if (!grad) return;
+    SDL_SetSurfaceBlendMode(grad, SDL_BLENDMODE_BLEND);
+    SDL_FillRect(grad, nullptr, SDL_MapRGBA(grad->format, 0, 0, 0, 0));
 
     for (int x = 0; x < bar.w; x++)
     {
@@ -179,7 +226,8 @@ static void drawGradientCapsule(SDL_Surface *surface, const SDL_Rect &bar,
         uint8_t cr = (channel == 0) ? (uint8_t)ch_val : (uint8_t)r;
         uint8_t cg = (channel == 1) ? (uint8_t)ch_val : (uint8_t)g;
         uint8_t cb = (channel == 2) ? (uint8_t)ch_val : (uint8_t)b;
-        uint32_t col = SDL_MapRGB(surface->format, cr, cg, cb);
+        uint8_t ca = (channel == 3) ? (uint8_t)ch_val : (uint8_t)a;
+        uint32_t col = SDL_MapRGBA(grad->format, cr, cg, cb, ca);
 
         int y_inset = 0;
         if (R > 0) {
@@ -197,9 +245,13 @@ static void drawGradientCapsule(SDL_Surface *surface, const SDL_Rect &bar,
 
         int col_h = bar.h - 2 * y_inset;
         if (col_h <= 0) continue;
-        SDL_Rect col_rect = {bar.x + x, bar.y + y_inset, 1, col_h};
-        SDL_FillRect(surface, &col_rect, col);
+        SDL_Rect col_rect = {x, y_inset, 1, col_h};
+        SDL_FillRect(grad, &col_rect, col);
     }
+
+    SDL_Rect dst = bar;
+    SDL_BlitSurface(grad, nullptr, surface, &dst);
+    SDL_FreeSurface(grad);
 }
 
 void ColorPickerMenu::drawSlider(SDL_Surface *surface, const SDL_Rect &row,
@@ -213,16 +265,17 @@ void ColorPickerMenu::drawSlider(SDL_Surface *surface, const SDL_Rect &row,
     // Fixed-width slots so all sliders align regardless of rendered glyph widths
     int label_fixed_w;
     {
-        int wr, wg, wb;
+        int wr, wg, wb, wa;
         TTF_SizeUTF8(font.small, "R", &wr, nullptr);
         TTF_SizeUTF8(font.small, "G", &wg, nullptr);
         TTF_SizeUTF8(font.small, "B", &wb, nullptr);
-        label_fixed_w = std::max({wr, wg, wb});
+        TTF_SizeUTF8(font.small, "A", &wa, nullptr);
+        label_fixed_w = std::max({wr, wg, wb, wa});
     }
     int hex_fixed_w;
     TTF_SizeUTF8(font.tiny, "00", &hex_fixed_w, nullptr);
 
-    // Channel label ("R", "G", "B") — centered in fixed-width slot
+    // Channel label ("R", "G", "B", "A") — centered in fixed-width slot
     SDL_Surface *label_surf = TTF_RenderUTF8_Blended(font.small, label, text_color);
     int label_x = row.x + SCALE1(OPTION_PADDING) + (label_fixed_w - label_surf->w) / 2;
     SDL_BlitSurfaceCPP(label_surf, {}, surface,
@@ -230,7 +283,7 @@ void ColorPickerMenu::drawSlider(SDL_Surface *surface, const SDL_Rect &row,
     SDL_FreeSurface(label_surf);
 
     // Hex value right-aligned in fixed-width slot
-    char hex_str[3];
+    char hex_str[4];
     snprintf(hex_str, sizeof(hex_str), "%02X", value);
     SDL_Surface *hex_surf = TTF_RenderUTF8_Blended(font.tiny, hex_str, text_color);
     int hex_slot_x = row.x + row.w - SCALE1(OPTION_PADDING) - hex_fixed_w;
@@ -247,17 +300,21 @@ void ColorPickerMenu::drawSlider(SDL_Surface *surface, const SDL_Rect &row,
 
     if (bar_w > 0)
     {
-        uint32_t white = SDL_MapRGB(surface->format, 255, 255, 255);
-        uint32_t black = SDL_MapRGB(surface->format, 0, 0, 0);
+        uint32_t white = SDL_MapRGBA(surface->format, 255, 255, 255, 255);
+        uint32_t black = SDL_MapRGBA(surface->format, 0, 0, 0, 255);
 
         // Ring inset within bar bounds: 1px black outer, 1px white inner, gradient fill
         drawSolidRoundedRect(surface, {bar_x, bar_y, bar_w, bar_h}, bar_h / 2, black);
         if (bar_w > 2 && bar_h > 2)
             drawSolidRoundedRect(surface, {bar_x + 1, bar_y + 1, bar_w - 2, bar_h - 2},
                                  (bar_h - 2) / 2, white);
-        if (bar_w > 4 && bar_h > 4)
+        if (bar_w > 4 && bar_h > 4) {
+            // inner section is filled with background color, so we can blend
+            drawSolidRoundedRect(surface, {bar_x + 2, bar_y + 2, bar_w - 4, bar_h - 4},
+                                    (bar_h - 4) / 2, THEME_COLOR7);
             drawGradientCapsule(surface, {bar_x + 2, bar_y + 2, bar_w - 4, bar_h - 4},
-                                this->r, this->g, this->b, channel);
+                                this->r, this->g, this->b, this->a, channel);
+        }
 
         // Circle thumb indicator
         const int circ_d      = bar_h + SCALE1(2);
@@ -305,9 +362,9 @@ void ColorPickerMenu::drawPreset(SDL_Surface *surface, const SDL_Rect &row,
 
     SDL_Color text_color = is_selected ? uintToColour(THEME_COLOR5_255) : uintToColour(THEME_COLOR4_255);
 
-    // Hex value "#RRGGBB"
-    char hex_str[8];
-    snprintf(hex_str, sizeof(hex_str), "#%06X", preset.color);
+    // Hex value "#RRGGBBAA"
+    char hex_str[9];
+    snprintf(hex_str, sizeof(hex_str), "#%08X", preset.color);
     SDL_Surface *hex_surf = TTF_RenderUTF8_Blended(font.tiny, hex_str, text_color);
     int hex_x = sq_rect.x + sq + SCALE1(OPTION_PADDING / 2 + 2);
     SDL_BlitSurfaceCPP(hex_surf, {}, surface,
@@ -359,13 +416,13 @@ void ColorPickerMenu::drawCustom(SDL_Surface *surface, const SDL_Rect &dst, cons
     const int SLIDER_AREA_W = dst.w - PREVIEW_SIZE - SCALE1(PADDING);
     const int PREVIEW_RADIUS = SCALE1(4);
 
-    uint32_t white = SDL_MapRGB(surface->format, 255, 255, 255);
-    uint32_t black = SDL_MapRGB(surface->format, 0, 0, 0);
-    uint32_t col_mapped = SDL_MapRGB(surface->format, r, g, b);
+    uint32_t white = SDL_MapRGBA(surface->format, 255, 255, 255, 255);
+    uint32_t black = SDL_MapRGBA(surface->format, 0, 0, 0, 255);
+    uint32_t col_mapped = SDL_MapRGBA(surface->format, r, g, b, a);
 
     // R, G, B slider rows
-    const char *channel_labels[] = {"R", "G", "B"};
-    int channel_values[] = {r, g, b};
+    const char *channel_labels[] = {"R", "G", "B", "A"};
+    int channel_values[] = {r, g, b, a};
     for (int i = 0; i < NUM_SLIDERS; i++)
     {
         SDL_Rect row = {dst.x, dst.y + TOP_OFFSET + SCALE1(i * BUTTON_SIZE), SLIDER_AREA_W, SCALE1(BUTTON_SIZE)};
@@ -379,7 +436,7 @@ void ColorPickerMenu::drawCustom(SDL_Surface *surface, const SDL_Rect &dst, cons
         PREVIEW_SIZE,
         PREVIEW_SIZE
     };
-    drawRoundedRect(surface, preview, PREVIEW_RADIUS, black, white, col_mapped);
+    drawRoundedAlphaRect(surface, preview, PREVIEW_RADIUS, black, white, col_mapped);
 
     // Preset rows below the sliders
     for (int i = 0; i < (int)presets.size(); i++)
@@ -390,6 +447,8 @@ void ColorPickerMenu::drawCustom(SDL_Surface *surface, const SDL_Rect &dst, cons
             dst.w,
             SCALE1(BUTTON_SIZE)
         };
+        if(row.y + row.h > dst.y + dst.h - SCALE1(BUTTON_SIZE)) 
+            break; // don't draw outside the menu area
         drawPreset(surface, row, presets[i], selected == NUM_SLIDERS + i);
     }
 }
