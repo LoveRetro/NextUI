@@ -82,6 +82,14 @@ enum {
 	COLOR_BACKGROUND = 7
 };
 
+// Input hint styles
+enum {
+	INPUT_STYLE_TEXT = -1, // Rendered text
+	INPUT_STYLE_ABXY = 0, // ABXY button icons
+	INPUT_STYLE_CARDINALS = 1, // Cardinal direction button icons
+	INPUT_STYLE_SHAPES = 2, // Shape button icons (PlayStation-style)
+};
+
 typedef struct
 {
 	// Theme
@@ -98,6 +106,7 @@ typedef struct
 	int gameSwitcherScaling; // enum
 	int gameSwitcherCurtain;
 	double gameArtWidth;	 // [0,1] -> 0-100% of screen width
+	int inputPromptStyle; // enum
 
 	// font loading/unloading callback
     FontLoad_callback_t onFontChange;
@@ -220,6 +229,7 @@ typedef struct
 #define CFG_DEFAULT_NTP false
 #define CFG_DEFAULT_TIMEZONE 320 // Europe/Berlin
 #define CFG_DEFAULT_GAMESWITCHER_CURTAIN 0
+#define CFG_DEFAULT_INPUT_PROMPT_STYLE INPUT_STYLE_TEXT
 
 // Notification defaults
 #define CFG_DEFAULT_NOTIFY_MANUAL_SAVE true
@@ -367,6 +377,9 @@ void CFG_setCurrentTimezone(int index);
 // Show/hide curtain on the game switcher screen (0-100% opacity)
 int CFG_getGameSwitcherCurtain(void);
 void CFG_setGameSwitcherCurtain(int opacity);
+// Input prompt style
+int CFG_getInputPromptStyle(void);
+void CFG_setInputPromptStyle(int style);
 
 // Notification settings
 bool CFG_getNotifyManualSave(void);
