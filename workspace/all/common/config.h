@@ -96,6 +96,7 @@ typedef struct
 	uint32_t color7_255; // not screen mapped
 	int thumbRadius;
 	int gameSwitcherScaling; // enum
+	int gameSwitcherCurtain;
 	double gameArtWidth;	 // [0,1] -> 0-100% of screen width
 
 	// font loading/unloading callback
@@ -173,13 +174,13 @@ typedef struct
 
 #define CFG_DEFAULT_FONT_FILE "font1.ttf"  // Next
 #define CFG_DEFAULT_FONT_STYLE 0x01 // TTF_STYLE_BOLD (MinUI default)
-#define CFG_DEFAULT_COLOR1 0xffffffU
-#define CFG_DEFAULT_COLOR2 0x9b2257U
-#define CFG_DEFAULT_COLOR3 0x1e2329U
-#define CFG_DEFAULT_COLOR4 0xffffffU
-#define CFG_DEFAULT_COLOR5 0x000000U
-#define CFG_DEFAULT_COLOR6 0xffffffU
-#define CFG_DEFAULT_COLOR7 0x000000U
+#define CFG_DEFAULT_COLOR1 0xffffffffU
+#define CFG_DEFAULT_COLOR2 0x9b2257ffU
+#define CFG_DEFAULT_COLOR3 0x1e2329ffU
+#define CFG_DEFAULT_COLOR4 0xffffffffU
+#define CFG_DEFAULT_COLOR5 0x000000ffU
+#define CFG_DEFAULT_COLOR6 0xffffffffU
+#define CFG_DEFAULT_COLOR7 0x000000ffU
 #define CFG_DEFAULT_COLOR_MAIN CFG_DEFAULT_COLOR1
 #define CFG_DEFAULT_COLOR_ACCENT CFG_DEFAULT_COLOR2
 #define CFG_DEFAULT_COLOR_ACCENT2 CFG_DEFAULT_COLOR3
@@ -218,6 +219,7 @@ typedef struct
 #define CFG_DEFAULT_BLUETOOTH_MAXRATE 48000
 #define CFG_DEFAULT_NTP false
 #define CFG_DEFAULT_TIMEZONE 320 // Europe/Berlin
+#define CFG_DEFAULT_GAMESWITCHER_CURTAIN 0
 
 // Notification defaults
 #define CFG_DEFAULT_NOTIFY_MANUAL_SAVE true
@@ -257,7 +259,7 @@ void CFG_setFontFile(const char* filename);
 // The font style to use for the UI font.
 int CFG_getFontStyle(void);
 void CFG_setFontStyle(int style);
-// The colors to use for the UI. These are 0xRRGGBB values.
+// The colors to use for the UI. These are packed 0xRRGGBBAA values.
 // 0 - Color1 (primary hint/asset colour)
 // 1 - Color2 (accent colour)
 // 2 - Color3 (secondary accent colour
@@ -362,6 +364,9 @@ void CFG_setNTP(bool on);
 // Current timezone index in tz database
 int CFG_getCurrentTimezone(void);
 void CFG_setCurrentTimezone(int index);
+// Show/hide curtain on the game switcher screen (0-100% opacity)
+int CFG_getGameSwitcherCurtain(void);
+void CFG_setGameSwitcherCurtain(int opacity);
 
 // Notification settings
 bool CFG_getNotifyManualSave(void);

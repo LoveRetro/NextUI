@@ -2616,6 +2616,11 @@ int main (int argc, char *argv[]) {
 			}
 			GFX_clear(screen);
 
+			if(CFG_getGameSwitcherCurtain() > 0 && currentScreen == SCREEN_GAMESWITCHER) {
+				GFX_blitTopCurtain(screen);
+				GFX_blitBottomCurtain(screen);
+			}
+
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
 			if (currentScreen == SCREEN_QUICKMENU) {
 				if(lastScreen != SCREEN_QUICKMENU) {
