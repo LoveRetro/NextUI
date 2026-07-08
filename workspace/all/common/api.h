@@ -97,8 +97,13 @@ enum {
 	ASSET_WHITE_PILL,
 	ASSET_BLACK_PILL,
 	ASSET_DARK_GRAY_PILL,
+	ASSET_WHITE_RECT,
+	ASSET_BLACK_RECT,
+	ASSET_DARK_GRAY_RECT,
 	ASSET_OPTION,
+	ASSET_OPTION_RECT,
 	ASSET_BUTTON,
+	ASSET_BUTTON_RECT,
 	ASSET_PAGE_BG,
 	ASSET_STATE_BG,
 	ASSET_PAGE,
@@ -261,7 +266,7 @@ SDL_Surface* GFX_init(int mode);
 
 void GFX_setMode(int mode);
 int GFX_hdmiChanged(void);
-SDL_Color /*GFX_*/ uintToColour(uint32_t colour);
+SDL_Color /*GFX_*/ uintToColour(uint32_t rgba);
 
 #define GFX_clear PLAT_clearVideo // (SDL_Surface* screen)
 #define GFX_clearAll PLAT_clearAll // (void)
@@ -332,6 +337,8 @@ void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_
 
 int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
 void GFX_blitHardwareHints(SDL_Surface* dst, int show_setting);
+void GFX_blitTopCurtain(SDL_Surface* dst);
+void GFX_blitBottomCurtain(SDL_Surface* dst);
 
 typedef enum {
 	INDICATOR_BRIGHTNESS = 1,
