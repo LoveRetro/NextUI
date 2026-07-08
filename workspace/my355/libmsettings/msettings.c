@@ -287,6 +287,23 @@ int GetExposure(void)
 {
 	return settings->exposure;
 }
+int GetDisplayCalEnabled(void)
+{
+	// my355 does not currently expose a display gamma/LUT control interface.
+	return 0;
+}
+int GetDisplayCalRedGain(void)
+{
+	return 100;
+}
+int GetDisplayCalGreenGain(void)
+{
+	return 100;
+}
+int GetDisplayCalBlueGain(void)
+{
+	return 100;
+}
 int GetMutedBrightness(void)
 {
 	return 0;
@@ -414,6 +431,22 @@ void SetExposure(int value)
 	SetRawExposure(scaleExposure(value));
 	settings->exposure = value;
 	SaveSettings();
+}
+void SetDisplayCalEnabled(int value)
+{
+	(void)value;
+}
+void SetDisplayCalRedGain(int value)
+{
+	(void)value;
+}
+void SetDisplayCalGreenGain(int value)
+{
+	(void)value;
+}
+void SetDisplayCalBlueGain(int value)
+{
+	(void)value;
 }
 
 void SetMutedBrightness(int value)
@@ -575,6 +608,12 @@ void SetRawSaturation(int val){
 }
 void SetRawExposure(int val){
 	// not supported on this device, so do nothing
+}
+void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain) {
+	(void)enabled;
+	(void)red_gain;
+	(void)green_gain;
+	(void)blue_gain;
 }
 
 // Find the first A2DP playback volume control via amixer
