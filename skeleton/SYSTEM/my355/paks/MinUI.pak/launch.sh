@@ -100,7 +100,7 @@ cd $(dirname "$0")
 parse_hook_cmd() {
 	HOOK_CMD="$1"
 	HOOK_EMU_PATH=$(echo "$HOOK_CMD" | sed "s/^'\\([^']*\\)'.*/\\1/")
-	_remainder=$(echo "$HOOK_CMD" | sed "s/^'[^']*//")
+	_remainder=$(echo "$HOOK_CMD" | sed "s/^'[^']*'//")
 	if echo "$_remainder" | grep -q "'"; then
 		HOOK_TYPE="rom"
 		HOOK_ROM_PATH=$(echo "$_remainder" | sed "s/.*'\\([^']*\\)'.*/\\1/")
