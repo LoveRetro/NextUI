@@ -43,6 +43,7 @@ void CFG_defaults(NextUISettings *cfg)
         .thumbRadius = CFG_DEFAULT_THUMBRADIUS,
         .gameArtWidth = CFG_DEFAULT_GAMEARTWIDTH,
 		.showFolderNamesAtRoot = CFG_DEFAULT_SHOWFOLDERNAMESATROOT,
+        .inputPromptStyle = CFG_DEFAULT_INPUT_PROMPT_STYLE,
 
         .showClock = CFG_DEFAULT_SHOWCLOCK,
         .clock24h = CFG_DEFAULT_CLOCK24H,
@@ -459,6 +460,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "gameSwitcherCurtain=%i", &temp_value) == 1)
             {
                 CFG_setGameSwitcherCurtain(temp_value);
+                continue;
+            }
+            if (sscanf(line, "inputPromptStyle=%i", &temp_value) == 1)
+            {
+                CFG_setInputPromptStyle(temp_value);
                 continue;
             }
         }
@@ -1157,6 +1163,17 @@ void CFG_setGameSwitcherCurtain(int opacity)
     CFG_sync();
 }
 
+int CFG_getInputPromptStyle(void)
+{
+    return settings.inputPromptStyle;
+}
+
+void CFG_setInputPromptStyle(int style)
+{
+    settings.inputPromptStyle = style;
+    CFG_sync();
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
@@ -1384,6 +1401,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getGameSwitcherCurtain());
     }
+    else if (strcmp(key, "inputPromptStyle") == 0)
+    {
+        sprintf(value, "%i", CFG_getInputPromptStyle());
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
@@ -1479,6 +1500,7 @@ void CFG_sync(void)
     fprintf(file, "raAchievementSortOrder=%i\n", settings.raAchievementSortOrder);
     fprintf(file, "fontStyle=%i\n", settings.fontStyle);
     fprintf(file, "gameSwitcherCurtain=%i\n", settings.gameSwitcherCurtain);
+    fprintf(file, "inputPromptStyle=%i\n", settings.inputPromptStyle);
 
     fclose(file);
 }
@@ -1546,6 +1568,7 @@ void CFG_print(void)
     printf("\t\"raAchievementSortOrder\": %i,\n", settings.raAchievementSortOrder);
     printf("\t\"fontStyle\": %i,\n", settings.fontStyle);
     printf("\t\"gameSwitcherCurtain\": %i,\n", settings.gameSwitcherCurtain);
+    printf("\t\"inputPromptStyle\": %i,\n", settings.inputPromptStyle);
 
     // meta, not a real setting
     printf("\t\"fontpath\": \"%s/%s\"\n", RES_PATH, CFG_getFontFile());
