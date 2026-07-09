@@ -328,7 +328,8 @@ static void applyDisplayCalDefaultsForDevice(Settings *target) {
 	target->displaycal_blue_gain = defaults.blue_gain;
 }
 
-void InitSettings(void) {	
+void InitSettings(void) {
+	int seed_displaycal = 0;
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
 	is_smartpro = exactMatch("smartpro", device);
@@ -359,6 +360,8 @@ void InitSettings(void) {
 				else {
 					// initialize with defaults
 					memcpy(settings, &DefaultSettings, shm_size);
+					// no displaycal fields before v11, seed device defaults
+					seed_displaycal = 1;
 
 					// overwrite with migrated data
 					if(version==10) {
@@ -519,11 +522,13 @@ void InitSettings(void) {
 			else {
 				// load defaults
 				memcpy(settings, &DefaultSettings, shm_size);
+				seed_displaycal = 1;
 			}
 		}
 		else {
 			// load defaults
 			memcpy(settings, &DefaultSettings, shm_size);
+			seed_displaycal = 1;
 		}
 		
 		// these shouldn't be persisted
@@ -540,7 +545,7 @@ void InitSettings(void) {
 		system("amixer sset 'DAC Swap' Off"); // Fix L/R channels
 	}
 
-	applyDisplayCalDefaultsForDevice(settings);
+	if (is_host && seed_displaycal) applyDisplayCalDefaultsForDevice(settings);
 
 	// This will implicitly update all other settings based on FN switch state
 	SetMute(settings->mute);
