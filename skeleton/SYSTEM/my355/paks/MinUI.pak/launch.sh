@@ -3,6 +3,7 @@
 export PLATFORM="my355"
 export SDCARD_PATH="/mnt/SDCARD"
 export BIOS_PATH="$SDCARD_PATH/Bios"
+export ROMS_PATH="$SDCARD_PATH/Roms"
 export SAVES_PATH="$SDCARD_PATH/Saves"
 export CHEATS_PATH="$SDCARD_PATH/Cheats"
 export SYSTEM_PATH="$SDCARD_PATH/.system/$PLATFORM"
