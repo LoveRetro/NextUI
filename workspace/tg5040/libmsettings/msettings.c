@@ -330,7 +330,7 @@ static void applyDisplayCalDefaultsForDevice(Settings *target) {
 
 void InitSettings(void) {	
 	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
+	is_brick = exactMatch("brick", device) || exactMatch("brickpro", device);
 	is_smartpro = exactMatch("smartpro", device);
 	
 	sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));

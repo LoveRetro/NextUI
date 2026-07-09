@@ -28,14 +28,14 @@ int is_brick = 0;
 void PLAT_initPlatform(void) {
 	// TODO: replace with something that doesnt bleed out of tg5040 scope
 	char *device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
+	is_brick = exactMatch("brick", device) || exactMatch("brickpro", device);
 }
 
 static SDL_Joystick **joysticks = NULL;
 static int num_joysticks = 0;
 void PLAT_initInput(void) {
 	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
+	is_brick = exactMatch("brick", device) || exactMatch("brickpro", device);
 	if(SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0)
 		LOG_error("Failed initializing joysticks: %s\n", SDL_GetError());
 	num_joysticks = SDL_NumJoysticks();
@@ -374,7 +374,7 @@ ConnectionStrength PLAT_connectionStrength(void) {
 
 void PLAT_initDefaultLeds() {
 	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
+	is_brick = exactMatch("brick", device) || exactMatch("brickpro", device);
 	if(is_brick) {
 	lightsDefault[0] = (LightSettings) {
 		"FN 1 key",
@@ -480,7 +480,7 @@ void PLAT_initDefaultLeds() {
 void PLAT_initLeds(LightSettings *lights) 
 {
 	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
+	is_brick = exactMatch("brick", device) || exactMatch("brickpro", device);
 
 	PLAT_initDefaultLeds();
 	FILE *file;

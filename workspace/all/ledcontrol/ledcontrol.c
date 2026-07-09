@@ -33,7 +33,7 @@ void save_settings() {
     LOG_debug("saving settings plat\n");
     char diskfilename[256];
     char* device = getenv("DEVICE");
-    int is_brick = exactMatch("brick", device);
+    int is_brick = exactMatch("brick", device) || exactMatch("brickpro", device);
     int maxlights = 4;
     // TODO: this shouldnt be in shared userdata
     if(is_brick) {
@@ -214,7 +214,7 @@ void handle_light_input(LightSettings *light, SDL_Event *event, int selected_set
 int main(int argc, char *argv[])
 {
     char* device = getenv("DEVICE");
-    int is_brick = exactMatch("brick", device);
+    int is_brick = exactMatch("brick", device) || exactMatch("brickpro", device);
     
 	InitSettings();
     PWR_setCPUSpeed(CPU_SPEED_AUTO);
