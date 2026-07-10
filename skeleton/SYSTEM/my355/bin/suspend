@@ -12,6 +12,9 @@ log() {
 
 sleep_retval=
 
+wifid_running=
+bluetoothd_running=
+
 LID_PATH=/sys/devices/platform/hall-mh248/hallvalue
 
 
@@ -57,8 +60,17 @@ before() {
 	# Subshell ensures a crashing hook cannot block suspend.
 	( "$SYSTEM_PATH/bin/run_hooks.sh" pre-sleep.d --sync-only ) >/dev/null 2>&1 || true
 
-	# TODO bluetooth
-	# TODO wifi
+	if pgrep bluetoothd >/dev/null 2>&1; then
+		bluetoothd_running=1
+		log "Stopping bluetoothd..."
+		/etc/bluetooth/bt_init.sh stop || true
+	fi
+
+	if pgrep wpa_supplicant >/dev/null 2>&1; then
+		wifid_running=1
+		log "Stopping wpa_supplicant..."
+		/etc/wifi/wifi_init.sh stop || true
+	fi
 
 	touch /tmp/system_suspend
 }
@@ -71,8 +83,15 @@ after() {
 	# TODO save and restore backlight settings
 	echo 100 > /sys/class/leds/work/brightness
 
-	# TODO bluetooth
-	# TODO wifi
+	if [ -n "$wifid_running" ]; then
+		log "Starting wpa_supplicant..."
+		/etc/wifi/wifi_init.sh start || true
+	fi
+
+	if [ -n "$bluetoothd_running" ]; then
+		log "Starting bluetoothd..."
+		/etc/bluetooth/bt_init.sh start || true
+	fi
 
 	rm /tmp/system_suspend
 	# fix_sleep_sound_bug
