@@ -51,6 +51,8 @@ mkdir -p "$SHARED_USERDATA_PATH/.minui"
 export TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
 if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
 	export DEVICE="brick"
+elif [ "$TRIMUI_MODEL" = "Trimui Brick Pro" ]; then
+	export DEVICE="brickpro"
 else
 	export DEVICE="smartpro"
 fi

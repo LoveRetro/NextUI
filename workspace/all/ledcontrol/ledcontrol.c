@@ -11,7 +11,7 @@
 #define NUM_MAIN_OPTIONS 5
 #define MAX_NAME_LEN 255
 
-const char *lightnames[4];
+const char *lightnames[5];
 #define NROF_TRIGGERS 14
 const char *triggernames[] = {
     "B", "A", "Y", "X", "L", "R", "FN1", "FN2", "MENU", "SELECT", "START", "ALL", "LR", "DPAD"};
@@ -33,14 +33,17 @@ void save_settings() {
     LOG_debug("saving settings plat\n");
     char diskfilename[256];
     char* device = getenv("DEVICE");
-    int is_brick = exactMatch("brick", device);
-    int maxlights = 4;
+    int maxlights = 3;
     // TODO: this shouldnt be in shared userdata
-    if(is_brick) {
+    if(exactMatch("brick", device)) {
+        maxlights = 4;
         snprintf(diskfilename, sizeof(diskfilename), SHARED_USERDATA_PATH "/ledsettings_brick.txt");
     }
+    else if (exactMatch("brickpro", device)) {
+        maxlights = 5;
+        snprintf(diskfilename, sizeof(diskfilename), SHARED_USERDATA_PATH "/ledsettings_brickpro.txt");
+    }
     else {
-        maxlights = 3;
         snprintf(diskfilename, sizeof(diskfilename), SHARED_USERDATA_PATH "/ledsettings.txt");
     }
 
@@ -214,14 +217,23 @@ void handle_light_input(LightSettings *light, SDL_Event *event, int selected_set
 int main(int argc, char *argv[])
 {
     char* device = getenv("DEVICE");
-    int is_brick = exactMatch("brick", device);
     
 	InitSettings();
     PWR_setCPUSpeed(CPU_SPEED_AUTO);
 
-    if (is_brick) {
+    int numOfLights = 3;
+    int combinedBrightness = 1;
+    if (exactMatch("brick", device)) {
         const char *brick_names[] = {"F1 key", "F2 key", "Top bar", "L&R triggers"};
         memcpy(lightnames, brick_names, sizeof(brick_names)); // Copy values
+        numOfLights = 4;
+        combinedBrightness = 0;
+    }
+    else if (exactMatch("brickpro", device)) {
+        const char *brickpro_names[] = {"F1 key", "F2 key", "Top bar", "Joysticks", "Triggers"};
+        memcpy(lightnames, brickpro_names, sizeof(brickpro_names)); // Copy values
+        numOfLights = 5;
+        combinedBrightness = 0;
     } else {
         const char *default_names[] = {"Joystick L","Joystick R", "Logo"};
         memcpy(lightnames, default_names, sizeof(default_names)); // Copy values
@@ -263,9 +275,6 @@ int main(int argc, char *argv[])
         if (had_bt != has_bt)
             dirty = 1;
         had_bt = has_bt;
-
-        int numOfLights = 3;
-        if(is_brick) numOfLights = 4;
 
         if (PAD_justPressed(BTN_B)) {
             quit = 1;
@@ -321,12 +330,12 @@ int main(int argc, char *argv[])
             // const char *settings_labels[6] = {"Effect", "Color", "Color2", "Speed", "Brightness", "Trigger"};
             // this stuff is really not multiplatform at all, need to figure out a way so its not so TrimUI specific
             const char *settings_labels[5]; // Define array with correct size
-            if (is_brick) {
-                const char *brick_labels[] = {"Effect", "Color", "Speed", "Brightness", "Info brightness"};
-                memcpy(settings_labels, brick_labels, sizeof(brick_labels)); // Copy values
-            } else {
+            if (combinedBrightness) {
                 const char *non_brick_labels[] = {"Effect", "Color", "Speed", "Brightness (All Leds)", "Info brightness (All Leds)"};
                 memcpy(settings_labels, non_brick_labels, sizeof(non_brick_labels)); // Copy values
+            } else {
+                const char *brick_labels[] = {"Effect", "Color", "Speed", "Brightness", "Info brightness"};
+                memcpy(settings_labels, brick_labels, sizeof(brick_labels)); // Copy values
             }
             int settings_values[5] = {
                 lightsDefault[selected_light].effect,

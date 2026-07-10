@@ -14,8 +14,8 @@ case $INFO in
 *"SStar"*)
 	PLATFORM="miyoomini"
 	;;
-*"TG5040"*|*"TG3040"*)
-	PLATFORM="tg5040" # Trimui Smart Pro or Brick
+*"TG5040"*|*"TG3040"*|*"TG4040"*)
+	PLATFORM="tg5040" # Trimui Smart Pro, Brick, Brick Pro
 	;;
 *"TG5050"*)
 	PLATFORM="tg5050" # Trimui Smart Pro S
