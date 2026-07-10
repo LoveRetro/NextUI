@@ -35,6 +35,8 @@ extern int is_brickpro;
 #define BUTTON_R2		BUTTON_NA
 #define BUTTON_L3		BUTTON_NA
 #define BUTTON_R3		BUTTON_NA
+#define BUTTON_L4		BUTTON_NA
+#define BUTTON_R4		BUTTON_NA
 
 #define BUTTON_MENU		BUTTON_NA
 #define BUTTON_MENU_ALT	BUTTON_NA
@@ -63,6 +65,8 @@ extern int is_brickpro;
 #define CODE_R2			CODE_NA
 #define CODE_L3			CODE_NA
 #define CODE_R3			CODE_NA
+#define CODE_L4         CODE_NA
+#define CODE_R4         CODE_NA
 
 #define CODE_MENU		CODE_NA
 #define CODE_POWER		102
@@ -92,8 +96,11 @@ extern int is_brickpro;
 #define JOY_R2			JOY_NA
 #define JOY_L3			(is_brick||is_brickpro?9:JOY_NA)
 #define JOY_R3			(is_brick||is_brickpro?10:JOY_NA)
+#define JOY_L4          (is_brickpro?11:JOY_NA)
+#define JOY_R4          (is_brickpro?12:JOY_NA)
 
 #define JOY_MENU		8
+#define JOY_MENU_ALT    (is_brickpro?15:JOY_NA)
 #define JOY_POWER		102
 #define JOY_PLUS		(is_brick||is_brickpro?14:128)
 #define JOY_MINUS		(is_brick||is_brickpro?13:129)

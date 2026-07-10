@@ -3327,7 +3327,7 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 		{
 			uint8_t code = event.key.keysym.scancode;
 			pressed = event.type == SDL_KEYDOWN;
-			// LOG_info("key event: %i (%i)\n", code,pressed);
+			LOG_info("key event: %i (%i)\n", code,pressed);
 			if (code == CODE_UP)
 			{
 				btn = BTN_DPAD_UP;
@@ -3403,6 +3403,11 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 				btn = BTN_L3;
 				id = BTN_ID_L3;
 			}
+			else if (code == CODE_L4)
+			{
+				btn = BTN_L4;
+				id = BTN_ID_L4;
+			}
 			else if (code == CODE_R1)
 			{
 				btn = BTN_R1;
@@ -3417,6 +3422,11 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 			{
 				btn = BTN_R3;
 				id = BTN_ID_R3;
+			}
+			else if (code == CODE_R4)
+			{
+				btn = BTN_R4;
+				id = BTN_ID_R4;
 			}
 			else if (code == CODE_PLUS)
 			{
@@ -3443,7 +3453,7 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 		{
 			uint8_t joy = event.jbutton.button;
 			pressed = event.type == SDL_JOYBUTTONDOWN;
-			// LOG_info("joy event: %i (%i)\n", joy,pressed);
+			LOG_info("joy event: %i (%i)\n", joy,pressed);
 			if (joy == JOY_UP)
 			{
 				btn = BTN_DPAD_UP;
@@ -3524,6 +3534,11 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 				btn = BTN_L3;
 				id = BTN_ID_L3;
 			}
+			else if (joy == JOY_L4)
+			{
+				btn = BTN_L4;
+				id = BTN_ID_L4;
+			}
 			else if (joy == JOY_R1)
 			{
 				btn = BTN_R1;
@@ -3538,6 +3553,11 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 			{
 				btn = BTN_R3;
 				id = BTN_ID_R3;
+			}
+			else if (joy == JOY_R4)
+			{
+				btn = BTN_R4;
+				id = BTN_ID_R4;
 			}
 			else if (joy == JOY_PLUS)
 			{
@@ -3559,7 +3579,7 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 		{
 			int hats[4] = {-1, -1, -1, -1}; // -1=no change,0=up,1=down,2=left,3=right btn_ids
 			int hat = event.jhat.value;
-			// LOG_info("hat event: %i\n", hat);
+			LOG_info("hat event: %i\n", hat);
 			// TODO: safe to assume hats will always be the primary dpad?
 			// TODO: this is literally a bitmask, make it one (oh, except there's 3 states...)
 			switch (hat)
