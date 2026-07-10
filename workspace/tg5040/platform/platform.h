@@ -12,6 +12,7 @@
 ///////////////////////////////
 
 extern int is_brick;
+extern int is_brickpro;
 
 ///////////////////////////////
 
@@ -89,13 +90,13 @@ extern int is_brick;
 #define JOY_R1			5
 #define JOY_L2			JOY_NA
 #define JOY_R2			JOY_NA
-#define JOY_L3			(is_brick?9:JOY_NA)
-#define JOY_R3			(is_brick?10:JOY_NA)
+#define JOY_L3			(is_brick||is_brickpro?9:JOY_NA)
+#define JOY_R3			(is_brick||is_brickpro?10:JOY_NA)
 
 #define JOY_MENU		8
 #define JOY_POWER		102
-#define JOY_PLUS		(is_brick?14:128)
-#define JOY_MINUS		(is_brick?13:129)
+#define JOY_PLUS		(is_brick||is_brickpro?14:128)
+#define JOY_MINUS		(is_brick||is_brickpro?13:129)
 
 ///////////////////////////////
 
@@ -120,9 +121,9 @@ extern int is_brick;
 
 ///////////////////////////////
 
-#define FIXED_SCALE 	(is_brick?3:2)
-#define FIXED_WIDTH		(is_brick?1024:1280)
-#define FIXED_HEIGHT	(is_brick?768:720)
+#define FIXED_SCALE 	(is_brick||is_brickpro?3:2)
+#define FIXED_WIDTH		(is_brick||is_brickpro?1024:1280)
+#define FIXED_HEIGHT	(is_brick||is_brickpro?768:720)
 #define FIXED_BPP		2
 #define FIXED_DEPTH		(FIXED_BPP * 8)
 #define FIXED_PITCH		(FIXED_WIDTH * FIXED_BPP)
@@ -130,9 +131,9 @@ extern int is_brick;
 
 ///////////////////////////////
 
-#define MAIN_ROW_COUNT (is_brick ? 7 : 10)
-#define QUICK_SWITCHER_COUNT (is_brick ? 3 : 4)
-#define PADDING (is_brick ? 5 : 10)
+#define MAIN_ROW_COUNT (is_brick||is_brickpro ? 7 : 10)
+#define QUICK_SWITCHER_COUNT (is_brick||is_brickpro ? 3 : 4)
+#define PADDING (is_brick||is_brickpro ? 5 : 10)
 
 ///////////////////////////////
 

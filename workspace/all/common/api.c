@@ -4512,11 +4512,11 @@ void LEDS_updateLeds(bool indicator_only)
 		return;
 	}
 		
-	int lightsize = 3;
 	char *device = getenv("DEVICE");
-	int is_brick = exactMatch("brick", device) || exactMatch("brickpro", device);
-	if (is_brick)
-		lightsize = 4;
+	int lightsize = exactMatch("brick", device) ? 4 
+		: exactMatch("brickpro", device) ? 5 
+		: 3; // smartpro, smartpro s
+
 	if(!lights)
 	{
 		LOG_error("LEDS_updateLeds called but lights is NULL\n");
