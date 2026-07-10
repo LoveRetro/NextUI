@@ -154,8 +154,7 @@ void PLAT_getGPUTemp() {
 }
 
 void PLAT_getGPUSpeed() {
-	// TODO
-	perf.gpu_speed = 42; // MHz
+	perf.gpu_speed = getInt("/sys/class/devfreq/fde60000.gpu/cur_freq")/1000000;
 }
 
 static struct WIFI_connection connection = {

@@ -273,7 +273,7 @@ namespace {
                     m_model = SmartProS;
                     m_platform = tg5050;
                 } else if(exactMatch("my355", device)) {
-                    m_vendor = Trimui;
+                    m_vendor = Miyoo;
                     m_model = Flip;
                     m_platform = my355;
                 }
