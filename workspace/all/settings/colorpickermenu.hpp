@@ -3,7 +3,7 @@
 #include "menu.hpp"
 
 struct ColorPreset {
-    uint32_t color;   // 0xRRGGBB
+    uint32_t color;   // 0xRRGGBBAA
     std::string label;
 };
 

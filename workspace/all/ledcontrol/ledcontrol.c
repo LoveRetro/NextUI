@@ -374,10 +374,11 @@ int main(int argc, char *argv[])
                         &(SDL_Rect){SCALE1(PADDING + BUTTON_PADDING), y + SCALE1(4)});
                     SDL_FreeSurface(text);
 
+                    // color1 is stored as 0xRRGGBB; GFX_blitAssetColor expects 0xRRGGBBAA
                     GFX_blitAssetColor(ASSET_BUTTON, NULL, screen, &(SDL_Rect){
                         SCALE1(PADDING) + text_width,
                         y + SCALE1(BUTTON_MARGIN)
-                    }, settings_values[j]);
+                    }, ((uint32_t)settings_values[j] << 8) | 0xFF);
                 } else  {
                     snprintf(setting_text, sizeof(setting_text), "%s: %d", settings_labels[j], settings_values[j]);
                     SDL_Surface *text = TTF_RenderUTF8_Blended(font.medium, setting_text, current_color);
