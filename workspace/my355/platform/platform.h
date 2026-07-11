@@ -29,6 +29,8 @@
 #define	BUTTON_R2		BUTTON_NA
 #define BUTTON_L3 		BUTTON_NA
 #define BUTTON_R3 		BUTTON_NA
+#define BUTTON_L4		BUTTON_NA
+#define BUTTON_R4		BUTTON_NA
 
 #define	BUTTON_MENU		BUTTON_NA
 #define	BUTTON_POWER	BUTTON_NA
@@ -56,6 +58,8 @@
 #define CODE_R2			78
 #define CODE_L3			230
 #define CODE_R3			229
+#define CODE_L4         CODE_NA
+#define CODE_R4         CODE_NA
 
 #define CODE_MENU		41
 #define CODE_POWER		102
@@ -84,6 +88,8 @@
 #define JOY_R2			JOY_NA
 #define JOY_L3			JOY_NA
 #define JOY_R3			JOY_NA
+#define JOY_L4			JOY_NA
+#define JOY_R4			JOY_NA
 
 #define JOY_MENU		JOY_NA
 #define JOY_POWER		JOY_NA
