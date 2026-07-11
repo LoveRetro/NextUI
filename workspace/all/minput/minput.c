@@ -54,9 +54,9 @@ int main(int argc , char* argv[]) {
 	int has_R2 = (BUTTON_R2!=BUTTON_NA || CODE_R2!=CODE_NA || JOY_R2!=JOY_NA || AXIS_R2!=AXIS_NA);
 	int has_L3 = (BUTTON_L3!=BUTTON_NA || CODE_L3!=CODE_NA || JOY_L3!=JOY_NA);
 	int has_R3 = (BUTTON_R3!=BUTTON_NA || CODE_R3!=CODE_NA || JOY_R3!=JOY_NA);
-	int has_LS = (AXIS_LX!=AXIS_NA);
-	int has_RS = (AXIS_RX!=AXIS_NA);
-	
+	int has_L4 = (BUTTON_L4!=BUTTON_NA || CODE_L4!=CODE_NA || JOY_L4!=JOY_NA);
+	int has_R4 = (BUTTON_R4!=BUTTON_NA || CODE_R4!=CODE_NA || JOY_R4!=JOY_NA);
+
 	int has_volume = (BUTTON_PLUS!=BUTTON_NA || CODE_PLUS!=CODE_NA || JOY_PLUS!=JOY_NA);
 	int has_power = HAS_POWER_BUTTON;
 	int has_menu = HAS_MENU_BUTTON;
@@ -96,11 +96,19 @@ int main(int argc , char* argv[]) {
 				ox = w;
 			
 				if (has_L2) w += getButtonWidth("L2") + SCALE1(BUTTON_MARGIN);
-				if (!has_L2) x += SCALE1(PILL_SIZE);
+				if (has_L4) w += getButtonWidth("L4") + SCALE1(BUTTON_MARGIN);
+				if (!has_L2 && !has_L4) x += SCALE1(PILL_SIZE);
 				GFX_blitPillColor(ASSET_WHITE_PILL, screen, &(SDL_Rect){x, y, w}, THEME_COLOR3, RGB_WHITE);
 
-				blitButton("L1", screen, PAD_isPressed(BTN_L1), x+SCALE1(BUTTON_MARGIN), y+SCALE1(BUTTON_MARGIN),0);
-				if (has_L2) blitButton("L2", screen, PAD_isPressed(BTN_L2), x+ox, y+SCALE1(BUTTON_MARGIN),0);
+				blitButton("L1", screen, PAD_isPressed(BTN_L1), x + SCALE1(BUTTON_MARGIN), y+SCALE1(BUTTON_MARGIN),0);
+				if (has_L2) {
+					x += ox;
+					blitButton("L2", screen, PAD_isPressed(BTN_L2), x, y+SCALE1(BUTTON_MARGIN),0);
+				}
+				if (has_L4) {
+					x += ox - SCALE1(BUTTON_MARGIN);
+					blitButton("L4", screen, PAD_isPressed(BTN_L4), x, y+SCALE1(BUTTON_MARGIN),0);
+				} 
 			}
 			
 			// R group
@@ -114,14 +122,22 @@ int main(int argc , char* argv[]) {
 				ox = w;
 			
 				if (has_R2) w += getButtonWidth("R2") + SCALE1(BUTTON_MARGIN);
+				if (has_R4) w += getButtonWidth("R4") + SCALE1(BUTTON_MARGIN);
 				
 				x = screen->w - w - SCALE1(BUTTON_MARGIN + PADDING);
-				if (!has_R2) x -= SCALE1(PILL_SIZE);
-				
+				if (!has_R2 && !has_R4) x -= SCALE1(PILL_SIZE);
+					
 				GFX_blitPillColor(ASSET_WHITE_PILL, screen, &(SDL_Rect){x,y,w}, THEME_COLOR3, RGB_WHITE);
 
-				blitButton(has_R2?"R2":"R1", screen, PAD_isPressed(has_R2?BTN_R2:BTN_R1), x+SCALE1(BUTTON_MARGIN), y+SCALE1(BUTTON_MARGIN),0);
-				if (has_R2) blitButton("R1", screen, PAD_isPressed(BTN_R1), x+ox, y+SCALE1(BUTTON_MARGIN),0);
+				if(has_R4) {
+					x+= SCALE1(BUTTON_MARGIN);
+					blitButton("R4", screen, PAD_isPressed(BTN_R4), x, y+SCALE1(BUTTON_MARGIN),0);
+				}
+				if(has_R2) { 
+					x+= ox - SCALE1(BUTTON_MARGIN);
+					blitButton("R2", screen, PAD_isPressed(BTN_R2), x, y+SCALE1(BUTTON_MARGIN),0);
+				}
+				blitButton("R1", screen, PAD_isPressed(BTN_R1), x+ox - SCALE1(BUTTON_MARGIN), y+SCALE1(BUTTON_MARGIN),0);
 			}
 			
 			// DPAD group

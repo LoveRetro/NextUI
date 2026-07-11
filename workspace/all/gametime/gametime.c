@@ -51,16 +51,6 @@ static SDL_Surface **romImages;
 
 static PlayActivities *play_activities;
 
-static inline SDL_Color colorFromUint(uint32_t colour)
-{
-	SDL_Color tempcol;
-	tempcol.a = 255;
-	tempcol.r = (colour >> 16) & 0xFF;
-	tempcol.g = (colour >> 8) & 0xFF;
-	tempcol.b = colour & 0xFF;
-	return tempcol;
-}
-
 ///////
 
 int _renderText(const char *text, TTF_Font *font, SDL_Color color, SDL_Rect *rect, bool right_align)
@@ -260,7 +250,7 @@ void renderList(int count, int start, int end, int selected)
         cleanName(rom_name, rom->name);
         SDL_Color textColor = COLOR_WHITE;
         if(isSelected) {
-            //textColor = colorFromUint(THEME_COLOR1);
+            //textColor = uintToColour(THEME_COLOR1);
             textColor = COLOR_BLACK;
         }
         renderText(rom_name, font.medium, textColor, &(SDL_Rect){
@@ -281,8 +271,8 @@ void renderList(int count, int start, int end, int selected)
             textHeight
         };
         for (int i = 0; i < 6; i++) {
-            SDL_Color detailCol = i % 2 == 0 ? COLOR_DARK_TEXT : colorFromUint(THEME_COLOR2_255);
-            //SDL_Color detailCol = colorFromUint(i % 2 == 0 ? THEME_COLOR3_255 : THEME_COLOR2_255);
+            SDL_Color detailCol = i % 2 == 0 ? COLOR_DARK_TEXT : uintToColour(THEME_COLOR2_255);
+            //SDL_Color detailCol = uintToColour(i % 2 == 0 ? THEME_COLOR3_255 : THEME_COLOR2_255);
             //SDL_Color detailCol = i % 2 == 0 ? COLOR_DARK_TEXT : COLOR_LIGHT_TEXT;
             detailsRect.x += renderText(details[i], font.small, detailCol, &detailsRect);
         }

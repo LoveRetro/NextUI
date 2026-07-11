@@ -245,6 +245,7 @@ namespace {
         enum Model {
             UnknownModel,
             Brick,
+            BrickPro,
             SmartPro,
             SmartProS,
             Flip
@@ -263,6 +264,10 @@ namespace {
                 if(exactMatch("brick", device)) {
                     m_vendor = Trimui;
                     m_model = Brick;
+                    m_platform = tg5040;
+                } else if(exactMatch("brickpro", device)) {
+                    m_vendor = Trimui;
+                    m_model = BrickPro;
                     m_platform = tg5040;
                 } else if(exactMatch("smartpro", device)) {
                     m_vendor = Trimui;
@@ -309,7 +314,7 @@ namespace {
         }
 
         bool hasAnalogSticks() const {
-            return m_model == SmartPro || m_model == SmartProS;
+            return m_model == SmartPro || m_model == SmartProS || m_model == BrickPro;
         }
 
         bool hasWifi() const {
