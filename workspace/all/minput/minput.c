@@ -1,12 +1,16 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <math.h>
 #include <msettings.h>
 
 #include "sdl.h"
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+
+// full-scale SDL joystick axis magnitude, used to map raw axis values to on-screen nub travel
+#define STICK_AXIS_MAX 32767
 
 static int getButtonWidth(char* label) {
 	SDL_Surface* text;
@@ -41,6 +45,15 @@ static void blitButton(char* label, SDL_Surface* dst, int pressed, int x, int y,
 	SDL_FreeSurface(text);
 }
 
+// ASSET_WHITE_PILL's round caps are a fixed-size sprite (native PILL_SIZE), so it can't be
+// stretched into a bigger circle without sampling outside the sprite. Draw one directly instead.
+static void fillCircle(SDL_Surface* dst, int cx, int cy, int radius, uint32_t color) {
+	for (int dy = -radius; dy <= radius; dy++) {
+		int dx = (int)(sqrt((double)radius*radius - (double)dy*dy) + 0.5);
+		SDL_FillRect(dst, &(SDL_Rect){cx-dx, cy+dy, dx*2, 1}, color);
+	}
+}
+
 int main(int argc , char* argv[]) {
 	PWR_setCPUSpeed(CPU_SPEED_AUTO);
 	
@@ -69,13 +82,20 @@ int main(int argc , char* argv[]) {
 	int quit = 0;
 	int dirty = 1;
 	// int show_setting = 0;
+	PAD_Axis last_laxis = {0,0};
+	PAD_Axis last_raxis = {0,0};
 	while(!quit) {
 		GFX_startFrame();
 		uint32_t frame_start = SDL_GetTicks();
-		
+
 		PAD_poll();
-		
+
 		if (PAD_anyPressed() || PAD_anyJustReleased()) dirty = 1;
+		if (pad.laxis.x!=last_laxis.x || pad.laxis.y!=last_laxis.y || pad.raxis.x!=last_raxis.x || pad.raxis.y!=last_raxis.y) {
+			dirty = 1;
+			last_laxis = pad.laxis;
+			last_raxis = pad.raxis;
+		}
 		if (PAD_isPressed(BTN_SELECT) && PAD_isPressed(BTN_START)) quit = 1;
 		
 		// PWR_update(&dirty, NULL, NULL,NULL);
@@ -133,11 +153,12 @@ int main(int argc , char* argv[]) {
 					x+= SCALE1(BUTTON_MARGIN);
 					blitButton("R4", screen, PAD_isPressed(BTN_R4), x, y+SCALE1(BUTTON_MARGIN),0);
 				}
-				if(has_R2) { 
-					x+= ox - SCALE1(BUTTON_MARGIN);
+				if(has_R2) {
+					x += has_R4 ? ox - SCALE1(BUTTON_MARGIN) : SCALE1(BUTTON_MARGIN);
 					blitButton("R2", screen, PAD_isPressed(BTN_R2), x, y+SCALE1(BUTTON_MARGIN),0);
 				}
-				blitButton("R1", screen, PAD_isPressed(BTN_R1), x+ox - SCALE1(BUTTON_MARGIN), y+SCALE1(BUTTON_MARGIN),0);
+				x += (has_R4 || has_R2) ? ox - SCALE1(BUTTON_MARGIN) : SCALE1(BUTTON_MARGIN);
+				blitButton("R1", screen, PAD_isPressed(BTN_R1), x, y+SCALE1(BUTTON_MARGIN),0);
 			}
 			
 			// DPAD group
@@ -256,9 +277,15 @@ int main(int argc , char* argv[]) {
 				int x = SCALE1(PADDING + PILL_SIZE);
 				int y = oy + SCALE1(PILL_SIZE*6);
 				int o = SCALE1(BUTTON_MARGIN);
+				int travel = o * 2;
+				int radius = (SCALE1(PILL_SIZE) + travel) / 2;
+				int cx = x + SCALE1(PILL_SIZE) / 2;
+				int cy = y + SCALE1(PILL_SIZE) / 2;
 
-				GFX_blitPillColor(ASSET_WHITE_PILL, screen, &(SDL_Rect){x, y, 0}, THEME_COLOR3, RGB_WHITE);
-				blitButton("L3", screen, PAD_isPressed(BTN_L3), x + o, y + o, 0);
+				fillCircle(screen, cx, cy, radius, THEME_COLOR3);
+				int dx = MAX(-travel, MIN(travel, (pad.laxis.x * travel) / STICK_AXIS_MAX));
+				int dy = MAX(-travel, MIN(travel, (pad.laxis.y * travel) / STICK_AXIS_MAX));
+				blitButton("L3", screen, PAD_isPressed(BTN_L3), x + o + dx, y + o + dy, 0);
 			}
 			
 			// R3
@@ -266,9 +293,15 @@ int main(int argc , char* argv[]) {
 				int x = FIXED_WIDTH - SCALE1(PADDING + PILL_SIZE * 3) + SCALE1(PILL_SIZE);
 				int y = oy + SCALE1(PILL_SIZE*6);
 				int o = SCALE1(BUTTON_MARGIN);
-				
-				GFX_blitPillColor(ASSET_WHITE_PILL, screen, &(SDL_Rect){x,y,0}, THEME_COLOR3, RGB_WHITE);
-				blitButton("R3", screen, PAD_isPressed(BTN_R3), x+o, y+o,0);
+				int travel = o * 2;
+				int radius = (SCALE1(PILL_SIZE) + travel) / 2;
+				int cx = x + SCALE1(PILL_SIZE) / 2;
+				int cy = y + SCALE1(PILL_SIZE) / 2;
+
+				fillCircle(screen, cx, cy, radius, THEME_COLOR3);
+				int dx = MAX(-travel, MIN(travel, (pad.raxis.x * travel) / STICK_AXIS_MAX));
+				int dy = MAX(-travel, MIN(travel, (pad.raxis.y * travel) / STICK_AXIS_MAX));
+				blitButton("R3", screen, PAD_isPressed(BTN_R3), x+o+dx, y+o+dy,0);
 			}
 
 			GFX_flip(screen);

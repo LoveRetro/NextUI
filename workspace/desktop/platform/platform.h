@@ -56,12 +56,12 @@
 
 #define CODE_L1			43 // Tab
 #define CODE_R1			5
-#define CODE_L2			6
-#define CODE_R2			7
-#define CODE_L3			8
-#define CODE_R3			9
-#define CODE_L4         10
-#define CODE_R4         11
+#define CODE_L2			CODE_NA
+#define CODE_R2			CODE_NA
+#define CODE_L3			CODE_NA
+#define CODE_R3			CODE_NA
+#define CODE_L4         CODE_NA
+#define CODE_R4         CODE_NA
 
 #define CODE_MENU		44 // Space
 #define CODE_POWER		42 // Backspace
