@@ -1950,7 +1950,12 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 		// Game loaded successfully — clear pending load info (no longer needed
 		// for retry).  Must happen before any early returns below.
 		ra_clear_pending_game();
-		
+
+		// Initialize memory regions using the system rcheevos actually detected.
+		if (game) {
+			RA_initMemoryRegions((uint32_t)game->console_id);
+		}
+
 		if (game && game->id != 0) {
 			RA_LOG_INFO("Game loaded: %s (ID: %u)\n", game->title, game->id);
 			
@@ -2346,30 +2351,25 @@ static int ra_is_cd_extension(const char* path) {
  *****************************************************************************/
 static void ra_do_load_game(const char* rom_path, const uint8_t* rom_data, size_t rom_size, const char* emu_tag) {
 	int console_id = RA_getConsoleId(emu_tag);
+
 	if (console_id == RC_CONSOLE_UNKNOWN) {
-		RA_LOG_WARN("Unknown console for tag '%s' - achievements disabled\n", emu_tag);
-		return;
+		RA_LOG_INFO("Unknown console for tag '%s', relying on rcheevos auto-detection\n", emu_tag);
+	} else {
+		// Handle consoles that have separate CD variants
+		// PCE tag is used for both HuCard and CD games in NextUI
+		if (console_id == RC_CONSOLE_PC_ENGINE && ra_is_cd_extension(rom_path)) {
+			console_id = RC_CONSOLE_PC_ENGINE_CD;
+			RA_LOG_DEBUG("Detected PC Engine CD image, using console ID %d\n", console_id);
+		}
+		// MD tag is used for both cartridge and Sega CD games in NextUI
+		else if (console_id == RC_CONSOLE_MEGA_DRIVE && ra_is_cd_extension(rom_path)) {
+			console_id = RC_CONSOLE_SEGA_CD;
+			RA_LOG_DEBUG("Detected Sega CD image, using console ID %d\n", console_id);
+		}
 	}
-	
-	// Handle consoles that have separate CD variants
-	// PCE tag is used for both HuCard and CD games in NextUI
-	if (console_id == RC_CONSOLE_PC_ENGINE && ra_is_cd_extension(rom_path)) {
-		console_id = RC_CONSOLE_PC_ENGINE_CD;
-		RA_LOG_DEBUG("Detected PC Engine CD image, using console ID %d\n", console_id);
-	}
-	// MD tag is used for both cartridge and Sega CD games in NextUI
-	else if (console_id == RC_CONSOLE_MEGA_DRIVE && ra_is_cd_extension(rom_path)) {
-		console_id = RC_CONSOLE_SEGA_CD;
-		RA_LOG_DEBUG("Detected Sega CD image, using console ID %d\n", console_id);
-	}
-	
-	RA_LOG_INFO("Loading game: %s (console: %s, ID: %d)\n",
-	       rom_path, rc_console_name(console_id), console_id);
-	
-	// Initialize memory regions for this console type BEFORE loading the game
-	// This ensures rcheevos can read memory correctly when checking achievements
-	RA_initMemoryRegions((uint32_t)console_id);
-	
+
+	RA_LOG_INFO("Identifying game: %s (Initial ID hint: %d)\n", rom_path, console_id);
+
 	// Use rc_client_begin_identify_and_load_game which hashes and identifies the ROM
 #ifdef RC_CLIENT_SUPPORTS_HASH
 	rc_client_begin_identify_and_load_game(ra_client, console_id,
