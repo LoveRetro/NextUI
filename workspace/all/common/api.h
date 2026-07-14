@@ -171,6 +171,50 @@ enum {
 	ASSET_COUNT,
 };
 
+enum {
+	INPUT_BUTTON_A,
+	INPUT_BUTTON_A_ALT1,
+	INPUT_BUTTON_A_ALT2,
+	INPUT_BUTTON_B,
+	INPUT_BUTTON_B_ALT1,
+	INPUT_BUTTON_B_ALT2,
+	INPUT_BUTTON_X,
+	INPUT_BUTTON_X_ALT1,
+	INPUT_BUTTON_X_ALT2,
+	INPUT_BUTTON_Y,
+	INPUT_BUTTON_Y_ALT1,
+	INPUT_BUTTON_Y_ALT2,
+	INPUT_DPAD_UP,
+	INPUT_DPAD_UP_ALT1,
+	INPUT_DPAD_UP_ALT2,
+	INPUT_DPAD_DOWN,
+	INPUT_DPAD_DOWN_ALT1,
+	INPUT_DPAD_DOWN_ALT2,
+	INPUT_DPAD_LEFT,
+	INPUT_DPAD_LEFT_ALT1,
+	INPUT_DPAD_LEFT_ALT2,
+	INPUT_DPAD_RIGHT,
+	INPUT_DPAD_RIGHT_ALT1,
+	INPUT_DPAD_RIGHT_ALT2,
+	INPUT_DPAD_UP_DOWN,
+	INPUT_DPAD_UP_DOWN_ALT1,
+	INPUT_DPAD_UP_DOWN_ALT2,
+	INPUT_DPAD_LEFT_RIGHT,
+	INPUT_DPAD_LEFT_RIGHT_ALT1,
+	INPUT_DPAD_LEFT_RIGHT_ALT2,
+	INPUT_DPAD_ALL,
+	INPUT_DPAD_ALL_ALT1,
+	INPUT_DPAD_ALL_ALT2,
+	INPUT_DPAD,
+	INPUT_DPAD_ALT1,
+	INPUT_DPAD_ALT2,
+
+	INPUT_BUTTON_HOME,
+	INPUT_BUTTON_POWER,
+	
+	INPUT_COUNT
+};
+
 typedef struct GFX_Fonts {
 	TTF_Font* large; 	// menu
 	TTF_Font* medium; 	// single char button label
@@ -359,6 +403,9 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
 void GFX_blitHardwareHints(SDL_Surface* dst, int show_setting);
 void GFX_blitTopCurtain(SDL_Surface* dst);
 void GFX_blitBottomCurtain(SDL_Surface* dst);
+
+void GFX_blitInputAssetColor(int input, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color);
+void GFX_blitInputAsset(int input, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);
 
 typedef enum {
 	INDICATOR_BRIGHTNESS = 1,

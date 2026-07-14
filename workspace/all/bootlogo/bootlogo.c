@@ -38,7 +38,7 @@ int loadImages()
     // This needs to get a bit more flexible down the line, but for now we either expect the files
     // in the pak root directory or in the "brick" subfolder.
     char basepath[MAX_PATH];
-    if(exactMatch("brick", device)) {
+    if(exactMatch("brick", device) || exactMatch("brickpro", device)) {
         snprintf(basepath, sizeof(basepath), "%s/Bootlogo.pak/brick/", TOOLS_PATH);
     }
     else {

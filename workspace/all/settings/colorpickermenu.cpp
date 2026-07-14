@@ -357,13 +357,14 @@ void ColorPickerMenu::drawPreset(SDL_Surface *surface, const SDL_Rect &row,
     SDL_Rect sq_rect = {row.x + SCALE1(OPTION_PADDING), row.y + (row.h - sq) / 2, sq, sq};
     SDL_FillRect(surface, &sq_rect, SDL_MapRGB(surface->format, 255, 255, 255));
     SDL_Rect sq_inner = {sq_rect.x + 1, sq_rect.y + 1, sq_rect.w - 2, sq_rect.h - 2};
+    SDL_Color preset_color = uintToColour(preset.color);
     SDL_FillRect(surface, &sq_inner, SDL_MapRGB(surface->format,
-        (preset.color >> 16) & 0xFF, (preset.color >> 8) & 0xFF, preset.color & 0xFF));
+        preset_color.r, preset_color.g, preset_color.b));
 
     SDL_Color text_color = is_selected ? uintToColour(THEME_COLOR5_255) : uintToColour(THEME_COLOR4_255);
 
     // Hex value "#RRGGBBAA"
-    char hex_str[9];
+    char hex_str[10];
     snprintf(hex_str, sizeof(hex_str), "#%08X", preset.color);
     SDL_Surface *hex_surf = TTF_RenderUTF8_Blended(font.tiny, hex_str, text_color);
     int hex_x = sq_rect.x + sq + SCALE1(OPTION_PADDING / 2 + 2);

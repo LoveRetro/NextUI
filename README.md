@@ -1,3 +1,5 @@
+<h1>This project is currently undergoing a license transition. See [#765](https://github.com/LoveRetro/NextUI/issues/765) for details.</h1>
+
 <div align="center">
 
   <img width=128px src="github/logo_outline.png">
@@ -120,6 +122,7 @@ Our wiki has a [list of all available Paks](https://nextui.loveretro.games/pak-s
 
 - [josegonzalez](https://github.com/josegonzalez) for [minui-keyboard](https://github.com/josegonzalez/minui-keyboard)
 - [knulli-cfw](https://github.com/knulli-cfw)/[Mikhailzrick](https://github.com/Mikhailzrick) for [fan-control-daemon](https://github.com/knulli-cfw/knulli-linux/commit/5c1b4724330b59cbe8af79d0a7f1dac86f1c221a)
+- [Kenney](www.kenney.nl) for [Input Prompts](https://kenney.nl/assets/input-prompts)
 
 ---
 

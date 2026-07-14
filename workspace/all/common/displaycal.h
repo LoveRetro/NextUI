@@ -19,6 +19,11 @@
 #define DISPLAYCAL_SMARTPRO_DEFAULT_GREEN_GAIN 77
 #define DISPLAYCAL_SMARTPRO_DEFAULT_BLUE_GAIN 50
 
+#define DISPLAYCAL_BRICKPRO_DEFAULT_ENABLED 1
+#define DISPLAYCAL_BRICKPRO_DEFAULT_RED_GAIN DISPLAYCAL_DEFAULT_RED_GAIN
+#define DISPLAYCAL_BRICKPRO_DEFAULT_GREEN_GAIN 94
+#define DISPLAYCAL_BRICKPRO_DEFAULT_BLUE_GAIN 54
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -46,10 +51,19 @@ static const struct DisplayCalDefaults DisplayCalDefaults_SmartPro = {
 	DISPLAYCAL_SMARTPRO_DEFAULT_BLUE_GAIN
 };
 
+// TrimUI Brick Pro, TODO
+static const struct DisplayCalDefaults DisplayCalDefaults_BrickPro = {
+	DISPLAYCAL_BRICKPRO_DEFAULT_ENABLED,
+	DISPLAYCAL_BRICKPRO_DEFAULT_RED_GAIN,
+	DISPLAYCAL_BRICKPRO_DEFAULT_GREEN_GAIN,
+	DISPLAYCAL_BRICKPRO_DEFAULT_BLUE_GAIN
+};
+
 enum DisplayCalPreset {
 	DISPLAYCAL_PRESET_DEFAULT = 0,
 	DISPLAYCAL_PRESET_BRICK,
-	DISPLAYCAL_PRESET_SMARTPRO
+	DISPLAYCAL_PRESET_SMARTPRO,
+	DISPLAYCAL_PRESET_BRICKPRO,
 };
 
 static inline DisplayCalDefaults DisplayCal_getDefaultSettings(enum DisplayCalPreset preset) {
@@ -58,6 +72,9 @@ static inline DisplayCalDefaults DisplayCal_getDefaultSettings(enum DisplayCalPr
 	}
 	if(preset == DISPLAYCAL_PRESET_BRICK) {
 		return DisplayCalDefaults_Brick;
+	}
+	if(preset == DISPLAYCAL_PRESET_BRICKPRO) {
+		return DisplayCalDefaults_BrickPro;
 	}
 	// Default preset
 	DisplayCalDefaults defaults = {

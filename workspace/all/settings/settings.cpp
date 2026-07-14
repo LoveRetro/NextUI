@@ -154,6 +154,10 @@ static const std::vector<std::string> transition_mode_labels = {"Off", "Snappy",
 static const std::vector<std::any>    curtain_opacity_values = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
 static const std::vector<std::string> curtain_opacity_labels = {"Off", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"};
 
+// Input prompt style options
+static const std::vector<std::any>    input_prompt_style_values = {(int)INPUT_STYLE_TEXT, (int)INPUT_STYLE_ABXY, (int)INPUT_STYLE_CARDINALS, (int)INPUT_STYLE_SHAPES};
+static const std::vector<std::string> input_prompt_style_labels = {"Text", "ABXY", "Cardinals", "Shapes"};
+
 // RetroAchievements sort order options
 static const std::vector<std::any> ra_sort_values = {
     (int)RA_SORT_UNLOCKED_FIRST,
@@ -241,6 +245,7 @@ namespace {
         enum Model {
             UnknownModel,
             Brick,
+            BrickPro,
             SmartPro,
             SmartProS,
             Flip
@@ -259,6 +264,10 @@ namespace {
                 if(exactMatch("brick", device)) {
                     m_vendor = Trimui;
                     m_model = Brick;
+                    m_platform = tg5040;
+                } else if(exactMatch("brickpro", device)) {
+                    m_vendor = Trimui;
+                    m_model = BrickPro;
                     m_platform = tg5040;
                 } else if(exactMatch("smartpro", device)) {
                     m_vendor = Trimui;
@@ -305,7 +314,7 @@ namespace {
         }
 
         bool hasAnalogSticks() const {
-            return m_model == SmartPro || m_model == SmartProS;
+            return m_model == SmartPro || m_model == SmartProS || m_model == BrickPro;
         }
 
         bool hasWifi() const {
@@ -468,6 +477,10 @@ int main(int argc, char *argv[])
             []() -> std::any{ return CFG_getGameSwitcherCurtain(); },
             [](const std::any &value){ CFG_setGameSwitcherCurtain(std::any_cast<int>(value)); },
             []() { CFG_setGameSwitcherCurtain(CFG_DEFAULT_GAMESWITCHER_CURTAIN);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Input prompt style", "Select the style of input prompts.", input_prompt_style_values, input_prompt_style_labels,
+            []() -> std::any{ return CFG_getInputPromptStyle(); },
+            [](const std::any &value){ CFG_setInputPromptStyle(std::any_cast<int>(value)); },
+            []() { CFG_setInputPromptStyle(CFG_DEFAULT_INPUT_PROMPT_STYLE);}});
         // not needed anymore
         // new MenuItem{ListItemType::Generic, "Game switcher scaling", "The scaling algorithm used to display the savegame image.", scaling, scaling_strings, []() -> std::any
         // { return CFG_getGameSwitcherScaling(); },
@@ -520,6 +533,7 @@ int main(int argc, char *argv[])
         {
             const DisplayCalDefaults defaultDisplayCal = DisplayCal_getDefaultSettings(
                 deviceInfo.getModel() == DeviceInfo::Brick ? DISPLAYCAL_PRESET_BRICK : 
+                deviceInfo.getModel() == DeviceInfo::BrickPro ? DISPLAYCAL_PRESET_BRICKPRO :
                 deviceInfo.getModel() == DeviceInfo::SmartPro ? DISPLAYCAL_PRESET_SMARTPRO : DISPLAYCAL_PRESET_DEFAULT);
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "White point correction", "Corrects the display white point to better match the \nsRGB standard, at the expense of some peak brightness.", {false, true}, on_off, []() -> std::any

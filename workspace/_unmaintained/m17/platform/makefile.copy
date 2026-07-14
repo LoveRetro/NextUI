@@ -1,8 +1,0 @@
-$(PLATFORM):
-	# $@
-	cp ./workspace/$@/boot/output/em_ui.sh ./build/BASE/
-	cp ./workspace/$@/boot/output/em_ui.sh ./build/SYSTEM/$@/dat/
-	cp ./workspace/$@/boot/output/lib* ./build/SYSTEM/$@/lib/
-	cp ./workspace/$@/install/install.sh ./build/SYSTEM/$@/bin/
-	# extras
-	
