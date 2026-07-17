@@ -335,6 +335,8 @@ void InitSettings(void) {
 	is_brick = exactMatch("brick", device);
 	is_brickpro = exactMatch("brickpro", device);
 	is_smartpro = exactMatch("smartpro", device);
+
+	applyDisplayCalDefaultsForDevice(&DefaultSettings);
 	
 	sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));
 	
@@ -542,8 +544,6 @@ void InitSettings(void) {
 		system("amixer sset 'digital volume' 0"); // 100%
 		system("amixer sset 'DAC Swap' Off"); // Fix L/R channels
 	}
-
-	applyDisplayCalDefaultsForDevice(settings);
 
 	// This will implicitly update all other settings based on FN switch state
 	SetMute(settings->mute);
