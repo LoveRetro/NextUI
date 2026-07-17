@@ -40,6 +40,13 @@ suspend_until_lid_open() {
 			break
 		fi
 
+		sleep 2
+
+        # Check the lid one more time in case user opened it during the sleep window
+        if lid_open; then
+            break
+        fi
+
 		log "Woke while lid still closed: retrying suspend"
 	done
 }
