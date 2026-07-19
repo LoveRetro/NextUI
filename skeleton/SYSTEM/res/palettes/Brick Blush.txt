@@ -1,0 +1,9 @@
+version=1
+name=Brick Blush
+color1=0xB5442EFF
+color2=0xF6DFD9FF
+color3=0xFBEAE6FF
+color4=0x33201DFF
+color5=0xFBEAE6FF
+color6=0x8A6259FF
+color7=0xFBECE8FF

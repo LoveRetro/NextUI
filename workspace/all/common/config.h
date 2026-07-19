@@ -107,6 +107,9 @@ typedef struct
 	int gameSwitcherCurtain;
 	double gameArtWidth;	 // [0,1] -> 0-100% of screen width
 	int inputPromptStyle; // enum
+	char paletteName[64]; // selected predefined color palette; empty == custom colors. keep in sync with PALETTE_NAME_MAX in palette.h
+	uint32_t customColors[7]; // last custom (non-palette) colors, restored by CFG_selectCustomPalette.
+	                          // in-memory only (not persisted): resets to defaults each app launch
 
 	// font loading/unloading callback
     FontLoad_callback_t onFontChange;
@@ -197,6 +200,7 @@ typedef struct
 #define CFG_DEFAULT_COLOR_LIST_TEXT_SELECTED CFG_DEFAULT_COLOR5
 #define CFG_DEFAULT_COLOR_HINT CFG_DEFAULT_COLOR6
 #define CFG_DEFAULT_COLOR_BACKGROUND CFG_DEFAULT_COLOR7
+#define CFG_DEFAULT_PALETTE_NAME "" // empty == custom colors
 #define CFG_DEFAULT_THUMBRADIUS 20 // unscaled!
 #define CFG_DEFAULT_SHOWCLOCK false
 #define CFG_DEFAULT_CLOCK24H true
@@ -276,6 +280,27 @@ void CFG_setFontStyle(int style);
 // 3 - Background Color (unused)
 uint32_t CFG_getColor(int id);
 void CFG_setColor(int id, uint32_t color);
+// Parse a hex color string into a packed 0xRRGGBBAA value. Accepts both legacy
+// RGB (RRGGBB, treated as opaque) and RGBA (RRGGBBAA), with or without "0x".
+uint32_t CFG_parseHexColor(const char *hexColor);
+// The name of the currently selected predefined color palette (see palette.h), or
+// "" for custom colors.
+const char* CFG_getPaletteName(void);
+// Atomically set all 7 UI colors and record `name` as the selected palette, so the
+// persisted palette name can never point at a color set that doesn't match it.
+// This is the only way to select a named (non-custom) palette; there is no setter
+// for the name alone. If a palette isn't already active, the current colors are
+// preserved first so CFG_selectCustomPalette() can restore them later.
+void CFG_applyPalette(const char *name, const uint32_t colors[7]);
+// Detach from any predefined palette without changing the current colors ("Custom").
+// Used when an individual color edit invalidates the current palette selection -
+// deliberately does not restore the pre-palette colors, since the edit itself is
+// the new intended state. For that, see CFG_selectCustomPalette().
+void CFG_clearPalette(void);
+// Explicitly select "Custom": if a predefined palette is active, restores the
+// colors that were in effect before it was applied and clears the palette name.
+// A no-op if already on Custom (colors are left untouched, not reset).
+void CFG_selectCustomPalette(void);
 // Time in secs before the device enters screen-off mode.
 uint32_t CFG_getScreenTimeoutSecs(void);
 void CFG_setScreenTimeoutSecs(uint32_t secs);

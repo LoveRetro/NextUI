@@ -248,6 +248,11 @@ public:
 
     virtual InputReactionHint handleInput(int &dirty) override;
 
+    // Re-sync the selected index from on_get(). Useful when the underlying value
+    // can change from outside this item (e.g. a palette selection invalidated by
+    // editing an individual color elsewhere in the menu).
+    void reselect() { initSelection(); }
+
     const std::any getValue() const override
     {
         assert(valueIdx >= 0);

@@ -1,0 +1,9 @@
+version=1
+name=Catppuccin Latte
+color1=0x8839EFFF
+color2=0xE6E9EFFF
+color3=0xEFF1F5FF
+color4=0x4C4F69FF
+color5=0xEFF1F5FF
+color6=0x6C6F85FF
+color7=0xEFF1F5FF
