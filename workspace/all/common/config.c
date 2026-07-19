@@ -44,6 +44,10 @@ void CFG_defaults(NextUISettings *cfg)
         .gameArtWidth = CFG_DEFAULT_GAMEARTWIDTH,
 		.showFolderNamesAtRoot = CFG_DEFAULT_SHOWFOLDERNAMESATROOT,
         .inputPromptStyle = CFG_DEFAULT_INPUT_PROMPT_STYLE,
+        .paletteName = CFG_DEFAULT_PALETTE_NAME,
+        .customColors = {CFG_DEFAULT_COLOR1, CFG_DEFAULT_COLOR2, CFG_DEFAULT_COLOR3,
+                          CFG_DEFAULT_COLOR4, CFG_DEFAULT_COLOR5, CFG_DEFAULT_COLOR6,
+                          CFG_DEFAULT_COLOR7},
 
         .showClock = CFG_DEFAULT_SHOWCLOCK,
         .clock24h = CFG_DEFAULT_CLOCK24H,
@@ -124,6 +128,14 @@ static inline uint32_t parseHexColor(const char *hexColor) {
     return value;
 }
 
+uint32_t CFG_parseHexColor(const char *hexColor)
+{
+    return parseHexColor(hexColor);
+}
+
+// Defined below, alongside the rest of the palette-name accessors.
+static void setPaletteNameRaw(const char *name);
+
 void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
 {
     CFG_defaults(&settings);
@@ -157,6 +169,17 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 else
                     CFG_setFontFile(value);
                 fontLoaded = true;
+                continue;
+            }
+            if (strncmp(line, "palette=", 8) == 0)
+            {
+                char *value = line + 8;
+                value[strcspn(value, "\r\n")] = 0;
+                // Restore the persisted name as-is; the colors it names are loaded
+                // independently a few lines below in this same pass, so the pair is
+                // already consistent. Deliberately bypasses CFG_applyPalette, which
+                // would overwrite those colors with a (possibly stale) palette's.
+                setPaletteNameRaw(value);
                 continue;
             }
             if(strncmp(line, "color1=", 7) == 0)
@@ -575,6 +598,65 @@ void CFG_setColor(int color_id, uint32_t color)
 
     if(settings.onColorSet)
         settings.onColorSet();
+}
+
+// Predefined color palette selection (see palette.c for enumeration/loading)
+//
+// A non-empty palette name and the 7 colors it points at must never diverge, so
+// setting a non-empty name is only possible atomically with the colors it names
+// (CFG_applyPalette). setPaletteNameRaw is a private escape hatch used solely to
+// restore already-consistent state read back from minuisettings.txt, where the
+// colors are loaded independently in the same pass.
+
+static void setPaletteNameRaw(const char *name)
+{
+    if (!name)
+        name = "";
+    strncpy(settings.paletteName, name, sizeof(settings.paletteName) - 1);
+    settings.paletteName[sizeof(settings.paletteName) - 1] = '\0';
+}
+
+const char* CFG_getPaletteName(void)
+{
+    return settings.paletteName;
+}
+
+void CFG_applyPalette(const char *name, const uint32_t colors[7])
+{
+    // Snapshot the current colors before they're overwritten, but only when
+    // actually leaving Custom - switching directly between two named palettes must
+    // not clobber the one saved "last custom" backup with an intermediate palette's
+    // colors.
+    if (settings.paletteName[0] == '\0')
+    {
+        settings.customColors[0] = settings.color1_255;
+        settings.customColors[1] = settings.color2_255;
+        settings.customColors[2] = settings.color3_255;
+        settings.customColors[3] = settings.color4_255;
+        settings.customColors[4] = settings.color5_255;
+        settings.customColors[5] = settings.color6_255;
+        settings.customColors[6] = settings.color7_255;
+    }
+
+    for (int i = 0; i < 7; i++)
+        CFG_setColor(i + 1, colors[i]);
+    setPaletteNameRaw(name);
+}
+
+void CFG_clearPalette(void)
+{
+    setPaletteNameRaw("");
+}
+
+void CFG_selectCustomPalette(void)
+{
+    // Only restore when actually transitioning away from a palette: if we're
+    // already Custom, the current colors are whatever the user has been editing
+    // and must not be clobbered by the (now stale) backup.
+    if (settings.paletteName[0] != '\0')
+        for (int i = 0; i < 7; i++)
+            CFG_setColor(i + 1, settings.customColors[i]);
+    setPaletteNameRaw("");
 }
 
 bool CFG_getShowFolderNamesAtRoot(void)
@@ -1185,6 +1267,10 @@ void CFG_get(const char *key, char *value)
         else
             sprintf(value, "1");
     }
+    else if (strcmp(key, "palette") == 0)
+    {
+        sprintf(value, "\"%s\"", CFG_getPaletteName());
+    }
     else if (strcmp(key, "color1") == 0)
     {
         sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_MAIN));
@@ -1444,6 +1530,7 @@ void CFG_sync(void)
         fprintf(file, "font=0\n");
     else
         fprintf(file, "font=%s\n", settings.fontFile);
+    fprintf(file, "palette=%s\n", settings.paletteName);
     fprintf(file, "color1=0x%08X\n", settings.color1_255);
     fprintf(file, "color2=0x%08X\n", settings.color2_255);
     fprintf(file, "color3=0x%08X\n", settings.color3_255);
@@ -1513,6 +1600,7 @@ void CFG_print(void)
         printf("\t\"font\": 0,\n");
     else
         printf("\t\"font\": 1,\n");
+    printf("\t\"palette\": \"%s\",\n", settings.paletteName);
     printf("\t\"color1\": \"0x%08X\",\n", settings.color1_255);
     printf("\t\"color2\": \"0x%08X\",\n", settings.color2_255);
     printf("\t\"color3\": \"0x%08X\",\n", settings.color3_255);

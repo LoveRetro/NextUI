@@ -1,0 +1,9 @@
+version=1
+name=Default
+color1=0xffffffff
+color2=0x9b2257ff
+color3=0x1e2329ff
+color4=0xffffffff
+color5=0x000000ff
+color6=0xffffffff
+color7=0x000000ff

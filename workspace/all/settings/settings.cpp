@@ -25,6 +25,7 @@ extern "C"
 #include "btmenu.hpp"
 #include "keyboardprompt.hpp"
 #include "colorpickermenu.hpp"
+#include "palettemenu.hpp"
 
 #define BUSYBOX_STOCK_VERSION "1.27.2"
 
@@ -192,9 +193,9 @@ namespace {
         {1, "Main Color",             "The color used to render main UI elements.",                          CFG_DEFAULT_COLOR1},
         {2, "Primary Accent Color",   "The color used to highlight important things in the user interface.", CFG_DEFAULT_COLOR2},
         {3, "Secondary Accent Color", "A secondary highlight color.",                                        CFG_DEFAULT_COLOR3},
-        {6, "Hint info Color",        "Color for button hints and info",                                     CFG_DEFAULT_COLOR6},
         {4, "List Text",              "List text color",                                                     CFG_DEFAULT_COLOR4},
         {5, "List Text Selected",     "List selected text color",                                            CFG_DEFAULT_COLOR5},
+        {6, "Hint info Color",        "Color for button hints and info",                                     CFG_DEFAULT_COLOR6},
         {7, "Background Color",       "Background color used when no background image is set.",              CFG_DEFAULT_COLOR7},
     };
 
@@ -371,9 +372,10 @@ int main(int argc, char *argv[])
             tz_labels.push_back(std::string(timezones[i]));
         }
 
-        // Factory helpers to avoid repeating identical lambda boilerplate for each picker
+        // Factory helpers to avoid repeating identical lambda boilerplate for each picker.
+        // Editing an individual color detaches from any predefined palette ("Custom").
         auto makeColorSetter = [](int id) -> ValueSetCallback {
-            return [id](const std::any &v){ CFG_setColor(id, std::any_cast<uint32_t>(v)); };
+            return [id](const std::any &v){ CFG_setColor(id, std::any_cast<uint32_t>(v)); CFG_clearPalette(); };
         };
         auto makeColorOpener = [](ColorPickerMenu *picker, int id, std::string name) -> MenuListCallback {
             return [picker, id, name](AbstractMenuItem &item) -> InputReactionHint {
@@ -385,7 +387,7 @@ int main(int argc, char *argv[])
             return [id]() -> std::any { return CFG_getColor(id); };
         };
         auto makeColorResetter = [](int id, uint32_t defaultColor) -> ValueResetCallback {
-            return [id, defaultColor]() { CFG_setColor(id, defaultColor); };
+            return [id, defaultColor]() { CFG_setColor(id, defaultColor); CFG_clearPalette(); };
         };
 
         // Pre-create one RGBA picker per color setting (reused across opens)
@@ -426,6 +428,7 @@ int main(int argc, char *argv[])
             []() -> std::any { return CFG_getFontStyle(); },
             [](const std::any &value) { CFG_setFontStyle(std::any_cast<int>(value)); },
             []() { CFG_setFontStyle(CFG_DEFAULT_FONT_STYLE); }});
+        appearanceItems.push_back(buildPaletteMenuItem());
         for (auto *item : colorMenuItems)
             appearanceItems.push_back(item);
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show battery percentage", "Show battery level as percent in the status pill", {false, true}, on_off,
