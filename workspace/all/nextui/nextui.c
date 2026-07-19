@@ -2530,7 +2530,7 @@ int main (int argc, char *argv[]) {
 				}
 			}
 
-			if (PAD_justRepeated(BTN_L1) && !PAD_isPressed(BTN_R1) && !PWR_ignoreSettingInput(BTN_L1, show_setting)) { // previous alpha
+			if (total>0 && PAD_justRepeated(BTN_L1) && !PAD_isPressed(BTN_R1) && !PWR_ignoreSettingInput(BTN_L1, show_setting)) { // previous alpha
 				Entry* entry = top->entries->items[selected];
 				int i = entry->alpha-1;
 				if (i>=0) {
@@ -2543,7 +2543,7 @@ int main (int argc, char *argv[]) {
 					}
 				}
 			}
-			else if (PAD_justRepeated(BTN_R1) && !PAD_isPressed(BTN_L1) && !PWR_ignoreSettingInput(BTN_R1, show_setting)) { // next alpha
+			else if (total>0 && PAD_justRepeated(BTN_R1) && !PAD_isPressed(BTN_L1) && !PWR_ignoreSettingInput(BTN_R1, show_setting)) { // next alpha
 				Entry* entry = top->entries->items[selected];
 				int i = entry->alpha+1;
 				if (i<top->alphas->count) {
@@ -2562,12 +2562,12 @@ int main (int argc, char *argv[]) {
 				dirty = 1;
 			}
 
-			Entry* entry = top->entries->items[top->selected];
+			Entry* entry = total>0 ? top->entries->items[top->selected] : NULL;
 
-			if (dirty && total>0)
+			if (dirty && entry)
 				readyResume(entry);
 
-			if (total>0 && can_resume && PAD_justReleased(BTN_RESUME)) {
+			if (entry && can_resume && PAD_justReleased(BTN_RESUME)) {
 				should_resume = 1;
 				Entry_open(entry);
 
@@ -2926,65 +2926,62 @@ int main (int argc, char *argv[]) {
 			}
 			else { // if currentscreen == SCREEN_GAMELIST
 				// background and game art file path stuff
-				Entry* entry = top->entries->items[top->selected];
-				assert(entry);
-				char tmp_path[MAX_PATH];
-				strncpy(tmp_path, entry->path, sizeof(tmp_path) - 1);
-				tmp_path[sizeof(tmp_path) - 1] = '\0';
-
-				char* res_name = strrchr(tmp_path, '/');
-				if (res_name) res_name++;
-
-				char path_copy[1024];
-				strncpy(path_copy, entry->path, sizeof(path_copy) - 1);
-				path_copy[sizeof(path_copy) - 1] = '\0';
-
-				char* rompath = dirname(path_copy);
-
-				char res_copy[1024];
-				strncpy(res_copy, res_name, sizeof(res_copy) - 1);
-				res_copy[sizeof(res_copy) - 1] = '\0';
-
-				char* dot = strrchr(res_copy, '.');
-				if (dot) *dot = '\0';
-
+				Entry* entry = total>0 ? top->entries->items[top->selected] : NULL;
 				static int lastType = -1;
 
 				// this is only a choice on the root folder
 				list_show_entry_names = stack->count > 1 || CFG_getShowFolderNamesAtRoot();
 
-				// load folder background
 				char defaultBgPath[512];
 				snprintf(defaultBgPath, sizeof(defaultBgPath), SDCARD_PATH "/bg.png");
 
-				if(((entry->type == ENTRY_DIR || entry->type == ENTRY_ROM) && CFG_getRomsUseFolderBackground())) {
-					char *newBg = entry->type == ENTRY_DIR ? entry->path:rompath;
-					if((strcmp(newBg, folderBgPath) != 0 || lastType != entry->type) && sizeof(folderBgPath) != 1) {
-						lastType = entry->type;
-						char tmppath[512];
-						strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
-						if (entry->type == ENTRY_DIR)
-							snprintf(tmppath, sizeof(tmppath), "%s/.media/bg.png", folderBgPath);
-						else if (entry->type == ENTRY_ROM)
-							snprintf(tmppath, sizeof(tmppath), "%s/.media/bglist.png", folderBgPath);
-						if(!exists(tmppath)) {
-							// Safeguard: If no background is available, still render the text to leave the user a way out
-							list_show_entry_names = true;
-							snprintf(tmppath, sizeof(tmppath), defaultBgPath, folderBgPath);
+				if (entry) {
+					char tmp_path[MAX_PATH];
+					strncpy(tmp_path, entry->path, sizeof(tmp_path) - 1);
+					tmp_path[sizeof(tmp_path) - 1] = '\0';
+
+					char* res_name = strrchr(tmp_path, '/');
+					if (res_name) res_name++;
+
+					char path_copy[1024];
+					strncpy(path_copy, entry->path, sizeof(path_copy) - 1);
+					path_copy[sizeof(path_copy) - 1] = '\0';
+
+					char* rompath = dirname(path_copy);
+
+					char res_copy[1024];
+					strncpy(res_copy, res_name, sizeof(res_copy) - 1);
+					res_copy[sizeof(res_copy) - 1] = '\0';
+
+					char* dot = strrchr(res_copy, '.');
+					if (dot) *dot = '\0';
+
+					// load folder background
+					if(((entry->type == ENTRY_DIR || entry->type == ENTRY_ROM) && CFG_getRomsUseFolderBackground())) {
+						char *newBg = entry->type == ENTRY_DIR ? entry->path:rompath;
+						if((strcmp(newBg, folderBgPath) != 0 || lastType != entry->type) && sizeof(folderBgPath) != 1) {
+							lastType = entry->type;
+							char tmppath[512];
+							strncpy(folderBgPath, newBg, sizeof(folderBgPath) - 1);
+							if (entry->type == ENTRY_DIR)
+								snprintf(tmppath, sizeof(tmppath), "%s/.media/bg.png", folderBgPath);
+							else if (entry->type == ENTRY_ROM)
+								snprintf(tmppath, sizeof(tmppath), "%s/.media/bglist.png", folderBgPath);
+							if(!exists(tmppath)) {
+								list_show_entry_names = true;
+								snprintf(tmppath, sizeof(tmppath), defaultBgPath, folderBgPath);
+							}
+							startLoadFolderBackground(tmppath, onBackgroundLoaded, NULL);
 						}
-						startLoadFolderBackground(tmppath, onBackgroundLoaded, NULL);
 					}
-				}
-				else if(strcmp(defaultBgPath, folderBgPath) != 0 && exists(defaultBgPath)) {
-					strncpy(folderBgPath, defaultBgPath, sizeof(folderBgPath) - 1);
-					startLoadFolderBackground(defaultBgPath, onBackgroundLoaded, NULL);
-				}
-				else {
-					// Safeguard: If no background is available, still render the text to leave the user a way out
-					list_show_entry_names = true;
-				}
-				// load game thumbnails
-				if (total > 0) {
+					else if(strcmp(defaultBgPath, folderBgPath) != 0 && exists(defaultBgPath)) {
+						strncpy(folderBgPath, defaultBgPath, sizeof(folderBgPath) - 1);
+						startLoadFolderBackground(defaultBgPath, onBackgroundLoaded, NULL);
+					}
+					else {
+						list_show_entry_names = true;
+					}
+					// load game thumbnails
 					if(CFG_getShowGameArt()) {
 						char thumbpath[1024];
 						snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
@@ -3001,6 +2998,9 @@ int main (int argc, char *argv[]) {
 						else
 							ox = screen->w;
 					}
+				}
+				else {
+					list_show_entry_names = true;
 				}
 
 				// buttons
@@ -3283,7 +3283,7 @@ int main (int argc, char *argv[]) {
 			}
 			SDL_UnlockMutex(animMutex);
 			if (currentScreen != SCREEN_GAMESWITCHER && currentScreen != SCREEN_QUICKMENU) {
-				if(is_scrolling && pillanimdone && currentAnimQueueSize < 1) {
+				if(is_scrolling && pillanimdone && currentAnimQueueSize < 1 && total>0) {
 					int ow = GFX_blitHardwareGroup(screen, show_setting);
 					Entry* entry = top->entries->items[top->selected];
 					trimSortingMeta(&entry->name);
@@ -3365,9 +3365,11 @@ int main (int argc, char *argv[]) {
 		if (has_hdmi!=had_hdmi) {
 			had_hdmi = has_hdmi;
 
-			Entry* entry = top->entries->items[top->selected];
-			LOG_info("restarting after HDMI change... (%s)\n", entry->path);
-			saveLast(entry->path); // NOTE: doesn't work in Recents (by design)
+			if (total>0) {
+				Entry* entry = top->entries->items[top->selected];
+				LOG_info("restarting after HDMI change... (%s)\n", entry->path);
+				saveLast(entry->path); // NOTE: doesn't work in Recents (by design)
+			}
 			sleep(4);
 			quit = 1;
 		}
