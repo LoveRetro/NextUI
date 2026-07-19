@@ -633,6 +633,13 @@ int main(int argc, char *argv[])
                 [](const std::any &value) { CFG_setPowerOffProtection(std::any_cast<bool>(value)); },
                 []() { CFG_setPowerOffProtection(CFG_DEFAULT_POWEROFFPROTECTION); }}
             );
+
+            systemItems.push_back(
+                new MenuItem{ListItemType::Generic, "Keep awake over USB", "Prevent screen-off and sleep while connected to a\ncomputer as a USB device (not just charging).", {false, true}, on_off,
+                []() -> std::any { return CFG_getKeepAwakeWhenUSB(); },
+                [](const std::any &value) { CFG_setKeepAwakeWhenUSB(std::any_cast<bool>(value)); },
+                []() { CFG_setKeepAwakeWhenUSB(CFG_DEFAULT_KEEPAWAKEWHENUSB); }}
+            );
         }
 
         if(deviceInfo.hasActiveCooling())

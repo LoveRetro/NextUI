@@ -68,6 +68,7 @@ void CFG_defaults(NextUISettings *cfg)
         .screenTimeoutSecs = CFG_DEFAULT_SCREENTIMEOUTSECS,
         .suspendTimeoutSecs = CFG_DEFAULT_SUSPENDTIMEOUTSECS,
         .powerOffProtection = CFG_DEFAULT_POWEROFFPROTECTION,
+        .keepAwakeWhenUSB = CFG_DEFAULT_KEEPAWAKEWHENUSB,
 
         .haptics = CFG_DEFAULT_HAPTICS,
         .romsUseFolderBackground = CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND,
@@ -300,6 +301,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "powerOffProtection=%i", &temp_value) == 1)
             {
                 CFG_setPowerOffProtection((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "keepAwakeWhenUSB=%i", &temp_value) == 1)
+            {
+                CFG_setKeepAwakeWhenUSB((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "switcherscale=%i", &temp_value) == 1)
@@ -700,6 +706,17 @@ bool CFG_getPowerOffProtection(void)
 void CFG_setPowerOffProtection(bool enable)
 {
     settings.powerOffProtection = enable;
+    CFG_sync();
+}
+
+bool CFG_getKeepAwakeWhenUSB(void)
+{
+    return settings.keepAwakeWhenUSB;
+}
+
+void CFG_setKeepAwakeWhenUSB(bool enable)
+{
+    settings.keepAwakeWhenUSB = enable;
     CFG_sync();
 }
 
@@ -1355,6 +1372,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getPowerOffProtection());
     }
+    else if (strcmp(key, "keepAwakeWhenUSB") == 0)
+    {
+        sprintf(value, "%i", CFG_getKeepAwakeWhenUSB());
+    }
     else if (strcmp(key, "switcherscale") == 0)
     {
         sprintf(value, "%i", CFG_getGameSwitcherScaling());
@@ -1552,6 +1573,7 @@ void CFG_sync(void)
     fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
     fprintf(file, "suspendTimeout=%i\n", settings.suspendTimeoutSecs);
     fprintf(file, "powerOffProtection=%i\n", settings.powerOffProtection);
+    fprintf(file, "keepAwakeWhenUSB=%i\n", settings.keepAwakeWhenUSB);
     fprintf(file, "switcherscale=%i\n", settings.gameSwitcherScaling);
     fprintf(file, "haptics=%i\n", settings.haptics);
     fprintf(file, "romfolderbg=%i\n", settings.romsUseFolderBackground);
@@ -1622,6 +1644,7 @@ void CFG_print(void)
     printf("\t\"screentimeout\": %i,\n", settings.screenTimeoutSecs);
     printf("\t\"suspendTimeout\": %i,\n", settings.suspendTimeoutSecs);
     printf("\t\"powerOffProtection\": %i,\n", settings.powerOffProtection);
+    printf("\t\"keepAwakeWhenUSB\": %i,\n", settings.keepAwakeWhenUSB);
     printf("\t\"switcherscale\": %i,\n", settings.gameSwitcherScaling);
     printf("\t\"haptics\": %i,\n", settings.haptics);
     printf("\t\"romfolderbg\": %i,\n", settings.romsUseFolderBackground);

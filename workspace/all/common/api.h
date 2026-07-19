@@ -581,6 +581,7 @@ void PWR_enableAutosleep(void);
 int PWR_preventAutosleep(void);
 
 int PWR_isCharging(void);
+int PWR_isUSBConnected(void);
 int PWR_getBattery(void);
 
 int PWR_isOnline(void);
@@ -732,6 +733,7 @@ int PLAT_supportsOverscan(void);
 #define PWR_LOW_CHARGE 10
 void PLAT_getBatteryStatus(int* is_charging, int* charge); // 0,1 and 0,10,20,40,60,80,100
 void PLAT_getBatteryStatusFine(int* is_charging, int* charge); // 0,1 and 0-100
+int PLAT_isUSBConnected(void); // 1 if the device is configured as a USB gadget on a host, else 0
 void PLAT_enableBacklight(int enable);
 int PLAT_supportsDeepSleep(void);
 int PLAT_deepSleep(void);
