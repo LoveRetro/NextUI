@@ -106,6 +106,15 @@ extern int is_brickpro;
 #define JOY_MINUS		(is_brick||is_brickpro?13:129)
 
 ///////////////////////////////
+// USER-ASSIGNABLE BUTTONS
+#define BTN_FN1			(is_brick?BTN_L3:(is_brickpro?BTN_L4:BTN_NONE))
+#define BTN_FN2			(is_brick?BTN_R3:(is_brickpro?BTN_R4:BTN_NONE))
+#define BTN_FN1_NAME	(is_brick?"L3":(is_brickpro?"L4":""))
+#define BTN_FN2_NAME	(is_brick?"R3":(is_brickpro?"R4":""))
+#define BTN_FN3			(is_brickpro?BTN_HOME:BTN_NONE)
+#define BTN_FN3_NAME	(is_brickpro?"HOME":"")
+
+///////////////////////////////
 
 #define AXIS_L2			2 // ABSZ
 #define AXIS_R2			5 // RABSZ

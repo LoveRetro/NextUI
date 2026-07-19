@@ -3386,8 +3386,8 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 			}
 			else if (code == CODE_MENU_ALT)
 			{
-				btn = BTN_MENU;
-				id = BTN_ID_MENU;
+				btn = BTN_HOME;
+				id = BTN_ID_HOME;
 			}
 			else if (code == CODE_L1)
 			{
@@ -3512,8 +3512,8 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 			}
 			else if (joy == JOY_MENU_ALT)
 			{
-				btn = BTN_MENU;
-				id = BTN_ID_MENU;
+				btn = BTN_HOME;
+				id = BTN_ID_HOME;
 			}
 			else if (joy == JOY_MENU_ALT2)
 			{

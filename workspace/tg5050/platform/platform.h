@@ -101,6 +101,15 @@
 #define JOY_MINUS		129
 
 ///////////////////////////////
+// USER-ASSIGNABLE BUTTONS
+#define BTN_FN1			BTN_NONE
+#define BTN_FN2			BTN_NONE
+#define BTN_FN3			BTN_HOME
+#define BTN_FN1_NAME	""
+#define BTN_FN2_NAME	""
+#define BTN_FN3_NAME	"HOME"
+
+///////////////////////////////
 
 #define AXIS_L2			2 // ABSZ
 #define AXIS_R2			5 // RABSZ
