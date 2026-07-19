@@ -65,6 +65,8 @@ void CFG_defaults(NextUISettings *cfg)
 
         .muteLeds = CFG_DEFAULT_MUTELEDS,
 
+        .fnAction = {CFG_DEFAULT_FN_ACTION, CFG_DEFAULT_FN_ACTION, CFG_DEFAULT_FN_ACTION},
+
         .screenTimeoutSecs = CFG_DEFAULT_SCREENTIMEOUTSECS,
         .suspendTimeoutSecs = CFG_DEFAULT_SUSPENDTIMEOUTSECS,
         .powerOffProtection = CFG_DEFAULT_POWEROFFPROTECTION,
@@ -341,6 +343,27 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "muteLeds=%i", &temp_value) == 1)
             {
                 CFG_setMuteLEDs(temp_value);
+                continue;
+            }
+            if (strncmp(line, "fn1action=", 10) == 0)
+            {
+                char *value = line + 10;
+                value[strcspn(value, "\r\n")] = 0;
+                CFG_setFnAction(0, value);
+                continue;
+            }
+            if (strncmp(line, "fn2action=", 10) == 0)
+            {
+                char *value = line + 10;
+                value[strcspn(value, "\r\n")] = 0;
+                CFG_setFnAction(1, value);
+                continue;
+            }
+            if (strncmp(line, "fn3action=", 10) == 0)
+            {
+                char *value = line + 10;
+                value[strcspn(value, "\r\n")] = 0;
+                CFG_setFnAction(2, value);
                 continue;
             }
             if (sscanf(line, "artWidth=%i", &temp_value) == 1)
@@ -907,6 +930,24 @@ void CFG_setMuteLEDs(bool on)
     CFG_sync();
 }
 
+const char* CFG_getFnAction(int index)
+{
+    if (index < 0 || index >= FN_BUTTON_COUNT)
+        return "";
+    return settings.fnAction[index];
+}
+
+void CFG_setFnAction(int index, const char* action)
+{
+    if (index < 0 || index >= FN_BUTTON_COUNT)
+        return;
+    if (!action)
+        action = "";
+    strncpy(settings.fnAction[index], action, sizeof(settings.fnAction[index]) - 1);
+    settings.fnAction[index][sizeof(settings.fnAction[index]) - 1] = '\0';
+    CFG_sync();
+}
+
 double CFG_getGameArtWidth(void)
 {
     return settings.gameArtWidth;
@@ -1400,6 +1441,18 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getMuteLEDs());
     }
+    else if (strcmp(key, "fn1action") == 0)
+    {
+        sprintf(value, "%s", CFG_getFnAction(0));
+    }
+    else if (strcmp(key, "fn2action") == 0)
+    {
+        sprintf(value, "%s", CFG_getFnAction(1));
+    }
+    else if (strcmp(key, "fn3action") == 0)
+    {
+        sprintf(value, "%s", CFG_getFnAction(2));
+    }
     else if (strcmp(key, "artWidth") == 0)
     {
         sprintf(value, "%i", (int)(CFG_getGameArtWidth()) * 100);
@@ -1581,6 +1634,9 @@ void CFG_sync(void)
     fprintf(file, "stateFormat=%i\n", settings.stateFormat);
     fprintf(file, "useExtractedFileName=%i\n", settings.useExtractedFileName);
     fprintf(file, "muteLeds=%i\n", settings.muteLeds);
+    fprintf(file, "fn1action=%s\n", settings.fnAction[0]);
+    fprintf(file, "fn2action=%s\n", settings.fnAction[1]);
+    fprintf(file, "fn3action=%s\n", settings.fnAction[2]);
     fprintf(file, "artWidth=%i\n", (int)(settings.gameArtWidth * 100));
     fprintf(file, "wifi=%i\n", settings.wifi);
     fprintf(file, "defaultView=%i\n", settings.defaultView);
@@ -1652,6 +1708,9 @@ void CFG_print(void)
     printf("\t\"stateFormat\": %i,\n", settings.stateFormat);
     printf("\t\"useExtractedFileName\": %i,\n", settings.useExtractedFileName);
     printf("\t\"muteLeds\": %i,\n", settings.muteLeds);
+    printf("\t\"fn1action\": \"%s\",\n", settings.fnAction[0]);
+    printf("\t\"fn2action\": \"%s\",\n", settings.fnAction[1]);
+    printf("\t\"fn3action\": \"%s\",\n", settings.fnAction[2]);
     printf("\t\"artWidth\": %i,\n", (int)(settings.gameArtWidth * 100));
     printf("\t\"wifi\": %i,\n", settings.wifi);
     printf("\t\"defaultView\": %i,\n", settings.defaultView);

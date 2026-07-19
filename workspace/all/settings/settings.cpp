@@ -26,6 +26,7 @@ extern "C"
 #include "keyboardprompt.hpp"
 #include "colorpickermenu.hpp"
 #include "palettemenu.hpp"
+#include "fnbuttonmenu.hpp"
 
 #define BUSYBOX_STOCK_VERSION "1.27.2"
 
@@ -1054,6 +1055,8 @@ int main(int argc, char *argv[])
             },
         });
 
+        MenuList *buttonMenu = buildFnButtonMenu(); // nullptr if this device has none
+
         std::vector<AbstractMenuItem*> mainItems = {
             new MenuItem{ListItemType::Generic, "Appearance", "UI customization", {}, {}, nullptr, nullptr, DeferToSubmenu, appearanceMenu},
             new MenuItem{ListItemType::Generic, "Display", "", {}, {}, nullptr, nullptr, DeferToSubmenu, displayMenu},
@@ -1063,6 +1066,9 @@ int main(int argc, char *argv[])
         if(deviceInfo.hasMuteToggle())
             mainItems.push_back(new MenuItem{ListItemType::Generic, "FN switch", "FN switch settings", {}, {}, nullptr, nullptr, DeferToSubmenu,
                 new MenuList(MenuItemType::Fixed, "FN Switch", muteItems)});
+
+        if(buttonMenu)
+            mainItems.push_back(new MenuItem{ListItemType::Generic, "Assignments", "Customize button assignments", {}, {}, nullptr, nullptr, DeferToSubmenu, buttonMenu});
 
         mainItems.push_back(new MenuItem{ListItemType::Generic, "In-Game", "In-game settings for MinArch", {}, {}, nullptr, nullptr, DeferToSubmenu, minarchMenu});
 

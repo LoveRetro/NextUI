@@ -22,7 +22,7 @@ SDL?=SDL
 TARGET = settings
 INCDIR = -I. -I../common/ -I../../$(PLATFORM)/platform/
 SOURCE = -c ../common/utils.c ../common/api.c ../common/config.c ../common/palette.c ../common/scaler.c ../common/http.c ../common/ra_auth.c ../common/ra_offline.c ../common/ra_sync.c ../common/ra_event_queue.c ../../$(PLATFORM)/platform/platform.c
-CXXSOURCE = $(TARGET).cpp menu.cpp colorpickermenu.cpp palettemenu.cpp wifimenu.cpp btmenu.cpp keyboardprompt.cpp
+CXXSOURCE = $(TARGET).cpp menu.cpp colorpickermenu.cpp palettemenu.cpp fnbuttonmenu.cpp wifimenu.cpp btmenu.cpp keyboardprompt.cpp
 CXXSOURCE += build/$(PLATFORM)/utils.o build/$(PLATFORM)/api.o build/$(PLATFORM)/config.o build/$(PLATFORM)/palette.o build/$(PLATFORM)/scaler.o build/$(PLATFORM)/http.o build/$(PLATFORM)/ra_auth.o build/$(PLATFORM)/ra_offline.o build/$(PLATFORM)/ra_sync.o build/$(PLATFORM)/ra_event_queue.o build/$(PLATFORM)/platform.o
 
 CC = $(CROSS_COMPILE)gcc

@@ -82,6 +82,15 @@ enum {
 	COLOR_BACKGROUND = 7
 };
 
+// Number of user-assignable button slots (FN1/FN2/FN3). Slots are fixed and global,
+// not per-device: which of them a given device actually exposes is a UI question.
+#define FN_BUTTON_COUNT 3
+
+// Prefix for the "launch a Tools pak" action, followed by a path relative to
+// Tools/<PLATFORM> (e.g. "pak:Bootlogo.pak"). The platform dir is resolved at launch
+// time rather than stored, so settings stay portable when a card moves between devices.
+#define FN_ACTION_PAK_PREFIX "pak:"
+
 // Input hint styles
 enum {
 	INPUT_STYLE_TEXT = -1, // Rendered text
@@ -134,6 +143,10 @@ typedef struct
 
 	// Mute switch
 	bool muteLeds;
+
+	// User-assignable buttons (see BTN_FN1/BTN_FN2/BTN_FN3 in platform.h).
+	// Action strings, "" == unassigned. See CFG_getFnAction().
+	char fnAction[FN_BUTTON_COUNT][256];
 
 	// Power
 	uint32_t screenTimeoutSecs;
@@ -223,6 +236,7 @@ typedef struct
 #define CFG_DEFAULT_STATEFORMAT STATE_FORMAT_SAV
 #define CFG_DEFAULT_EXTRACTEDFILENAME false
 #define CFG_DEFAULT_MUTELEDS false
+#define CFG_DEFAULT_FN_ACTION "" // unassigned
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
@@ -370,6 +384,15 @@ void CFG_setUseExtractedFileName(bool);
 // Enable/disable mute also shutting off LEDs.
 bool CFG_getMuteLEDs(void);
 void CFG_setMuteLEDs(bool);
+// The action bound to a user-assignable button, where `index` is 0 (FN1), 1 (FN2) or
+// 2 (FN3, the "HOME" button).
+// The value is a "<kind>:<arg>" action string so more kinds can be added later without
+// migrating existing settings; "" means unassigned. The only kind today is
+// FN_ACTION_PAK_PREFIX. Callers must ignore kinds they don't recognise, so a card
+// configured on a newer build degrades to "does nothing" on an older one.
+// Returns "" for an out of range index.
+const char* CFG_getFnAction(int index);
+void CFG_setFnAction(int index, const char* action);
 // Set game art width percentage.
 double CFG_getGameArtWidth(void);
 void CFG_setGameArtWidth(double zeroToOne);
