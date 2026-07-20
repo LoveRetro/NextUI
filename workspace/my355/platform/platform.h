@@ -97,6 +97,15 @@
 #define JOY_MINUS		JOY_NA
 
 ///////////////////////////////
+// USER-ASSIGNABLE BUTTONS
+#define BTN_FN1			BTN_NONE
+#define BTN_FN2			BTN_NONE
+#define BTN_FN3			BTN_NONE
+#define BTN_FN1_NAME	""
+#define BTN_FN2_NAME	""
+#define BTN_FN3_NAME	""
+
+///////////////////////////////
 
 #define AXIS_LX	0
 #define AXIS_LY	1
