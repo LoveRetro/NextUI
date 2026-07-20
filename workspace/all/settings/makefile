@@ -21,9 +21,9 @@ SDL?=SDL
 
 TARGET = settings
 INCDIR = -I. -I../common/ -I../../$(PLATFORM)/platform/
-SOURCE = -c ../common/utils.c ../common/api.c ../common/config.c ../common/scaler.c ../common/http.c ../common/ra_auth.c ../../$(PLATFORM)/platform/platform.c
-CXXSOURCE = $(TARGET).cpp menu.cpp colorpickermenu.cpp wifimenu.cpp btmenu.cpp keyboardprompt.cpp
-CXXSOURCE += build/$(PLATFORM)/utils.o build/$(PLATFORM)/api.o build/$(PLATFORM)/config.o build/$(PLATFORM)/scaler.o build/$(PLATFORM)/http.o build/$(PLATFORM)/ra_auth.o build/$(PLATFORM)/platform.o
+SOURCE = -c ../common/utils.c ../common/api.c ../common/config.c ../common/palette.c ../common/scaler.c ../common/http.c ../common/ra_auth.c ../common/ra_offline.c ../common/ra_sync.c ../common/ra_event_queue.c ../../$(PLATFORM)/platform/platform.c
+CXXSOURCE = $(TARGET).cpp menu.cpp colorpickermenu.cpp palettemenu.cpp fnbuttonmenu.cpp wifimenu.cpp btmenu.cpp keyboardprompt.cpp
+CXXSOURCE += build/$(PLATFORM)/utils.o build/$(PLATFORM)/api.o build/$(PLATFORM)/config.o build/$(PLATFORM)/palette.o build/$(PLATFORM)/scaler.o build/$(PLATFORM)/http.o build/$(PLATFORM)/ra_auth.o build/$(PLATFORM)/ra_offline.o build/$(PLATFORM)/ra_sync.o build/$(PLATFORM)/ra_event_queue.o build/$(PLATFORM)/platform.o
 
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
@@ -31,7 +31,7 @@ CFLAGS += $(OPT)
 CFLAGS += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\"
 CXXFLAGS += $(CFLAGS) -std=c++17
 CFLAGS += -fpermissive
-LDFLAGS +=  -lmsettings
+LDFLAGS +=  -lmsettings -lcrypto
 ifeq ($(PLATFORM), tg5040)
 # drop as soon as we use btagent on all platforms
 CXXFLAGS += -DHAS_BTAGENT
@@ -57,7 +57,7 @@ PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 all: $(PREFIX_LOCAL)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
 	$(CC) $(SOURCE) $(CFLAGS) $(LDFLAGS)
-	mv utils.o api.o config.o scaler.o http.o ra_auth.o platform.o build/$(PLATFORM)
+	mv utils.o api.o config.o palette.o scaler.o http.o ra_auth.o ra_offline.o ra_sync.o ra_event_queue.o platform.o build/$(PLATFORM)
 	$(CXX) $(CXXSOURCE) -o $(PRODUCT) $(CXXFLAGS) $(LDFLAGS) -lstdc++
 clean:
 	rm -f $(PRODUCT)

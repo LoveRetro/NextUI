@@ -1,5 +1,7 @@
 #include "ra_auth.h"
+#include "ra_util.h"
 #include "http.h"
+#include "config.h"
 #include "defines.h"
 
 #include <stdio.h>
@@ -9,73 +11,44 @@
 // RetroAchievements API endpoints
 #define RA_API_URL "https://retroachievements.org/dorequest.php"
 
-// Minimal JSON helpers for RA login responses
-
-static const char* find_json_string(const char* json, const char* key, char* out, size_t out_size) {
-    if (!json || !key || !out || out_size == 0) return NULL;
-    
-    // Search for "key":"value" pattern
-    char search[128];
-    snprintf(search, sizeof(search), "\"%s\":\"", key);
-    
-    const char* start = strstr(json, search);
-    if (!start) {
-        // Try "key": "value" (with space)
-        snprintf(search, sizeof(search), "\"%s\": \"", key);
-        start = strstr(json, search);
-        if (!start) return NULL;
-    }
-    
-    start += strlen(search);
-    const char* end = strchr(start, '"');
-    if (!end) return NULL;
-    
-    size_t len = end - start;
-    if (len >= out_size) len = out_size - 1;
-    
-    strncpy(out, start, len);
-    out[len] = '\0';
-    
-    return out;
-}
-
-static int find_json_bool(const char* json, const char* key) {
-    if (!json || !key) return -1;
-    
-    // Search for "key":true or "key":false
-    char search_true[128];
-    char search_false[128];
-    snprintf(search_true, sizeof(search_true), "\"%s\":true", key);
-    snprintf(search_false, sizeof(search_false), "\"%s\":false", key);
-    
-    if (strstr(json, search_true)) return 1;
-    if (strstr(json, search_false)) return 0;
-    
-    // Try with space after colon
-    snprintf(search_true, sizeof(search_true), "\"%s\": true", key);
-    snprintf(search_false, sizeof(search_false), "\"%s\": false", key);
-    
-    if (strstr(json, search_true)) return 1;
-    if (strstr(json, search_false)) return 0;
-    
-    return -1;
-}
-
 // Parse RA login response
 static void parse_login_response(const char* json, RA_AuthResponse* response) {
     if (!json || !response) return;
     
     // Check for Success field
-    int success = find_json_bool(json, "Success");
+    int success = ra_find_json_bool(json, "Success");
     
     if (success == 1) {
         response->result = RA_AUTH_SUCCESS;
         
         // Extract Token
-        find_json_string(json, "Token", response->token, sizeof(response->token));
+        ra_find_json_string(json, "Token", response->token, sizeof(response->token));
         
         // Extract User (display name)
-        find_json_string(json, "User", response->display_name, sizeof(response->display_name));
+        ra_find_json_string(json, "User", response->display_name, sizeof(response->display_name));
+        
+        // Extract internal (server) username from AvatarUrl.
+        // The RA server builds AvatarUrl from the internal username field
+        // (e.g. "/UserPic/MyOriginalUserName.png"), which may differ from the
+        // display_name if the user has renamed their account.
+        // Unfortunately, there is no current other way with the RA api to get the orginal 
+        // username which was used, and if an offline achievement was sent with an updated
+        // name, the server will reject the unlock time, and use the current time instead.
+        {
+            char avatar_url[256] = {0};
+            bool have_server_username = false;
+            if (ra_find_json_string(json, "AvatarUrl", avatar_url, sizeof(avatar_url))) {
+                have_server_username = CFG_setRAServerUsernameFromAvatarUrl(avatar_url);
+            }
+            if (!have_server_username) {
+                // AvatarUrl missing or malformed — clear any stale value from a
+                // prior login so offline sync falls back to CFG_getRAUsername().
+                // This may produce incorrect unlock timestamps for renamed
+                // accounts, but it's better than signing unlocks with a stale
+                // internal username the server no longer recognizes.
+                CFG_setRAServerUsername("");
+            }
+        }
         
         if (strlen(response->token) == 0) {
             // Token missing in success response - shouldn't happen but handle it
@@ -87,7 +60,7 @@ static void parse_login_response(const char* json, RA_AuthResponse* response) {
         response->result = RA_AUTH_ERROR_INVALID;
         
         // Try to extract error message
-        if (!find_json_string(json, "Error", response->error_message, 
+        if (!ra_find_json_string(json, "Error", response->error_message, 
                              sizeof(response->error_message))) {
             strncpy(response->error_message, "Invalid credentials", 
                     sizeof(response->error_message) - 1);
@@ -153,28 +126,16 @@ void RA_authenticate(const char* username, const char* password,
         return;
     }
     
-    // URL-encode username and password
-    char* enc_username = HTTP_urlEncode(username);
-    char* enc_password = HTTP_urlEncode(password);
-    
-    if (!enc_username || !enc_password) {
-        free(enc_username);
-        free(enc_password);
+    // Build POST data: r=login&u=username&p=password
+    char post_data[512];
+    if (!ra_build_login_post_password(username, password, post_data, sizeof(post_data))) {
         RA_AuthResponse response = {0};
         response.result = RA_AUTH_ERROR_UNKNOWN;
-        strncpy(response.error_message, "Memory allocation failed", 
+        strncpy(response.error_message, "Failed to build login request", 
                 sizeof(response.error_message) - 1);
         if (callback) callback(&response, userdata);
         return;
     }
-    
-    // Build POST data: r=login&u=username&p=password
-    char post_data[512];
-    snprintf(post_data, sizeof(post_data), "r=login&u=%s&p=%s", 
-             enc_username, enc_password);
-    
-    free(enc_username);
-    free(enc_password);
     
     // Create async context
     RA_AsyncAuthContext* ctx = calloc(1, sizeof(RA_AsyncAuthContext));
@@ -206,26 +167,14 @@ RA_AuthResult RA_authenticateSync(const char* username, const char* password,
         return response->result;
     }
     
-    // URL-encode username and password
-    char* enc_username = HTTP_urlEncode(username);
-    char* enc_password = HTTP_urlEncode(password);
-    
-    if (!enc_username || !enc_password) {
-        free(enc_username);
-        free(enc_password);
+    // Build POST data
+    char post_data[512];
+    if (!ra_build_login_post_password(username, password, post_data, sizeof(post_data))) {
         response->result = RA_AUTH_ERROR_UNKNOWN;
-        strncpy(response->error_message, "Memory allocation failed", 
+        strncpy(response->error_message, "Failed to build login request", 
                 sizeof(response->error_message) - 1);
         return response->result;
     }
-    
-    // Build POST data
-    char post_data[512];
-    snprintf(post_data, sizeof(post_data), "r=login&u=%s&p=%s", 
-             enc_username, enc_password);
-    
-    free(enc_username);
-    free(enc_password);
     
     // Make synchronous POST request
     HTTP_Response* http_response = HTTP_post(RA_API_URL, post_data, NULL);

@@ -3,13 +3,13 @@
 #include "menu.hpp"
 
 struct ColorPreset {
-    uint32_t color;   // 0xRRGGBB
+    uint32_t color;   // 0xRRGGBBAA
     std::string label;
 };
 
 class ColorPickerMenu : public MenuList
 {
-    int r, g, b;
+    int r, g, b, a;
     int selected;
     ValueSetCallback on_set;
     std::vector<ColorPreset> presets;

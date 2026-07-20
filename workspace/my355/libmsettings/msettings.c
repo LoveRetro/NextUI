@@ -129,6 +129,44 @@ static int HDMI_enabled(void) {
 	return exactMatch(value, "connected\n");
 }
 
+static int get_usbc_card_num() {
+	FILE *fp = popen("cat /proc/asound/cards", "r");
+	if (!fp) return -1;
+
+	char line[256];
+	while (fgets(line, sizeof(line), fp)) {
+		if (strstr(line, "rockchiprk817") == NULL) { // skip the built-in codec
+			int card_num;
+			if (sscanf(line, " %d ", &card_num) == 1) {
+				pclose(fp);
+				return card_num;
+			}
+		}
+	}
+
+	pclose(fp);
+	return -1;
+}
+
+static int get_rockchip_card_num() {
+	FILE *fp = popen("cat /proc/asound/cards", "r");
+	if (!fp) return -1;
+
+	char line[256];
+	while (fgets(line, sizeof(line), fp)) {
+		if (strstr(line, "rockchiprk817") != NULL) { // look for the built-in codec
+			int card_num;
+			if (sscanf(line, " %d ", &card_num) == 1) {
+				pclose(fp);
+				return card_num;
+			}
+		}
+	}
+
+	pclose(fp);
+	return -1;
+}
+
 void InitSettings(void) {
 	sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));
 
@@ -177,24 +215,15 @@ void InitSettings(void) {
 			// load defaults
 			memcpy(settings, &DefaultSettings, shm_size);
 		}
-
-		// these shouldn't be persisted
-		// settings->jack = 0;
-		// settings->hdmi = 0;
-		int jack = JACK_enabled();
-		int hdmi = HDMI_enabled();
-
-		// both of these set volume
-		SetJack(jack);
-		SetHDMI(hdmi);
 	}
+
+	// Always re-set Jack and HDMI according to hardware state
+	settings->jack = JACK_enabled();
+	settings->hdmi = HDMI_enabled();
+
 	printf("brightness: %i (hdmi: %i)\nspeaker: %i (jack: %i)\n", settings->brightness, settings->hdmi, settings->speaker, settings->jack); 
 	fflush(stdout);
 	system("amixer");
-
-	char cmd[256];
-	sprintf(cmd, "amixer sset 'Playback Path' '%s' > /dev/null 2>&1", GetJack() ? "HP" : "SPK");
-	system(cmd);
 
 	SetVolume(GetVolume());
 	SetBrightness(GetBrightness());
@@ -257,6 +286,23 @@ int GetSaturation(void)
 int GetExposure(void)
 {
 	return settings->exposure;
+}
+int GetDisplayCalEnabled(void)
+{
+	// my355 does not currently expose a display gamma/LUT control interface.
+	return 0;
+}
+int GetDisplayCalRedGain(void)
+{
+	return 100;
+}
+int GetDisplayCalGreenGain(void)
+{
+	return 100;
+}
+int GetDisplayCalBlueGain(void)
+{
+	return 100;
 }
 int GetMutedBrightness(void)
 {
@@ -385,6 +431,22 @@ void SetExposure(int value)
 	SetRawExposure(scaleExposure(value));
 	settings->exposure = value;
 	SaveSettings();
+}
+void SetDisplayCalEnabled(int value)
+{
+	(void)value;
+}
+void SetDisplayCalRedGain(int value)
+{
+	(void)value;
+}
+void SetDisplayCalGreenGain(int value)
+{
+	(void)value;
+}
+void SetDisplayCalBlueGain(int value)
+{
+	(void)value;
 }
 
 void SetMutedBrightness(int value)
@@ -547,6 +609,12 @@ void SetRawSaturation(int val){
 void SetRawExposure(int val){
 	// not supported on this device, so do nothing
 }
+void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain) {
+	(void)enabled;
+	(void)red_gain;
+	(void)green_gain;
+	(void)blue_gain;
+}
 
 // Find the first A2DP playback volume control via amixer
 static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
@@ -603,51 +671,75 @@ void SetRawVolume(int val) { // 0-100
 		}
     } 
 	else if (GetAudioSink() == AUDIO_SINK_USBDAC) {
-		// USB DAC path: use card 1
-		struct mixer *mixer = mixer_open(1);
+		// USB DAC path: grab the first card that is not called "rockchiprk817"
+		int card_num = get_usbc_card_num();
+		if(card_num < 0) {
+			printf("Failed to find USB audio card\n"); fflush(stdout);
+			return;
+		}
+
+		struct mixer *mixer = mixer_open(card_num);
 		if (!mixer) {
 			printf("Failed to open mixer\n"); fflush(stdout);
 			return;
 		}
 
-        const unsigned int num_controls = mixer_get_num_ctls(mixer);
-        for (unsigned int i = 0; i < num_controls; i++) {
-            struct mixer_ctl *ctl = mixer_get_ctl(mixer, i);
-            const char *name = mixer_ctl_get_name(ctl);
-            if (!name) continue;
+		const unsigned int num_controls = mixer_get_num_ctls(mixer);
+		for (unsigned int i = 0; i < num_controls; i++) {
+			struct mixer_ctl *ctl = mixer_get_ctl(mixer, i);
+			const char *name = mixer_ctl_get_name(ctl);
+			if (!name) continue;
 
-            if (strstr(name, "PCM") && (strstr(name, "Volume") || strstr(name, "volume"))) {
-                if (mixer_ctl_get_type(ctl) == MIXER_CTL_TYPE_INT) {
-                    int min = mixer_ctl_get_range_min(ctl);
-                    int max = mixer_ctl_get_range_max(ctl);
-                    int volume = min + (val * (max - min)) / 100;
-					unsigned int num_values = mixer_ctl_get_num_values(ctl);
-					for (unsigned int i = 0; i < num_values; i++)
-						mixer_ctl_set_value(ctl, i, volume);
-                }
-                break;
-            }
-        }
+			if ((strstr(name, "PCM") || strstr(name, "Playback")) && (strstr(name, "Volume") || strstr(name, "volume"))) {
+				if (mixer_ctl_get_type(ctl) == MIXER_CTL_TYPE_INT) {
+					int min = mixer_ctl_get_range_min(ctl);
+					int max = mixer_ctl_get_range_max(ctl);
+					int volume = min + (val * (max - min)) / 100;
+					unsigned int ctl_values = mixer_ctl_get_num_values(ctl);
+					for (unsigned int j = 0; j < ctl_values; j++)
+						mixer_ctl_set_value(ctl, j, volume);
+				}
+				break;
+			}
+		}
 		mixer_close(mixer);
 	}
 	else {
-		system("amixer sset 'SPK' 1% > /dev/null 2>&1"); // ensure there is always a change
-		if (settings->jack) {
-			system("amixer sset 'Playback Path' 'HP' > /dev/null 2>&1");
-			puts("headphones"); fflush(stdout);
+		// Speaker path: grab the card that is called "rockchiprk817"
+		int card_num = get_rockchip_card_num();
+		if(card_num < 0) {
+			card_num = 0; // fallback to card 0 if we can't find it
 		}
-		else if (val==0) {
-			system("amixer sset 'Playback Path' 'OFF' > /dev/null 2>&1"); // mute speaker (not headphone as that produces white noise)
-			puts("mute"); fflush(stdout);
+
+		struct mixer *mixer = mixer_open(card_num);
+		if (!mixer) {
+			printf("Failed to open mixer\n"); fflush(stdout);
+			return;
 		}
-		else {
-			system("amixer sset 'Playback Path' 'SPK' > /dev/null 2>&1");
-			puts("speaker"); fflush(stdout);
+
+		struct mixer_ctl *path = mixer_get_ctl_by_name(mixer, "Playback Path");
+		if (path) {
+			// I don't seem to have white noise with headphones off
+			if (val == 0) mixer_ctl_set_enum_by_string(path, "OFF");
+			else if (settings->jack) mixer_ctl_set_enum_by_string(path, "HP");
+			else mixer_ctl_set_enum_by_string(path, "SPK");
 		}
-		
-		char cmd[256];
-		sprintf(cmd, "amixer sset 'SPK' %i%% > /dev/null 2>&1", val);
-		puts(cmd); fflush(stdout);
-		system(cmd);
+
+		// Attempt to mute the individual switches but I am not sure it does anything
+		struct mixer_ctl *spk_sw = mixer_get_ctl_by_name(mixer, "Speaker Switch");
+		if (spk_sw) mixer_ctl_set_value(spk_sw, 0, (!settings->jack && val > 0));
+
+		struct mixer_ctl *hp_sw = mixer_get_ctl_by_name(mixer, "Headphone Switch");
+		if (hp_sw) mixer_ctl_set_value(hp_sw, 0, (settings->jack && val > 0));
+
+		struct mixer_ctl *vol = mixer_get_ctl_by_name(mixer, "SPK Volume");
+		if (vol) {
+			unsigned int num_values = mixer_ctl_get_num_values(vol);
+			for (unsigned int i = 0; i < num_values; i++) {
+				mixer_ctl_set_value(vol, i, val);
+			}
+		}
+
+		mixer_close(mixer);
 	}
 }

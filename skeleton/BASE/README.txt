@@ -48,6 +48,10 @@ TRIMUI SMART PRO / TRIMUI BRICK
   "TrimUI" button: Quick menu
   Select button: Game switcher
 
+TRIMUI BRICK / BRICK PRO / SMART PRO S
+
+  Buttons with no action of their own can be assigned a pak to launch: L3/R3 on the Brick, L4/R4 on the Brick Pro, and HOME on the Brick Pro and Smart Pro S. Assign them under Settings > Assignments. Assignments only apply in the main menu, not in-game. HOME no longer acts as a second menu button.
+
 ----------------------------------------
 Quicksave & auto-resume
 

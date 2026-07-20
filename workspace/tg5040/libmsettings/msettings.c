@@ -12,6 +12,7 @@
 #include <string.h>
 #include <tinyalsa/mixer.h>
 
+#include "displaycal.h"
 #include "msettings.h"
 
 ///////////////////////////////////////
@@ -172,10 +173,46 @@ typedef struct SettingsV10 {
 	int audiosink; // was bluetooth true/false before
 } SettingsV10;
 
+typedef struct SettingsV11 {
+	int version; // future proofing
+	int brightness;
+	int colortemperature;
+	int headphones;
+	int speaker;
+	int mute;
+	int contrast;
+	int saturation;
+	int exposure;
+	int toggled_brightness;
+	int toggled_colortemperature;
+	int toggled_contrast;
+	int toggled_saturation;
+	int toggled_exposure;
+	int toggled_volume;
+	int disable_dpad_on_mute;
+	int emulate_joystick_on_mute;
+	int turbo_a;
+	int turbo_b;
+	int turbo_x;
+	int turbo_y;
+	int turbo_l1;
+	int turbo_l2;
+	int turbo_r1;
+	int turbo_r2;
+	int unused[2]; // for future use
+	// NOTE: doesn't really need to be persisted but still needs to be shared
+	int jack;
+	int audiosink; // was bluetooth true/false before
+	int displaycal_enabled;
+	int displaycal_red_gain;
+	int displaycal_green_gain;
+	int displaycal_blue_gain;
+} SettingsV11;
+
 // When incrementing SETTINGS_VERSION, update the Settings typedef and add
 // backwards compatibility to InitSettings!
-#define SETTINGS_VERSION 10
-typedef SettingsV10 Settings;
+#define SETTINGS_VERSION 11
+typedef SettingsV11 Settings;
 static Settings DefaultSettings = {
 	.version = SETTINGS_VERSION,
 	.brightness = SETTINGS_DEFAULT_BRIGHTNESS,
@@ -204,6 +241,10 @@ static Settings DefaultSettings = {
 	.turbo_r2 = 0,
 	.jack = 0,
 	.audiosink = AUDIO_SINK_DEFAULT,
+	.displaycal_enabled = DISPLAYCAL_DEFAULT_ENABLED,
+	.displaycal_red_gain = DISPLAYCAL_DEFAULT_RED_GAIN,
+	.displaycal_green_gain = DISPLAYCAL_DEFAULT_GREEN_GAIN,
+	.displaycal_blue_gain = DISPLAYCAL_DEFAULT_BLUE_GAIN,
 };
 static Settings* settings;
 
@@ -274,10 +315,28 @@ int peekVersion(const char *filename) {
 }
 
 static int is_brick = 0;
+static int is_brickpro = 0;
+static int is_smartpro = 0;
+
+static void applyDisplayCalDefaultsForDevice(Settings *target) {
+	DisplayCalDefaults defaults = DisplayCal_getDefaultSettings(
+		  is_brick ? DISPLAYCAL_PRESET_BRICK
+		: is_brickpro ? DISPLAYCAL_PRESET_BRICK
+		: is_smartpro ? DISPLAYCAL_PRESET_SMARTPRO 
+		: DISPLAYCAL_PRESET_DEFAULT);
+	target->displaycal_enabled = defaults.enabled;
+	target->displaycal_red_gain = defaults.red_gain;
+	target->displaycal_green_gain = defaults.green_gain;
+	target->displaycal_blue_gain = defaults.blue_gain;
+}
 
 void InitSettings(void) {	
 	char* device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
+	is_brickpro = exactMatch("brickpro", device);
+	is_smartpro = exactMatch("smartpro", device);
+
+	applyDisplayCalDefaultsForDevice(&DefaultSettings);
 	
 	sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));
 	
@@ -307,7 +366,15 @@ void InitSettings(void) {
 					memcpy(settings, &DefaultSettings, shm_size);
 
 					// overwrite with migrated data
-					if(version==9) {
+					if(version==10) {
+						printf("Found settings v10.\n");
+						SettingsV10 old;
+						read(fd, &old, sizeof(SettingsV10));
+
+						memcpy(settings, &old, sizeof(SettingsV10));
+						settings->version = SETTINGS_VERSION;
+					}
+					else if(version==9) {
 						printf("Found settings v9.\n");
 						SettingsV9 old;
 						read(fd, &old, sizeof(SettingsV9));
@@ -497,6 +564,11 @@ static inline void SaveSettings(void) {
 	}
 }
 
+static inline void applyDisplayCalSettings(void) {
+	if (settings->displaycal_enabled)
+		SetRawDisplayCal(1, settings->displaycal_red_gain, settings->displaycal_green_gain, settings->displaycal_blue_gain);
+}
+
 ///////// Getters exposed in public API
 
 int GetBrightness(void) { // 0-10
@@ -540,6 +612,22 @@ int GetExposure(void)
 		return GetMutedExposure();
 
 	return settings->exposure;
+}
+int GetDisplayCalEnabled(void)
+{
+	return settings->displaycal_enabled;
+}
+int GetDisplayCalRedGain(void)
+{
+	return settings->displaycal_red_gain;
+}
+int GetDisplayCalGreenGain(void)
+{
+	return settings->displaycal_green_gain;
+}
+int GetDisplayCalBlueGain(void)
+{
+	return settings->displaycal_blue_gain;
 }
 // monitored and set by thread in keymon
 int GetJack(void) {
@@ -664,6 +752,36 @@ void SetExposure(int value){
 	settings->exposure = value;
 	SaveSettings();
 }
+void SetDisplayCalEnabled(int is_enabled) {
+	int was_enabled = settings->displaycal_enabled;
+	is_enabled = (is_enabled != 0);
+	settings->displaycal_enabled = is_enabled;
+
+	// Disabling only needs hardware writes when we are turning an active LUT off.
+	if (is_enabled)
+		applyDisplayCalSettings();
+	else if (was_enabled)
+		SetRawDisplayCal(0, settings->displaycal_red_gain, settings->displaycal_green_gain, settings->displaycal_blue_gain);
+	SaveSettings();
+}
+void SetDisplayCalRedGain(int value) {
+	value = DisplayCal_clampGainValue(value);
+	settings->displaycal_red_gain = value;
+	applyDisplayCalSettings();
+	SaveSettings();
+}
+void SetDisplayCalGreenGain(int value) {
+	value = DisplayCal_clampGainValue(value);
+	settings->displaycal_green_gain = value;
+	applyDisplayCalSettings();
+	SaveSettings();
+}
+void SetDisplayCalBlueGain(int value) {
+	value = DisplayCal_clampGainValue(value);
+	settings->displaycal_blue_gain = value;
+	applyDisplayCalSettings();
+	SaveSettings();
+}
 void SetVolume(int value) // 0-20
 {
 	if (settings->mute && GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
@@ -702,6 +820,7 @@ void SetMute(int value) {
 	SetContrast(GetContrast());
 	SetSaturation(GetSaturation());
 	SetExposure(GetExposure());
+	applyDisplayCalSettings();
 
 	if(is_brick && GetMuteDisablesDpad())
 		disableDpad(settings->mute);
@@ -950,6 +1069,21 @@ int scaleBrightness(int value) {
 			case 10: raw=255; break;	// 64
 		}
 	}
+	else if (is_brickpro) {
+		switch (value) {
+			case 0: raw=1; break; 		// 0
+			case 1: raw=8; break; 		// 8
+			case 2: raw=16; break; 		// 8
+			case 3: raw=32; break; 		// 16
+			case 4: raw=48; break;		// 16
+			case 5: raw=72; break;		// 24
+			case 6: raw=96; break;		// 24
+			case 7: raw=128; break;		// 32
+			case 8: raw=160; break;		// 32
+			case 9: raw=192; break;		// 32
+			case 10: raw=255; break;	// 64
+		}
+	}
 	else {
 		switch (value) {
 			case 0: raw=4; break; 		//  0
@@ -1134,6 +1268,44 @@ static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
     return 0;
 }
 
+static int get_usbc_card_num() {
+	FILE *fp = popen("cat /proc/asound/cards", "r");
+	if (!fp) return -1;
+
+	char line[256];
+	while (fgets(line, sizeof(line), fp)) {
+		if (strstr(line, "audiocodec") == NULL) { // skip the built-in codec
+			int card_num;
+			if (sscanf(line, " %d ", &card_num) == 1) {
+				pclose(fp);
+				return card_num;
+			}
+		}
+	}
+
+	pclose(fp);
+	return -1;
+}
+
+static int get_audiocodec_card_num() {
+	FILE *fp = popen("cat /proc/asound/cards", "r");
+	if (!fp) return -1;
+
+	char line[256];
+	while (fgets(line, sizeof(line), fp)) {
+		if (strstr(line, "audiocodec") != NULL) { // look for the built-in codec
+			int card_num;
+			if (sscanf(line, " %d ", &card_num) == 1) {
+				pclose(fp);
+				return card_num;
+			}
+		}
+	}
+
+	pclose(fp);
+	return -1;
+}
+
 void SetRawVolume(int val) { // in: 0-100
 	if (settings->mute && GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 		val = scaleVolume(GetMutedVolume());
@@ -1150,8 +1322,14 @@ void SetRawVolume(int val) { // in: 0-100
         }
     } 
 	else if (GetAudioSink() == AUDIO_SINK_USBDAC) {
-		// USB DAC path: use card 1
-		struct mixer *mixer = mixer_open(1);
+		// USB DAC path: grab the first card that is not called "audiocodec"
+		int card_num = get_usbc_card_num();
+		if(card_num < 0) {
+			printf("Failed to find USB audio card\n"); fflush(stdout);
+			return;
+		}
+
+		struct mixer *mixer = mixer_open(card_num);
 		if (!mixer) {
 			printf("Failed to open mixer\n"); fflush(stdout);
 			return;
@@ -1163,7 +1341,7 @@ void SetRawVolume(int val) { // in: 0-100
             const char *name = mixer_ctl_get_name(ctl);
             if (!name) continue;
 
-            if (strstr(name, "PCM") && (strstr(name, "Volume") || strstr(name, "volume"))) {
+            if ((strstr(name, "PCM") || strstr(name, "Playback")) && (strstr(name, "Volume") || strstr(name, "volume"))) {
                 if (mixer_ctl_get_type(ctl) == MIXER_CTL_TYPE_INT) {
                     int min = mixer_ctl_get_range_min(ctl);
                     int max = mixer_ctl_get_range_max(ctl);
@@ -1178,8 +1356,13 @@ void SetRawVolume(int val) { // in: 0-100
 		mixer_close(mixer);
 	}
 	else {
-        // Speaker path: use direct lookup by name
-		struct mixer *mixer = mixer_open(0);
+		// Speaker path: grab the card that is called "audiocodec"
+		int card_num = get_audiocodec_card_num();
+		if(card_num < 0) {
+			card_num = 0; // fallback to card 0 if we can't find it
+		}
+
+		struct mixer *mixer = mixer_open(card_num);
         if (!mixer) {
             printf("Failed to open mixer\n"); fflush(stdout);
             return;
@@ -1232,5 +1415,17 @@ void SetRawExposure(int val){
 	if (fd) {
 		fprintf(fd, "%i", val);
 		fclose(fd);
+	}
+}
+void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain) {
+	printf("SetRawDisplayCal(%i,%i,%i,%i)\n", enabled, red_gain, green_gain, blue_gain); fflush(stdout);
+
+	int ret = enabled
+		? DisplayCal_enableWithValues(red_gain, green_gain, blue_gain)
+		: DisplayCal_disable();
+	if (ret != 0) {
+		fprintf(stderr, "SetRawDisplayCal failed to %s display calibration: %i\n",
+			enabled ? "enable" : "disable", ret);
+		fflush(stderr);
 	}
 }

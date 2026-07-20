@@ -25,17 +25,18 @@
 #include <dirent.h>
 
 int is_brick = 0;
+int is_brickpro = 0;
 void PLAT_initPlatform(void) {
 	// TODO: replace with something that doesnt bleed out of tg5040 scope
 	char *device = getenv("DEVICE");
 	is_brick = exactMatch("brick", device);
+	is_brickpro = exactMatch("brickpro", device);
 }
 
 static SDL_Joystick **joysticks = NULL;
 static int num_joysticks = 0;
 void PLAT_initInput(void) {
-	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
+	PLAT_initPlatform();
 	if(SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0)
 		LOG_error("Failed initializing joysticks: %s\n", SDL_GetError());
 	num_joysticks = SDL_NumJoysticks();
@@ -188,9 +189,42 @@ void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
 	}
 }
 
+int PLAT_isUSBConnected(void)
+{
+	// The UDC (USB Device Controller) reports "configured" once a host has
+	// enumerated us as a USB gadget. This is independent of merely being
+	// plugged into a charger, so it lets us tell "connected to a computer"
+	// apart from "connected to power".
+	DIR *dir = opendir("/sys/class/udc");
+	if (!dir)
+		return 0;
+
+	int connected = 0;
+	struct dirent *entry;
+	while ((entry = readdir(dir)) != NULL)
+	{
+		if (entry->d_name[0] == '.')
+			continue;
+
+		char path[512];
+		snprintf(path, sizeof(path), "/sys/class/udc/%s/state", entry->d_name);
+
+		char state[32] = {0};
+		getFile(path, state, sizeof(state));
+		if (strncmp(state, "configured", 10) == 0)
+		{
+			connected = 1;
+			break;
+		}
+	}
+
+	closedir(dir);
+	return connected;
+}
+
 void PLAT_enableBacklight(int enable) {
 	if (enable) {
-		if (is_brick) SetRawBrightness(8);
+		if (is_brick || is_brickpro) SetRawBrightness(8);
 		SetBrightness(GetBrightness());
 	}
 	else {
@@ -243,145 +277,76 @@ static pthread_mutex_t currentcpuinfo;
 // a roling average for the display values of about 2 frames, otherwise they are unreadable jumping too fast up and down and stuff to read
 #define ROLLING_WINDOW 120  
 
-volatile int useAutoCpu = 1;
 void *PLAT_cpu_monitor(void *arg) {
-    struct timespec start_time, curr_time;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
-
-    long clock_ticks_per_sec = sysconf(_SC_CLK_TCK);
+    if (!Perf_tryBeginCPUMonitor()) return NULL;
 
     double prev_real_time = get_time_sec();
     double prev_cpu_time = get_process_cpu_time_sec();
 
-	// big Cortex-A53 CPUx4 - 408Mhz to 2160Mhz
-	// 408000 600000 816000 1008000 1200000 1416000 1608000 1800000 2000000
-	const int cpu_frequencies[] = {408,600,816,1008,1200,1416,1608,1800,2000};
-    const int num_freqs = sizeof(cpu_frequencies) / sizeof(cpu_frequencies[0]);
-    int current_index = 1; 
-
     double cpu_usage_history[ROLLING_WINDOW] = {0};
-    double cpu_speed_history[ROLLING_WINDOW] = {0};
     int history_index = 0;
-    int history_count = 0; 
+    int history_count = 0;
 
-    while (true) {
+    while (Perf_isCPUMonitorEnabled()) {
+        double curr_real_time = get_time_sec();
+        double curr_cpu_time = get_process_cpu_time_sec();
 
-		double curr_real_time = get_time_sec();
-		double curr_cpu_time = get_process_cpu_time_sec();
+        double elapsed_real_time = curr_real_time - prev_real_time;
+        double elapsed_cpu_time = curr_cpu_time - prev_cpu_time;
 
-		double elapsed_real_time = curr_real_time - prev_real_time;
-		double elapsed_cpu_time = curr_cpu_time - prev_cpu_time;
-
-        if (useAutoCpu) {
-            double cpu_usage = 0;
-
-            if (elapsed_real_time > 0) {
-                cpu_usage = (elapsed_cpu_time / elapsed_real_time) * 100.0;
-            }
+        if (elapsed_real_time > 0) {
+            double cpu_usage = (elapsed_cpu_time / elapsed_real_time) * 100.0;
 
             pthread_mutex_lock(&currentcpuinfo);
 
-			// the goal here is is to keep cpu usage between 75% and 85% at the lowest possible speed so device stays cool and battery usage is at a minimum
-			// if usage falls out of this range it will either scale a step down or up 
-			// but if usage hits above 95% we need that max boost and we instant scale up to 2000mhz as long as needed
-			// all this happens very fast like 60 times per second, so i'm applying roling averages to display values, so debug screen is readable and gives a good estimate on whats happening cpu wise
-			// the roling averages are purely for displaying, the actual scaling is happening realtime each run. 
-            if (cpu_usage > 95) {
-                current_index = num_freqs - 1; // Instant power needed, cpu is above 95% Jump directly to max boost 2000MHz
-            }
-            else if (cpu_usage > 85 && current_index < num_freqs - 1) { // otherwise try to keep between 75 and 85 at lowest clock speed
-                current_index++; 
-            } 
-            else if (cpu_usage < 75 && current_index > 0) {
-                current_index--; 
-            }
-
-            PLAT_setCustomCPUSpeed(cpu_frequencies[current_index] * 1000);
-
             cpu_usage_history[history_index] = cpu_usage;
-            cpu_speed_history[history_index] = cpu_frequencies[current_index];
-
             history_index = (history_index + 1) % ROLLING_WINDOW;
-            if (history_count < ROLLING_WINDOW) {
-                history_count++; 
-            }
+            if (history_count < ROLLING_WINDOW) history_count++;
 
-            double sum_cpu_usage = 0, sum_cpu_speed = 0;
-            for (int i = 0; i < history_count; i++) {
-                sum_cpu_usage += cpu_usage_history[i];
-                sum_cpu_speed += cpu_speed_history[i];
-            }
-
+            double sum_cpu_usage = 0;
+            for (int i = 0; i < history_count; i++) sum_cpu_usage += cpu_usage_history[i];
             perf.cpu_usage = sum_cpu_usage / history_count;
-            //perf.cpu_speed = sum_cpu_speed / history_count;
 
             pthread_mutex_unlock(&currentcpuinfo);
-
-            prev_real_time = curr_real_time;
-            prev_cpu_time = curr_cpu_time;
-			// 20ms really seems lowest i can go, anything lower it becomes innacurate, maybe one day I will find another even more granual way to calculate usage accurately and lower this shit to 1ms haha, altough anything lower than 10ms causes cpu usage in itself so yeah
-			// Anyways screw it 20ms is pretty much on a frame by frame basis anyways, so will anything lower really make a difference specially if that introduces cpu usage by itself? 
-			// Who knows, maybe some CPU engineer will find my comment here one day and can explain, maybe this is looking for the limits of C and needs Assambler or whatever to call CPU instructions directly to go further, but all I know is PUSH and MOV, how did the orignal Roller Coaster Tycoon developer wrote a whole game like this anyways? Its insane..
-            usleep(20000);
-
-        } else {
-			// Just measure CPU usage without changing frequency
-
-            if (elapsed_real_time > 0) {
-                double cpu_usage = (elapsed_cpu_time / elapsed_real_time) * 100.0;
-
-                pthread_mutex_lock(&currentcpuinfo);
-
-                cpu_usage_history[history_index] = cpu_usage;
-
-                history_index = (history_index + 1) % ROLLING_WINDOW;
-                if (history_count < ROLLING_WINDOW) {
-                    history_count++;
-                }
-
-                double sum_cpu_usage = 0;
-                for (int i = 0; i < history_count; i++) {
-                    sum_cpu_usage += cpu_usage_history[i];
-                }
-
-                perf.cpu_usage = sum_cpu_usage / history_count;
-
-                pthread_mutex_unlock(&currentcpuinfo);
-            }
-
-            prev_real_time = curr_real_time;
-            prev_cpu_time = curr_cpu_time;
-            usleep(100000); 
         }
-    }
-}
 
-
-#define GOVERNOR_PATH "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
-void PLAT_setCustomCPUSpeed(int speed) {
-    FILE *fp = fopen(GOVERNOR_PATH, "w");
-    if (fp == NULL) {
-        perror("Failed to open scaling_setspeed");
-        return;
+        prev_real_time = curr_real_time;
+        prev_cpu_time = curr_cpu_time;
+        usleep(100000);
     }
 
-    fprintf(fp, "%d\n", speed);
-    fclose(fp);
+    Perf_endCPUMonitor();
+    return NULL;
 }
+
 void PLAT_setCPUSpeed(int speed) {
-	int freq = 0;
+	const char* mode;
 	switch (speed) {
-		case CPU_SPEED_MENU: 		freq =  600000; perf.cpu_speed = 600; break;
-		case CPU_SPEED_POWERSAVE:	freq = 1200000; perf.cpu_speed = 1200; break;
-		case CPU_SPEED_NORMAL: 		freq = 1608000; perf.cpu_speed = 1600; break;
-		case CPU_SPEED_PERFORMANCE: freq = 2000000; perf.cpu_speed = 2000; break;
+		case CPU_SPEED_AUTO: mode = "auto"; break;
+		case CPU_SPEED_PERFORMANCE: mode = "performance"; break;
+		case CPU_SPEED_POWERSAVE: mode = "powersave"; break;
+		default: return;
 	}
-	putInt(GOVERNOR_PATH, freq);
+	
+	const char* system_path = getenv("SYSTEM_PATH");
+	if (!system_path) {
+		LOG_info("WARNING: SYSTEM_PATH not set, cannot run governor script\n");
+		return;
+	}
+	char cmd[512];
+	int n = snprintf(cmd, sizeof(cmd), "sh \"%s/bin/governor.sh\" \"%s\"", system_path, mode);
+	if (n < 0 || n >= (int)sizeof(cmd)) {
+		LOG_info("WARNING: SYSTEM_PATH too long for governor script path\n");
+		return;
+	}
+	int ret = system(cmd);
+	if (ret != 0) LOG_info("WARNING: governor script exited with status %d for mode '%s'\n", ret, mode);
 }
 
 #define MAX_STRENGTH 0xFFFF
 #define MIN_VOLTAGE 500000
-#define MAX_VOLTAGE 3300000
+// Brick Pro has a 3.3V motor driver, but its getting very annoying on higher rumble strengths, so we limit it to 2.5V for now.
+#define MAX_VOLTAGE (is_brickpro ? 2500000 : 3300000)
 #define RUMBLE_PATH "/sys/class/gpio/gpio227/value"
 #define RUMBLE_VOLTAGE_PATH "/sys/class/motor/voltage"
 
@@ -443,119 +408,38 @@ ConnectionStrength PLAT_connectionStrength(void) {
 }
 
 void PLAT_initDefaultLeds() {
-	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
-	if(is_brick) {
-	lightsDefault[0] = (LightSettings) {
-		"FN 1 key",
-		"f1",
-		4,
-		1000,
-		100,
-		0xFFFFFF,
-		0xFFFFFF,
-		0,
-		{},
-		1,
-		100,
-		0
-	};
-	lightsDefault[1] = (LightSettings) {
-		"FN 2 key",
-		"f2",
-		4,
-		1000,
-		100,
-		0xFFFFFF,
-		0xFFFFFF,
-		0,
-		{},
-		1,
-		100,
-		0
-	};
-	lightsDefault[2] = (LightSettings) {
-		"Topbar",
-		"m",
-		4,
-		1000,
-		100,
-		0xFFFFFF,
-		0xFFFFFF,
-		0,
-		{},
-		1,
-		100,
-		0
-	};
-	lightsDefault[3] = (LightSettings) {
-		"L/R triggers",
-		"lr",
-		4,
-		1000,
-		100,
-		0xFFFFFF,
-		0xFFFFFF,
-		0,
-		{},
-		1,
-		100,
-		0
-	};
-} else {
-	lightsDefault[0] = (LightSettings) {
-		"Joystick L",
-		"l",
-		4,
-		1000,
-		100,
-		0xFFFFFF,
-		0xFFFFFF,
-		0,
-		{},
-		1,
-		100,
-		0
-	};
-	lightsDefault[1] = (LightSettings) {
-		"Joystick R",
-		"r",
-		4,
-		1000,
-		100,
-		0xFFFFFF,
-		0xFFFFFF,
-		0,
-		{},
-		1,
-		100,
-		0
-	};
-	lightsDefault[2] = (LightSettings) {
-		"Logo",
-		"m",
-		4,
-		1000,
-		100,
-		0xFFFFFF,
-		0xFFFFFF,
-		0,
-		{},
-		1,
-		100,
-		0
-	};
-}
+	PLAT_initPlatform();
+	if(is_brickpro) {
+		lightsDefault[0] = (LightSettings) {"FN 1 key","f1",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		lightsDefault[1] = (LightSettings) {"FN 2 key","f2",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		lightsDefault[2] = (LightSettings) {"Topbar","m",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		lightsDefault[3] = (LightSettings) {"Joysticks L/R","lr",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		//lightsDefault[4] = (LightSettings) {"Joystick L","l",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		//lightsDefault[5] = (LightSettings) {"Joystick R","r",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		lightsDefault[4] = (LightSettings) {"Triggers L/R","rear",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+	}
+	else if(is_brick) {
+		lightsDefault[0] = (LightSettings) {"FN 1 key","f1",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		lightsDefault[1] = (LightSettings) {"FN 2 key","f2",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		lightsDefault[2] = (LightSettings) {"Topbar","m",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		lightsDefault[3] = (LightSettings) {"L/R triggers","lr",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		//lightsDefault[3] = (LightSettings) {"L trigger","l",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		//lightsDefault[3] = (LightSettings) {"R trigger","r",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+	} else {
+		lightsDefault[0] = (LightSettings) {"Joystick L","l",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		lightsDefault[1] = (LightSettings) {"Joystick R","r",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+		lightsDefault[2] = (LightSettings) {"Logo","m",4,1000,100,0xFFFFFF,0xFFFFFF,0,{},1,100,0};
+	}
 }
 void PLAT_initLeds(LightSettings *lights) 
 {
-	char* device = getenv("DEVICE");
-	is_brick = exactMatch("brick", device);
-
 	PLAT_initDefaultLeds();
 	FILE *file;
 	if(is_brick) {
 		file = PLAT_OpenSettings("ledsettings_brick.txt");
+	}
+	else if(is_brickpro) {
+		file = PLAT_OpenSettings("ledsettings_brickpro.txt");
 	}
 	else {
 		file = PLAT_OpenSettings("ledsettings.txt");
@@ -642,16 +526,29 @@ void PLAT_initLeds(LightSettings *lights)
 	}
 }
 
+// Brick: Brightness for "m" (top bar)
+// Brick Pro: Brightness for "m" (top bar)?
+// Smart Pro/S: Global brightness for all
 #define LED_PATH1 "/sys/class/led_anim/max_scale"
+// Brick: Brightness for "lr" (triggers)
+// Brick Pro: Brightness for "lr" (joysticks)?
+// Smart Pro/S: n/a
 #define LED_PATH2 "/sys/class/led_anim/max_scale_lr"
-#define LED_PATH3 "/sys/class/led_anim/max_scale_f1f2" 
+// Brick: Brightness for "f1f2" (buttons)
+// Brick Pro: Brightness for "f1f2" (buttons)?
+// Smart Pro/S: n/a
+#define LED_PATH3 "/sys/class/led_anim/max_scale_f1f2"
+// Brick: n/a
+// Brick Pro: Brightness for "rear" (triggers)
+// Smart Pro/S: n/a 
+#define LED_PATH4 "/sys/class/led_anim/max_scale_rear" 
 
 void PLAT_setLedInbrightness(LightSettings *led)
 {
     char filepath[256];
     FILE *file;
     // first set brightness
-	if(is_brick) {
+	if(is_brick || is_brickpro) {
 		if (strcmp(led->filename, "m") == 0) {
 			snprintf(filepath, sizeof(filepath), LED_PATH1);
 		} else if (strcmp(led->filename, "f1") == 0) {
@@ -677,7 +574,7 @@ void PLAT_setLedBrightness(LightSettings *led)
     char filepath[256];
     FILE *file;
     // first set brightness
-	if(is_brick) {
+	if(is_brick || is_brickpro) {
 		if (strcmp(led->filename, "m") == 0) {
 			snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/max_scale");
 		} else if (strcmp(led->filename, "f1") == 0) {

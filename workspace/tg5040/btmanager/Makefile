@@ -54,3 +54,6 @@ bluez:
 	cd build && python3 -m zipfile -c nextui.upgrade_bluez.pakz .update_bluez/ post_install.sh
 
 all: bluez
+
+clean:
+	rm -rf ./build

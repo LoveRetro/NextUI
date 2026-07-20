@@ -1,0 +1,9 @@
+version=1
+name=Catppuccin Macchiato
+color1=0xF5A97FFF
+color2=0x1E2030FF
+color3=0x24273AFF
+color4=0xCAD3F5FF
+color5=0x24273AFF
+color6=0xA5ADCBFF
+color7=0x24273AFF

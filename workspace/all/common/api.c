@@ -85,6 +85,7 @@ static struct GFX_Context
 {
 	SDL_Surface *screen;
 	SDL_Surface *assets;
+	SDL_Surface *inputs;
 
 	int mode;
 	int vsync;
@@ -92,6 +93,7 @@ static struct GFX_Context
 
 static SDL_Rect asset_rects[ASSET_COUNT];
 static uint32_t asset_rgbs[ASSET_COLORS];
+static SDL_Rect input_rects[INPUT_COUNT];
 GFX_Fonts font;
 
 ///////////////////////////////
@@ -110,47 +112,57 @@ SDL_Color ALT_BUTTON_TEXT_COLOR;
 // Function to convert hex color code to RGB and set the values
 static inline uint32_t HexToUint(const char *hexColor)
 {
-	int r, g, b;
-	sscanf(hexColor, "%02x%02x%02x", &r, &g, &b);
-	return SDL_MapRGB(gfx.screen->format, r, g, b);
+	int r, g, b, a = 255; // Default alpha value to 255 (fully opaque)
+	// hex color code may or may not have alpha channel, so we need to handle both cases
+	if (strlen(hexColor) == 8) // If the hex color code has alpha channel
+	{
+		sscanf(hexColor, "%02x%02x%02x%02x", &r, &g, &b, &a);
+	}
+	else // If the hex color code does not have alpha channel
+	{
+		sscanf(hexColor, "%02x%02x%02x", &r, &g, &b);
+	}
+	return SDL_MapRGBA(gfx.screen->format, r, g, b, a);
 }
 
 static inline uint32_t HexToUint32_unmapped(const char *hexColor)
 {
-	// Convert the hex string to an unsigned long
-	uint32_t value = (uint32_t)strtoul(hexColor, NULL, 16);
-	return value;
+    // Convert the hex string to an unsigned long
+    uint32_t value = (uint32_t)strtoul(hexColor, NULL, 16);
+    return value;
 }
 
-static inline void rgb_unpack(uint32_t col, int *r, int *g, int *b)
+static inline void rgba_unpack(uint32_t col, int *r, int *g, int *b, int *a)
 {
-	*r = (col >> 16) & 0xff;
-	*g = (col >> 8) & 0xff;
-	*b = col & 0xff;
+	*r = (col >> 24) & 0xff;
+	*g = (col >> 16) & 0xff;
+	*b = (col >> 8) & 0xff;
+	*a = col & 0xff;
 }
 
-static inline uint32_t rgb_pack(int r, int g, int b)
+static inline uint32_t rgba_pack(int r, int g, int b, int a)
 {
-	return (r << 16) + (g << 8) + b;
+	return (r << 24) + (g << 16) + (b << 8) + a;
 }
 
 static inline uint32_t mapUint(uint32_t col)
 {
-	int r, g, b;
-	rgb_unpack(col, &r, &g, &b);
-	return SDL_MapRGB(gfx.screen->format, r, g, b);
+	int r, g, b, a;
+	rgba_unpack(col, &r, &g, &b, &a);
+	return SDL_MapRGBA(gfx.screen->format, r, g, b, a);
 }
 
-static inline uint32_t UintMult(uint32_t color, uint32_t modulate_rgb)
+static inline uint32_t UintMult(uint32_t color, uint32_t modulate_rgba)
 {
 	SDL_Color dest = uintToColour(color);
-	SDL_Color modulate = uintToColour(modulate_rgb);
+	SDL_Color modulate = uintToColour(modulate_rgba);
 
 	dest.r = (int)dest.r * modulate.r / 255;
 	dest.g = (int)dest.g * modulate.g / 255;
 	dest.b = (int)dest.b * modulate.b / 255;
+	dest.a = (int)dest.a * modulate.a / 255;
 
-	return (dest.r << 16) | (dest.g << 8) | dest.b;
+	return (dest.r << 24) | (dest.g << 16) | (dest.b << 8) | dest.a;
 }
 
 ///////////////////////////////
@@ -172,6 +184,7 @@ static struct PWR_Context
 
 	pthread_t battery_pt;
 	SDL_atomic_t is_charging;
+	SDL_atomic_t is_usb_connected;
 	SDL_atomic_t charge;
 
 	SDL_atomic_t is_online;
@@ -214,6 +227,49 @@ int currentshadertexw = 0;
 int currentshadertexh = 0;
 
 int should_rotate = 0;
+
+static pthread_mutex_t perf_cpu_monitor_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int perf_cpu_monitor_enabled = 0;
+static int perf_cpu_monitor_running = 0;
+
+void Perf_setCPUMonitorEnabled(int enabled)
+{
+    pthread_mutex_lock(&perf_cpu_monitor_mutex);
+    perf_cpu_monitor_enabled = enabled;
+    pthread_mutex_unlock(&perf_cpu_monitor_mutex);
+}
+
+int Perf_isCPUMonitorEnabled(void)
+{
+    int enabled;
+
+    pthread_mutex_lock(&perf_cpu_monitor_mutex);
+    enabled = perf_cpu_monitor_enabled;
+    pthread_mutex_unlock(&perf_cpu_monitor_mutex);
+
+    return enabled;
+}
+
+int Perf_tryBeginCPUMonitor(void)
+{
+    int should_run = 0;
+
+    pthread_mutex_lock(&perf_cpu_monitor_mutex);
+    if (perf_cpu_monitor_enabled && !perf_cpu_monitor_running) {
+        perf_cpu_monitor_running = 1;
+        should_run = 1;
+    }
+    pthread_mutex_unlock(&perf_cpu_monitor_mutex);
+
+    return should_run;
+}
+
+void Perf_endCPUMonitor(void)
+{
+    pthread_mutex_lock(&perf_cpu_monitor_mutex);
+    perf_cpu_monitor_running = 0;
+    pthread_mutex_unlock(&perf_cpu_monitor_mutex);
+}
 
 FALLBACK_IMPLEMENTATION void PLAT_pinToCores(int core_type)
 {
@@ -268,11 +324,11 @@ int GFX_loadSystemFont(const char *fontPath)
 	font.tiny = TTF_OpenFont(fontPath, SCALE1(FONT_TINY));
 	font.micro = TTF_OpenFont(fontPath, SCALE1(FONT_MICRO));
 
-	TTF_SetFontStyle(font.large, TTF_STYLE_BOLD);
-	TTF_SetFontStyle(font.medium, TTF_STYLE_BOLD);
-	TTF_SetFontStyle(font.small, TTF_STYLE_BOLD);
-	TTF_SetFontStyle(font.tiny, TTF_STYLE_BOLD);
-	TTF_SetFontStyle(font.micro, TTF_STYLE_BOLD);
+	TTF_SetFontStyle(font.large, CFG_getFontStyle());
+	TTF_SetFontStyle(font.medium, CFG_getFontStyle());
+	TTF_SetFontStyle(font.small, CFG_getFontStyle());
+	TTF_SetFontStyle(font.tiny, CFG_getFontStyle());
+	TTF_SetFontStyle(font.micro, CFG_getFontStyle());
 
 	return 0;
 }
@@ -327,10 +383,15 @@ SDL_Surface *GFX_init(int mode)
 	RGB_DARK_GRAY = SDL_MapRGB(gfx.screen->format, TRIAD_DARK_GRAY);
 
 	asset_rgbs[ASSET_WHITE_PILL] = RGB_WHITE;
+	asset_rgbs[ASSET_WHITE_RECT] = RGB_WHITE;
 	asset_rgbs[ASSET_BLACK_PILL] = RGB_BLACK;
+	asset_rgbs[ASSET_BLACK_RECT] = RGB_BLACK;
 	asset_rgbs[ASSET_DARK_GRAY_PILL] = RGB_DARK_GRAY;
+	asset_rgbs[ASSET_DARK_GRAY_RECT] = RGB_DARK_GRAY;
 	asset_rgbs[ASSET_OPTION] = RGB_DARK_GRAY;
+	asset_rgbs[ASSET_OPTION_RECT] = RGB_DARK_GRAY;
 	asset_rgbs[ASSET_BUTTON] = RGB_WHITE;
+	asset_rgbs[ASSET_BUTTON_RECT] = RGB_WHITE;
 	asset_rgbs[ASSET_PAGE_BG] = RGB_WHITE;
 	asset_rgbs[ASSET_STATE_BG] = RGB_WHITE;
 	asset_rgbs[ASSET_PAGE] = RGB_BLACK;
@@ -344,8 +405,13 @@ SDL_Surface *GFX_init(int mode)
 	asset_rects[ASSET_WHITE_PILL] = (SDL_Rect){SCALE4(1, 1, 30, 30)};
 	asset_rects[ASSET_BLACK_PILL] = (SDL_Rect){SCALE4(33, 1, 30, 30)};
 	asset_rects[ASSET_DARK_GRAY_PILL] = (SDL_Rect){SCALE4(65, 1, 30, 30)};
+	asset_rects[ASSET_WHITE_RECT] = (SDL_Rect){SCALE4(1+14, 1, 2, 30)}; // two pixels wide, middle of the asset
+	asset_rects[ASSET_BLACK_RECT] = (SDL_Rect){SCALE4(33+14, 1, 2, 30)}; // two pixels wide, middle of the asset
+	asset_rects[ASSET_DARK_GRAY_RECT] = (SDL_Rect){SCALE4(65+14, 1, 2, 30)}; // two pixels wide, middle of the asset
 	asset_rects[ASSET_OPTION] = (SDL_Rect){SCALE4(97, 1, 20, 20)};
+	asset_rects[ASSET_OPTION_RECT] = (SDL_Rect){SCALE4(97+9, 1, 2, 20)}; // two pixels wide, middle of the asset
 	asset_rects[ASSET_BUTTON] = (SDL_Rect){SCALE4(1, 33, 20, 20)};
+	asset_rects[ASSET_BUTTON_RECT] = (SDL_Rect){SCALE4(1+9, 33, 2, 20)}; // two pixels wide, middle of the asset
 	asset_rects[ASSET_PAGE_BG] = (SDL_Rect){SCALE4(64, 33, 15, 15)};
 	asset_rects[ASSET_STATE_BG] = (SDL_Rect){SCALE4(23, 54, 8, 8)};
 	asset_rects[ASSET_PAGE] = (SDL_Rect){SCALE4(39, 54, 6, 6)};
@@ -389,6 +455,54 @@ SDL_Surface *GFX_init(int mode)
 		LOG_info("missing assets, you're about to segfault dummy!\n");
 	gfx.assets = IMG_Load(asset_path);
 
+	input_rects[INPUT_BUTTON_A] = (SDL_Rect){SCALE4(0, 0, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_BUTTON_B] = (SDL_Rect){SCALE4(20, 0, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_BUTTON_X] = (SDL_Rect){SCALE4(40, 0, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_BUTTON_Y] = (SDL_Rect){SCALE4(60, 0, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_UP] = (SDL_Rect){SCALE4(80, 0, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_DOWN] = (SDL_Rect){SCALE4(100, 0, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_LEFT] = (SDL_Rect){SCALE4(120, 0, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_RIGHT] = (SDL_Rect){SCALE4(140, 0, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_UP_DOWN] = (SDL_Rect){SCALE4(160, 0, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_LEFT_RIGHT] = (SDL_Rect){SCALE4(180, 0, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_ALL] = (SDL_Rect){SCALE4(200, 0, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD] = (SDL_Rect){SCALE4(220, 0, BUTTON_SIZE, BUTTON_SIZE)};
+
+	input_rects[INPUT_BUTTON_A_ALT1] = (SDL_Rect){SCALE4(0, 20, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_BUTTON_B_ALT1] = (SDL_Rect){SCALE4(20, 20, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_BUTTON_X_ALT1] = (SDL_Rect){SCALE4(40, 20, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_BUTTON_Y_ALT1] = (SDL_Rect){SCALE4(60, 20, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_UP_ALT1] = (SDL_Rect){SCALE4(80, 20, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_DOWN_ALT1] = (SDL_Rect){SCALE4(100, 20, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_LEFT_ALT1] = (SDL_Rect){SCALE4(120, 20, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_RIGHT_ALT1] = (SDL_Rect){SCALE4(140, 20, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_UP_DOWN_ALT1] = (SDL_Rect){SCALE4(160, 20, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_LEFT_RIGHT_ALT1] = (SDL_Rect){SCALE4(180, 20, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_ALL_ALT1] = (SDL_Rect){SCALE4(200, 20, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_ALT1] = (SDL_Rect){SCALE4(220, 20, BUTTON_SIZE, BUTTON_SIZE)};
+
+	input_rects[INPUT_BUTTON_A_ALT2] = (SDL_Rect){SCALE4(0, 40, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_BUTTON_B_ALT2] = (SDL_Rect){SCALE4(20, 40, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_BUTTON_X_ALT2] = (SDL_Rect){SCALE4(40, 40, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_BUTTON_Y_ALT2] = (SDL_Rect){SCALE4(60, 40, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_UP_ALT2] = (SDL_Rect){SCALE4(80, 40, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_DOWN_ALT2] = (SDL_Rect){SCALE4(100, 40, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_LEFT_ALT2] = (SDL_Rect){SCALE4(120, 40, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_RIGHT_ALT2] = (SDL_Rect){SCALE4(140, 40, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_UP_DOWN_ALT2] = (SDL_Rect){SCALE4(160, 40, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_LEFT_RIGHT_ALT2] = (SDL_Rect){SCALE4(180, 40, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_ALL_ALT2] = (SDL_Rect){SCALE4(200, 40, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_DPAD_ALT2] = (SDL_Rect){SCALE4(220, 40, BUTTON_SIZE, BUTTON_SIZE)};
+
+	input_rects[INPUT_BUTTON_HOME] = (SDL_Rect){SCALE4(0, 60, BUTTON_SIZE, BUTTON_SIZE)};
+	input_rects[INPUT_BUTTON_POWER] = (SDL_Rect){SCALE4(20, 60, BUTTON_SIZE, BUTTON_SIZE)};
+
+	char input_path[MAX_PATH];
+	sprintf(input_path, RES_PATH "/inputs@%ix.png", FIXED_SCALE);
+	if (!exists(input_path))
+		LOG_info("missing inputs, you're about to segfault dummy!\n");
+	gfx.inputs = IMG_Load(input_path);
+
 	PLAT_clearAll();
 
 	return gfx.screen;
@@ -403,6 +517,7 @@ void GFX_quit(void)
 	TTF_CloseFont(font.micro);
 
 	SDL_FreeSurface(gfx.assets);
+	SDL_FreeSurface(gfx.inputs);
 
 	CFG_quit();
 
@@ -1304,13 +1419,13 @@ void GFX_freeAAScaler(void)
 
 ///////////////////////////////
 
-SDL_Color /*GFX_*/ uintToColour(uint32_t colour)
+SDL_Color /*GFX_*/ uintToColour(uint32_t rgba)
 {
 	SDL_Color tempcol;
-	tempcol.a = 255;
-	tempcol.r = (colour >> 16) & 0xFF;
-	tempcol.g = (colour >> 8) & 0xFF;
-	tempcol.b = colour & 0xFF;
+	tempcol.r = (rgba >> 24) & 0xFF;
+	tempcol.g = (rgba >> 16) & 0xFF;
+	tempcol.b = (rgba >> 8) & 0xFF;
+	tempcol.a = rgba & 0xFF;
 	return tempcol;
 }
 
@@ -1603,18 +1718,68 @@ void GFX_blitSurfaceColor(SDL_Surface *src, SDL_Rect *src_rect, SDL_Surface *dst
 		else if (asset_color == THEME_COLOR7)
 			asset_color = THEME_COLOR7_255;
 
+		SDL_Color tint = uintToColour(asset_color);
+
 		SDL_Color restore;
+		Uint8 restore_a;
+		SDL_BlendMode restore_blend;
 		SDL_GetSurfaceColorMod(src, &restore.r, &restore.g, &restore.b);
-		SDL_SetSurfaceColorMod(src,
-							   (asset_color >> 16) & 0xFF,
-							   (asset_color >> 8) & 0xFF,
-							   asset_color & 0xFF);
+		SDL_GetSurfaceAlphaMod(src, &restore_a);
+		SDL_GetSurfaceBlendMode(src, &restore_blend);
+
+		SDL_SetSurfaceColorMod(src, tint.r, tint.g, tint.b);
+		SDL_SetSurfaceAlphaMod(src, tint.a);
+		SDL_SetSurfaceBlendMode(src, SDL_BLENDMODE_BLEND);
 		SDL_BlitSurface(src, src_rect, dst, dst_rect);
 		SDL_SetSurfaceColorMod(src, restore.r, restore.g, restore.b);
+		SDL_SetSurfaceAlphaMod(src, restore_a);
+		SDL_SetSurfaceBlendMode(src, restore_blend);
 	}
 	else
 	{
 		SDL_BlitSurface(src, src_rect, dst, dst_rect);
+	}
+}
+
+static void GFX_blitSurfaceColorScaled(SDL_Surface *src, SDL_Rect *src_rect, SDL_Surface *dst, SDL_Rect *dst_rect, uint32_t asset_color)
+{
+	if (asset_color != RGB_WHITE)
+	{
+		if (asset_color == THEME_COLOR1)
+			asset_color = THEME_COLOR1_255;
+		else if (asset_color == THEME_COLOR2)
+			asset_color = THEME_COLOR2_255;
+		else if (asset_color == THEME_COLOR3)
+			asset_color = THEME_COLOR3_255;
+		else if (asset_color == THEME_COLOR4)
+			asset_color = THEME_COLOR4_255;
+		else if (asset_color == THEME_COLOR5)
+			asset_color = THEME_COLOR5_255;
+		else if (asset_color == THEME_COLOR6)
+			asset_color = THEME_COLOR6_255;
+		else if (asset_color == THEME_COLOR7)
+			asset_color = THEME_COLOR7_255;
+
+		SDL_Color tint = uintToColour(asset_color);
+
+		SDL_Color restore;
+		Uint8 restore_a;
+		SDL_BlendMode restore_blend;
+		SDL_GetSurfaceColorMod(src, &restore.r, &restore.g, &restore.b);
+		SDL_GetSurfaceAlphaMod(src, &restore_a);
+		SDL_GetSurfaceBlendMode(src, &restore_blend);
+
+		SDL_SetSurfaceColorMod(src, tint.r, tint.g, tint.b);
+		SDL_SetSurfaceAlphaMod(src, tint.a);
+		SDL_SetSurfaceBlendMode(src, SDL_BLENDMODE_BLEND);
+		SDL_BlitScaled(src, src_rect, dst, dst_rect);
+		SDL_SetSurfaceColorMod(src, restore.r, restore.g, restore.b);
+		SDL_SetSurfaceAlphaMod(src, restore_a);
+		SDL_SetSurfaceBlendMode(src, restore_blend);
+	}
+	else
+	{
+		SDL_BlitScaled(src, src_rect, dst, dst_rect);
 	}
 }
 
@@ -1642,6 +1807,47 @@ void GFX_blitAsset(int asset, SDL_Rect *src_rect, SDL_Surface *dst, SDL_Rect *ds
 {
 	GFX_blitAssetColor(asset, src_rect, dst, dst_rect, RGB_WHITE);
 }
+
+static void GFX_fillRectBlend(SDL_Surface *dst, const SDL_Rect *rect, uint32_t mapped_color)
+{
+	if (!dst || !rect || rect->w <= 0 || rect->h <= 0)
+		return;
+
+	Uint8 r, g, b, a;
+	SDL_GetRGBA(mapped_color, dst->format, &r, &g, &b, &a);
+
+	SDL_Surface *tmp = SDL_CreateRGBSurfaceWithFormat(0, rect->w, rect->h,
+														 32, SDL_PIXELFORMAT_ARGB8888);
+	if (!tmp)
+		return;
+
+	SDL_SetSurfaceBlendMode(tmp, SDL_BLENDMODE_BLEND);
+	SDL_FillRect(tmp, NULL, SDL_MapRGBA(tmp->format, r, g, b, a));
+
+	SDL_Rect dst_rect = *rect;
+	SDL_BlitSurface(tmp, NULL, dst, &dst_rect);
+	SDL_FreeSurface(tmp);
+}
+
+static int GFX_pillRectAsset(int asset)
+{
+	switch (asset)
+	{
+	case ASSET_WHITE_PILL:
+		return ASSET_WHITE_RECT;
+	case ASSET_BLACK_PILL:
+		return ASSET_BLACK_RECT;
+	case ASSET_DARK_GRAY_PILL:
+		return ASSET_DARK_GRAY_RECT;
+	case ASSET_BUTTON:
+		return ASSET_BUTTON_RECT;
+	case ASSET_OPTION:
+		return ASSET_OPTION_RECT;
+	default:
+		return -1;
+	}
+}
+
 void GFX_blitPillColor(int asset, SDL_Surface *dst, SDL_Rect *dst_rect, uint32_t asset_color, uint32_t fill_color)
 {
 	int x = dst_rect->x;
@@ -1661,8 +1867,19 @@ void GFX_blitPillColor(int asset, SDL_Surface *dst, SDL_Rect *dst_rect, uint32_t
 	x += r;
 	if (w > 0)
 	{
-		// SDL_FillRect(dst, &(SDL_Rect){x,y,w,h}, UintMult(fill_color, asset_color));
-		SDL_FillRect(dst, &(SDL_Rect){x, y, w, h}, asset_color);
+		int rect_asset = GFX_pillRectAsset(asset);
+		if (rect_asset >= 0)
+		{
+			uint32_t center_color = (fill_color != RGB_WHITE) ? fill_color : asset_color;
+			SDL_Rect src_rect = asset_rects[rect_asset];
+			SDL_Rect center_dst = {x, y, w, h};
+			GFX_blitSurfaceColorScaled(gfx.assets, &src_rect, dst, &center_dst, center_color);
+		}
+		else
+		{
+			// Fallback for non-pill assets that still use this helper.
+			GFX_fillRectBlend(dst, &(SDL_Rect){x, y, w, h}, asset_color);
+		}
 		x += w;
 	}
 	GFX_blitAssetColor(asset, &(SDL_Rect){r, 0, r, h}, dst, &(SDL_Rect){x, y}, asset_color);
@@ -1678,6 +1895,30 @@ void GFX_blitPillLight(int asset, SDL_Surface *dst, SDL_Rect *dst_rect)
 void GFX_blitPillDark(int asset, SDL_Surface *dst, SDL_Rect *dst_rect)
 {
 	GFX_blitPillColor(asset, dst, dst_rect, THEME_COLOR1, RGB_WHITE);
+}
+
+void GFX_blitInputAssetColor(int input, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color)
+{
+	SDL_Rect *rect = &input_rects[input];
+	SDL_Rect adj_rect = {
+		.x = rect->x,
+		.y = rect->y,
+		.w = rect->w,
+		.h = rect->h,
+	};
+	if (src_rect)
+	{
+		adj_rect.x += src_rect->x;
+		adj_rect.y += src_rect->y;
+		adj_rect.w = src_rect->w;
+		adj_rect.h = src_rect->h;
+	}
+
+	GFX_blitSurfaceColor(gfx.inputs, &adj_rect, dst, dst_rect, asset_color);
+}
+void GFX_blitInputAsset(int input, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect)
+{
+	GFX_blitInputAssetColor(input, src_rect, dst, dst_rect, RGB_WHITE);
 }
 void GFX_blitRect(int asset, SDL_Surface *dst, SDL_Rect *dst_rect)
 {
@@ -1721,14 +1962,64 @@ void GFX_blitBattery(SDL_Surface *dst, SDL_Rect *dst_rect)
 	GFX_blitBatteryAtPosition(dst, x, y);
 }
 
+static int HintToButton(char* hint) {
+	const int style = CFG_getInputPromptStyle();
+	if(style == INPUT_STYLE_TEXT)
+		return -1;
+
+	if (strcasecmp(hint, "A") == 0) {
+		return INPUT_BUTTON_A + style;
+	}
+	else if (strcasecmp(hint, "B") == 0) {
+		return INPUT_BUTTON_B + style;
+	}
+	else if (strcasecmp(hint, "X") == 0) {
+		return INPUT_BUTTON_X + style;
+	}
+	else if (strcasecmp(hint, "Y") == 0) {
+		return INPUT_BUTTON_Y + style;
+	}
+	// not really feeling these, deactivated for now
+	//else if (strcasecmp(hint, "Left") == 0) {
+	//	return INPUT_DPAD_LEFT + style;
+	//}
+	//else if (strcasecmp(hint, "Right") == 0) {
+	//	return INPUT_DPAD_RIGHT + style;
+	//}
+	//else if (strcasecmp(hint, "L/R") == 0) {
+	//	return INPUT_DPAD_LEFT_RIGHT + style;
+	//}
+	//else if (strcasecmp(hint, "Up") == 0) {
+	//	return INPUT_DPAD_UP + style;
+	//}
+	//else if (strcasecmp(hint, "Down") == 0) {
+	//	return INPUT_DPAD_DOWN + style;
+	//}
+	//else if (strcasecmp(hint, "U/D") == 0) {
+	//	return INPUT_DPAD_UP_DOWN + style;
+	//}
+	//else if (strcasecmp(hint, "Dpad") == 0) {
+	//	return INPUT_DPAD + style; // or INPUT_DPAD_ALL
+	//}
+	else if (strcasecmp(hint, "Home") == 0) {
+		return INPUT_BUTTON_HOME;
+	}
+	else if (strcasecmp(hint, "Power") == 0) {
+		return INPUT_BUTTON_POWER;
+	}
+
+	return -1; // Not found
+}
+
 int GFX_getButtonWidth(char *hint, char *button)
 {
 	int button_width = 0;
 	int width;
 
 	int special_case = !strcmp(button, BRIGHTNESS_BUTTON_LABEL); // TODO: oof
+	int input_asset = HintToButton(button);
 
-	if (strlen(button) == 1)
+	if (strlen(button) == 1 || input_asset >= 0)
 	{
 		button_width += SCALE1(BUTTON_SIZE);
 	}
@@ -1744,35 +2035,54 @@ int GFX_getButtonWidth(char *hint, char *button)
 	button_width += width + SCALE1(BUTTON_MARGIN);
 	return button_width;
 }
+
 void GFX_blitButton(char *hint, char *button, SDL_Surface *dst, SDL_Rect *dst_rect)
 {
 	SDL_Surface *text;
 	int ox = 0;
 
 	int special_case = !strcmp(button, BRIGHTNESS_BUTTON_LABEL); // TODO: oof
+	int input_asset = HintToButton(button);
 
 	// button
-	if (strlen(button) == 1)
+	if (strlen(button) == 1 || input_asset >= 0)
 	{
 		GFX_blitAssetColor(ASSET_BUTTON, NULL, dst, dst_rect, THEME_COLOR1);
 
-		// label
-		text = TTF_RenderUTF8_Blended(font.medium, button, ALT_BUTTON_TEXT_COLOR);
-		SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){dst_rect->x + (SCALE1(BUTTON_SIZE) - text->w) / 2, dst_rect->y + (SCALE1(BUTTON_SIZE) - text->h) / 2});
-		ox += SCALE1(BUTTON_SIZE);
-		SDL_FreeSurface(text);
+		// special case: if CFG_getInputPromptStyle() is anything but INPUT_STYLE_TEXT, we want to blit the prompt asset
+		if (input_asset >= 0)
+		{
+			GFX_blitInputAssetColor(input_asset, NULL, dst, dst_rect, THEME_COLOR3);
+			ox += SCALE1(BUTTON_SIZE);
+		}
+		else {
+			// label
+			text = TTF_RenderUTF8_Blended(font.medium, button, ALT_BUTTON_TEXT_COLOR);
+			SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){dst_rect->x + (SCALE1(BUTTON_SIZE) - text->w) / 2, dst_rect->y + (SCALE1(BUTTON_SIZE) - text->h) / 2});
+			ox += SCALE1(BUTTON_SIZE);
+			SDL_FreeSurface(text);
+		}
 	}
 	else
 	{
-		text = TTF_RenderUTF8_Blended(special_case ? font.large : font.tiny, button, ALT_BUTTON_TEXT_COLOR);
-		GFX_blitPillDark(ASSET_BUTTON, dst, &(SDL_Rect){dst_rect->x, dst_rect->y, SCALE1(BUTTON_SIZE) / 2 + text->w, SCALE1(BUTTON_SIZE)});
-		ox += SCALE1(BUTTON_SIZE) / 4;
-
-		int oy = special_case ? SCALE1(-2) : 0;
-		SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){ox + dst_rect->x, oy + dst_rect->y + (SCALE1(BUTTON_SIZE) - text->h) / 2, text->w, text->h});
-		ox += text->w;
-		ox += SCALE1(BUTTON_SIZE) / 4;
-		SDL_FreeSurface(text);
+		// special case: if CFG_getInputPromptStyle() is anything but INPUT_STYLE_TEXT, we want to blit the prompt asset
+		if (input_asset >= 0)
+		{
+			GFX_blitAssetColor(ASSET_BUTTON, NULL, dst, dst_rect, THEME_COLOR1);
+			GFX_blitInputAssetColor(input_asset, NULL, dst, dst_rect, THEME_COLOR3);
+			ox += SCALE1(BUTTON_SIZE);
+		}
+		else {
+			text = TTF_RenderUTF8_Blended(special_case ? font.large : font.tiny, button, ALT_BUTTON_TEXT_COLOR);
+			GFX_blitPillDark(ASSET_BUTTON, dst, &(SDL_Rect){dst_rect->x, dst_rect->y, SCALE1(BUTTON_SIZE) / 2 + text->w, SCALE1(BUTTON_SIZE)});
+			ox += SCALE1(BUTTON_SIZE) / 4;
+	
+			int oy = special_case ? SCALE1(-2) : 0;
+			SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){ox + dst_rect->x, oy + dst_rect->y + (SCALE1(BUTTON_SIZE) - text->h) / 2, text->w, text->h});
+			ox += text->w;
+			ox += SCALE1(BUTTON_SIZE) / 4;
+			SDL_FreeSurface(text);
+		}
 	}
 
 	ox += SCALE1(BUTTON_MARGIN);
@@ -2171,6 +2481,26 @@ int GFX_blitButtonGroup(char **pairs, int primary, SDL_Surface *dst, int align_r
 		ox += hints[i].ow + SCALE1(BUTTON_MARGIN);
 	}
 	return ow;
+}
+
+void GFX_blitTopCurtain(SDL_Surface* dst)
+{
+	// blit a top curtain to the screen, which is a semi-transparent black rectangle at the top of the screen
+	int opacity = CFG_getGameSwitcherCurtain() * 255 / 100; // convert percentage to 0-255 range
+	if(opacity <= 0)
+		return; // no need to draw if fully transparent
+	SDL_Rect rect = {0, 0, dst->w, SCALE1(PADDING+PILL_SIZE+PADDING)};
+	GFX_fillRectBlend(dst, &rect, SDL_MapRGBA(dst->format, 0, 0, 0, opacity));
+}
+
+void GFX_blitBottomCurtain(SDL_Surface* dst)
+{
+	// blit a bottom curtain to the screen, which is a semi-transparent black rectangle at the bottom of the screen
+	int opacity = CFG_getGameSwitcherCurtain() * 255 / 100; // convert percentage to 0-255 range
+	if(opacity <= 0)
+		return; // no need to draw if fully transparent
+	SDL_Rect rect = {0, dst->h - SCALE1(PADDING+PILL_SIZE+PADDING), dst->w, SCALE1(PADDING+PILL_SIZE+PADDING)};
+	GFX_fillRectBlend(dst, &rect, SDL_MapRGBA(dst->format, 0, 0, 0, opacity));
 }
 
 #define MAX_TEXT_LINES 16
@@ -3056,8 +3386,8 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 			}
 			else if (code == CODE_MENU_ALT)
 			{
-				btn = BTN_MENU;
-				id = BTN_ID_MENU;
+				btn = BTN_HOME;
+				id = BTN_ID_HOME;
 			}
 			else if (code == CODE_L1)
 			{
@@ -3074,6 +3404,11 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 				btn = BTN_L3;
 				id = BTN_ID_L3;
 			}
+			else if (code == CODE_L4)
+			{
+				btn = BTN_L4;
+				id = BTN_ID_L4;
+			}
 			else if (code == CODE_R1)
 			{
 				btn = BTN_R1;
@@ -3088,6 +3423,11 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 			{
 				btn = BTN_R3;
 				id = BTN_ID_R3;
+			}
+			else if (code == CODE_R4)
+			{
+				btn = BTN_R4;
+				id = BTN_ID_R4;
 			}
 			else if (code == CODE_PLUS)
 			{
@@ -3179,8 +3519,8 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 			}
 			else if (joy == JOY_MENU_ALT)
 			{
-				btn = BTN_MENU;
-				id = BTN_ID_MENU;
+				btn = BTN_HOME;
+				id = BTN_ID_HOME;
 			}
 			else if (joy == JOY_MENU_ALT2)
 			{
@@ -3202,6 +3542,11 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 				btn = BTN_L3;
 				id = BTN_ID_L3;
 			}
+			else if (joy == JOY_L4)
+			{
+				btn = BTN_L4;
+				id = BTN_ID_L4;
+			}
 			else if (joy == JOY_R1)
 			{
 				btn = BTN_R1;
@@ -3216,6 +3561,11 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 			{
 				btn = BTN_R3;
 				id = BTN_ID_R3;
+			}
+			else if (joy == JOY_R4)
+			{
+				btn = BTN_R4;
+				id = BTN_ID_R4;
 			}
 			else if (joy == JOY_PLUS)
 			{
@@ -3625,6 +3975,7 @@ static void PWR_updateBatteryStatus(void)
 	PLAT_getBatteryStatusFine(&is_charging, &charge);
 	SDL_AtomicSet(&pwr.is_charging, is_charging);
 	SDL_AtomicSet(&pwr.charge, charge);
+	SDL_AtomicSet(&pwr.is_usb_connected, PLAT_isUSBConnected());
 
 	// this is technically redundant, but PWR_update() might not always be called to conserve battery and cycles
 	LEDS_applyRules();
@@ -3973,7 +4324,8 @@ static void PWR_waitForWake(void)
 			SDL_Delay(200);
 			if (SDL_GetTicks() - sleep_ticks >= sleepDelay)
 			{ // increased to two minutes
-				if (SDL_AtomicGet(&pwr.is_charging))
+				if (SDL_AtomicGet(&pwr.is_charging) ||
+					(CFG_getKeepAwakeWhenUSB() && SDL_AtomicGet(&pwr.is_usb_connected)))
 				{
 					sleep_ticks += 60000; // check again in a minute
 					continue;
@@ -4054,13 +4406,18 @@ void PWR_enableAutosleep(void)
 }
 int PWR_preventAutosleep(void)
 {
-	return SDL_AtomicGet(&pwr.is_charging) || !pwr.can_autosleep || GetHDMI();
+	return SDL_AtomicGet(&pwr.is_charging) || !pwr.can_autosleep || GetHDMI() ||
+		   (CFG_getKeepAwakeWhenUSB() && SDL_AtomicGet(&pwr.is_usb_connected));
 }
 
 // updated by PWR_updateBatteryStatus()
 int PWR_isCharging(void)
 {
 	return SDL_AtomicGet(&pwr.is_charging);
+}
+int PWR_isUSBConnected(void)
+{
+	return SDL_AtomicGet(&pwr.is_usb_connected);
 }
 int PWR_getBattery(void)
 { // 10-100 in 10-20% fragments
@@ -4189,12 +4546,12 @@ void LEDS_updateLeds(bool indicator_only)
 		LOG_error("LEDS_updateLeds: lights not initialized, skipping\n");
 		return;
 	}
-
-	int lightsize = 3;
+		
 	char *device = getenv("DEVICE");
-	int is_brick = exactMatch("brick", device);
-	if (is_brick)
-		lightsize = 4;
+	int lightsize = exactMatch("brick", device) ? 4 
+		: exactMatch("brickpro", device) ? 5 
+		: 3; // smartpro, smartpro s
+
 	if(!lights)
 	{
 		LOG_error("LEDS_updateLeds called but lights is NULL\n");

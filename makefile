@@ -125,8 +125,9 @@ ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))
 	cp ./workspace/all/minarch/build/$(PLATFORM)/liblzma.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libzstd.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 
-	# libchdr for RetroAchievements CHD hashing
+	# libchdr and libcrypto for RetroAchievements
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.* ./build/SYSTEM/$(PLATFORM)/lib/
+	cp ./workspace/all/minarch/build/$(PLATFORM)/libcrypto.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 
 ifneq (,$(filter $(PLATFORM),tg5040 my355))
 	# liblz4 for Rewind support

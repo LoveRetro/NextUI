@@ -48,6 +48,11 @@ void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
 	*charge = 100;
 }
 
+int PLAT_isUSBConnected(void)
+{
+	return 0;
+}
+
 void PLAT_enableBacklight(int enable) {
 	// buh
 }
@@ -62,7 +67,6 @@ void PLAT_powerOff(int reboot) {
 
 ///////////////////////////////
 
-volatile int useAutoCpu = 0;
 void PLAT_setCPUSpeed(int speed) {
 	// buh
 }

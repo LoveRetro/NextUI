@@ -93,14 +93,17 @@ extern int currentshaderdsth;
 extern int currentshadertexw;
 extern int currentshadertexh;
 extern int should_rotate;
-extern volatile int useAutoCpu;
-
 enum {
 	ASSET_WHITE_PILL,
 	ASSET_BLACK_PILL,
 	ASSET_DARK_GRAY_PILL,
+	ASSET_WHITE_RECT,
+	ASSET_BLACK_RECT,
+	ASSET_DARK_GRAY_RECT,
 	ASSET_OPTION,
+	ASSET_OPTION_RECT,
 	ASSET_BUTTON,
+	ASSET_BUTTON_RECT,
 	ASSET_PAGE_BG,
 	ASSET_STATE_BG,
 	ASSET_PAGE,
@@ -146,6 +149,50 @@ enum {
 	ASSET_SUSPEND,
 
 	ASSET_COUNT,
+};
+
+enum {
+	INPUT_BUTTON_A,
+	INPUT_BUTTON_A_ALT1,
+	INPUT_BUTTON_A_ALT2,
+	INPUT_BUTTON_B,
+	INPUT_BUTTON_B_ALT1,
+	INPUT_BUTTON_B_ALT2,
+	INPUT_BUTTON_X,
+	INPUT_BUTTON_X_ALT1,
+	INPUT_BUTTON_X_ALT2,
+	INPUT_BUTTON_Y,
+	INPUT_BUTTON_Y_ALT1,
+	INPUT_BUTTON_Y_ALT2,
+	INPUT_DPAD_UP,
+	INPUT_DPAD_UP_ALT1,
+	INPUT_DPAD_UP_ALT2,
+	INPUT_DPAD_DOWN,
+	INPUT_DPAD_DOWN_ALT1,
+	INPUT_DPAD_DOWN_ALT2,
+	INPUT_DPAD_LEFT,
+	INPUT_DPAD_LEFT_ALT1,
+	INPUT_DPAD_LEFT_ALT2,
+	INPUT_DPAD_RIGHT,
+	INPUT_DPAD_RIGHT_ALT1,
+	INPUT_DPAD_RIGHT_ALT2,
+	INPUT_DPAD_UP_DOWN,
+	INPUT_DPAD_UP_DOWN_ALT1,
+	INPUT_DPAD_UP_DOWN_ALT2,
+	INPUT_DPAD_LEFT_RIGHT,
+	INPUT_DPAD_LEFT_RIGHT_ALT1,
+	INPUT_DPAD_LEFT_RIGHT_ALT2,
+	INPUT_DPAD_ALL,
+	INPUT_DPAD_ALL_ALT1,
+	INPUT_DPAD_ALL_ALT2,
+	INPUT_DPAD,
+	INPUT_DPAD_ALT1,
+	INPUT_DPAD_ALT2,
+
+	INPUT_BUTTON_HOME,
+	INPUT_BUTTON_POWER,
+	
+	INPUT_COUNT
 };
 
 typedef struct GFX_Fonts {
@@ -263,7 +310,7 @@ SDL_Surface* GFX_init(int mode);
 
 void GFX_setMode(int mode);
 int GFX_hdmiChanged(void);
-SDL_Color /*GFX_*/ uintToColour(uint32_t colour);
+SDL_Color /*GFX_*/ uintToColour(uint32_t rgba);
 
 #define GFX_clear PLAT_clearVideo // (SDL_Surface* screen)
 #define GFX_clearAll PLAT_clearAll // (void)
@@ -334,6 +381,11 @@ void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_
 
 int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
 void GFX_blitHardwareHints(SDL_Surface* dst, int show_setting);
+void GFX_blitTopCurtain(SDL_Surface* dst);
+void GFX_blitBottomCurtain(SDL_Surface* dst);
+
+void GFX_blitInputAssetColor(int input, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color);
+void GFX_blitInputAsset(int input, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);
 
 typedef enum {
 	INDICATOR_BRIGHTNESS = 1,
@@ -509,6 +561,7 @@ void PWR_enableAutosleep(void);
 int PWR_preventAutosleep(void);
 
 int PWR_isCharging(void);
+int PWR_isUSBConnected(void);
 int PWR_getBattery(void);
 
 int PWR_isOnline(void);
@@ -557,10 +610,10 @@ void LEDS_setProfile(int profile); // enum LightProfile
 void LEDS_updateLeds(bool indicator_only);
 
 enum {
-	CPU_SPEED_MENU,
-	CPU_SPEED_POWERSAVE,
-	CPU_SPEED_NORMAL,
-	CPU_SPEED_PERFORMANCE,
+	CPU_SPEED_AUTO = 0,
+	CPU_SPEED_PERFORMANCE = 1,
+	CPU_SPEED_POWERSAVE = 2,
+	CPU_SPEED_MENU = CPU_SPEED_AUTO, // legacy
 };
 #define PWR_setCPUSpeed PLAT_setCPUSpeed
 
@@ -660,14 +713,19 @@ int PLAT_supportsOverscan(void);
 #define PWR_LOW_CHARGE 10
 void PLAT_getBatteryStatus(int* is_charging, int* charge); // 0,1 and 0,10,20,40,60,80,100
 void PLAT_getBatteryStatusFine(int* is_charging, int* charge); // 0,1 and 0-100
+int PLAT_isUSBConnected(void); // 1 if the device is configured as a USB gadget on a host, else 0
 void PLAT_enableBacklight(int enable);
 int PLAT_supportsDeepSleep(void);
 int PLAT_deepSleep(void);
 void PLAT_powerOff(int reboot);
 
+void Perf_setCPUMonitorEnabled(int enabled);
+int Perf_isCPUMonitorEnabled(void);
+int Perf_tryBeginCPUMonitor(void);
+void Perf_endCPUMonitor(void);
+
 void *PLAT_cpu_monitor(void *arg);
 void PLAT_setCPUSpeed(int speed); // enum
-void PLAT_setCustomCPUSpeed(int speed);
 // note: this affects the calling thread and every thread spawned from it (after)
 void PLAT_pinToCores(int core_type); // CPU_CORE_EFFICIENCY or CPU_CORE_PERFORMANCE
 void PLAT_setRumble(int strength);
