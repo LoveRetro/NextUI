@@ -184,6 +184,7 @@ static struct PWR_Context
 
 	pthread_t battery_pt;
 	SDL_atomic_t is_charging;
+	SDL_atomic_t is_usb_connected;
 	SDL_atomic_t charge;
 
 	SDL_atomic_t is_online;
@@ -3327,7 +3328,7 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 		{
 			uint8_t code = event.key.keysym.scancode;
 			pressed = event.type == SDL_KEYDOWN;
-			LOG_info("key event: %i (%i)\n", code,pressed);
+			// LOG_info("key event: %i (%i)\n", code,pressed);
 			if (code == CODE_UP)
 			{
 				btn = BTN_DPAD_UP;
@@ -3385,8 +3386,8 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 			}
 			else if (code == CODE_MENU_ALT)
 			{
-				btn = BTN_MENU;
-				id = BTN_ID_MENU;
+				btn = BTN_HOME;
+				id = BTN_ID_HOME;
 			}
 			else if (code == CODE_L1)
 			{
@@ -3460,7 +3461,7 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 		{
 			uint8_t joy = event.jbutton.button;
 			pressed = event.type == SDL_JOYBUTTONDOWN;
-			LOG_info("joy event: %i (%i)\n", joy,pressed);
+			// LOG_info("joy event: %i (%i)\n", joy,pressed);
 			if (joy == JOY_UP)
 			{
 				btn = BTN_DPAD_UP;
@@ -3518,8 +3519,8 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 			}
 			else if (joy == JOY_MENU_ALT)
 			{
-				btn = BTN_MENU;
-				id = BTN_ID_MENU;
+				btn = BTN_HOME;
+				id = BTN_ID_HOME;
 			}
 			else if (joy == JOY_MENU_ALT2)
 			{
@@ -3586,7 +3587,7 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 		{
 			int hats[4] = {-1, -1, -1, -1}; // -1=no change,0=up,1=down,2=left,3=right btn_ids
 			int hat = event.jhat.value;
-			LOG_info("hat event: %i\n", hat);
+			// LOG_info("hat event: %i\n", hat);
 			// TODO: safe to assume hats will always be the primary dpad?
 			// TODO: this is literally a bitmask, make it one (oh, except there's 3 states...)
 			switch (hat)
@@ -3974,6 +3975,7 @@ static void PWR_updateBatteryStatus(void)
 	PLAT_getBatteryStatusFine(&is_charging, &charge);
 	SDL_AtomicSet(&pwr.is_charging, is_charging);
 	SDL_AtomicSet(&pwr.charge, charge);
+	SDL_AtomicSet(&pwr.is_usb_connected, PLAT_isUSBConnected());
 
 	// this is technically redundant, but PWR_update() might not always be called to conserve battery and cycles
 	LEDS_applyRules();
@@ -4322,7 +4324,8 @@ static void PWR_waitForWake(void)
 			SDL_Delay(200);
 			if (SDL_GetTicks() - sleep_ticks >= sleepDelay)
 			{ // increased to two minutes
-				if (SDL_AtomicGet(&pwr.is_charging))
+				if (SDL_AtomicGet(&pwr.is_charging) ||
+					(CFG_getKeepAwakeWhenUSB() && SDL_AtomicGet(&pwr.is_usb_connected)))
 				{
 					sleep_ticks += 60000; // check again in a minute
 					continue;
@@ -4403,13 +4406,18 @@ void PWR_enableAutosleep(void)
 }
 int PWR_preventAutosleep(void)
 {
-	return SDL_AtomicGet(&pwr.is_charging) || !pwr.can_autosleep || GetHDMI();
+	return SDL_AtomicGet(&pwr.is_charging) || !pwr.can_autosleep || GetHDMI() ||
+		   (CFG_getKeepAwakeWhenUSB() && SDL_AtomicGet(&pwr.is_usb_connected));
 }
 
 // updated by PWR_updateBatteryStatus()
 int PWR_isCharging(void)
 {
 	return SDL_AtomicGet(&pwr.is_charging);
+}
+int PWR_isUSBConnected(void)
+{
+	return SDL_AtomicGet(&pwr.is_usb_connected);
 }
 int PWR_getBattery(void)
 { // 10-100 in 10-20% fragments

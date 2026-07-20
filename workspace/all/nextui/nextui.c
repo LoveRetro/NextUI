@@ -1229,6 +1229,41 @@ static void openPak(char* path) {
 	sprintf(cmd, "'%s/launch.sh'", escapeSingleQuotes(path));
 	queueNext(cmd);
 }
+
+// Run the action bound to a user-assignable button (0 == FN1, 1 == FN2).
+// Returns 1 if something was launched.
+static int runFnAction(int index) {
+	const char* action = CFG_getFnAction(index);
+	if (!action || !action[0]) return 0; // unassigned
+
+	// only "launch a Tools pak" exists so far; ignore kinds we don't know so a card
+	// configured on a newer build just does nothing here instead of misfiring
+	size_t prefix_len = strlen(FN_ACTION_PAK_PREFIX);
+	if (strncmp(action, FN_ACTION_PAK_PREFIX, prefix_len)!=0) return 0;
+
+	const char* rel = action + prefix_len;
+	if (!rel[0]) return 0;
+
+	char pak_path[256];
+	snprintf(pak_path, sizeof(pak_path), "%s/Tools/%s/%s", SDCARD_PATH, PLATFORM, rel);
+
+	char launch_path[256];
+	snprintf(launch_path, sizeof(launch_path), "%s/launch.sh", pak_path);
+	if (!exists(launch_path)) return 0; // stale binding, eg. the pak was deleted
+
+	// unlike openPak() we save where the user *is*, not the pak itself, so exiting
+	// the pak comes back to the same spot in the list
+	if (top && top->entries->count>0) {
+		Entry* entry = top->entries->items[top->selected];
+		saveLast(entry->path);
+	}
+
+	char cmd[256];
+	// NOTE: escapeSingleQuotes() modifies pak_path in place
+	snprintf(cmd, sizeof(cmd), "'%s/launch.sh'", escapeSingleQuotes(pak_path));
+	queueNext(cmd);
+	return 1;
+}
 static void openRom(char* path, char* last) {
 	LOG_info("openRom(%s,%s)\n", path, last);
 
@@ -2300,6 +2335,15 @@ int main (int argc, char *argv[]) {
 
 		PWR_update(&dirty, &show_setting, NULL, NULL);
 
+		// user-assignable buttons, handled before the per-screen input so they work
+		// from the game list, the game switcher and the quick menu alike.
+		// skipped while the brightness/volume overlay owns input, same as L1/R1 below.
+		if (!show_setting) {
+			if (PAD_justPressed(BTN_FN1)) runFnAction(0);
+			else if (PAD_justPressed(BTN_FN2)) runFnAction(1);
+			else if (PAD_justPressed(BTN_FN3)) runFnAction(2);
+		}
+
 		int is_online = PWR_isOnline();
 		if (was_online!=is_online)
 			dirty = 1;
@@ -2894,7 +2938,7 @@ int main (int argc, char *argv[]) {
 					else {
 						SDL_Rect preview_rect = {ox,oy,screen->w,screen->h};
 						SDL_Surface * tmpsur = SDL_CreateRGBSurfaceWithFormat(0,screen->w,screen->h,screen->format->BitsPerPixel,screen->format->format);
-						SDL_FillRect(tmpsur, &preview_rect, CFG_getColor(COLOR_BACKGROUND));
+						SDL_FillRect(tmpsur, &preview_rect, THEME_COLOR7);
 						if(lastScreen == SCREEN_GAME) {
 							GFX_animateSurfaceOpacity(tmpsur,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,LAYER_BACKGROUND);
 						} else if(lastScreen == SCREEN_GAMELIST) {
@@ -3223,7 +3267,7 @@ int main (int argc, char *argv[]) {
 				SDL_LockMutex(animMutex);
 				if (list_show_entry_names) {
 					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
-					GFX_drawOnLayer(globalText, SCALE1(PADDING+BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
+					GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
 				}
 				SDL_UnlockMutex(animMutex);
 			}

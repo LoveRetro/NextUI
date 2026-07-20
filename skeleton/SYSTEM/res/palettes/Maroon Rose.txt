@@ -1,0 +1,9 @@
+version=1
+name=Maroon Rose
+color1=0xE9A6A0FF
+color2=0x1C0B0EFF
+color3=0x2E100CFF
+color4=0xF3E6E4FF
+color5=0x2E100CFF
+color6=0x9C7B78FF
+color7=0x271014FF

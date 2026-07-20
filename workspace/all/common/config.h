@@ -82,6 +82,15 @@ enum {
 	COLOR_BACKGROUND = 7
 };
 
+// Number of user-assignable button slots (FN1/FN2/FN3). Slots are fixed and global,
+// not per-device: which of them a given device actually exposes is a UI question.
+#define FN_BUTTON_COUNT 3
+
+// Prefix for the "launch a Tools pak" action, followed by a path relative to
+// Tools/<PLATFORM> (e.g. "pak:Bootlogo.pak"). The platform dir is resolved at launch
+// time rather than stored, so settings stay portable when a card moves between devices.
+#define FN_ACTION_PAK_PREFIX "pak:"
+
 // Input hint styles
 enum {
 	INPUT_STYLE_TEXT = -1, // Rendered text
@@ -107,6 +116,9 @@ typedef struct
 	int gameSwitcherCurtain;
 	double gameArtWidth;	 // [0,1] -> 0-100% of screen width
 	int inputPromptStyle; // enum
+	char paletteName[64]; // selected predefined color palette; empty == custom colors. keep in sync with PALETTE_NAME_MAX in palette.h
+	uint32_t customColors[7]; // last custom (non-palette) colors, restored by CFG_selectCustomPalette.
+	                          // in-memory only (not persisted): resets to defaults each app launch
 
 	// font loading/unloading callback
     FontLoad_callback_t onFontChange;
@@ -132,10 +144,15 @@ typedef struct
 	// Mute switch
 	bool muteLeds;
 
+	// User-assignable buttons (see BTN_FN1/BTN_FN2/BTN_FN3 in platform.h).
+	// Action strings, "" == unassigned. See CFG_getFnAction().
+	char fnAction[FN_BUTTON_COUNT][256];
+
 	// Power
 	uint32_t screenTimeoutSecs;
 	uint32_t suspendTimeoutSecs;
 	bool powerOffProtection;
+	bool keepAwakeWhenUSB;
 
 	// Emulator
 	int saveFormat;
@@ -197,6 +214,7 @@ typedef struct
 #define CFG_DEFAULT_COLOR_LIST_TEXT_SELECTED CFG_DEFAULT_COLOR5
 #define CFG_DEFAULT_COLOR_HINT CFG_DEFAULT_COLOR6
 #define CFG_DEFAULT_COLOR_BACKGROUND CFG_DEFAULT_COLOR7
+#define CFG_DEFAULT_PALETTE_NAME "" // empty == custom colors
 #define CFG_DEFAULT_THUMBRADIUS 20 // unscaled!
 #define CFG_DEFAULT_SHOWCLOCK false
 #define CFG_DEFAULT_CLOCK24H true
@@ -211,12 +229,14 @@ typedef struct
 #define CFG_DEFAULT_SCREENTIMEOUTSECS 60
 #define CFG_DEFAULT_SUSPENDTIMEOUTSECS 30
 #define CFG_DEFAULT_POWEROFFPROTECTION true
+#define CFG_DEFAULT_KEEPAWAKEWHENUSB false
 #define CFG_DEFAULT_HAPTICS false
 #define CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND true
 #define CFG_DEFAULT_SAVEFORMAT SAVE_FORMAT_SAV
 #define CFG_DEFAULT_STATEFORMAT STATE_FORMAT_SAV
 #define CFG_DEFAULT_EXTRACTEDFILENAME false
 #define CFG_DEFAULT_MUTELEDS false
+#define CFG_DEFAULT_FN_ACTION "" // unassigned
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
@@ -276,6 +296,27 @@ void CFG_setFontStyle(int style);
 // 3 - Background Color (unused)
 uint32_t CFG_getColor(int id);
 void CFG_setColor(int id, uint32_t color);
+// Parse a hex color string into a packed 0xRRGGBBAA value. Accepts both legacy
+// RGB (RRGGBB, treated as opaque) and RGBA (RRGGBBAA), with or without "0x".
+uint32_t CFG_parseHexColor(const char *hexColor);
+// The name of the currently selected predefined color palette (see palette.h), or
+// "" for custom colors.
+const char* CFG_getPaletteName(void);
+// Atomically set all 7 UI colors and record `name` as the selected palette, so the
+// persisted palette name can never point at a color set that doesn't match it.
+// This is the only way to select a named (non-custom) palette; there is no setter
+// for the name alone. If a palette isn't already active, the current colors are
+// preserved first so CFG_selectCustomPalette() can restore them later.
+void CFG_applyPalette(const char *name, const uint32_t colors[7]);
+// Detach from any predefined palette without changing the current colors ("Custom").
+// Used when an individual color edit invalidates the current palette selection -
+// deliberately does not restore the pre-palette colors, since the edit itself is
+// the new intended state. For that, see CFG_selectCustomPalette().
+void CFG_clearPalette(void);
+// Explicitly select "Custom": if a predefined palette is active, restores the
+// colors that were in effect before it was applied and clears the palette name.
+// A no-op if already on Custom (colors are left untouched, not reset).
+void CFG_selectCustomPalette(void);
 // Time in secs before the device enters screen-off mode.
 uint32_t CFG_getScreenTimeoutSecs(void);
 void CFG_setScreenTimeoutSecs(uint32_t secs);
@@ -285,6 +326,9 @@ void CFG_setSuspendTimeoutSecs(uint32_t secs);
 // Enable/disable PMIC power-off protection mode.
 bool CFG_getPowerOffProtection(void);
 void CFG_setPowerOffProtection(bool enable);
+// Keep the device awake while it is connected to a host as a USB device.
+bool CFG_getKeepAwakeWhenUSB(void);
+void CFG_setKeepAwakeWhenUSB(bool enable);
 // Show/hide clock in the status pill.
 bool CFG_getShowClock(void);
 void CFG_setShowClock(bool show);
@@ -340,6 +384,15 @@ void CFG_setUseExtractedFileName(bool);
 // Enable/disable mute also shutting off LEDs.
 bool CFG_getMuteLEDs(void);
 void CFG_setMuteLEDs(bool);
+// The action bound to a user-assignable button, where `index` is 0 (FN1), 1 (FN2) or
+// 2 (FN3, the "HOME" button).
+// The value is a "<kind>:<arg>" action string so more kinds can be added later without
+// migrating existing settings; "" means unassigned. The only kind today is
+// FN_ACTION_PAK_PREFIX. Callers must ignore kinds they don't recognise, so a card
+// configured on a newer build degrades to "does nothing" on an older one.
+// Returns "" for an out of range index.
+const char* CFG_getFnAction(int index);
+void CFG_setFnAction(int index, const char* action);
 // Set game art width percentage.
 double CFG_getGameArtWidth(void);
 void CFG_setGameArtWidth(double zeroToOne);
