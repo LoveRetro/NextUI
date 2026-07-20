@@ -211,8 +211,35 @@ void PLAT_getBatteryStatusFine(int* is_charging, int* charge)
 
 int PLAT_isUSBConnected(void)
 {
-	// Not implemented for this platform yet.
-	return 0;
+	// The UDC (USB Device Controller) reports "configured" once a host has
+	// enumerated us as a USB gadget. This is independent of merely being
+	// plugged into a charger, so it lets us tell "connected to a computer"
+	// apart from "connected to power".
+	DIR *dir = opendir("/sys/class/udc");
+	if (!dir)
+		return 0;
+
+	int connected = 0;
+	struct dirent *entry;
+	while ((entry = readdir(dir)) != NULL)
+	{
+		if (entry->d_name[0] == '.')
+			continue;
+
+		char path[512];
+		snprintf(path, sizeof(path), "/sys/class/udc/%s/state", entry->d_name);
+
+		char state[32] = {0};
+		getFile(path, state, sizeof(state));
+		if (strncmp(state, "configured", 10) == 0)
+		{
+			connected = 1;
+			break;
+		}
+	}
+
+	closedir(dir);
+	return connected;
 }
 
 #define BLANK_PATH "/sys/class/backlight/backlight/bl_power"

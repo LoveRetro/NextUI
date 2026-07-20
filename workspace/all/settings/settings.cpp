@@ -316,7 +316,7 @@ namespace {
         }
 
         bool hasAnalogSticks() const {
-            return m_model == SmartPro || m_model == SmartProS || m_model == BrickPro;
+            return m_platform == my355 || m_model == SmartPro || m_model == SmartProS || m_model == BrickPro;
         }
 
         bool hasWifi() const {
@@ -634,7 +634,10 @@ int main(int argc, char *argv[])
                 [](const std::any &value) { CFG_setPowerOffProtection(std::any_cast<bool>(value)); },
                 []() { CFG_setPowerOffProtection(CFG_DEFAULT_POWEROFFPROTECTION); }}
             );
-
+        }
+        
+        if(deviceInfo.getPlatform() == DeviceInfo::tg5040 || deviceInfo.getPlatform() == DeviceInfo::my355)
+        {
             systemItems.push_back(
                 new MenuItem{ListItemType::Generic, "Keep awake over USB", "Prevent screen-off and sleep while connected to a\ncomputer as a USB device (not just charging).", {false, true}, on_off,
                 []() -> std::any { return CFG_getKeepAwakeWhenUSB(); },
