@@ -21,7 +21,7 @@ jobs:
       release-name: ${{ steps.release-name.outputs.RELEASE_NAME }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -45,7 +45,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
 
       - name: Generate cores matrix
         id: cores
@@ -67,7 +67,7 @@ jobs:
         core: ${{ fromJson(needs.core-matrix.outputs.cores) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
 
       - name: Setup
         run: make setup
@@ -90,7 +90,7 @@ jobs:
       RELEASE_NAME: ${{ needs.prepare.outputs.release-name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
 
       - name: Install dependencies
         run: |
