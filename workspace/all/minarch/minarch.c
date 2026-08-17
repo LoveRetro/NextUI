@@ -1,3 +1,4 @@
+#include <malloc.h>
 #include <stdlib.h>
 #include <msettings.h>
 
@@ -138,6 +139,11 @@ int main(int argc , char* argv[]) {
 
 	if(argc < 2)
 		return EXIT_FAILURE;
+
+	// keep malloc arenas and thread stacks out of the address range dynarec cores
+	// need for their JIT cache (must happen before any thread is created)
+	mallopt(M_ARENA_MAX, 2);
+	SDL_SetHint(SDL_HINT_THREAD_STACK_SIZE, "1048576");
 
 	PWR_setCPUSpeed(CPU_SPEED_PERFORMANCE); // start in performance mode for fast loading
 	PWR_pinToCores(CPU_CORE_PERFORMANCE); // thread affinity
