@@ -3861,6 +3861,7 @@ int PAD_tappedSelect(uint32_t now)
 ///////////////////////////////
 
 // the RLIMIT_STACK default (8MB per thread) wastes address space
+// workaround for libretro/gpsp#248 and NextUI#814
 #define THREAD_STACK_SIZE (1024 * 1024)
 
 static int spawn_thread(pthread_t *pt, void *(*fn)(void *), void *arg)

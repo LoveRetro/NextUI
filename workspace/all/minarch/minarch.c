@@ -144,6 +144,7 @@ int main(int argc , char* argv[]) {
 
 	// keep malloc arenas and thread stacks out of the address range dynarec cores
 	// need for their JIT cache (must happen before any thread is created)
+	// workaround for libretro/gpsp#248 and NextUI#814
 #ifdef __GLIBC__
 	mallopt(M_ARENA_MAX, 2); // glibc extension
 #endif
