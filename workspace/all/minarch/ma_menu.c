@@ -239,19 +239,6 @@ static const rc_client_achievement_t** ach_menu_achievements = NULL; // Flattene
 static int ach_menu_count = 0;
 static bool ach_filter_locked_only = false;  // Y button toggle: show all or locked only
 
-// Active-challenge achievement ids for the current menu open. Active challenges
-// are pinned to the top of the list and flagged with a trophy in the row.
-#define ACH_MAX_CHALLENGE 16
-static uint32_t ach_challenge_ids[ACH_MAX_CHALLENGE];
-static int ach_challenge_count = 0;
-
-static bool ach_is_active_challenge(uint32_t id) {
-	for (int i = 0; i < ach_challenge_count; i++) {
-		if (ach_challenge_ids[i] == id) return true;
-	}
-	return false;
-}
-
 // Achievement sorting comparison function
 static int ach_compare_unlocked_first(const void* a, const void* b) {
 	const rc_client_achievement_t* achA = *(const rc_client_achievement_t**)a;
@@ -590,7 +577,6 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 	// challenges remain at the top regardless of sort.
 	const rc_client_achievement_t** all_achievements = calloc(total_achievements, sizeof(rc_client_achievement_t*));
 	int idx = 0;
-	ach_challenge_count = 0;
 
 	// Pass 1: pinned active challenges
 	for (uint32_t b = 0; b < ach_menu_list->num_buckets && idx < total_achievements; b++) {
@@ -598,9 +584,6 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 		if (bucket->bucket_type != RC_CLIENT_ACHIEVEMENT_BUCKET_ACTIVE_CHALLENGE) continue;
 		for (uint32_t a = 0; a < bucket->num_achievements && idx < total_achievements; a++) {
 			all_achievements[idx++] = bucket->achievements[a];
-			if (ach_challenge_count < ACH_MAX_CHALLENGE) {
-				ach_challenge_ids[ach_challenge_count++] = bucket->achievements[a]->id;
-			}
 		}
 	}
 	int challenge_pin_count = idx;
@@ -789,7 +772,7 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 				const rc_client_achievement_t* ach = filtered[j];
 				bool is_muted = RA_isAchievementMuted(ach->id);
 				bool is_offline_pending = RA_isAchievementOfflinePending(ach->id);
-				bool is_challenge = ach_is_active_challenge(ach->id);
+				bool is_challenge = ach->bucket == RC_CLIENT_ACHIEVEMENT_BUCKET_ACTIVE_CHALLENGE;
 				bool is_selected = (row == selected_row);
 				SDL_Color text_color = COLOR_WHITE;
 
