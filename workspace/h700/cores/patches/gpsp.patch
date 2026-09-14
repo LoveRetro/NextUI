@@ -24,3 +24,14 @@ index dc4b60dec7f70a153dbc2eb849cd5acfc90f9d4d..94c7f8dd037284153b6858730a10b6aa
  # Windows
  else
  	TARGET := $(TARGET_NAME)_libretro.dll
+diff --git a/savestate.c b/savestate.c
+--- a/savestate.c
++++ b/savestate.c
+@@ -146,3 +146,7 @@ bool gba_load_state(const void* src)
++  /* Saved frequency steps may use a different output rate. Recompute them
++   * after restoring the timers, sound channels and I/O registers. */
++  sound_frequency_changed();
++
+   // Generate converted palette (since it is not saved)
+   for(i = 0; i < 512; i++)
+   {
