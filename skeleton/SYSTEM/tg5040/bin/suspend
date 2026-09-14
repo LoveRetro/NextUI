@@ -20,6 +20,17 @@ before() {
 	# Subshell ensures a crashing hook cannot block suspend.
 	( "$SYSTEM_PATH/bin/run_hooks.sh" pre-sleep.d --sync-only ) >/dev/null 2>&1 || true
 
+	# trimui_inputd polls the hall sticks on /dev/i2c-3 every 16ms. Those
+	# transfers run into suspend entry and the Brick Pro never resumes.
+	# Stock keymon raises this flag at screen blank and inputd stops
+	# polling while it exists; we run stock inputd but never set it.
+	# This pauses input on every model, but only the Brick Pro has i2c
+	# stick traffic to stop.
+	>&2 echo "Pausing stock input daemon..."
+	touch /tmp/system_suspend
+	# let an in-flight poll drain before we hand over to the kernel
+	sleep 0.2
+
 	>&2 echo "Saving mixer state..."
 	mkdir -p "$asound_state_dir"
 	alsactl --file "$asound_state_dir/asound.state.pre" store || true
@@ -94,6 +105,10 @@ for i in $(seq 1 $sleep_max_tries); do
 	>&2 echo "Deep sleep failed: retrying in 3 seconds"
 	sleep 3
 done
+
+# Let inputd resume polling. Kept out of after() so input comes back even
+# if restarting the network services is slow.
+rm -f /tmp/system_suspend
 
 # Resume services in background to reduce UI latency
 after &
