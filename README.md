@@ -1,5 +1,3 @@
-<h1>This project is currently undergoing a license transition. See [#765](https://github.com/LoveRetro/NextUI/issues/765) for details.</h1>
-
 <div align="center">
 
   <img width=128px src="github/logo_outline.png">
@@ -39,6 +37,18 @@
 A CFW based of MinUI with a rebuild emulation engine and tons of added features for the TrimUI Brick and Smart Pro. 
 
 For other devices we recommend checking out [MinUI](https://github.com/shauninman/MinUI)
+
+## License
+
+This project is licensed under [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0).
+Personal, educational, and non-commercial use is freely permitted. Commercial use is not.
+See [LICENSE](LICENSE) and [NOTICE](NOTICE) for full details.
+
+> **Note:** This project was previously licensed under GPL 3.0. As of August 15, 2026, the license
+> has changed to PolyForm Noncommercial 1.0.0. The full transition history and rationale
+> is documented in [issue #765](https://github.com/LoveRetro/NextUI/issues/765).
+
+## Changes and additions
 
 - Fixed both screen tearing and sync stutter problems of MinUI by rebuilding the emulator engine core
 - Game switcher menu (Onion OS style) by [@frysee](https://github.com/frysee)

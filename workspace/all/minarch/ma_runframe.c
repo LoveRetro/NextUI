@@ -1,5 +1,6 @@
 #include <SDL2/SDL.h>
 #include "ma_internal.h"
+#include "ma_cheats.h"
 #include "ma_rewind.h"
 #include "ma_input.h"
 #include "ma_config.h"
@@ -46,6 +47,8 @@ static void limitFF(void) {
 }
 
 void run_frame(void) {
+	Cheats_apply();
+
 	// if rewind is toggled, fast-forward toggle must stay off; fast-forward hold pauses rewind
 	int do_rewind = (rewind_pressed || rewind_toggle) && !(rewind_toggle && ff_hold_active);
 	if (do_rewind) {

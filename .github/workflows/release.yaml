@@ -28,7 +28,7 @@ jobs:
       release-name: ${{ steps.release-name.outputs.RELEASE_NAME }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
 
       - name: Generate cores matrix
         id: cores
@@ -88,7 +88,7 @@ jobs:
         core: ${{ fromJson(needs.core-matrix.outputs.cores) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
 
       - name: Setup
         run: make setup
@@ -111,7 +111,7 @@ jobs:
       RELEASE_NAME: ${{ needs.prepare.outputs.release-name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
 
       - name: Install dependencies
         run: |
@@ -188,7 +188,7 @@ jobs:
           echo '::warning title=Attest skipped::Attest action requires permissions and is performed only for main branch.'
 
       - name: Attest Build Provenance
-        uses: actions/attest-build-provenance@v4.1.1
+        uses: actions/attest-build-provenance@v4.2.2
         if: github.ref == 'refs/heads/main'
         with:
           subject-path: |
@@ -203,7 +203,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 

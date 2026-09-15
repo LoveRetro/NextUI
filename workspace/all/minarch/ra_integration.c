@@ -127,9 +127,11 @@ static RA_GetMemorySizeFunc ra_get_memory_size = NULL;
 static struct retro_memory_map* ra_memory_map = NULL;
 static struct retro_memory_descriptor* ra_memory_map_descriptors = NULL;
 
-// Memory regions for rcheevos (initialized per-game based on console type)
+// Memory regions for rcheevos, built lazily on the first memory read once
+// rcheevos knows which console the game belongs to (see ra_read_memory)
 static rc_libretro_memory_regions_t ra_memory_regions;
 static bool ra_memory_regions_initialized = false;
+static bool ra_memory_init_attempted = false;
 
 // Pending game load storage (for async login race condition)
 #define RA_MAX_PATH 512
@@ -749,8 +751,28 @@ static void ra_clear_muted_achievements(void) {
 }
 
 /*****************************************************************************
+ * Helper: Drop the current memory regions
+ *****************************************************************************/
+static void ra_reset_memory_regions(void) {
+	if (ra_memory_regions_initialized) {
+		rc_libretro_memory_destroy(&ra_memory_regions);
+		ra_memory_regions_initialized = false;
+	}
+	ra_memory_init_attempted = false;
+}
+
+/*****************************************************************************
+ * Helper: Build the memory regions for the console rcheevos identified
+ *****************************************************************************/
+static bool ra_init_memory_for_game(rc_client_t* client) {
+	const rc_client_game_t* game = rc_client_get_game_info(client);
+	RA_initMemoryRegions(game ? (uint32_t)game->console_id : RC_CONSOLE_UNKNOWN);
+	return ra_memory_regions_initialized;
+}
+
+/*****************************************************************************
  * Helper: Get core memory info callback for rc_libretro
- * 
+ *
  * This callback is used by rc_libretro_memory_init to query memory regions
  * from the libretro core when no memory map is provided.
  *****************************************************************************/
@@ -767,42 +789,33 @@ static void ra_get_core_memory_info(uint32_t id, rc_libretro_core_memory_info_t*
 
 /*****************************************************************************
  * Callback: Memory read
- * 
+ *
  * rcheevos calls this to read emulator memory for achievement checking.
  * We use rc_libretro_memory_read which handles memory maps properly.
+ *
+ * The regions are built on the first read: the console is only known once
+ * rcheevos has identified the game, and it validates achievement addresses
+ * before invoking ra_game_loaded_callback().
  *****************************************************************************/
 
 static uint32_t ra_read_memory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, rc_client_t* client) {
-	(void)client; // unused
-	
-	// Use the properly initialized memory regions
+	if (!ra_memory_regions_initialized && !ra_memory_init_attempted) {
+		ra_init_memory_for_game(client);
+	}
+
 	if (ra_memory_regions_initialized) {
 		return rc_libretro_memory_read(&ra_memory_regions, address, buffer, num_bytes);
 	}
-	
-	// Fallback for cases where memory regions aren't initialized yet
-	// This shouldn't happen in normal operation, but provides backwards compatibility
-	if (!ra_get_memory_data || !ra_get_memory_size) {
-		return 0;
+
+	// Some cores only expose their memory after the first retro_run().  While
+	// loading, report it as readable so rcheevos doesn't disable everything —
+	// RA_doFrame() retries the init once the core is running.
+	if (ra_game_state != GAME_LOADED) {
+		memset(buffer, 0, num_bytes);
+		return num_bytes;
 	}
-	
-	// RETRO_MEMORY_SYSTEM_RAM = 0
-	void* mem_data = ra_get_memory_data(0);
-	size_t mem_size = ra_get_memory_size(0);
-	
-	if (!mem_data || address + num_bytes > mem_size) {
-		// Try save RAM as fallback (some cores expose different memory types)
-		// RETRO_MEMORY_SAVE_RAM = 1
-		mem_data = ra_get_memory_data(1);
-		mem_size = ra_get_memory_size(1);
-		
-		if (!mem_data || address + num_bytes > mem_size) {
-			return 0;
-		}
-	}
-	
-	memcpy(buffer, (uint8_t*)mem_data + address, num_bytes);
-	return num_bytes;
+
+	return 0;
 }
 
 /*****************************************************************************
@@ -1951,9 +1964,11 @@ static void ra_game_loaded_callback(int result, const char* error_message,
 		// for retry).  Must happen before any early returns below.
 		ra_clear_pending_game();
 
-		// Initialize memory regions using the system rcheevos actually detected.
-		if (game) {
-			RA_initMemoryRegions((uint32_t)game->console_id);
+		// Regions are normally already built by ra_read_memory() during the
+		// load sequence; retry here if the core wasn't ready then.
+		if (!ra_memory_regions_initialized && !ra_init_memory_for_game(client)) {
+			RA_LOG_ERROR("Core exposes no memory yet — achievement processing "
+			             "starts when it does\n");
 		}
 
 		if (game && game->id != 0) {
@@ -2208,11 +2223,8 @@ void RA_quit(void) {
 	RA_Badges_quit();
 	
 	// Clean up memory regions
-	if (ra_memory_regions_initialized) {
-		rc_libretro_memory_destroy(&ra_memory_regions);
-		ra_memory_regions_initialized = false;
-	}
-	
+	ra_reset_memory_regions();
+
 	// Free our deep-copied memory map
 	if (ra_memory_map_descriptors) {
 		free(ra_memory_map_descriptors);
@@ -2245,6 +2257,9 @@ void RA_setMemoryAccessors(RA_GetMemoryFunc get_data, RA_GetMemorySizeFunc get_s
 }
 
 void RA_setMemoryMap(const void* mmap) {
+	// Drop regions derived from the previous map so they get rebuilt from this one
+	ra_reset_memory_regions();
+
 	// Free any existing memory map copy
 	if (ra_memory_map_descriptors) {
 		free(ra_memory_map_descriptors);
@@ -2254,7 +2269,7 @@ void RA_setMemoryMap(const void* mmap) {
 		free(ra_memory_map);
 		ra_memory_map = NULL;
 	}
-	
+
 	if (!mmap) {
 		RA_LOG_DEBUG("Memory map cleared\n");
 		return;
@@ -2294,20 +2309,18 @@ void RA_setMemoryMap(const void* mmap) {
 
 void RA_initMemoryRegions(uint32_t console_id) {
 	// Clean up any existing regions
-	if (ra_memory_regions_initialized) {
-		rc_libretro_memory_destroy(&ra_memory_regions);
-		ra_memory_regions_initialized = false;
-	}
-	
+	ra_reset_memory_regions();
+	ra_memory_init_attempted = true;
+
 	// Initialize memory regions based on console type and available memory info
-	memset(&ra_memory_regions, 0, sizeof(ra_memory_regions));
-	
+	// (rc_libretro_memory_init overwrites the struct in full)
 	int result = rc_libretro_memory_init(&ra_memory_regions, ra_memory_map,
 	                                     ra_get_core_memory_info, console_id);
-	
+
 	if (result) {
 		ra_memory_regions_initialized = true;
-		RA_LOG_DEBUG("Memory regions initialized: %u regions, %zu total bytes\n",
+		RA_LOG_INFO("Memory regions initialized for console %u (%s): %u regions, %zu total bytes\n",
+		       console_id, rc_console_name(console_id),
 		       ra_memory_regions.count, ra_memory_regions.total_size);
 	} else {
 		RA_LOG_WARN("Failed to initialize memory regions for console %u\n", console_id);
@@ -2369,6 +2382,10 @@ static void ra_do_load_game(const char* rom_path, const uint8_t* rom_data, size_
 	}
 
 	RA_LOG_INFO("Identifying game: %s (Initial ID hint: %d)\n", rom_path, console_id);
+
+	// Drop regions from a previous load; ra_read_memory() rebuilds them for
+	// the console rcheevos identifies.
+	ra_reset_memory_regions();
 
 	// Use rc_client_begin_identify_and_load_game which hashes and identifies the ROM
 #ifdef RC_CLIENT_SUPPORTS_HASH
@@ -2461,11 +2478,8 @@ void RA_unloadGame(void) {
 		RA_Badges_clearMemory();
 		
 		// Clean up memory regions for this game
-		if (ra_memory_regions_initialized) {
-			rc_libretro_memory_destroy(&ra_memory_regions);
-			ra_memory_regions_initialized = false;
-		}
-		
+		ra_reset_memory_regions();
+
 		// Clear the memory map (will be set fresh when next game loads)
 		// Note: We don't free here - the core may still be loaded and the map
 		// will be needed if the same core loads another game. The memory is
@@ -2752,9 +2766,23 @@ void RA_doFrame(void) {
 	ra_process_queued_responses();
 	
 	if (ra_client && ra_game_state == GAME_LOADED) {
-		rc_client_do_frame(ra_client);
+		// Don't process achievements until the memory is mapped: rcheevos
+		// disables the achievements behind any read that fails.  Retry at 1 Hz
+		// for cores that only expose their memory once they start running.
+		if (ra_memory_regions_initialized) {
+			rc_client_do_frame(ra_client);
+		} else {
+			static uint32_t last_memory_retry = 0;
+			uint32_t now = SDL_GetTicks();
+			if (now - last_memory_retry >= 1000) {
+				last_memory_retry = now;
+				if (ra_init_memory_for_game(ra_client)) {
+					RA_LOG_INFO("Core memory became available — processing achievements\n");
+				}
+			}
+		}
 	}
-	
+
 	// Periodically process deferred state transitions (~every 500ms)
 	// This ensures connectivity probe results, login retries, and sync
 	// triggers are handled during gameplay without waiting for menu open.

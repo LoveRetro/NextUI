@@ -104,7 +104,8 @@ void Core_applyCheats(struct Cheats *cheats)
 
 	core.cheat_reset();
 	for (int i = 0; i < cheats->count; i++) {
-		if (cheats->cheats[i].enabled) {
+		// no code means it describes a memory write, applied by Cheats_apply
+		if (cheats->cheats[i].enabled && cheats->cheats[i].code) {
 			core.cheat_set(i, cheats->cheats[i].enabled, cheats->cheats[i].code);
 		}
 	}
