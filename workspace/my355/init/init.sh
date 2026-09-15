@@ -3,17 +3,21 @@
 
 set -x
 
-TAKE_BACKUP=1
-if [ -f /usr/miyoo/bin/runmiyoo-original.sh ] && [ ! -f /mnt/SDCARD/force_hook_reinstall ]; then
-	echo "already installed"
-	exit 0
-elif [ -f /mnt/SDCARD/force_hook_reinstall ]; then
+DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# payload is shared with spruceOS, only ever replace an installed hook with a newer PAYLOAD_VERSION
+if [ -f /mnt/SDCARD/force_hook_reinstall ]; then
 	echo "force reinstall requested, proceeding with installation"
 	rm -f /mnt/SDCARD/force_hook_reinstall
-	TAKE_BACKUP=0
+elif [ -f /usr/miyoo/bin/runmiyoo-original.sh ]; then
+	NEW_VERSION=$(grep PAYLOAD_VERSION "$DIR/payload/runmiyoo.sh" | awk '{print $3}')
+	OLD_VERSION=$(grep PAYLOAD_VERSION /usr/miyoo/bin/runmiyoo.sh | awk '{print $3}')
+	# unversioned hooks (older NextUI) still work, leave them alone
+	if [ -z "$OLD_VERSION" ] || [ "$NEW_VERSION" -le "$OLD_VERSION" ]; then
+		echo "already installed"
+		exit 0
+	fi
 fi
-
-DIR="$(cd "$(dirname "$0")" && pwd)"
 
 export PATH=/tmp/bin:$DIR/payload/bin:$PATH
 export LD_LIBRARY_PATH=/tmp/lib:$DIR/payload/lib:$LD_LIBRARY_PATH
@@ -62,7 +66,7 @@ unsquashfs old_rootfs.squashfs
 echo "TEXT:Injecting hook" > /tmp/show2.fifo
 echo "PROGRESS:60" > /tmp/show2.fifo
 echo "swapping runmiyoo.sh"
-if [ $TAKE_BACKUP -eq 1 ]; then
+if [ ! -f squashfs-root/usr/miyoo/bin/runmiyoo-original.sh ]; then
 	mv squashfs-root/usr/miyoo/bin/runmiyoo.sh squashfs-root/usr/miyoo/bin/runmiyoo-original.sh
 fi
 mv runmiyoo.sh squashfs-root/usr/miyoo/bin/

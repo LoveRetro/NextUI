@@ -217,13 +217,12 @@ setup: name
 special:
 	# setup miyoomini/trimui/magicx family .tmp_update in BOOT
 	mv ./build/BOOT/common ./build/BOOT/.tmp_update
-	mv ./build/BOOT/miyoo ./build/BASE/
+	mv ./build/BOOT/miyoo355 ./build/BASE/
 	mv ./build/BOOT/trimui ./build/BASE/
-	cp -R ./build/BOOT/.tmp_update ./build/BASE/miyoo/app/
-	rm -rf ./build/BASE/miyoo/app/.tmp_update/tg*
+	cp -R ./build/BOOT/.tmp_update ./build/BASE/miyoo355/app/
+	rm -rf ./build/BASE/miyoo355/app/.tmp_update/tg*
 	cp -R ./build/BOOT/.tmp_update ./build/BASE/trimui/app/
 	rm -rf ./build/BASE/trimui/app/.tmp_update/my355*
-	cp -R ./build/BASE/miyoo ./build/BASE/miyoo355
 ifneq (,$(findstring my355, $(PLATFORMS)))
 	cp -R ./workspace/my355/init ./build/BASE/miyoo355/app/my355
 	cp -r ./workspace/my355/other/squashfs/output/* ./build/BASE/miyoo355/app/my355/payload/
@@ -269,7 +268,7 @@ package: tidy
 	mv $(VENDOR_DEST)/* ./build/BASE/
 
 	# TODO: can I just add everything in BASE to zip?
-	cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves Shaders Overlays trimui miyoo miyoo355 MinUI.zip *.pakz README.txt
+	cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves Shaders Overlays trimui miyoo355 MinUI.zip *.pakz README.txt
 	cd ./build/EXTRAS && zip -r ../../releases/$(RELEASE_NAME)-extras.zip Bios Emus Roms Saves Shaders Overlays Tools README.txt
 	echo "$(RELEASE_VERSION)" > ./build/latest.txt
 
