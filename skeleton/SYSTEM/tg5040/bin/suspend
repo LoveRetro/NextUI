@@ -24,17 +24,23 @@ resume_inputd() {
 }
 
 restore_services() {
-	restore_wifi="$1"
-	restore_bluetooth="$2"
-
-	if [ -n "$restore_wifi" ]; then
-		>&2 echo "Starting wpa_supplicant..."
-		/etc/wifi/wifi_init.sh start || true
+	if [ -e /tmp/poweroff ] || [ -e /tmp/reboot ]; then
+		>&2 echo "Shutdown requested; skipping service restore"
+		return
 	fi
 
-	if [ -n "$restore_bluetooth" ]; then
+	if [ -n "$1" ]; then
+		>&2 echo "Starting wpa_supplicant..."
+		if ! /etc/wifi/wifi_init.sh start; then
+			>&2 echo "Error: Wifi did not recover after suspend"
+		fi
+	fi
+
+	if [ -n "$2" ]; then
 		>&2 echo "Starting bluetoothd..."
-		/etc/bluetooth/bt_init.sh start || true
+		if ! /etc/bluetooth/bt_init.sh start; then
+			>&2 echo "Error: Bluetooth did not recover after suspend"
+		fi
 	fi
 }
 
@@ -89,8 +95,15 @@ before() {
 		fi
 	fi
 
-	if pgrep wpa_supplicant; then
+	wifi_enabled=$(nextval.elf wifi 2>/dev/null | sed -n 's/.*"wifi": \([0-9]*\).*/\1/p')
+	wifi_process_running=
+	if pgrep wpa_supplicant >/dev/null 2>&1; then
+		wifi_process_running=1
+	fi
+	if [ "$wifi_enabled" = "1" ] || { [ -z "$wifi_enabled" ] && [ -n "$wifi_process_running" ]; }; then
 		wifid_running=1
+	fi
+	if [ -n "$wifi_process_running" ] || [ -n "$wifid_running" ]; then
 		>&2 echo "Stopping wpa_supplicant..."
 		/etc/wifi/wifi_init.sh stop || true
 		if pgrep wpa_supplicant >/dev/null 2>&1; then
@@ -175,15 +188,14 @@ for i in $(seq 1 $sleep_max_tries); do
 	fi
 done
 
-# Resume input before the slower network services are started in the background.
+# Resume input before restoring network services.
 resume_inputd
 
-# Move the restore responsibility into the background child before exiting.
-# The EXIT trap then sees empty state and becomes a no-op.
+# Clear the tracked state before restoring so the EXIT trap cannot restore twice.
 restore_wifi="$wifid_running"
 restore_bluetooth="$bluetoothd_running"
 wifid_running=
 bluetoothd_running=
-after "$restore_wifi" "$restore_bluetooth" &
+after "$restore_wifi" "$restore_bluetooth"
 
 exit "$sleep_retval"

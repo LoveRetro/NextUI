@@ -4384,6 +4384,7 @@ static void PWR_waitForWake(void)
 {
 	uint32_t sleep_ticks = SDL_GetTicks();
 	const int sleepDelay = CFG_getSuspendTimeoutSecs() * 1000;
+	int deep_sleep_attempted = 0;
 	while (!PAD_wake())
 	{
 		if (pwr.requested_wake)
@@ -4394,7 +4395,7 @@ static void PWR_waitForWake(void)
 		if (sleepDelay > 0)
 		{
 			SDL_Delay(200);
-			if (SDL_GetTicks() - sleep_ticks >= sleepDelay)
+			if (!deep_sleep_attempted && SDL_GetTicks() - sleep_ticks >= sleepDelay)
 			{ // increased to two minutes
 				if (SDL_AtomicGet(&pwr.is_charging) ||
 					(CFG_getKeepAwakeWhenUSB() && SDL_AtomicGet(&pwr.is_usb_connected)))
@@ -4405,18 +4406,32 @@ static void PWR_waitForWake(void)
 				if (PLAT_supportsDeepSleep())
 				{
 					int ret = PWR_deepSleep();
+					deep_sleep_attempted = 1;
 					if (ret == 0)
 					{
-						return;
+						// A kernel resume is not necessarily a user-requested wake.
+						// Give the input event time to arrive before deciding whether
+						// to restore the UI or remain in responsive light sleep.
+						uint32_t resumed_at = SDL_GetTicks();
+						while (SDL_GetTicks() - resumed_at < 1000)
+						{
+							if (pwr.requested_wake || PAD_wake())
+							{
+								pwr.requested_wake = 0;
+								return;
+							}
+							SDL_Delay(20);
+						}
+						LOG_warn("resumed without wake input - remaining in light sleep\n");
 					}
 					else
 					{
-						// A failed suspend can mean a driver or a required pre-sleep
-						// handshake was not ready. Restore the UI instead of chaining
-						// that failure into a second power-state transition.
-						LOG_warn("failed to enter deep sleep - waking back up\n");
-						return;
+						// Do not retry a failed transition or force a shutdown. Both
+						// can compound a wedged driver into a reboot or black screen.
+						// Light sleep remains responsive to the normal wake input.
+						LOG_warn("failed to enter deep sleep - remaining in light sleep\n");
 					}
+					continue;
 				}
 				if (pwr.can_poweroff)
 				{
