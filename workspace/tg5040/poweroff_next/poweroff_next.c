@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 #include <linux/reboot.h>
 #include <mntent.h>
@@ -30,6 +31,16 @@
 #define I2C_DEVICE "/dev/i2c-6"
 #define AXP2202_ADDR 0x34
 #define LOG_FILE "/root/powerofflog.txt"
+#define DEVICE_BRICK "brick"
+#define DEVICE_SMARTPRO "smartpro"
+
+#define AXP2202_PWROFF_EN_REG 0x22
+#define AXP2202_SOFT_POWEROFF_REG 0x27
+#define AXP2202_IRQ_ENABLE_FIRST 0x40
+#define AXP2202_IRQ_ENABLE_LAST 0x44
+#define AXP2202_IRQ_STATUS_FIRST 0x48
+#define AXP2202_IRQ_STATUS_LAST 0x4C
+#define AXP2202_IRQ_REG_COUNT (AXP2202_IRQ_ENABLE_LAST - AXP2202_IRQ_ENABLE_FIRST + 1)
 
 static FILE *log_fp = NULL;
 
@@ -270,14 +281,80 @@ static int axp2202_write_reg(int fd, uint8_t reg, uint8_t value)
 {
     uint8_t buffer[2] = {reg, value};
     ssize_t bytes = write(fd, buffer, sizeof(buffer));
-    int result = bytes == (ssize_t)sizeof(buffer) ? 0 : -1;
-    if (result != 0)
-        log_msg("poweroff_next: [DEBUG] axp2202_write_reg: Failed to write 0x%02x to reg 0x%02x\n", value, reg);
-    return result;
+    if (bytes == (ssize_t)sizeof(buffer))
+        return 0;
+
+    if (bytes < 0)
+        log_msg("poweroff_next: PMIC write reg 0x%02x failed: %s\n", reg, strerror(errno));
+    else
+        log_msg("poweroff_next: PMIC write reg 0x%02x was short: %zd of %zu bytes\n",
+                reg, bytes, sizeof(buffer));
+
+    return -1;
+}
+
+static int axp2202_read_reg(int fd, uint8_t reg, uint8_t *value)
+{
+    struct i2c_msg messages[] = {
+        {
+            .addr = AXP2202_ADDR,
+            .flags = 0,
+            .len = sizeof(reg),
+            .buf = &reg,
+        },
+        {
+            .addr = AXP2202_ADDR,
+            .flags = I2C_M_RD,
+            .len = sizeof(*value),
+            .buf = value,
+        },
+    };
+    struct i2c_rdwr_ioctl_data transfer = {
+        .msgs = messages,
+        .nmsgs = sizeof(messages) / sizeof(messages[0]),
+    };
+    int result = ioctl(fd, I2C_RDWR, &transfer);
+
+    if (result == (int)transfer.nmsgs)
+        return 0;
+
+    if (result < 0)
+        log_msg("poweroff_next: PMIC read reg 0x%02x failed: %s\n", reg, strerror(errno));
+    else
+        log_msg("poweroff_next: PMIC read reg 0x%02x was incomplete: %d of %u messages\n",
+                reg, result, transfer.nmsgs);
+
+    return -1;
+}
+
+static void restore_axp2202_configuration(int fd, const uint8_t *irq_enable,
+                                          uint8_t poweroff_enable)
+{
+    log_msg("poweroff_next: Restoring PMIC configuration after an incomplete sequence.\n");
+
+    if (axp2202_write_reg(fd, AXP2202_PWROFF_EN_REG, poweroff_enable) != 0)
+        log_msg("poweroff_next: Failed to restore PMIC power-off configuration.\n");
+
+    for (int reg = AXP2202_IRQ_ENABLE_FIRST; reg <= AXP2202_IRQ_ENABLE_LAST; ++reg)
+    {
+        if (axp2202_write_reg(fd, (uint8_t)reg,
+                              irq_enable[reg - AXP2202_IRQ_ENABLE_FIRST]) != 0)
+            log_msg("poweroff_next: Failed to restore PMIC IRQ register 0x%02x.\n", reg);
+    }
+}
+
+static bool direct_pmic_poweroff_supported(const char *device)
+{
+    // The legacy direct-I2C sequence predates Brick Pro support. Do not force
+    // access to the TG4040 PMIC while its kernel driver owns the device.
+    return device != NULL &&
+           (strcmp(device, DEVICE_BRICK) == 0 || strcmp(device, DEVICE_SMARTPRO) == 0);
 }
 
 static int execute_axp2202_poweroff(void)
 {
+    uint8_t irq_enable[AXP2202_IRQ_REG_COUNT];
+    uint8_t poweroff_enable;
     int fd = open(I2C_DEVICE, O_RDWR | O_CLOEXEC);
     if (fd < 0)
     {
@@ -297,26 +374,54 @@ static int execute_axp2202_poweroff(void)
         }
     }
 
-    for (int reg = 0x40; reg <= 0x44; ++reg)
-        axp2202_write_reg(fd, (uint8_t)reg, 0x00);
+    // Snapshot every persistent register changed below. If setup fails before
+    // the final trigger, restore the prior state instead of leaving IRQs masked.
+    for (int reg = AXP2202_IRQ_ENABLE_FIRST; reg <= AXP2202_IRQ_ENABLE_LAST; ++reg)
+    {
+        if (axp2202_read_reg(fd, (uint8_t)reg,
+                             &irq_enable[reg - AXP2202_IRQ_ENABLE_FIRST]) != 0)
+            goto fail_without_changes;
+    }
 
-    for (int reg = 0x48; reg <= 0x4C; ++reg)
-        axp2202_write_reg(fd, (uint8_t)reg, 0xFF);
+    if (axp2202_read_reg(fd, AXP2202_PWROFF_EN_REG, &poweroff_enable) != 0)
+        goto fail_without_changes;
 
-    axp2202_write_reg(fd, 0x22, 0x0A);
+    for (int reg = AXP2202_IRQ_ENABLE_FIRST; reg <= AXP2202_IRQ_ENABLE_LAST; ++reg)
+    {
+        if (axp2202_write_reg(fd, (uint8_t)reg, 0x00) != 0)
+            goto fail_and_restore;
+    }
+
+    for (int reg = AXP2202_IRQ_STATUS_FIRST; reg <= AXP2202_IRQ_STATUS_LAST; ++reg)
+    {
+        if (axp2202_write_reg(fd, (uint8_t)reg, 0xFF) != 0)
+            goto fail_and_restore;
+    }
+
+    if (axp2202_write_reg(fd, AXP2202_PWROFF_EN_REG, 0x0A) != 0)
+        goto fail_and_restore;
+
     struct timespec wait = {.tv_sec = 0, .tv_nsec = 50000000};
     nanosleep(&wait, NULL);
 
-    int ret = axp2202_write_reg(fd, 0x27, 0x01);
+    if (axp2202_write_reg(fd, AXP2202_SOFT_POWEROFF_REG, 0x01) != 0)
+        goto fail_and_restore;
+
     close(fd);
 
     struct timespec latch = {.tv_sec = 1, .tv_nsec = 0};
     nanosleep(&latch, NULL);
 
-    return ret;
+    return 0;
+
+fail_and_restore:
+    restore_axp2202_configuration(fd, irq_enable, poweroff_enable);
+fail_without_changes:
+    close(fd);
+    return -1;
 }
 
-static int run_poweroff_protection(void)
+static void run_poweroff_protection(bool use_direct_pmic)
 {
     kill_sdcard_users();
     sync();
@@ -331,18 +436,16 @@ static int run_poweroff_protection(void)
 
     sync();
     
-    struct timespec pre_pmic_wait = {.tv_sec = 0, .tv_nsec = 500000000};
-    nanosleep(&pre_pmic_wait, NULL);
+    struct timespec pre_poweroff_wait = {.tv_sec = 0, .tv_nsec = 500000000};
+    nanosleep(&pre_poweroff_wait, NULL);
 
-    if (execute_axp2202_poweroff() != 0)
+    if (use_direct_pmic && execute_axp2202_poweroff() != 0)
     {
-        log_msg("poweroff_next: PMIC shutdown sequence failed.\n");
-        return -1;
+        log_msg("poweroff_next: PMIC shutdown sequence failed; "
+                "using the kernel-managed shutdown path.\n");
     }
 
     finalize_poweroff();
-    
-    return 0;
 }
 
 static void run_standard_shutdown(void)
@@ -366,7 +469,7 @@ int main(void)
         setvbuf(log_fp, NULL, _IONBF, 0);
     }
 
-    // Block SIGTERM and SIGKILL for this process to prevent self-termination
+    // Block catchable termination signals so the process cleanup cannot stop us.
     sigset_t block_set;
     sigemptyset(&block_set);
     sigaddset(&block_set, SIGTERM);
@@ -376,18 +479,23 @@ int main(void)
     
     CFG_init(NULL, NULL);
 
+    const char *device = getenv("DEVICE");
     bool protection_enabled = CFG_getPowerOffProtection();
-    log_msg("poweroff_next: [DEBUG] main: Power-off protection = %s\n", protection_enabled ? "enabled" : "disabled");
+    bool protection_supported = direct_pmic_poweroff_supported(device);
+    log_msg("poweroff_next: Power-off protection = %s; device = %s\n",
+            protection_enabled ? "enabled" : "disabled", device ? device : "unknown");
+
+    if (protection_enabled && !protection_supported)
+    {
+        log_msg("poweroff_next: Direct PMIC power-off is not enabled for this device; "
+                "using the kernel-managed shutdown path.\n");
+    }
 
     if (protection_enabled)
     {
-        if (run_poweroff_protection() == 0)
-        {
-            CFG_quit();
-            return 0;
-        }
-
-        log_msg("poweroff_next: Falling back to standard shutdown.\n");
+        run_poweroff_protection(protection_supported);
+        CFG_quit();
+        return 0;
     }
 
     run_standard_shutdown();
