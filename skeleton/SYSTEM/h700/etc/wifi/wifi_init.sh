@@ -66,9 +66,20 @@ stop_dhcp() {
 	killall udhcpc 2>/dev/null || true
 }
 
+wait_for_interface() {
+	# The driver may still be initializing the radio when the frontend starts.
+	# This runs in the background from launch.sh, so waiting costs the UI nothing.
+	n=0
+	while [ ! -d "/sys/class/net/$WIFI_INTERFACE" ] && [ "$n" -lt 100 ]; do
+		sleep 0.25
+		n=$((n + 1))
+	done
+}
+
 start() {
 	systemctl stop NetworkManager 2>/dev/null || true
 	systemctl stop wpa_supplicant "wpa_supplicant@$WIFI_INTERFACE.service" 2>/dev/null || true
+	wait_for_interface
 	rfkill unblock wifi 2>/dev/null || true
 	ip link set "$WIFI_INTERFACE" up 2>/dev/null || true
 	write_default_config
