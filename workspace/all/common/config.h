@@ -187,6 +187,7 @@ typedef struct
 	char raServerUsername[64];  // Server's internal username (from avatar URL, used for sync hash)
 	bool raAuthenticated;       // Whether we have a valid token
 	bool raShowNotifications;   // Show achievement unlock notifications
+	bool raShowChallengeIndicators; // Show on-screen indicator while a challenge achievement is active
 	int raNotificationDuration; // Duration for achievement notifications (1-5 seconds)
 	int raProgressNotificationDuration; // Duration for progress notifications (0-5 seconds, 0 = disabled)
 	int raAchievementSortOrder; // Sort order for achievements list (RA_SORT_* enum)
@@ -267,6 +268,7 @@ typedef struct
 #define CFG_DEFAULT_RA_SERVER_USERNAME ""
 #define CFG_DEFAULT_RA_AUTHENTICATED false
 #define CFG_DEFAULT_RA_SHOW_NOTIFICATIONS true
+#define CFG_DEFAULT_RA_SHOW_CHALLENGE_INDICATORS true
 #define CFG_DEFAULT_RA_NOTIFICATION_DURATION 3
 #define CFG_DEFAULT_RA_PROGRESS_NOTIFICATION_DURATION 1
 #define CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER RA_SORT_UNLOCKED_FIRST
@@ -469,6 +471,8 @@ bool CFG_getRAAuthenticated(void);
 void CFG_setRAAuthenticated(bool authenticated);
 bool CFG_getRAShowNotifications(void);
 void CFG_setRAShowNotifications(bool show);
+bool CFG_getRAShowChallengeIndicators(void);
+void CFG_setRAShowChallengeIndicators(bool show);
 int CFG_getRANotificationDuration(void);
 void CFG_setRANotificationDuration(int seconds);
 int CFG_getRAProgressNotificationDuration(void);

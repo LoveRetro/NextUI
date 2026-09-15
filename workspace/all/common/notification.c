@@ -80,6 +80,23 @@ static ProgressIndicatorState progress_state = {0};
 static SDL_mutex* progress_mutex = NULL;
 
 ///////////////////////////////
+// Challenge indicator state
+//
+// Active "challenge" achievements (tracked by id so SHOW/HIDE are idempotent).
+// Written from the rcheevos event handler (main thread) and read during
+// rendering; guarded by challenge_mutex to match the progress-indicator
+// pattern and stay safe regardless of which thread renders.
+///////////////////////////////
+
+#define CHALLENGE_MAX_ACTIVE 16
+
+static uint32_t challenge_ids[CHALLENGE_MAX_ACTIVE];
+static int challenge_count = 0;
+static int challenge_dirty = 0;
+static int last_challenge_count = 0;
+static SDL_mutex* challenge_mutex = NULL;
+
+///////////////////////////////
 // Rounded rectangle drawing
 ///////////////////////////////
 
@@ -170,7 +187,14 @@ void Notification_init(void) {
     if (!progress_mutex) {
         progress_mutex = SDL_CreateMutex();
     }
-    
+    // Create challenge indicator mutex
+    if (!challenge_mutex) {
+        challenge_mutex = SDL_CreateMutex();
+    }
+    challenge_count = 0;
+    challenge_dirty = 0;
+    last_challenge_count = 0;
+
     render_dirty = 1;
     last_notification_count = 0;
     initialized = 1;
@@ -353,6 +377,70 @@ static void render_progress_indicator(const ProgressIndicatorState* snap) {
 	SDL_FreeSurface(progress_surface);
 }
 
+// Render the challenge indicator: a trophy pill in the lower-right corner.
+// One trophy when a single challenge is active; trophy + "+N" when more than
+// one. `count` is the number of active challenges (>= 1).
+static void render_challenge_indicator(int count) {
+	if (count < 1) return;
+
+	SDL_Color text_color = uintToColour(THEME_COLOR1_255);
+	SDL_Color bg_color_sdl = uintToColour(THEME_COLOR2_255);
+
+	// Trophy glyph size (the asset rect is already scaled to the device scale).
+	SDL_Rect trophy_rect;
+	GFX_assetRect(ASSET_TROPHY, &trophy_rect);
+	int icon_w = trophy_rect.w;
+	int icon_h = trophy_rect.h;
+
+	// "+N" counter only when more than one challenge is active.
+	char count_text[8] = {0};
+	int text_w = 0, text_h = 0;
+	if (count > 1) {
+		snprintf(count_text, sizeof(count_text), "+%d", count - 1);
+		TTF_SizeUTF8(font.tiny, count_text, &text_w, &text_h);
+	}
+
+	int content_h = icon_h > text_h ? icon_h : text_h;
+	int gap = (count > 1) ? notif_icon_gap : 0;
+	int pill_w = icon_w + gap + text_w + (notif_padding_x * 2);
+	int pill_h = content_h + (notif_padding_y * 2);
+	int corner_radius = pill_h / 2;
+	int x = screen_width - notif_margin - pill_w;
+	int y = screen_height - notif_margin - pill_h;
+
+	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(
+		0, pill_w, pill_h, 32, SDL_PIXELFORMAT_ABGR8888);
+	if (!surface) return;
+
+	SDL_FillRect(surface, NULL, 0);
+	Uint32 bg_color = SDL_MapRGBA(surface->format,
+	                              bg_color_sdl.r, bg_color_sdl.g, bg_color_sdl.b, 255);
+	draw_rounded_rect(surface, 0, 0, pill_w, pill_h, corner_radius, bg_color);
+
+	int content_x = notif_padding_x;
+	int icon_y = notif_padding_y + (content_h - icon_h) / 2;
+	GFX_blitAssetColor(ASSET_TROPHY, NULL, surface,
+	                   &(SDL_Rect){content_x, icon_y}, THEME_COLOR1_255);
+	content_x += icon_w + gap;
+
+	if (count > 1) {
+		SDL_Surface* text_surf = TTF_RenderUTF8_Blended(font.tiny, count_text, text_color);
+		if (text_surf) {
+			SDL_SetSurfaceBlendMode(text_surf, SDL_BLENDMODE_BLEND);
+			SDL_Rect text_dst = {content_x,
+			                     notif_padding_y + (content_h - text_surf->h) / 2,
+			                     text_surf->w, text_surf->h};
+			SDL_BlitSurface(text_surf, NULL, surface, &text_dst);
+			SDL_FreeSurface(text_surf);
+		}
+	}
+
+	SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_NONE);
+	SDL_Rect dst_rect = {x, y, pill_w, pill_h};
+	SDL_BlitSurface(surface, NULL, gl_notification_surface, &dst_rect);
+	SDL_FreeSurface(surface);
+}
+
 // Render a single notification pill
 static void render_notification_pill(Notification* n, int x, int y, SDL_Color text_color, SDL_Color bg_color_sdl) {
     int text_w = 0, text_h = 0;
@@ -466,8 +554,16 @@ void Notification_renderToLayer(int layer) {
 	SDL_UnlockMutex(progress_mutex);
 	
 	int has_progress_indicator = progress_snap.active;
-	
-	if (!has_notifications && !has_system_indicator && !has_progress_indicator) {
+
+	// Snapshot challenge indicator state under lock.
+	int challenge_snap = 0, challenge_snap_dirty = 0;
+	SDL_LockMutex(challenge_mutex);
+	challenge_snap = challenge_count;
+	challenge_snap_dirty = challenge_dirty;
+	SDL_UnlockMutex(challenge_mutex);
+	int has_challenge_indicator = challenge_snap > 0;
+
+	if (!has_notifications && !has_system_indicator && !has_progress_indicator && !has_challenge_indicator) {
 		// When all notifications and indicators are gone, render one final transparent frame
 		if (gl_notification_surface) {
 			if (needs_clear_frame) {
@@ -479,6 +575,10 @@ void Notification_renderToLayer(int layer) {
 				SDL_LockMutex(progress_mutex);
 				progress_state.dirty = 0;
 				SDL_UnlockMutex(progress_mutex);
+				SDL_LockMutex(challenge_mutex);
+				challenge_dirty = 0;
+				SDL_UnlockMutex(challenge_mutex);
+				last_challenge_count = 0;
 				last_system_indicator_type = SYSTEM_INDICATOR_NONE;
 				return;
 			}
@@ -496,8 +596,9 @@ void Notification_renderToLayer(int layer) {
 	int notifications_changed = render_dirty || notification_count != last_notification_count;
 	int indicator_changed = system_indicator_dirty || system_indicator_type != last_system_indicator_type;
 	int progress_changed = progress_snap.dirty;
-    
-    if (!notifications_changed && !indicator_changed && !progress_changed) {
+	int challenge_changed = challenge_snap_dirty || challenge_snap != last_challenge_count;
+
+    if (!notifications_changed && !indicator_changed && !progress_changed && !challenge_changed) {
         return;
     }
     
@@ -521,6 +622,9 @@ void Notification_renderToLayer(int layer) {
 	if (has_progress_indicator) {
 		render_progress_indicator(&progress_snap);
 	}
+	if (has_challenge_indicator) {
+		render_challenge_indicator(challenge_snap);
+	}
     if (has_notifications) {
         render_notification_stack();
     }
@@ -538,6 +642,11 @@ void Notification_renderToLayer(int layer) {
 	SDL_LockMutex(progress_mutex);
 	progress_state.dirty = 0;
 	SDL_UnlockMutex(progress_mutex);
+
+	last_challenge_count = challenge_snap;
+	SDL_LockMutex(challenge_mutex);
+	challenge_dirty = 0;
+	SDL_UnlockMutex(challenge_mutex);
 }
 
 bool Notification_isActive(void) {
@@ -555,7 +664,14 @@ void Notification_clear(void) {
 	}
 	progress_state.dirty = 1;
 	SDL_UnlockMutex(progress_mutex);
-	
+
+	if (challenge_mutex) {
+		SDL_LockMutex(challenge_mutex);
+		challenge_count = 0;
+		challenge_dirty = 1;
+		SDL_UnlockMutex(challenge_mutex);
+	}
+
 	render_dirty = 1;
 	PLAT_clearNotificationSurface();
     if (gl_notification_surface) {
@@ -568,10 +684,14 @@ void Notification_quit(void) {
     Notification_clear();
     system_indicator_type = SYSTEM_INDICATOR_NONE;
     initialized = 0;
-    
+
     if (progress_mutex) {
         SDL_DestroyMutex(progress_mutex);
         progress_mutex = NULL;
+    }
+    if (challenge_mutex) {
+        SDL_DestroyMutex(challenge_mutex);
+        challenge_mutex = NULL;
     }
 }
 
@@ -664,5 +784,58 @@ bool Notification_hasProgressIndicator(void) {
     SDL_LockMutex(progress_mutex);
     bool active = progress_state.active;
     SDL_UnlockMutex(progress_mutex);
+    return active;
+}
+
+///////////////////////////////
+// Challenge Indicator Functions
+///////////////////////////////
+
+void Notification_showChallengeIndicator(uint32_t ach_id) {
+    if (!initialized) return;
+    SDL_LockMutex(challenge_mutex);
+    int found = 0;
+    for (int i = 0; i < challenge_count; i++) {
+        if (challenge_ids[i] == ach_id) { found = 1; break; }
+    }
+    if (!found && challenge_count < CHALLENGE_MAX_ACTIVE) {
+        challenge_ids[challenge_count++] = ach_id;
+        challenge_dirty = 1;
+    }
+    SDL_UnlockMutex(challenge_mutex);
+}
+
+void Notification_hideChallengeIndicator(uint32_t ach_id) {
+    if (!initialized) return;
+    SDL_LockMutex(challenge_mutex);
+    for (int i = 0; i < challenge_count; i++) {
+        if (challenge_ids[i] == ach_id) {
+            // Remove by shifting the tail down.
+            for (int j = i; j < challenge_count - 1; j++) {
+                challenge_ids[j] = challenge_ids[j + 1];
+            }
+            challenge_count--;
+            challenge_dirty = 1;
+            break;
+        }
+    }
+    SDL_UnlockMutex(challenge_mutex);
+}
+
+void Notification_clearChallengeIndicators(void) {
+    if (!challenge_mutex) return;
+    SDL_LockMutex(challenge_mutex);
+    if (challenge_count > 0) {
+        challenge_count = 0;
+        challenge_dirty = 1;
+    }
+    SDL_UnlockMutex(challenge_mutex);
+}
+
+bool Notification_hasChallengeIndicator(void) {
+    if (!initialized) return false;
+    SDL_LockMutex(challenge_mutex);
+    bool active = challenge_count > 0;
+    SDL_UnlockMutex(challenge_mutex);
     return active;
 }
