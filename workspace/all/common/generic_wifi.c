@@ -119,17 +119,26 @@ bool PLAT_wifiEnabled() {
 }
 
 void PLAT_wifiEnable(bool on) {
+	int status;
+
 	if (on) {
 		wifilog("turning wifi on...\n");
-		system(SYSTEM_PATH "/etc/wifi/wifi_init.sh start > /dev/null 2>&1");
-		// Keep config in sync
-		CFG_setWifi(on);
+		status = system(SYSTEM_PATH "/etc/wifi/wifi_init.sh start > /dev/null 2>&1");
+		if (status == 0) {
+			CFG_setWifi(true);
+		}
+		else {
+			LOG_error("failed to enable wifi: service exited with status %d\n", status);
+			CFG_setWifi(false);
+		}
 	}
 	else {
 		wifilog("turning wifi off...\n");
 		// Keep config in sync
-		CFG_setWifi(on);
-		system(SYSTEM_PATH "/etc/wifi/wifi_init.sh stop > /dev/null 2>&1");
+		CFG_setWifi(false);
+		status = system(SYSTEM_PATH "/etc/wifi/wifi_init.sh stop > /dev/null 2>&1");
+		if (status != 0)
+			LOG_error("failed to disable wifi: service exited with status %d\n", status);
 	}
 }
 
