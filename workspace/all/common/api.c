@@ -15,6 +15,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 #include "utils.h"
 #include "config.h"
@@ -183,6 +184,7 @@ static struct PWR_Context
 	int resume_tick;
 
 	pthread_t battery_pt;
+	int battery_thread_started;
 	SDL_atomic_t is_charging;
 	SDL_atomic_t is_usb_connected;
 	SDL_atomic_t charge;
@@ -190,7 +192,12 @@ static struct PWR_Context
 	SDL_atomic_t is_online;
 	SDL_atomic_t update_secs;
 	SDL_atomic_t poll_network_status;
+	SDL_atomic_t monitor_paused;
 } pwr = {0};
+
+// The monitor reads PMIC-backed power-supply state. Keep it out of the small
+// window where the kernel is suspending or resuming those same devices.
+static pthread_mutex_t pwr_monitor_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static struct SND_Context
 {
@@ -3990,6 +3997,11 @@ void PWR_updateFrequency(int secs, int updateWifi)
 	SDL_AtomicSet(&pwr.poll_network_status, updateWifi);
 }
 
+static void PWR_unlockMonitorMutex(void *arg)
+{
+	pthread_mutex_unlock((pthread_mutex_t *)arg);
+}
+
 static void *PWR_monitorBattery(void *arg)
 {
 	while (1)
@@ -3998,11 +4010,67 @@ static void *PWR_monitorBattery(void *arg)
 		int interval = SDL_AtomicGet(&pwr_ctx->update_secs);
 		if (interval <= 0)
 			interval = 1;
-		PWR_updateBatteryStatus();
-		PWR_updateNetworkStatus();
+
+		if (!SDL_AtomicGet(&pwr_ctx->monitor_paused))
+		{
+			int ret = pthread_mutex_lock(&pwr_monitor_mutex);
+			if (ret != 0)
+			{
+				LOG_error("power monitor lock failed: %d\n", ret);
+				sleep(interval);
+				continue;
+			}
+
+			// read(2) is a cancellation point. Always release the mutex if the
+			// thread is cancelled during a sysfs update while the app exits.
+			pthread_cleanup_push(PWR_unlockMonitorMutex, &pwr_monitor_mutex);
+			if (!SDL_AtomicGet(&pwr_ctx->monitor_paused))
+			{
+				PWR_updateBatteryStatus();
+				PWR_updateNetworkStatus();
+			}
+			pthread_cleanup_pop(1);
+		}
 		sleep(interval);
 	}
 	return NULL;
+}
+
+#define PWR_MONITOR_PAUSE_TIMEOUT_MS 2000
+
+// Returns with pwr_monitor_mutex held. Pausing first prevents a new polling
+// cycle from winning the mutex while the main thread waits for an in-flight
+// cycle to finish.
+static int PWR_pauseMonitoring(void)
+{
+	SDL_AtomicSet(&pwr.monitor_paused, 1);
+
+	uint32_t started_at = SDL_GetTicks();
+	while (SDL_GetTicks() - started_at < PWR_MONITOR_PAUSE_TIMEOUT_MS)
+	{
+		int ret = pthread_mutex_trylock(&pwr_monitor_mutex);
+		if (ret == 0)
+			return 0;
+		if (ret != EBUSY)
+		{
+			LOG_error("failed to pause power monitor: %d\n", ret);
+			SDL_AtomicSet(&pwr.monitor_paused, 0);
+			return -1;
+		}
+		SDL_Delay(20);
+	}
+
+	LOG_error("timed out waiting for power monitor to become idle\n");
+	SDL_AtomicSet(&pwr.monitor_paused, 0);
+	return -1;
+}
+
+static void PWR_resumeMonitoring(void)
+{
+	int ret = pthread_mutex_unlock(&pwr_monitor_mutex);
+	if (ret != 0)
+		LOG_error("failed to unlock power monitor: %d\n", ret);
+	SDL_AtomicSet(&pwr.monitor_paused, 0);
 }
 
 void PWR_init(void)
@@ -4019,6 +4087,8 @@ void PWR_init(void)
 
 	SDL_AtomicSet(&pwr.update_secs, 5);
 	SDL_AtomicSet(&pwr.poll_network_status, 1);
+	SDL_AtomicSet(&pwr.monitor_paused, 0);
+	pwr.battery_thread_started = 0;
 	pwr.initialized = 1;
 
 	if (CFG_getHaptics())
@@ -4026,7 +4096,11 @@ void PWR_init(void)
 
 	PWR_updateBatteryStatus();
 
-	pthread_create(&pwr.battery_pt, NULL, &PWR_monitorBattery, &pwr);
+	int ret = pthread_create(&pwr.battery_pt, NULL, &PWR_monitorBattery, &pwr);
+	if (ret == 0)
+		pwr.battery_thread_started = 1;
+	else
+		LOG_error("failed to start power monitor: %d\n", ret);
 	LOG_info("PWR_init complete\n");
 }
 void PWR_quit(void)
@@ -4034,9 +4108,15 @@ void PWR_quit(void)
 	if (!pwr.initialized)
 		return;
 
-	// cancel battery thread
-	pthread_cancel(pwr.battery_pt);
-	pthread_join(pwr.battery_pt, NULL);
+	SDL_AtomicSet(&pwr.monitor_paused, 1);
+	if (pwr.battery_thread_started)
+	{
+		// cancel battery thread
+		pthread_cancel(pwr.battery_pt);
+		pthread_join(pwr.battery_pt, NULL);
+		pwr.battery_thread_started = 0;
+	}
+	pwr.initialized = 0;
 }
 
 int PWR_ignoreSettingInput(int btn, int show_setting)
@@ -4303,7 +4383,6 @@ static void PWR_exitSleep(void)
 static void PWR_waitForWake(void)
 {
 	uint32_t sleep_ticks = SDL_GetTicks();
-	int deep_sleep_attempts = 0;
 	const int sleepDelay = CFG_getSuspendTimeoutSecs() * 1000;
 	while (!PAD_wake())
 	{
@@ -4332,7 +4411,11 @@ static void PWR_waitForWake(void)
 					}
 					else
 					{
-						LOG_warn("failed to enter deep sleep - powering off\n");
+						// A failed suspend can mean a driver or a required pre-sleep
+						// handshake was not ready. Restore the UI instead of chaining
+						// that failure into a second power-state transition.
+						LOG_warn("failed to enter deep sleep - waking back up\n");
+						return;
 					}
 				}
 				if (pwr.can_poweroff)
@@ -4365,6 +4448,11 @@ void PWR_sleep(void)
 
 int PWR_deepSleep(void)
 {
+	if (PWR_pauseMonitoring() != 0)
+		return -1;
+
+	int result = -1;
+
 	// Run `${BIN_PATH}/suspend` if it exists, then fall back
 	// to the PLAT_deepSleep implementation.
 	//
@@ -4379,14 +4467,29 @@ int PWR_deepSleep(void)
 		if (ret < 0)
 		{
 			LOG_error("failed to launch suspend executable: %d\n", errno);
-			return -1;
 		}
-
-		LOG_info("suspend executable exited with %d\n", ret);
-		return ret == 0 ? 0 : -1;
+		else if (WIFEXITED(ret))
+		{
+			int exit_status = WEXITSTATUS(ret);
+			LOG_info("suspend executable exited with %d\n", exit_status);
+			result = exit_status == 0 ? 0 : -1;
+		}
+		else if (WIFSIGNALED(ret))
+		{
+			LOG_error("suspend executable terminated by signal %d\n", WTERMSIG(ret));
+		}
+		else
+		{
+			LOG_error("suspend executable returned unexpected status %d\n", ret);
+		}
+	}
+	else
+	{
+		result = PLAT_deepSleep();
 	}
 
-	return PLAT_deepSleep();
+	PWR_resumeMonitoring();
+	return result;
 }
 
 void PWR_disableAutosleep(void)

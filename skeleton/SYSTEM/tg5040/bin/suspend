@@ -10,8 +10,44 @@ wifid_running=
 bluetoothd_running=
 
 sleep_retval=
+inputd_paused=
 
 asound_state_dir=/tmp/asound-suspend
+inputd_suspend_flag=${INPUTD_SUSPEND_FLAG:-/tmp/system_suspend}
+power_state_path=${POWER_STATE_PATH:-/sys/power/state}
+
+resume_inputd() {
+	if [ -n "$inputd_paused" ]; then
+		rm -f "$inputd_suspend_flag"
+		inputd_paused=
+	fi
+}
+
+restore_services() {
+	restore_wifi="$1"
+	restore_bluetooth="$2"
+
+	if [ -n "$restore_wifi" ]; then
+		>&2 echo "Starting wpa_supplicant..."
+		/etc/wifi/wifi_init.sh start || true
+	fi
+
+	if [ -n "$restore_bluetooth" ]; then
+		>&2 echo "Starting bluetoothd..."
+		/etc/bluetooth/bt_init.sh start || true
+	fi
+}
+
+cleanup() {
+	# Clear these first so a signal during cleanup cannot restore twice.
+	restore_wifi="$wifid_running"
+	restore_bluetooth="$bluetoothd_running"
+	wifid_running=
+	bluetoothd_running=
+
+	resume_inputd
+	restore_services "$restore_wifi" "$restore_bluetooth"
+}
 
 before() {
 	>&2 echo "Preparing for suspend..."
@@ -19,6 +55,25 @@ before() {
 	# Run pre-sleep hooks synchronously before services are stopped.
 	# Subshell ensures a crashing hook cannot block suspend.
 	( "$SYSTEM_PATH/bin/run_hooks.sh" pre-sleep.d --sync-only ) >/dev/null 2>&1 || true
+
+	if [ "${DEVICE:-}" = "brickpro" ]; then
+		# Stock trimui_inputd polls the TG4040 hall sticks over I2C. Its own
+		# keymon creates this flag before suspend so those transfers cannot race
+		# the kernel's suspend entry. NextUI keeps inputd but replaces keymon.
+		>&2 echo "Pausing stock input daemon..."
+		if touch "$inputd_suspend_flag"; then
+			inputd_paused=1
+			# Allow an in-flight I2C transaction to drain.
+			sleep 0.2
+			if [ ! -e "$inputd_suspend_flag" ]; then
+				>&2 echo "Error: stock input daemon did not remain paused"
+				return 1
+			fi
+		else
+			>&2 echo "Error: could not pause stock input daemon"
+			return 1
+		fi
+	fi
 
 	>&2 echo "Saving mixer state..."
 	mkdir -p "$asound_state_dir"
@@ -28,12 +83,20 @@ before() {
 		bluetoothd_running=1
 		>&2 echo "Stopping bluetoothd..."
 		/etc/bluetooth/bt_init.sh stop || true
+		if pgrep bluetoothd >/dev/null 2>&1; then
+			>&2 echo "Error: bluetoothd did not stop"
+			return 1
+		fi
 	fi
 
 	if pgrep wpa_supplicant; then
 		wifid_running=1
 		>&2 echo "Stopping wpa_supplicant..."
 		/etc/wifi/wifi_init.sh stop || true
+		if pgrep wpa_supplicant >/dev/null 2>&1; then
+			>&2 echo "Error: wpa_supplicant did not stop"
+			return 1
+		fi
 	fi
 }
 
@@ -43,39 +106,54 @@ after() {
 	# Run post-resume hooks in background immediately after wake.
 	( "$SYSTEM_PATH/bin/run_hooks.sh" post-resume.d ) >/dev/null 2>&1 &
 
-	if [ -n "$wifid_running" ]; then
-		>&2 echo "Starting wpa_supplicant..."
-		/etc/wifi/wifi_init.sh start || true
-	fi
-
-	if [ -n "$bluetoothd_running" ]; then
-		>&2 echo "Starting bluetoothd..."
-		/etc/bluetooth/bt_init.sh start || true
-	fi
+	restore_services "$1" "$2"
 
 	# >&2 echo "Restoring mixer state..."
 	# alsactl --file "$asound_state_dir/asound.state.post" store || true
 	# alsactl --file "$asound_state_dir/asound.state.pre" restore || true
 }
 
-before
+# Do not leave stock input handling or stopped services behind if suspend setup
+# is interrupted or fails. Normal completion clears the tracked service state
+# before restoration is handed to the background.
+trap 'cleanup' EXIT
+trap 'exit 1' HUP INT TERM
+
+if [ ! -w "$power_state_path" ] || ! grep -qw mem "$power_state_path"; then
+	>&2 echo "Error: kernel suspend-to-RAM is unavailable"
+	exit 1
+fi
+
+if ! before; then
+	>&2 echo "Error: suspend preconditions failed"
+	exit 1
+fi
 
 >&2 echo "Suspending..."
 sleep_max_tries=5
+if [ "${DEVICE:-}" = "brickpro" ]; then
+	# A failed TG4040 suspend should return to the UI for a deliberate retry;
+	# repeating the transition while input is paused only lengthens a black-screen
+	# failure and cannot repair a wedged kernel driver.
+	sleep_max_tries=1
+fi
 for i in $(seq 1 $sleep_max_tries); do
 	>&2 echo "Deep sleep attempt $i of $sleep_max_tries"
 
 	sleep_time=$(date +%s)
-	echo mem >/sys/power/state
-	sleep_retval=$?
+	if echo mem >"$power_state_path"; then
+		sleep_retval=0
+	else
+		sleep_retval=1
+	fi
 
 	>&2 echo "Deep sleep: kernel returned $sleep_retval"
-	if [ $sleep_retval -eq 0 ]; then
+	if [ "$sleep_retval" -eq 0 ]; then
 		break
 	fi
 
 	wake_time=$(date +%s)
-	time_asleep=$(($wake_time-$sleep_time))
+	time_asleep=$((wake_time - sleep_time))
 
 	# Workaround for a strange false negative case where
 	# the device sleeps properly but still returns non-zero.
@@ -84,18 +162,28 @@ for i in $(seq 1 $sleep_max_tries); do
 
 	# If device has been asleep for longer than a set period,
 	# ignore the retval and continue with waking the device.
-	if [ $time_asleep -gt 5 ]; then
+	if [ "$time_asleep" -gt 5 ]; then
 		>&2 echo "Deep sleep: averting false negative retval - (sleep for $time_asleep secs)"
 		sleep_retval=0
 		break
 	fi
 	
 
-	>&2 echo "Deep sleep failed: retrying in 3 seconds"
-	sleep 3
+	if [ "$i" -lt "$sleep_max_tries" ]; then
+		>&2 echo "Deep sleep failed: retrying in 3 seconds"
+		sleep 3
+	fi
 done
 
-# Resume services in background to reduce UI latency
-after &
+# Resume input before the slower network services are started in the background.
+resume_inputd
 
-exit $sleep_retval
+# Move the restore responsibility into the background child before exiting.
+# The EXIT trap then sees empty state and becomes a no-op.
+restore_wifi="$wifid_running"
+restore_bluetooth="$bluetoothd_running"
+wifid_running=
+bluetoothd_running=
+after "$restore_wifi" "$restore_bluetooth" &
+
+exit "$sleep_retval"
