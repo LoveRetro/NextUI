@@ -8,6 +8,23 @@ Paks are platform specific. Inside the Emus and Tools folders you will find (or 
 
 Some platforms have multiple devices with unique qualities. NextUI differentiates these devices from the base platform with the `DEVICE` envar. eg. the "rg35xxplus" platform has two unique devices "cube" for the RG CubeXX, and "wide" for the RG34xx. It also supports "hdmi" for when outputting to HDMI. A pak can choose to use or ignore this envar.
 
+# In-game pak shortcuts
+
+A foreground tool such as a game guide can opt into the in-game pak picker by adding `in_game_shortcut` to its `pak.json`:
+
+	{
+	  "name": "Game Guide",
+	  "short_name": "GUIDE",
+	  "type": "TOOL",
+	  "in_game_shortcut": true
+	}
+
+The user can then select it under Settings > In-Game > Pak Shortcut and open it with X from MinArch's root in-game menu. MinArch pauses game audio and keeps the core and game resident until the pak's `launch.sh` returns. The pak receives the current game path in `NEXTUI_ROM_PATH` and its emulator tag in `NEXTUI_EMU_TAG`.
+
+The optional `short_name` is used for the X button hint and is limited to 12 characters. If omitted, the hint uses `name` instead.
+
+Only foreground tools that exit cleanly should opt in. An in-game shortcut should not launch another emulator, leave background processes running, change display modes, or power off or reboot the device. Because MinArch remains resident, the pak should also avoid opening an audio device.
+
 # The types of emulator pak
 
 There are three basic types of emulator paks, which you chose depends on your goals and your desired level of NextUI integration.

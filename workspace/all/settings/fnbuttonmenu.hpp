@@ -11,3 +11,6 @@
 // Returns nullptr when the device has no assignable buttons, in which case the caller
 // should leave the menu out entirely.
 MenuList* buildFnButtonMenu();
+
+// Builds the In-Game "Pak Shortcut" row and its metadata-filtered picker.
+AbstractMenuItem* buildPakShortcutItem();

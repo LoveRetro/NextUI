@@ -148,6 +148,9 @@ typedef struct
 	// Action strings, "" == unassigned. See CFG_getFnAction().
 	char fnAction[FN_BUTTON_COUNT][256];
 
+	// Tools pak exposed on X in MinArch's root in-game menu.
+	char pakShortcut[256];
+
 	// Power
 	uint32_t screenTimeoutSecs;
 	uint32_t suspendTimeoutSecs;
@@ -237,6 +240,7 @@ typedef struct
 #define CFG_DEFAULT_EXTRACTEDFILENAME false
 #define CFG_DEFAULT_MUTELEDS false
 #define CFG_DEFAULT_FN_ACTION "" // unassigned
+#define CFG_DEFAULT_PAK_SHORTCUT "" // unassigned
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
@@ -393,6 +397,10 @@ void CFG_setMuteLEDs(bool);
 // Returns "" for an out of range index.
 const char* CFG_getFnAction(int index);
 void CFG_setFnAction(int index, const char* action);
+// The metadata-approved Tools pak exposed on X in MinArch's root in-game menu.
+// Uses the same FN_ACTION_PAK_PREFIX representation as button assignments.
+const char* CFG_getPakShortcut(void);
+void CFG_setPakShortcut(const char* action);
 // Set game art width percentage.
 double CFG_getGameArtWidth(void);
 void CFG_setGameArtWidth(double zeroToOne);
