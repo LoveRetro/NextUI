@@ -6,6 +6,7 @@ SDCARD_PATH="/mnt/SDCARD"
 UPDATE_PATH="$SDCARD_PATH/MinUI.zip"
 PAKZ_PATH="$SDCARD_PATH/*.pakz"
 SYSTEM_PATH="$SDCARD_PATH/.system"
+UPDATE_FAILED="no"
 
 export LD_LIBRARY_PATH=/usr/trimui/lib:$LD_LIBRARY_PATH
 export PATH=/usr/trimui/bin:$PATH
@@ -15,6 +16,19 @@ if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
 	DEVICE="brick"
 elif [ "$TRIMUI_MODEL" = "Trimui Brick Pro" ]; then
 	DEVICE="brickpro"
+fi
+
+# The Brick Pro stock OS starts Wi-Fi before handing control to the updater.
+# Keep high-current peripherals quiet while the SD card is under sustained load.
+if [ "$DEVICE" = "brickpro" ]; then
+	/etc/init.d/wpa_supplicant stop > /dev/null 2>&1
+	killall udhcpc > /dev/null 2>&1
+	for RFKILL_PATH in /sys/class/rfkill/rfkill*; do
+		if [ -f "$RFKILL_PATH/type" ] && [ "`cat "$RFKILL_PATH/type"`" = "wlan" ]; then
+			echo 0 > "$RFKILL_PATH/state"
+		fi
+	done
+	echo 1 > /sys/class/speaker/mute
 fi
 
 # only show splash if either UPDATE_PATH or pakz files exist
@@ -49,6 +63,9 @@ fi
 echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
 CPU_SPEED_PERF=2000000
+if [ "$DEVICE" = "brickpro" ]; then
+	CPU_SPEED_PERF=1200000
+fi
 echo $CPU_SPEED_PERF > $CPU_PATH
 
 ##Remove Old Led Daemon
@@ -69,7 +86,11 @@ for pakz in $PAKZ_PATH; do
 	echo "TEXT:Extracting $pakz" > /tmp/show2.fifo
 	cd $(dirname "$0")/$PLATFORM
 
-	./unzip -o -d "$SDCARD_PATH" "$pakz" # >> $pakz.txt
+	if ! ./unzip -o -d "$SDCARD_PATH" "$pakz"; then # >> $pakz.txt
+		echo "TEXT:Failed to extract $pakz" > /tmp/show2.fifo
+		continue
+	fi
+	sync
 	rm -f "$pakz"
 
 	# run postinstall if present
@@ -94,19 +115,24 @@ if [ -f "$UPDATE_PATH" ]; then
 	rm -rf $SYSTEM_PATH/$PLATFORM/lib
 	rm -rf $SYSTEM_PATH/$PLATFORM/paks/MinUI.pak
 
-	./unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH" # &> /mnt/SDCARD/unzip.txt
-	rm -f "$UPDATE_PATH"
+	if ./unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH"; then # &> /mnt/SDCARD/unzip.txt
+		sync
+		rm -f "$UPDATE_PATH"
 
-	# the updated system finishes the install/update
-	if [ -f $SYSTEM_PATH/$PLATFORM/bin/install.sh ]; then
-		$SYSTEM_PATH/$PLATFORM/bin/install.sh # &> $SDCARD_PATH/log.txt
+		# the updated system finishes the install/update
+		if [ -f $SYSTEM_PATH/$PLATFORM/bin/install.sh ]; then
+			$SYSTEM_PATH/$PLATFORM/bin/install.sh # &> $SDCARD_PATH/log.txt
+		fi
+	else
+		echo "TEXT:Failed to install NextUI" > /tmp/show2.fifo
+		UPDATE_FAILED="yes"
 	fi
 fi
 
 #kill $SHOW_PID
 
 LAUNCH_PATH="$SYSTEM_PATH/$PLATFORM/paks/MinUI.pak/launch.sh"
-if [ -f "$LAUNCH_PATH" ] ; then
+if [ "$UPDATE_FAILED" = "no" ] && [ -f "$LAUNCH_PATH" ] ; then
 	"$LAUNCH_PATH"
 fi
 killall trimui_inputd
