@@ -421,14 +421,31 @@ int main(int argc, char *argv[])
             font_values.push_back(f.filename);
             font_labels.push_back(f.label);
         }
+
+        MenuItem *fontStyleItem = nullptr;
+        auto resetFontStyleToFaceDefault = [&fontStyleItem]() {
+            const int faceStyle = GFX_getSystemFontFaceStyle();
+            const int style = (faceStyle & TTF_STYLE_BOLD)
+                ? TTF_STYLE_BOLD
+                : TTF_STYLE_NORMAL;
+            CFG_setFontStyle(style);
+            if (fontStyleItem)
+                fontStyleItem->reselect();
+        };
+        auto selectFont = [&resetFontStyleToFaceDefault](const char *filename) {
+            CFG_setFontFile(filename);
+            resetFontStyleToFaceDefault();
+        };
+
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Font", "The font to render all UI text.", font_values, font_labels,
             []() -> std::any { return std::string(CFG_getFontFile()); },
-            [](const std::any &value) { CFG_setFontFile(std::any_cast<std::string>(value).c_str()); },
-            []() { CFG_setFontFile(CFG_DEFAULT_FONT_FILE); }});
-        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Font style", "The style to render the UI font (e.g. bold)", std::vector<std::any>{0, 1}, std::vector<std::string>{"Normal", "Bold"},
+            [&selectFont](const std::any &value) { selectFont(std::any_cast<std::string>(value).c_str()); },
+            [&selectFont]() { selectFont(CFG_DEFAULT_FONT_FILE); }});
+        fontStyleItem = new MenuItem{ListItemType::Generic, "Font style", "The style to render the UI font (e.g. bold)", std::vector<std::any>{TTF_STYLE_NORMAL, TTF_STYLE_BOLD}, std::vector<std::string>{"Normal", "Bold"},
             []() -> std::any { return CFG_getFontStyle(); },
             [](const std::any &value) { CFG_setFontStyle(std::any_cast<int>(value)); },
-            []() { CFG_setFontStyle(CFG_DEFAULT_FONT_STYLE); }});
+            [&resetFontStyleToFaceDefault]() { resetFontStyleToFaceDefault(); }};
+        appearanceItems.push_back(fontStyleItem);
         appearanceItems.push_back(buildPaletteMenuItem());
         for (auto *item : colorMenuItems)
             appearanceItems.push_back(item);

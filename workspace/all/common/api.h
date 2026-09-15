@@ -308,6 +308,9 @@ enum {
 };
 
 SDL_Surface* GFX_init(int mode);
+// Style reported by SDL_ttf immediately after opening the current font face,
+// before NextUI applies its configured synthetic style.
+int GFX_getSystemFontFaceStyle(void);
 #define GFX_resize PLAT_resizeVideo				// (int w, int h, int pitch);
 #define GFX_setSharpness PLAT_setSharpness // (int sharpness)
 #define GFX_setEffectColor PLAT_setEffectColor // (int color)

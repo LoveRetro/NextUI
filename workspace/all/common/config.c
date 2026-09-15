@@ -1286,7 +1286,9 @@ int CFG_getFontStyle(void)
 
 void CFG_setFontStyle(int style)
 {
-    settings.fontStyle = clamp(style, 0x00, 0x01);
+    // SDL_ttf defines TTF_STYLE_NORMAL as 0x00 and TTF_STYLE_BOLD as 0x01.
+    // Use the values directly to keep config.c free of SDL dependencies.
+    settings.fontStyle = (style & 0x01) ? 0x01 : 0x00;
     CFG_sync();
     // reload the font to apply the new style (if the font supports it)
     CFG_setFontFile(CFG_getFontFile());
