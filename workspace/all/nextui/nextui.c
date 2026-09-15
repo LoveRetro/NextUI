@@ -1205,12 +1205,13 @@ static int autoResume(void) {
 
 	// putFile(LAST_PATH, FAUX_RECENT_PATH); // saveLast() will crash here because top is NULL
 
-	char act[256];
-	sprintf(act, "gametimectl.elf start '%s'", escapeSingleQuotes(sd_path));
-	system(act);
+	// gametimectl.elf start is now Game Tracker.pak's own pre-launch.sh, run by
+	// pak-hooks.sh -- this file has no direct knowledge of gametimectl any
+	// more. Still need the escaping side effect on sd_path below though.
+	escapeSingleQuotes(sd_path);
 
 	char cmd[256];
-	// dont escape sd_path again because it was already escaped for gametimectl and function modifies input str aswell
+	// dont escape sd_path again -- it was already escaped above, and the function modifies its input str
 	sprintf(cmd, "'%s' '%s'", escapeSingleQuotes(emu_path), sd_path);
 	putInt(RESUME_SLOT_PATH, AUTO_RESUME_SLOT);
 	queueNext(cmd);
@@ -1319,11 +1320,12 @@ static void openRom(char* path, char* last) {
 	// so we need to save the path before we call that
 	addRecent(recent_path, recent_alias); // yiiikes
 	saveLast(last==NULL ? sd_path : last);
-	char act[256];
-	sprintf(act, "gametimectl.elf start '%s'", escapeSingleQuotes(sd_path));
-	system(act);
+	// gametimectl.elf start is now Game Tracker.pak's own pre-launch.sh, run by
+	// pak-hooks.sh -- this file has no direct knowledge of gametimectl any
+	// more. Still need the escaping side effect on sd_path below though.
+	escapeSingleQuotes(sd_path);
 	char cmd[256];
-	// dont escape sd_path again because it was already escaped for gametimectl and function modifies input str aswell
+	// dont escape sd_path again -- it was already escaped above, and the function modifies its input str
 	sprintf(cmd, "'%s' '%s'", escapeSingleQuotes(emu_path), sd_path);
 	queueNext(cmd);
 }
@@ -2290,8 +2292,14 @@ int main (int argc, char *argv[]) {
 	if(currentScreen == SCREEN_GAMESWITCHER)
 		lastScreen = SCREEN_GAME;
 
-	// make sure we have no running games logged as active anymore (we might be launching back into the UI here)
+	// make sure we have no running games logged as active anymore (we might be
+	// launching back into the UI here). Kept as a direct call, not a hook: this
+	// is a defensive catch-all for any process that dies without a clean
+	// post-launch (crash, forced quit), not one of the regular lifecycle events.
 	system("gametimectl.elf stop_all");
+
+	// the pak-hooks.sh cache is rebuilt from MinUI.pak/launch.sh right after a
+	// Tools pak (not a rom) exits, not here -- see HOOKS.md.
 
 	GFX_setVsync(VSYNC_STRICT);
 	PWR_setCPUSpeed(CPU_SPEED_AUTO);

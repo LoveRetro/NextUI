@@ -18,7 +18,7 @@ export CORES_PATH="$SYSTEM_PATH/cores"
 export USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
 export SHARED_USERDATA_PATH="$SDCARD_PATH/.userdata/shared"
 export LOGS_PATH="$USERDATA_PATH/logs"
-export HOOKS_PATH="$USERDATA_PATH/.hooks"
+export HOOKS_PATH="$USERDATA_PATH/.hooks" # deprecated, see HOOKS.md
 export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
 
 mkdir -p "$BIOS_PATH"
@@ -27,7 +27,7 @@ mkdir -p "$SAVES_PATH"
 mkdir -p "$CHEATS_PATH"
 mkdir -p "$USERDATA_PATH"
 mkdir -p "$LOGS_PATH"
-mkdir -p "$HOOKS_PATH"
+mkdir -p "$HOOKS_PATH" # deprecated, see HOOKS.md
 mkdir -p "$SHARED_USERDATA_PATH/.minui"
 
 export IS_NEXT="yes"
@@ -48,7 +48,8 @@ if [ -f "$AUTO_PATH" ]; then
 fi
 
 # Composable boot hooks (run after auto.sh for backward compatibility)
-"$SYSTEM_PATH/bin/run_hooks.sh" boot.d
+"$SYSTEM_PATH/bin/run_hooks.sh" boot.d # deprecated, see HOOKS.md
+"$SYSTEM_PATH/bin/pak-hooks.sh" boot
 
 cd $(dirname "$0")
 
@@ -81,9 +82,20 @@ touch "$EXEC_PATH"  && sync
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
 		parse_hook_cmd "$CMD"
-		"$SYSTEM_PATH/bin/run_hooks.sh" pre-launch.d
-		eval $CMD
-		"$SYSTEM_PATH/bin/run_hooks.sh" post-launch.d
+		# a registered pak-hooks.sh pre-launch.sh that exits non-zero cancels the
+		# launch (the deprecated run_hooks.sh pre-launch.d cannot veto, see
+		# HOOKS.md). Game Tracker.pak's own pre-launch.sh/post-launch.sh is what
+		# starts/stops gametimectl -- this shell has no direct knowledge of it.
+		"$SYSTEM_PATH/bin/run_hooks.sh" pre-launch.d # deprecated, see HOOKS.md
+		if "$SYSTEM_PATH/bin/pak-hooks.sh" pre-launch; then
+			eval $CMD
+			"$SYSTEM_PATH/bin/run_hooks.sh" post-launch.d # deprecated, see HOOKS.md
+			"$SYSTEM_PATH/bin/pak-hooks.sh" post-launch
+			# only a Tools pak (eg. Pak Store, Files.pak) can plausibly have
+			# changed what's under Tools/ -- a rom never does, so skip the
+			# rescan on the overwhelming majority of returns to the menu
+			[ "$HOOK_TYPE" = "pak" ] && "$SYSTEM_PATH/bin/pak-hooks.sh" rebuild-cache &
+		fi
 		rm -f $NEXT_PATH
 	fi
 #done

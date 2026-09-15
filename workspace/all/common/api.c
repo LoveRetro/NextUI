@@ -4081,7 +4081,9 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 	{
 		if (before_sleep)
 			before_sleep();
-		system("gametimectl.elf stop_all");
+		// reuse the pre-sleep hook: an outright poweroff needs the same
+		// "close the open session" cleanup as going to sleep does
+		system("pak-hooks.sh pre-sleep");
 		PWR_powerOff(0);
 	}
 
@@ -4349,7 +4351,10 @@ void PWR_sleep(void)
 {
 	LOG_info("Entering hybrid sleep\n");
 
-	system("gametimectl.elf stop_all");
+	// api.c has no business knowing gametimectl exists -- Game Tracker.pak's
+	// own pre-sleep.sh/post-resume.sh is what actually stops/resumes
+	// tracking. See pak-hooks.sh.
+	system("pak-hooks.sh pre-sleep");
 
 	GFX_clear(gfx.screen);
 	PAD_reset();
@@ -4358,7 +4363,7 @@ void PWR_sleep(void)
 	PWR_exitSleep();
 	PAD_reset();
 
-	system("gametimectl.elf resume");
+	system("pak-hooks.sh post-resume");
 
 	pwr.resume_tick = SDL_GetTicks();
 }
