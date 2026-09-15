@@ -1345,6 +1345,57 @@ void PLAT_GPU_Flip() {
 	SDL_RenderPresent(vid.renderer);
 }
 
+int PLAT_captureScreenshot(SDL_Surface* out) {
+	if (!out) return SDL_SetError("Output surface is NULL");
+	if (!vid.renderer || !vid.screen) return SDL_SetError("Video is not initialized");
+	if (out->w != vid.screen->w || out->h != vid.screen->h) {
+		return SDL_SetError("Output surface must be %dx%d", vid.screen->w, vid.screen->h);
+	}
+
+	SDL_Texture* previous_target = SDL_GetRenderTarget(vid.renderer);
+	Uint8 previous_r;
+	Uint8 previous_g;
+	Uint8 previous_b;
+	Uint8 previous_a;
+	if (SDL_GetRenderDrawColor(vid.renderer, &previous_r, &previous_g,
+	                           &previous_b, &previous_a) != 0) return -1;
+
+	Uint8 clear_r;
+	Uint8 clear_g;
+	Uint8 clear_b;
+	Uint8 clear_a;
+	SDL_GetRGBA(vid.clear_color, vid.screen->format, &clear_r, &clear_g, &clear_b, &clear_a);
+
+	SDL_Texture* capture_target = SDL_CreateTexture(vid.renderer,
+	                                                SDL_PIXELFORMAT_ARGB8888,
+	                                                SDL_TEXTUREACCESS_TARGET,
+	                                                vid.screen->w,
+	                                                vid.screen->h);
+	if (!capture_target) return -1;
+
+	int result = -1;
+	if (SDL_SetRenderTarget(vid.renderer, capture_target) != 0) goto restore;
+	if (SDL_SetRenderDrawColor(vid.renderer, clear_r, clear_g, clear_b, clear_a) != 0) goto restore;
+	if (SDL_RenderClear(vid.renderer) != 0) goto restore;
+	if (SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL) != 0) goto restore;
+	if (SDL_RenderCopy(vid.renderer, vid.target_layer2, NULL, NULL) != 0) goto restore;
+	if (SDL_RenderCopy(vid.renderer, vid.stream_layer1, NULL, NULL) != 0) goto restore;
+	if (SDL_RenderCopy(vid.renderer, vid.target_layer3, NULL, NULL) != 0) goto restore;
+	if (SDL_RenderCopy(vid.renderer, vid.target_layer4, NULL, NULL) != 0) goto restore;
+	if (SDL_RenderCopy(vid.renderer, vid.target_layer5, NULL, NULL) != 0) goto restore;
+	if (SDL_MUSTLOCK(out) && SDL_LockSurface(out) != 0) goto restore;
+	result = SDL_RenderReadPixels(vid.renderer, NULL, out->format->format,
+	                              out->pixels, out->pitch);
+	if (SDL_MUSTLOCK(out)) SDL_UnlockSurface(out);
+
+restore:
+	if (SDL_SetRenderTarget(vid.renderer, previous_target) != 0) result = -1;
+	if (SDL_SetRenderDrawColor(vid.renderer, previous_r, previous_g,
+	                           previous_b, previous_a) != 0) result = -1;
+	SDL_DestroyTexture(capture_target);
+	return result;
+}
+
 void PLAT_animateSurfaceOpacity(
 	SDL_Surface *inputSurface,
 	int x, int y, int w, int h,
