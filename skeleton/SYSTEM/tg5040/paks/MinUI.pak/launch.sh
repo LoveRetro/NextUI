@@ -28,6 +28,21 @@ export HOME="$USERDATA_PATH"
 
 #######################################
 
+# Resolve the hardware model before handling a shutdown marker. poweroff_next
+# uses this allowlist to keep unvalidated boards off the direct-I2C PMIC path.
+export TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
+if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
+	export DEVICE="brick"
+elif [ "$TRIMUI_MODEL" = "Trimui Brick Pro" ]; then
+	export DEVICE="brickpro"
+elif [ "$TRIMUI_MODEL" = "Trimui Smart Pro" ]; then
+	export DEVICE="smartpro"
+else
+	export DEVICE="unknown"
+fi
+
+#######################################
+
 if [ -f "/tmp/poweroff" ]; then
 	poweroff_next
 	exit 0
@@ -47,15 +62,6 @@ mkdir -p "$USERDATA_PATH"
 mkdir -p "$LOGS_PATH"
 mkdir -p "$HOOKS_PATH"
 mkdir -p "$SHARED_USERDATA_PATH/.minui"
-
-export TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
-if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
-	export DEVICE="brick"
-elif [ "$TRIMUI_MODEL" = "Trimui Brick Pro" ]; then
-	export DEVICE="brickpro"
-else
-	export DEVICE="smartpro"
-fi
 
 export IS_NEXT="yes"
 

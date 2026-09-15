@@ -628,8 +628,11 @@ int main(int argc, char *argv[])
 
         if(deviceInfo.getPlatform() == DeviceInfo::tg5040)
         {
+            const char *poweroffDescription = deviceInfo.getModel() == DeviceInfo::BrickPro
+                ? "Stops processes and unmounts the SD card before asking\nthe kernel PMIC driver to power off."
+                : "Bypasses the stock shutdown procedure to avoid the \"limbo bug\".\nInstructs the PMIC directly to soft disconnect the battery.";
             systemItems.push_back(
-                new MenuItem{ListItemType::Generic, "Safe poweroff", "Bypasses the stock shutdown procedure to avoid the \"limbo bug\".\nInstructs the PMIC directly to soft disconnect the battery.", {false, true}, on_off,
+                new MenuItem{ListItemType::Generic, "Safe poweroff", poweroffDescription, {false, true}, on_off,
                 []() -> std::any { return CFG_getPowerOffProtection(); },
                 [](const std::any &value) { CFG_setPowerOffProtection(std::any_cast<bool>(value)); },
                 []() { CFG_setPowerOffProtection(CFG_DEFAULT_POWEROFFPROTECTION); }}
