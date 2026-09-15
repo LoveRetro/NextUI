@@ -41,21 +41,21 @@
 
 // see https://wiki.libsdl.org/SDL2/SDL_Scancode
 
-#define CODE_UP			82 // Up Arrow
-#define CODE_DOWN		81 // Down Arrow
-#define CODE_LEFT		80 // Left Arrow
-#define CODE_RIGHT		79 // Right Arrow
+#define CODE_UP			SDL_SCANCODE_UP
+#define CODE_DOWN		SDL_SCANCODE_DOWN
+#define CODE_LEFT		SDL_SCANCODE_LEFT
+#define CODE_RIGHT		SDL_SCANCODE_RIGHT
 
-#define CODE_SELECT		53 // ^
-#define CODE_START		40 // Return
+#define CODE_SELECT		SDL_SCANCODE_GRAVE // ` and ~ on ANSI keyboards
+#define CODE_START		SDL_SCANCODE_RETURN
 
-#define CODE_A			22 // S
-#define CODE_B			4  // A
-#define CODE_X			26 // W
-#define CODE_Y			20 // Q
+#define CODE_A			SDL_SCANCODE_S
+#define CODE_B			SDL_SCANCODE_A
+#define CODE_X			SDL_SCANCODE_W
+#define CODE_Y			SDL_SCANCODE_Q
 
-#define CODE_L1			43 // Tab
-#define CODE_R1			5
+#define CODE_L1			SDL_SCANCODE_TAB
+#define CODE_R1			SDL_SCANCODE_B
 #define CODE_L2			CODE_NA
 #define CODE_R2			CODE_NA
 #define CODE_L3			CODE_NA
@@ -63,8 +63,8 @@
 #define CODE_L4         CODE_NA
 #define CODE_R4         CODE_NA
 
-#define CODE_MENU		44 // Space
-#define CODE_POWER		42 // Backspace
+#define CODE_MENU		SDL_SCANCODE_SPACE
+#define CODE_POWER		SDL_SCANCODE_BACKSPACE
 
 #define CODE_PLUS		CODE_NA
 #define CODE_MINUS		CODE_NA
