@@ -43,6 +43,7 @@ void CFG_defaults(NextUISettings *cfg)
         .thumbRadius = CFG_DEFAULT_THUMBRADIUS,
         .gameArtWidth = CFG_DEFAULT_GAMEARTWIDTH,
 		.showFolderNamesAtRoot = CFG_DEFAULT_SHOWFOLDERNAMESATROOT,
+        .collateSubfolders = CFG_DEFAULT_COLLATESUBFOLDERS,
         .inputPromptStyle = CFG_DEFAULT_INPUT_PROMPT_STYLE,
         .paletteName = CFG_DEFAULT_PALETTE_NAME,
         .customColors = {CFG_DEFAULT_COLOR1, CFG_DEFAULT_COLOR2, CFG_DEFAULT_COLOR3,
@@ -57,6 +58,9 @@ void CFG_defaults(NextUISettings *cfg)
         .showRecents = CFG_DEFAULT_SHOWRECENTS,
         .showTools = CFG_DEFAULT_SHOWTOOLS,
         .showCollections = CFG_DEFAULT_SHOWCOLLECTIONS,
+        .showCollectionsPromotion = CFG_DEFAULT_SHOWCOLLECTIONSPROMOTION,
+        .sortCollectionsEntries = CFG_DEFAULT_SORTCOLLECTIONSENTRIES,
+        .useCollectionsNestedMap = CFG_DEFAULT_USECOLLECTIONSNESTEDMAP,
         .showGameArt = CFG_DEFAULT_SHOWGAMEART,
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
         .defaultView = CFG_DEFAULT_VIEW,
@@ -280,6 +284,21 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 CFG_setShowCollections((bool)temp_value);
                 continue;
             }
+            if (sscanf(line, "collectionspromotion=%i", &temp_value) == 1)
+            {
+                CFG_setShowCollectionsPromotion((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "collectionsentriessort=%i", &temp_value) == 1)
+            {
+                CFG_setSortCollectionsEntries((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "usecollectionsnestedmap=%i", &temp_value) == 1)
+            {
+                CFG_setUseCollectionsNestedMap((bool)temp_value);
+                continue;
+            }
             if (sscanf(line, "gameart=%i", &temp_value) == 1)
             {
                 CFG_setShowGameArt((bool)temp_value);
@@ -293,6 +312,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "showfoldernamesatroot=%i", &temp_value) == 1)
             {
                 CFG_setShowFolderNamesAtRoot((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "collateSubfolders=%i", &temp_value) == 1)
+            {
+                CFG_setCollateSubfolders((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "suspendTimeout=%i", &temp_value) == 1)
@@ -384,6 +408,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "quickSwitcherUi=%i", &temp_value) == 1)
             {
                 CFG_setShowQuickswitcherUI(temp_value);
+                continue;
+            }
+            if (sscanf(line, "quickSwitcherUiGames=%i", &temp_value) == 1)
+            {
+                CFG_setShowQuickswitcherUIGames(temp_value);
                 continue;
             }
             if (sscanf(line, "wifiDiagnostics=%i", &temp_value) == 1)
@@ -699,6 +728,17 @@ void CFG_setShowFolderNamesAtRoot(bool show)
 	CFG_sync();
 }
 
+bool CFG_getCollateSubfolders(void)
+{
+    return settings.collateSubfolders;
+}
+
+void CFG_setCollateSubfolders(bool show)
+{
+    settings.collateSubfolders = show;
+    CFG_sync();
+}
+
 uint32_t CFG_getScreenTimeoutSecs(void)
 {
     return settings.screenTimeoutSecs;
@@ -839,6 +879,39 @@ bool CFG_getShowCollections(void)
 void CFG_setShowCollections(bool show)
 {
     settings.showCollections = show;
+    CFG_sync();
+}
+
+bool CFG_getShowCollectionsPromotion(void)
+{
+    return settings.showCollectionsPromotion;
+}
+
+void CFG_setShowCollectionsPromotion(bool show)
+{
+    settings.showCollectionsPromotion = show;
+    CFG_sync();
+}
+
+bool CFG_getSortCollectionsEntries(void)
+{
+    return settings.sortCollectionsEntries;
+}
+
+void CFG_setSortCollectionsEntries(bool show)
+{
+    settings.sortCollectionsEntries = show;
+    CFG_sync();
+}
+
+bool CFG_getUseCollectionsNestedMap(void)
+{
+    return settings.useCollectionsNestedMap;
+}
+
+void CFG_setUseCollectionsNestedMap(bool show)
+{
+    settings.useCollectionsNestedMap = show;
     CFG_sync();
 }
 
@@ -989,6 +1062,17 @@ bool CFG_getShowQuickswitcherUI(void)
 void CFG_setShowQuickswitcherUI(bool on)
 {
     settings.showQuickSwitcherUi = on;
+    CFG_sync();
+}
+
+bool CFG_getShowQuickswitcherUIGames(void)
+{
+    return settings.showQuickSwitcherUiGames;
+}
+
+void CFG_setShowQuickswitcherUIGames(bool on)
+{
+    settings.showQuickSwitcherUiGames = on;
     CFG_sync();
 }
 
@@ -1393,6 +1477,18 @@ void CFG_get(const char *key, char *value)
 	{
 		sprintf(value, "%i", CFG_getShowCollections());
     }
+	else if (strcmp(key, "collectionspromotion") == 0)
+	{
+		sprintf(value, "%i", CFG_getShowCollectionsPromotion());
+    }
+	else if (strcmp(key, "collectionsentriessort") == 0)
+	{
+		sprintf(value, "%i", CFG_getSortCollectionsEntries());
+    }
+	else if (strcmp(key, "usecollectionsnestedmap") == 0)
+	{
+		sprintf(value, "%i", CFG_getUseCollectionsNestedMap());
+    }
     else if (strcmp(key, "gameart") == 0)
     {
         sprintf(value, "%i", CFG_getShowGameArt());
@@ -1400,6 +1496,10 @@ void CFG_get(const char *key, char *value)
 	else if (strcmp(key, "showfoldernamesatroot") == 0)
     {
         sprintf(value, "%i", CFG_getShowFolderNamesAtRoot());
+    }
+    else if (strcmp(key, "collateSubfolders") == 0)
+    {
+        sprintf(value, "%i", CFG_getCollateSubfolders());
     }
     else if (strcmp(key, "screentimeout") == 0)
     {
@@ -1468,6 +1568,10 @@ void CFG_get(const char *key, char *value)
     else if (strcmp(key, "quickSwitcherUi") == 0)
     {
         sprintf(value, "%i", (int)(CFG_getShowQuickswitcherUI()));
+    }
+    else if (strcmp(key, "quickSwitcherUiGames") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getShowQuickswitcherUIGames()));
     }
     else if (strcmp(key, "wifiDiagnostics") == 0)
     {
@@ -1621,8 +1725,12 @@ void CFG_sync(void)
     fprintf(file, "recents=%i\n", settings.showRecents);
     fprintf(file, "tools=%i\n", settings.showTools);
 	fprintf(file, "collections=%i\n", settings.showCollections);
+    fprintf(file, "collectionspromotion=%i\n", settings.showCollectionsPromotion);
+    fprintf(file, "collectionsentriessort=%i\n", settings.sortCollectionsEntries);
+    fprintf(file, "usecollectionsnestedmap=%i\n", settings.useCollectionsNestedMap);
     fprintf(file, "gameart=%i\n", settings.showGameArt);
     fprintf(file, "showfoldernamesatroot=%i\n", settings.showFolderNamesAtRoot);
+    fprintf(file, "collateSubfolders=%i\n", settings.collateSubfolders);
     fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
     fprintf(file, "suspendTimeout=%i\n", settings.suspendTimeoutSecs);
     fprintf(file, "powerOffProtection=%i\n", settings.powerOffProtection);
@@ -1641,6 +1749,7 @@ void CFG_sync(void)
     fprintf(file, "wifi=%i\n", settings.wifi);
     fprintf(file, "defaultView=%i\n", settings.defaultView);
     fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
+    fprintf(file, "quickSwitcherUiGames=%i\n", settings.showQuickSwitcherUiGames);
     fprintf(file, "wifiDiagnostics=%i\n", settings.wifiDiagnostics);
     fprintf(file, "bluetooth=%i\n", settings.bluetooth);
     fprintf(file, "btDiagnostics=%i\n", settings.bluetoothDiagnostics);
@@ -1695,6 +1804,9 @@ void CFG_print(void)
     printf("\t\"recents\": %i,\n", settings.showRecents);
     printf("\t\"tools\": %i,\n", settings.showTools);
 	printf("\t\"collections\": %i,\n", settings.showCollections);
+    printf("\t\"collectionspromotion\": %i,\n", settings.showCollectionsPromotion);
+    printf("\t\"collectionsentriessort\": %i,\n", settings.sortCollectionsEntries);
+    printf("\t\"usecollectionsnestedmap\": %i,\n", settings.useCollectionsNestedMap);
     printf("\t\"gameart\": %i,\n", settings.showGameArt);
     printf("\t\"showfoldernamesatroot\": %i,\n", settings.showFolderNamesAtRoot);
     printf("\t\"screentimeout\": %i,\n", settings.screenTimeoutSecs);
@@ -1715,6 +1827,7 @@ void CFG_print(void)
     printf("\t\"wifi\": %i,\n", settings.wifi);
     printf("\t\"defaultView\": %i,\n", settings.defaultView);
     printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
+    printf("\t\"quickSwitcherUiGames\": %i,\n", settings.showQuickSwitcherUiGames);
     printf("\t\"wifiDiagnostics\": %i,\n", settings.wifiDiagnostics);
     printf("\t\"bluetooth\": %i,\n", settings.bluetooth);
     printf("\t\"btDiagnostics\": %i,\n", settings.bluetoothDiagnostics);

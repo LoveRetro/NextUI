@@ -457,6 +457,10 @@ int main(int argc, char *argv[])
             []() -> std::any { return CFG_getShowFolderNamesAtRoot(); },
             [](const std::any &value) { CFG_setShowFolderNamesAtRoot(std::any_cast<bool>(value)); },
             []() { CFG_setShowFolderNamesAtRoot(CFG_DEFAULT_SHOWFOLDERNAMESATROOT);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Collate Subfolders", "Merge duplicate subfolders in already merged platform folders.", {false, true}, on_off,
+            []() -> std::any { return CFG_getCollateSubfolders(); },
+            [](const std::any &value) { CFG_setCollateSubfolders(std::any_cast<bool>(value)); },
+            []() { CFG_setCollateSubfolders(CFG_DEFAULT_COLLATESUBFOLDERS);}});
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show Recents", "Show \"Recently Played\" menu entry in game list.", {false, true}, on_off,
             []() -> std::any { return CFG_getShowRecents(); },
             [](const std::any &value) { CFG_setShowRecents(std::any_cast<bool>(value)); },
@@ -465,6 +469,22 @@ int main(int argc, char *argv[])
             []() -> std::any { return CFG_getShowTools(); },
             [](const std::any &value) { CFG_setShowTools(std::any_cast<bool>(value)); },
             []() { CFG_setShowTools(CFG_DEFAULT_SHOWTOOLS);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show Collections", "Show \"Collections\" menu entry in game list.", {false, true}, on_off,
+            []() -> std::any { return CFG_getShowCollections(); },
+            [](const std::any &value) { CFG_setShowCollections(std::any_cast<bool>(value)); },
+            []() { CFG_setShowCollections(CFG_DEFAULT_SHOWCOLLECTIONS);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show Collections Promotion", "Show \"Collections\" menu entries in root game list\nOnly occurs when all Game folders are hidden.", {false, true}, on_off,
+            []() -> std::any { return CFG_getShowCollectionsPromotion(); },
+            [](const std::any &value) { CFG_setShowCollectionsPromotion(std::any_cast<bool>(value)); },
+            []() { CFG_setShowCollectionsPromotion(CFG_DEFAULT_SHOWCOLLECTIONSPROMOTION);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Sort Collections Entries", "Sort \"Collections\" entries alphabetically.\nOtherwise uses order listed in Collection file.", {false, true}, on_off,
+            []() -> std::any { return CFG_getSortCollectionsEntries(); },
+            [](const std::any &value) { CFG_setSortCollectionsEntries(std::any_cast<bool>(value)); },
+            []() { CFG_setSortCollectionsEntries(CFG_DEFAULT_SORTCOLLECTIONSENTRIES);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Use Collections Nested Map", "Use map.txt contained within \"Collections\" subfolders.\nFalls back to map.txt in root Collections folder if not found.", {false, true}, on_off,
+            []() -> std::any { return CFG_getUseCollectionsNestedMap(); },
+            [](const std::any &value) { CFG_setUseCollectionsNestedMap(std::any_cast<bool>(value)); },
+            []() { CFG_setUseCollectionsNestedMap(CFG_DEFAULT_USECOLLECTIONSNESTEDMAP);}});
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show game art", "Show game artwork in the main menu", {false, true}, on_off,
             []() -> std::any { return CFG_getShowGameArt(); },
             [](const std::any &value) { CFG_setShowGameArt(std::any_cast<bool>(value)); },
