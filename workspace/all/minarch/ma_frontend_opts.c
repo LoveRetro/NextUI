@@ -3,6 +3,7 @@
 #include "ma_cheats.h"
 #include "ra_integration.h"
 #include "notification.h"
+#include "shader_sets.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -431,13 +432,19 @@ static int OptionSaveChanges_onConfirm(MenuList* list, int i) {
 	char* message;
 	switch (i) {
 		case 0: {
-			Config_write(CONFIG_WRITE_ALL);
-			message = "Saved for console.";
+			int result = Config_write(CONFIG_WRITE_ALL);
+			if (result == CONFIG_WRITE_SHADER_SET)
+				message = "Saved console and shader set.";
+			else if (result == CONFIG_WRITE_STANDARD)
+				message = "Saved for console.";
+			else
+				message = "Unable to save for console.";
 			break;
 		}
 		case 1: {
-			Config_write(CONFIG_WRITE_GAME);
-			message = "Saved for game.";
+			message = Config_write(CONFIG_WRITE_GAME)
+				? "Saved for game."
+				: "Unable to save for game.";
 			break;
 		}
 		default: {
@@ -651,19 +658,54 @@ static int OptionPragmas_openMenu(MenuList* list, int i) {
 
 	return MENU_CALLBACK_NOP;
 }
+
+#define SHADER_SET_MENU_ID -1
+
+static ShaderSetList ShaderSetOptions = {0};
+static char **ShaderSetLabels = NULL;
+
+static void OptionShaders_freeFileList(char **files) {
+	if (!files)
+		return;
+	for (int i = 0; files[i]; i++)
+		free(files[i]);
+	free(files);
+}
+
+static void OptionShaders_refreshItems(MenuList *list) {
+	for (int i = 0; i < config.shaders.count; i++)
+		list->items[i + 1].value = config.shaders.options[i].value;
+}
+
 static int OptionShaders_optionChanged(MenuList* list, int i) {
 	MenuItem* item = &list->items[i];
+	if (item->id == SHADER_SET_MENU_ID) {
+		int previous = ShaderSets_activeIndex(&ShaderSetOptions);
+		if (item->value == previous)
+			return MENU_CALLBACK_NOP;
+
+		if (item->value < 0 || item->value >= ShaderSetOptions.count ||
+			!ShaderSets_setActive(ShaderSetOptions.names[item->value])) {
+			item->value = previous;
+			Menu_message("Unable to save shader set", (char*[]){"B", "BACK", NULL});
+			return MENU_CALLBACK_NOP;
+		}
+
+		Config_reloadFrontendShaders();
+		item->value = ShaderSets_activeIndex(&ShaderSetOptions);
+		OptionShaders_refreshItems(list);
+		return MENU_CALLBACK_NOP;
+	}
+
+	int shader_index = item->id;
 	// Process menu entry change, update underlying config cruft and call handler
 	Config_syncShaders(item->key, item->value);
 	// Apply shader pragmas if needed
 	applyShaderSettings();
 	// Update menu entries to reflect any changes made by the handler
-	for (int y = 0; y < config.shaders.count; y++) {
-		MenuItem* item = &list->items[y];
-		item->value = config.shaders.options[y].value;
-	}
+	OptionShaders_refreshItems(list);
 
-	if(i==SH_SHADERS_PRESET) {
+	if(shader_index==SH_SHADERS_PRESET) {
 		// On shader preset change:
 		// Push all new shader settings to shader engine,
 		// compile shaders if needed, populate pragmas list
@@ -696,9 +738,54 @@ int OptionShaders_openMenu(MenuList* list, int i) {
 		return MENU_CALLBACK_NOP;
 	}
 
-	ShaderOptions_menu.items = calloc(config.shaders.count + 1, sizeof(MenuItem));
+	if (!ShaderSets_list(&ShaderSetOptions)) {
+		OptionShaders_freeFileList(filelist);
+		Menu_message("Unable to read shader sets", (char*[]){"B", "BACK", NULL});
+		return MENU_CALLBACK_NOP;
+	}
+
+	ShaderSetLabels = calloc(ShaderSetOptions.count + 1, sizeof(char *));
+	if (!ShaderSetLabels) {
+		OptionShaders_freeFileList(filelist);
+		ShaderSets_freeList(&ShaderSetOptions);
+		Menu_message("Unable to read shader sets", (char*[]){"B", "BACK", NULL});
+		return MENU_CALLBACK_NOP;
+	}
+	for (int i = 0; i < ShaderSetOptions.count; i++) {
+		ShaderSetLabels[i] = strdup(ShaderSets_displayName(ShaderSetOptions.names[i]));
+		if (!ShaderSetLabels[i]) {
+			for (int j = 0; j < i; j++)
+				free(ShaderSetLabels[j]);
+			free(ShaderSetLabels);
+			ShaderSetLabels = NULL;
+			OptionShaders_freeFileList(filelist);
+			ShaderSets_freeList(&ShaderSetOptions);
+			Menu_message("Unable to read shader sets", (char*[]){"B", "BACK", NULL});
+			return MENU_CALLBACK_NOP;
+		}
+	}
+
+	ShaderOptions_menu.items = calloc(config.shaders.count + 2, sizeof(MenuItem));
+	if (!ShaderOptions_menu.items) {
+		for (int i = 0; i < ShaderSetOptions.count; i++)
+			free(ShaderSetLabels[i]);
+		free(ShaderSetLabels);
+		ShaderSetLabels = NULL;
+		OptionShaders_freeFileList(filelist);
+		ShaderSets_freeList(&ShaderSetOptions);
+		Menu_message("Unable to open shader settings", (char*[]){"B", "BACK", NULL});
+		return MENU_CALLBACK_NOP;
+	}
+
+	MenuItem *set_item = &ShaderOptions_menu.items[0];
+	set_item->id = SHADER_SET_MENU_ID;
+	set_item->name = "Shader Set";
+	set_item->desc = "Globally applies a frontend and shader configuration immediately.";
+	set_item->value = ShaderSets_activeIndex(&ShaderSetOptions);
+	set_item->values = ShaderSetLabels;
+
 	for (int i = 0; i < config.shaders.count; i++) {
-		MenuItem* item = &ShaderOptions_menu.items[i];
+		MenuItem* item = &ShaderOptions_menu.items[i + 1];
 		Option* configitem = &config.shaders.options[i];
 		item->id = i;
 		item->name = configitem->name;
@@ -718,11 +805,15 @@ int OptionShaders_openMenu(MenuList* list, int i) {
 	}
 
 
-	if (ShaderOptions_menu.items[0].name) {
-		Menu_options(&ShaderOptions_menu);
-	} else {
-		Menu_message("No shaders available\n/Shaders folder or shader files not found", (char*[]){"B", "BACK", NULL});
-	}
+	Menu_options(&ShaderOptions_menu);
+
+	free(ShaderOptions_menu.items);
+	ShaderOptions_menu.items = NULL;
+	for (int i = 0; i < ShaderSetOptions.count; i++)
+		free(ShaderSetLabels[i]);
+	free(ShaderSetLabels);
+	ShaderSetLabels = NULL;
+	ShaderSets_freeList(&ShaderSetOptions);
 
 	return MENU_CALLBACK_NOP;
 }

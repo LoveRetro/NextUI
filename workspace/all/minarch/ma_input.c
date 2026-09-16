@@ -1,6 +1,9 @@
 #include "ma_internal.h"
 #include "ma_input.h"
+#include "notification.h"
+#include "shader_sets.h"
 
+#include <stdio.h>
 #include <string.h>
 
 int setFastForward(int enable) {
@@ -10,6 +13,41 @@ int setFastForward(int enable) {
 	}
 	fast_forward = val;
 	return val;
+}
+
+static void nextShaderSet(void) {
+	ShaderSetList list;
+	char name[MAX_PATH];
+	char message[NOTIFICATION_MAX_MESSAGE];
+
+	if (!ShaderSets_list(&list)) {
+		Notification_push(NOTIFICATION_SETTING, "Unable to read shader sets", NULL);
+		return;
+	}
+
+	if (list.count == 1) {
+		int had_active_set = config.shader_set_cfg || config.shader_set_override_cfg;
+		if (ShaderSets_setActive("")) {
+			if (had_active_set)
+				Config_reloadFrontendShaders();
+			Notification_push(NOTIFICATION_SETTING, "Shader set: Disabled", NULL);
+		}
+		else
+			Notification_push(NOTIFICATION_SETTING, "Unable to change shader set", NULL);
+		ShaderSets_freeList(&list);
+		return;
+	}
+
+	if (!ShaderSets_advance(&list, name, sizeof(name))) {
+		ShaderSets_freeList(&list);
+		Notification_push(NOTIFICATION_SETTING, "Unable to change shader set", NULL);
+		return;
+	}
+
+	Config_reloadFrontendShaders();
+	snprintf(message, sizeof(message), "Shader set: %s", ShaderSets_displayName(name));
+	Notification_push(NOTIFICATION_SETTING, message, NULL);
+	ShaderSets_freeList(&list);
 }
 
 static uint32_t buttons = 0; // RETRO_DEVICE_ID_JOYPAD_* buttons
@@ -166,6 +204,9 @@ void input_poll_callback(void) {
 					case SHORTCUT_CYCLE_EFFECT:
 						screen_effect = (screen_effect + 1) % config.frontend.options[FE_OPT_EFFECT].count;
 						Config_syncFrontend(config.frontend.options[FE_OPT_EFFECT].key, screen_effect);
+						break;
+					case SHORTCUT_NEXT_SHADER_SET:
+						nextShaderSet();
 						break;
 					default: break;
 				}

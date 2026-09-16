@@ -70,6 +70,7 @@ int DEVICE_WIDTH = 0;
 int DEVICE_HEIGHT = 0;
 int DEVICE_PITCH = 0;
 int shader_reset_suppressed = 0;
+int has_pending_opt_change = 0;
 
 GFX_Renderer renderer;
 
@@ -247,8 +248,6 @@ int main(int argc , char* argv[]) {
 
 	chooseSyncRef();
 	
-	int has_pending_opt_change = 0;
-
 	// then initialize custom  shaders from settings
 	initShaders();
 	Config_readOptions();
@@ -256,8 +255,6 @@ int main(int argc , char* argv[]) {
 	int rewind_initialized = Rewind_init(core.serialize_size ? core.serialize_size() : 0);
 	rewind_init_ready = 1;  // Mark setup as attempted, even if rewind init failed, so option changes can retry it later.
 	if (rewind_initialized && core.serialize_size) Rewind_on_state_change();
-	// release config when all is loaded
-	Config_free();
 
 	LOG_info("total startup time %ims\n\n",SDL_GetTicks());
 	
@@ -313,11 +310,12 @@ int main(int argc , char* argv[]) {
 		
 		Notification_renderToLayer(5);  // Always call - handles cleanup when inactive
 
-		if (has_pending_opt_change) {
+		if (has_pending_opt_change && !config.core.changed) {
 			has_pending_opt_change = 0;
 			if (Core_updateAVInfo()) {
 				LOG_info("AV info changed, reset sound system");
 				SND_resetAudio(core.sample_rate, core.fps);
+				renderer.dst_p = 0;
 			}
 			chooseSyncRef();
 		}

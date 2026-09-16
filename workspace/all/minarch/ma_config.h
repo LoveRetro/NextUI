@@ -11,8 +11,14 @@ void Config_load(void);
 void Config_free(void);
 void Config_readOptions(void);
 void Config_readControls(void);
-void Config_write(int override);
+enum {
+	CONFIG_WRITE_FAILED,
+	CONFIG_WRITE_STANDARD,
+	CONFIG_WRITE_SHADER_SET,
+};
+int Config_write(int override);
 void Config_restore(void);
+bool Config_reloadFrontendShaders(void);
 void Config_syncShaders(char* key, int value);
 void applyShaderSettings(void);
 void initShaders(void);

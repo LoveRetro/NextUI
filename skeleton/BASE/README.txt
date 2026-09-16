@@ -98,6 +98,21 @@ Cheats use RetroArch .cht file format. Many cheat files are here <https://github
 Cheat file name needs to match ROM name, and go underneath the "Cheats" directory. For example, `/Cheats/GB/Super Mario Land (World).zip.cht`. When a cheat file is detected, it will show up in the "cheats" menu item ingame. Not all cheats work with all cores, may want to clean up files to just the cheats you want.
 
 ----------------------------------------
+Shader sets
+
+The first option in the in-game Shaders menu applies one frontend and shader configuration across all Minarch emulators. Set configs live in `/Shaders/sets`. Each `.cfg` file directly inside that folder appears as a selectable set. Select Disabled to use the normal emulator settings without a global set. Changes are saved globally and applied immediately.
+
+A set can be adjusted for a specific emulator tag by adding a config with the same filename inside a tag subfolder. For example, `/Shaders/sets/Retro.cfg` is the fallback for every emulator and `/Shaders/sets/GBA/Retro.cfg` overrides its values for GBA games.
+
+Set configs support frontend, shader, shader-parameter, and emulator/core options. They can also include `minarch_gamepad_type` when authored manually. Controls and shortcuts are not read from sets. The selected set is applied after console or per-game settings and takes priority. For example, `/Shaders/sets/GB/Retro.cfg` can select a Gambatte palette for the Retro set.
+
+The in-game Shortcuts menu includes Next Shader Set. Bind it to cycle through Disabled and the available sets, apply the new set immediately, and show the selected name in a notification.
+
+When a shader set is active, Save for console keeps normal emulator, gamepad, control, and shortcut settings in the console config and writes a complete frontend, shader, and core-option snapshot to `/Shaders/sets/<TAG>/<Set>.cfg`. Gamepad type is not written to generated set overrides. This tag override freezes those set-specific values for that emulator until it is regenerated or removed.
+
+Save for game continues to save the currently effective shader values into the game config. The active set stays visually in control; selecting Disabled reveals the saved game values again.
+
+----------------------------------------
 
 Disc-based games
 

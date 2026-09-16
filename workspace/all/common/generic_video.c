@@ -92,7 +92,7 @@ ShaderPass shaders[MAXSHADERS];
 
 // memcpy these in initShaders()
 const ShaderProgram blank_shader_program = {
-	.shader_p = 0, .filename = "stock.glsl"
+	.shader_p = 0, .filename = NULL
 };
 const ShaderPass blank_shader_pass = { .program = NULL,
 	.alpha = 0, .target_texture = 0, .target_updated = 1
@@ -475,6 +475,14 @@ GLuint load_shader_from_file(GLenum type, const char* filepath) {
 
 #define MAX_SHADER_PRAGMAS 32
 void loadShaderPragmas(ShaderProgram *shader, const char *shaderSource) {
+	if (shader->pragmas) {
+		free(shader->pragmas);
+		shader->pragmas = NULL;
+		shader->num_pragmas = 0;
+	}
+	if (!shaderSource)
+		return;
+
 	shader->pragmas = calloc(MAX_SHADER_PRAGMAS, sizeof(ShaderParam));
 	if (!shader->pragmas) {
 		fprintf(stderr, "Out of memory allocating pragmas for %s\n", shader->filename);
@@ -491,57 +499,75 @@ void init_shader_program(ShaderProgram * shader, const char * path, const char *
 	char filepath[512];
 	snprintf(filepath, sizeof(filepath), "%s/%s", path, filename);
 
-	const char *shaderSource  = load_shader_source(filepath);
-	loadShaderPragmas(shader,shaderSource);
+	char *shaderSource = load_shader_source(filepath);
+	if (!shaderSource)
+		return;
 
 	GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, filepath);
 	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, filepath);
+	if (!vertex_shader1 || !fragment_shader1) {
+		if (vertex_shader1) glDeleteShader(vertex_shader1);
+		if (fragment_shader1) glDeleteShader(fragment_shader1);
+		free(shaderSource);
+		return;
+	}
 
-	// Link the shader program
+	GLuint new_program = link_program(vertex_shader1, fragment_shader1, filename);
+	glDeleteShader(vertex_shader1);
+	glDeleteShader(fragment_shader1);
+
+	if (new_program == 0) {
+		LOG_info("Shader linking failed for %s\n", filename);
+		free(shaderSource);
+		return;
+	}
+
+	GLint success = 0;
+	glGetProgramiv(new_program, GL_LINK_STATUS, &success);
+	if (!success) {
+		char infoLog[512];
+		glGetProgramInfoLog(new_program, 512, NULL, infoLog);
+		LOG_info("Shader Program Linking Failed: %s\n", infoLog);
+		glDeleteProgram(new_program);
+		free(shaderSource);
+		return;
+	}
+
 	if (shader->shader_p != 0) {
 		LOG_info("Deleting previous shader %i\n",shader->shader_p);
 		glDeleteProgram(shader->shader_p);
 	}
-	shader->shader_p = link_program(vertex_shader1, fragment_shader1, filename);
+	shader->shader_p = new_program;
+	loadShaderPragmas(shader, shaderSource);
+	free(shaderSource);
 
+	LOG_info("Shader Program Linking Success %s shader ID is %i\n", filename,shader->shader_p);
 
-	if (shader->shader_p == 0) {
-		LOG_info("Shader linking failed for %s\n", filename);
+	// Populate uniforms and pragma uniforms
+	shader->u_FrameDirection = glGetUniformLocation( shader->shader_p, "FrameDirection");
+	shader->u_FrameCount = glGetUniformLocation( shader->shader_p, "FrameCount");
+	shader->u_OutputSize = glGetUniformLocation( shader->shader_p, "OutputSize");
+	shader->u_TextureSize = glGetUniformLocation( shader->shader_p, "TextureSize");
+	shader->u_InputSize = glGetUniformLocation( shader->shader_p, "InputSize");
+	shader->u_OrigTextureSize = glGetUniformLocation( shader->shader_p, "OrigTextureSize");
+	shader->u_OrigInputSize = glGetUniformLocation( shader->shader_p, "OrigInputSize");
+	shader->u_Texture = glGetUniformLocation(shader->shader_p, "Texture");
+	shader->u_OrigTexture = glGetUniformLocation(shader->shader_p, "OrigTexture");
+	shader->u_texelSize = glGetUniformLocation(shader->shader_p, "texelSize");
+	for (int i = 0; i < shader->num_pragmas; ++i) {
+		shader->pragmas[i].uniformLocation = glGetUniformLocation(shader->shader_p, shader->pragmas[i].name);
+		shader->pragmas[i].value = shader->pragmas[i].def;
+
+		LOG_info("Param: %s = %f (min: %f, max: %f, step: %f)\n",
+				 shader->pragmas[i].name,
+				 shader->pragmas[i].def,
+				 shader->pragmas[i].min,
+				 shader->pragmas[i].max,
+				 shader->pragmas[i].step);
 	}
 
-	GLint success = 0;
-	glGetProgramiv(shader->shader_p, GL_LINK_STATUS, &success);
-	if (!success) {
-		char infoLog[512];
-		glGetProgramInfoLog(shader->shader_p, 512, NULL, infoLog);
-		LOG_info("Shader Program Linking Failed: %s\n", infoLog);
-	} else {
-		LOG_info("Shader Program Linking Success %s shader ID is %i\n", filename,shader->shader_p);
-
-		// Populate uniforms and pragma uniforms
-		shader->u_FrameDirection = glGetUniformLocation( shader->shader_p, "FrameDirection");
-		shader->u_FrameCount = glGetUniformLocation( shader->shader_p, "FrameCount");
-		shader->u_OutputSize = glGetUniformLocation( shader->shader_p, "OutputSize");
-		shader->u_TextureSize = glGetUniformLocation( shader->shader_p, "TextureSize");
-		shader->u_InputSize = glGetUniformLocation( shader->shader_p, "InputSize");
-		shader->u_OrigTextureSize = glGetUniformLocation( shader->shader_p, "OrigTextureSize");
-		shader->u_OrigInputSize = glGetUniformLocation( shader->shader_p, "OrigInputSize");
-		shader->u_Texture = glGetUniformLocation(shader->shader_p, "Texture");
-		shader->u_OrigTexture = glGetUniformLocation(shader->shader_p, "OrigTexture");
-		shader->u_texelSize = glGetUniformLocation(shader->shader_p, "texelSize");
-		for (int i = 0; i < shader->num_pragmas; ++i) {
-			shader->pragmas[i].uniformLocation = glGetUniformLocation(shader->shader_p, shader->pragmas[i].name);
-			shader->pragmas[i].value = shader->pragmas[i].def;
-
-			LOG_info("Param: %s = %f (min: %f, max: %f, step: %f)\n",
-					 shader->pragmas[i].name,
-					 shader->pragmas[i].def,
-					 shader->pragmas[i].min,
-					 shader->pragmas[i].max,
-					 shader->pragmas[i].step);
-		}
-
-	}
+	if (shader->filename)
+		free(shader->filename);
 	shader->filename = strdup(filename);
 
 }

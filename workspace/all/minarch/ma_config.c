@@ -3,10 +3,18 @@
 #include <string.h>
 #include <math.h>
 #include <dirent.h>
+#include <errno.h>
+#include <ctype.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "ma_internal.h"
 #include "ma_options.h"
 #include "ma_config.h"
+#include "ma_runframe.h"
+#include "shader_sets.h"
+
+static void freeShaderSettings(int i);
 
 static ButtonMapping button_label_mapping[] = { // used to lookup the retro_id and local btn_id from button name
 	{"NONE",	-1,								BTN_ID_NONE},
@@ -404,35 +412,32 @@ void Config_init(void) {
 	config.initialized = 1;
 }
 void Config_quit(void) {
-	if (!config.initialized) return;
-	for (int i=0; core_button_mapping[i].name; i++) {
-		free(core_button_mapping[i].name);
+	if (config.initialized) {
+		for (int i=0; core_button_mapping[i].name; i++) {
+			free(core_button_mapping[i].name);
+		}
 	}
+	for (int i = 0; i < 3; i++)
+		freeShaderSettings(i);
+	Config_free();
 }
-static void Config_readOptionsString(char* cfg) {
+
+static void Config_readFrontendOptionsString(char* cfg, int sync) {
 	if (!cfg) return;
 
-	LOG_info("Config_readOptions\n");
-	char key[256];
 	char value[256];
 	for (int i=0; config.frontend.options[i].key; i++) {
 		Option* option = &config.frontend.options[i];
 		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
 		OptionList_setOptionValue(&config.frontend, option->key, value);
-		Config_syncFrontend(option->key, option->value);
+		if (sync) Config_syncFrontend(option->key, option->value);
 	}
-	
-	if (has_custom_controllers && Config_getValue(cfg,"minarch_gamepad_type",value,NULL)) {
-		gamepad_type = strtol(value, NULL, 0);
-		int device = strtol(gamepad_values[gamepad_type], NULL, 0);
-		core.set_controller_port_device(0, device);
-	}
-	for (int i=0; config.core.options[i].key; i++) {
-		Option* option = &config.core.options[i];
-		// LOG_info("%s\n",option->key);
-		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
-		OptionList_setOptionValue(&config.core, option->key, value);
-	}
+}
+
+static void Config_readShaderOptionsString(char* cfg) {
+	if (!cfg) return;
+
+	char value[256];
 	for (int i=0; config.shaders.options[i].key; i++) {
 		Option* option = &config.shaders.options[i];
 		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
@@ -447,6 +452,64 @@ static void Config_readOptionsString(char* cfg) {
 			}
 		}
 	}
+}
+
+static int Config_getGamepadType(char *cfg, int *type) {
+	char value[256];
+	char *end;
+	long parsed;
+	int count = 0;
+
+	if (!cfg || !Config_getValue(cfg, "minarch_gamepad_type", value, NULL))
+		return 0;
+
+	errno = 0;
+	parsed = strtol(value, &end, 0);
+	if (end == value)
+		return -1;
+	while (isspace((unsigned char)*end)) end++;
+	while (gamepad_values[count]) count++;
+	if (errno == ERANGE || *end || parsed < 0 || parsed >= count)
+		return -1;
+
+	*type = parsed;
+	return 1;
+}
+
+static void Config_readCoreOptionsString(char* cfg) {
+	if (!cfg) return;
+
+	if (has_custom_controllers) {
+		int type;
+		int result = Config_getGamepadType(cfg, &type);
+		if (result > 0) {
+			gamepad_type = type;
+			int device = strtol(gamepad_values[gamepad_type], NULL, 0);
+			core.set_controller_port_device(0, device);
+		}
+		else if (result < 0)
+			LOG_warn("invalid minarch_gamepad_type\n");
+	}
+	char value[256];
+	for (int i=0; config.core.options[i].key; i++) {
+		Option* option = &config.core.options[i];
+		// LOG_info("%s\n",option->key);
+		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
+		OptionList_setOptionValue(&config.core, option->key, value);
+	}
+}
+
+static void Config_readSetOptionsString(char* cfg, int sync) {
+	Config_readFrontendOptionsString(cfg, sync);
+	Config_readCoreOptionsString(cfg);
+	Config_readShaderOptionsString(cfg);
+}
+
+static void Config_readOptionsString(char* cfg) {
+	if (!cfg) return;
+
+	LOG_info("Config_readOptions\n");
+	Config_readSetOptionsString(cfg, 1);
 }
 static void Config_readControlsString(char* cfg) {
 	if (!cfg) return;
@@ -509,6 +572,36 @@ static void Config_readControlsString(char* cfg) {
 		mapping->mod = mod;
 	}
 }
+
+static void Config_loadShaderSet(void) {
+	ShaderSetList list;
+	int active;
+	char path[MAX_PATH];
+
+	if (config.shader_set_cfg) {
+		free(config.shader_set_cfg);
+		config.shader_set_cfg = NULL;
+	}
+	if (config.shader_set_override_cfg) {
+		free(config.shader_set_override_cfg);
+		config.shader_set_override_cfg = NULL;
+	}
+
+	if (!ShaderSets_list(&list))
+		return;
+
+	active = ShaderSets_activeIndex(&list);
+	if (active > 0 && ShaderSets_rootPath(list.names[active], path, sizeof(path)))
+		config.shader_set_cfg = allocFile(path);
+
+	if (active > 0 &&
+		ShaderSets_overridePath(list.names[active], core.tag, path, sizeof(path)) &&
+		exists(path))
+		config.shader_set_override_cfg = allocFile(path);
+
+	ShaderSets_freeList(&list);
+}
+
 void Config_load(void) {
 	LOG_info("Config_load\n");
 	
@@ -568,58 +661,61 @@ void Config_load(void) {
 	if (!override) Config_getPath(path, CONFIG_WRITE_ALL);
 	
 	config.user_cfg = allocFile(path);
-	if (!config.user_cfg) return;
-	
-	LOG_info("using user config: %s\n", path);
-	
-	config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
+	if (config.user_cfg) {
+		LOG_info("using user config: %s\n", path);
+		config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
+	}
+
+	Config_loadShaderSet();
 }
 void Config_free(void) {
 	if (config.system_cfg) free(config.system_cfg);
 	if (config.default_cfg) free(config.default_cfg);
 	if (config.user_cfg) free(config.user_cfg);
+	if (config.shader_set_cfg) free(config.shader_set_cfg);
+	if (config.shader_set_override_cfg) free(config.shader_set_override_cfg);
+	if (config.shaders_preset) free(config.shaders_preset);
+	config.system_cfg = NULL;
+	config.default_cfg = NULL;
+	config.user_cfg = NULL;
+	config.shader_set_cfg = NULL;
+	config.shader_set_override_cfg = NULL;
+	config.shaders_preset = NULL;
 }
 void Config_readOptions(void) {
 	Config_readOptionsString(config.system_cfg);
 	Config_readOptionsString(config.default_cfg);
 	Config_readOptionsString(config.user_cfg);
+	// Active sets intentionally override both console and game visual settings.
+	Config_readSetOptionsString(config.shader_set_cfg, 1);
+	Config_readSetOptionsString(config.shader_set_override_cfg, 1);
 }
 void Config_readControls(void) {
 	Config_readControlsString(config.default_cfg);
 	Config_readControlsString(config.user_cfg);
 }
-void Config_write(int override) {
-	char path[MAX_PATH];
-	// sprintf(path, "%s/%s.cfg", core.config_dir, game.alt_name);
-	Config_getPath(path, CONFIG_WRITE_GAME);
-	
-	if (!override) {
-		if (config.loaded==CONFIG_GAME) unlink(path);
-		Config_getPath(path, CONFIG_WRITE_ALL);
-	}
-	config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
-	
-	FILE *file = fopen(path, "wb");
-	if (!file) return;
-	
+
+static int Config_writeFrontendShaders(FILE *file, int preserve_locks) {
 	for (int i=0; config.frontend.options[i].key; i++) {
 		Option* option = &config.frontend.options[i];
 		int count = 0;
 		while ( option->values &&  option->values[count]) count++;
 		if (option->value >= 0 && option->value < count) {
-			fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
+			if (fprintf(file, "%s%s = %s\n",
+				preserve_locks && option->lock ? "-" : "",
+				option->key, option->values[option->value]) < 0)
+				return 0;
 		}
-	}
-	for (int i=0; config.core.options[i].key; i++) {
-		Option* option = &config.core.options[i];
-		fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
 	}
 	for (int i=0; config.shaders.options[i].key; i++) {
 		Option* option = &config.shaders.options[i];
 		int count = 0;
 		while ( option->values &&  option->values[count]) count++;
 		if (option->value >= 0 && option->value < count) {
-			fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
+			if (fprintf(file, "%s%s = %s\n",
+				preserve_locks && option->lock ? "-" : "",
+				option->key, option->values[option->value]) < 0)
+				return 0;
 		}
 	}
 	for (int y=0; y < config.shaders.options[SH_NROFSHADERS].value; y++) {
@@ -628,28 +724,278 @@ void Config_write(int override) {
 			int count = 0;
 			while ( option->values &&  option->values[count]) count++;
 			if (option->value >= 0 && option->value < count) {
-				fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
+				if (fprintf(file, "%s%s = %s\n",
+					preserve_locks && option->lock ? "-" : "",
+					option->key, option->values[option->value]) < 0)
+					return 0;
 			}
 		}
 	}
-	
-	if (has_custom_controllers) fprintf(file, "%s = %i\n", "minarch_gamepad_type", gamepad_type);
-	
+	return 1;
+}
+
+static int Config_writeSetCoreOptions(FILE *file) {
+	for (int i=0; config.core.options[i].key; i++) {
+		Option* option = &config.core.options[i];
+		if (fprintf(file, "%s%s = %s\n", option->lock ? "-" : "",
+			option->key, option->values[option->value]) < 0)
+			return 0;
+	}
+	return 1;
+}
+
+static int Config_writeNonvisual(FILE *file) {
+	for (int i=0; config.core.options[i].key; i++) {
+		Option* option = &config.core.options[i];
+		if (fprintf(file, "%s = %s\n", option->key, option->values[option->value]) < 0)
+			return 0;
+	}
+
+	if (has_custom_controllers &&
+		fprintf(file, "%s = %i\n", "minarch_gamepad_type", gamepad_type) < 0)
+		return 0;
+
 	for (int i=0; config.controls[i].name; i++) {
 		ButtonMapping* mapping = &config.controls[i];
 		int j = mapping->local + 1;
 		if (mapping->mod) j += LOCAL_BUTTON_COUNT;
-		fprintf(file, "bind %s = %s\n", mapping->name, button_labels[j]);
+		if (fprintf(file, "bind %s = %s\n", mapping->name, button_labels[j]) < 0)
+			return 0;
 	}
 	for (int i=0; config.shortcuts[i].name; i++) {
 		ButtonMapping* mapping = &config.shortcuts[i];
 		int j = mapping->local + 1;
 		if (mapping->mod) j += LOCAL_BUTTON_COUNT;
-		fprintf(file, "bind %s = %s\n", mapping->name, button_labels[j]);
+		if (fprintf(file, "bind %s = %s\n", mapping->name, button_labels[j]) < 0)
+			return 0;
 	}
-	
-	fclose(file);
+	return 1;
+}
+
+static int Config_finishFile(FILE *file) {
+	if (fflush(file) != 0) {
+		fclose(file);
+		return 0;
+	}
+	int fd = fileno(file);
+	if (fd >= 0 && fsync(fd) != 0) {
+		fclose(file);
+		return 0;
+	}
+	return fclose(file) == 0;
+}
+
+static int Config_refreshUserConfig(const char *path) {
+	char *updated_user_cfg = allocFile((char *)path);
+	if (!updated_user_cfg) {
+		LOG_error("failed to refresh user config: %s\n", path);
+		return 0;
+	}
+	if (config.user_cfg) free(config.user_cfg);
+	config.user_cfg = updated_user_cfg;
+	return 1;
+}
+
+static int Config_writeStandard(const char *path) {
+	FILE *file = fopen(path, "wb");
+	if (!file)
+		return 0;
+
+	if (!Config_writeFrontendShaders(file, 0) || !Config_writeNonvisual(file)) {
+		fclose(file);
+		return 0;
+	}
+	if (!Config_finishFile(file))
+		return 0;
+
+	return Config_refreshUserConfig(path);
+}
+
+static int Config_isNonvisualLine(const char *line, size_t len) {
+	char key[256];
+	const char *start = line;
+	const char *delimiter;
+
+	while (len && (*start == ' ' || *start == '\t')) {
+		start++;
+		len--;
+	}
+	if (len && *start == '-') {
+		start++;
+		len--;
+	}
+	if (len >= 5 && !strncmp(start, "bind ", 5))
+		return 1;
+
+	delimiter = NULL;
+	for (size_t i = 0; i + 2 < len; i++) {
+		if (start[i] == ' ' && start[i + 1] == '=' && start[i + 2] == ' ') {
+			delimiter = start + i;
+			break;
+		}
+	}
+	if (!delimiter)
+		return 0;
+
+	size_t key_len = delimiter - start;
+	if (key_len >= sizeof(key))
+		return 0;
+	memcpy(key, start, key_len);
+	key[key_len] = '\0';
+
+	if (!strcmp(key, "minarch_gamepad_type"))
+		return 1;
+	for (int i = 0; config.core.options[i].key; i++) {
+		if (!strcmp(key, config.core.options[i].key))
+			return 1;
+	}
+	return 0;
+}
+
+static int Config_writePreservedVisual(FILE *file, const char *cfg) {
+	if (!cfg)
+		return 1;
+
+	const char *line = cfg;
+	while (*line) {
+		const char *end = line;
+		while (*end && *end != '\n' && *end != '\r')
+			end++;
+		size_t len = end - line;
+
+		if (!Config_isNonvisualLine(line, len)) {
+			if (len && fwrite(line, 1, len, file) != len)
+				return 0;
+			if (fputc('\n', file) == EOF)
+				return 0;
+		}
+
+		while (*end == '\n' || *end == '\r')
+			end++;
+		line = end;
+	}
+	return 1;
+}
+
+static int Config_makeTempPath(const char *path, char *temp_path, size_t temp_size) {
+	return snprintf(temp_path, temp_size, "%s.tmp.%ld", path, (long)getpid()) < (int)temp_size;
+}
+
+static int Config_writeActiveSetConsole(const char *set_name, const char *game_path,
+	const char *console_path) {
+	char override_dir[MAX_PATH];
+	char override_path[MAX_PATH];
+	char console_temp[MAX_PATH] = {0};
+	char override_temp[MAX_PATH] = {0};
+	char *console_cfg = allocFile((char *)console_path);
+	char *new_user_cfg = NULL;
+	char *new_override_cfg = NULL;
+	FILE *console_file = NULL;
+	FILE *override_file = NULL;
+	int result = 0;
+
+	if (!ShaderSets_overridePath(set_name, core.tag, override_path, sizeof(override_path)) ||
+		snprintf(override_dir, sizeof(override_dir), "%s/%s", SHADER_SETS_PATH, core.tag) >= (int)sizeof(override_dir) ||
+		!Config_makeTempPath(console_path, console_temp, sizeof(console_temp)) ||
+		!Config_makeTempPath(override_path, override_temp, sizeof(override_temp)))
+		goto cleanup;
+
+	if (exists((char *)console_path) && !console_cfg)
+		goto cleanup;
+
+	if (mkdir(override_dir, 0755) != 0 && errno != EEXIST)
+		goto cleanup;
+
+	console_file = fopen(console_temp, "wb");
+	if (!console_file)
+		goto cleanup;
+	if (!Config_writePreservedVisual(console_file, console_cfg) ||
+		!Config_writeNonvisual(console_file))
+		goto cleanup;
+	if (!Config_finishFile(console_file)) {
+		console_file = NULL;
+		goto cleanup;
+	}
+	console_file = NULL;
+
+	override_file = fopen(override_temp, "wb");
+	if (!override_file)
+		goto cleanup;
+	if (!Config_writeFrontendShaders(override_file, 1) ||
+		!Config_writeSetCoreOptions(override_file))
+		goto cleanup;
+	if (!Config_finishFile(override_file)) {
+		override_file = NULL;
+		goto cleanup;
+	}
+	override_file = NULL;
+
+	new_user_cfg = allocFile(console_temp);
+	if (!new_user_cfg)
+		goto cleanup;
+	new_override_cfg = allocFile(override_temp);
+	if (!new_override_cfg)
+		goto cleanup;
+
+	if (rename(console_temp, console_path) != 0)
+		goto cleanup;
+	if (rename(override_temp, override_path) != 0)
+		goto cleanup;
+	if (config.loaded == CONFIG_GAME &&
+		unlink(game_path) != 0 && errno != ENOENT)
+		goto cleanup;
+
+	config.loaded = CONFIG_CONSOLE;
+	if (config.user_cfg) free(config.user_cfg);
+	config.user_cfg = new_user_cfg;
+	new_user_cfg = NULL;
+	if (config.shader_set_override_cfg) free(config.shader_set_override_cfg);
+	config.shader_set_override_cfg = new_override_cfg;
+	new_override_cfg = NULL;
 	sync();
+	result = 1;
+
+cleanup:
+	if (console_file) fclose(console_file);
+	if (override_file) fclose(override_file);
+	if (console_temp[0]) unlink(console_temp);
+	if (override_temp[0]) unlink(override_temp);
+	free(console_cfg);
+	free(new_user_cfg);
+	free(new_override_cfg);
+	return result;
+}
+
+int Config_write(int override) {
+	char game_path[MAX_PATH];
+	char path[MAX_PATH];
+	char active_set[MAX_PATH];
+
+	Config_getPath(game_path, CONFIG_WRITE_GAME);
+
+	if (!override) {
+		if (!ShaderSets_getActive(active_set, sizeof(active_set)))
+			return CONFIG_WRITE_FAILED;
+		if (active_set[0]) {
+			Config_getPath(path, CONFIG_WRITE_ALL);
+			return Config_writeActiveSetConsole(active_set, game_path, path)
+				? CONFIG_WRITE_SHADER_SET
+				: CONFIG_WRITE_FAILED;
+		}
+	}
+
+	strcpy(path, game_path);
+	if (!override) {
+		if (config.loaded==CONFIG_GAME) unlink(path);
+		Config_getPath(path, CONFIG_WRITE_ALL);
+	}
+
+	if (!Config_writeStandard(path))
+		return CONFIG_WRITE_FAILED;
+
+	config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
+	sync();
+	return CONFIG_WRITE_STANDARD;
 }
 void Config_restore(void) {
 	char path[MAX_PATH];
@@ -698,10 +1044,10 @@ void Config_restore(void) {
 		mapping->mod = 0;
 	}
 	
+	Config_free();
 	Config_load();
 	Config_readOptions();
 	Config_readControls();
-	Config_free();
 	
 	renderer.dst_p = 0;
 }
@@ -710,15 +1056,35 @@ void readShadersPreset(int i) {
 	char shaderspath[MAX_PATH] = {0};
 	sprintf(shaderspath, SHADERS_FOLDER "/%s", config.shaders.options[SH_SHADERS_PRESET].values[i]);
 	LOG_info("read shaders preset %s\n",shaderspath);
+	if (config.shaders_preset) {
+		free(config.shaders_preset);
+		config.shaders_preset = NULL;
+	}
 	if (exists(shaderspath)) {
 		config.shaders_preset = allocFile(shaderspath);
 		Config_readOptionsString(config.shaders_preset);
 	}
-	else config.shaders_preset = NULL;
+}
+
+static void freeShaderSettings(int i) {
+	if (!config.shaderpragmas[i].options)
+		return;
+
+	for (int j = 0; j < config.shaderpragmas[i].count; j++) {
+		Option *option = &config.shaderpragmas[i].options[j];
+		for (int k = 0; option->values && option->values[k]; k++)
+			free(option->values[k]);
+		free(option->values);
+		free(option->labels);
+	}
+	free(config.shaderpragmas[i].options);
+	config.shaderpragmas[i].options = NULL;
+	config.shaderpragmas[i].count = 0;
 }
 
 void loadShaderSettings(int i) {
 	int menucount = 0;
+	freeShaderSettings(i);
 	config.shaderpragmas[i].options = calloc(32 + 1, sizeof(Option));
 	ShaderParam *params = PLAT_getShaderPragmas(i);
 	if(params == NULL) return;
@@ -886,6 +1252,202 @@ void initShaders() {
 			Config_syncShaders(option->key, option->value);
 		}
 	}
+}
+
+static void resetFrontendShaders(void) {
+	for (int i = 0; config.frontend.options[i].key; i++) {
+		config.frontend.options[i].value = config.frontend.options[i].default_value;
+		config.frontend.options[i].lock = 0;
+	}
+	for (int i = 0; config.shaders.options[i].key; i++) {
+		config.shaders.options[i].value = config.shaders.options[i].default_value;
+		config.shaders.options[i].lock = 0;
+	}
+	for (int i = 0; i < 3; i++)
+		freeShaderSettings(i);
+}
+
+static void readEffectiveFrontendOptions(int sync) {
+	Config_readFrontendOptionsString(config.system_cfg, sync);
+	Config_readFrontendOptionsString(config.default_cfg, sync);
+	Config_readFrontendOptionsString(config.user_cfg, sync);
+	Config_readFrontendOptionsString(config.shader_set_cfg, sync);
+	Config_readFrontendOptionsString(config.shader_set_override_cfg, sync);
+}
+
+static void readEffectiveShaderOptions(void) {
+	Config_readShaderOptionsString(config.system_cfg);
+	Config_readShaderOptionsString(config.default_cfg);
+	Config_readShaderOptionsString(config.user_cfg);
+	Config_readShaderOptionsString(config.shader_set_cfg);
+	Config_readShaderOptionsString(config.shader_set_override_cfg);
+}
+
+static void readEffectiveFrontendShaders(int sync) {
+	readEffectiveFrontendOptions(sync);
+	readEffectiveShaderOptions();
+}
+
+static int shaderSetTouchesFrontendOption(int index) {
+	char value[256];
+	const char *key = config.frontend.options[index].key;
+
+	return (config.shader_set_cfg &&
+			Config_getValue(config.shader_set_cfg, key, value, NULL)) ||
+		(config.shader_set_override_cfg &&
+			Config_getValue(config.shader_set_override_cfg, key, value, NULL));
+}
+
+static int shaderSetTouchesKey(const char *key) {
+	char value[256];
+	return (config.shader_set_cfg &&
+			Config_getValue(config.shader_set_cfg, key, value, NULL)) ||
+		(config.shader_set_override_cfg &&
+			Config_getValue(config.shader_set_override_cfg, key, value, NULL));
+}
+
+static int shaderSetTouchesGamepad(void) {
+	int type;
+	return Config_getGamepadType(config.shader_set_cfg, &type) > 0 ||
+		Config_getGamepadType(config.shader_set_override_cfg, &type) > 0;
+}
+
+static void reloadCoreOptions(const int *old_values, const int *old_locks,
+	const int *old_set_options, int old_gamepad, int old_set_gamepad) {
+	int new_set_gamepad = shaderSetTouchesGamepad();
+	int palette_changed = 0;
+
+	for (int i = 0; i < config.core.count; i++) {
+		config.core.options[i].value = config.core.options[i].default_value;
+		config.core.options[i].lock = 0;
+	}
+	if (has_custom_controllers) {
+		gamepad_type = 0;
+		core.set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
+	}
+
+	Config_readCoreOptionsString(config.system_cfg);
+	Config_readCoreOptionsString(config.default_cfg);
+	Config_readCoreOptionsString(config.user_cfg);
+	Config_readCoreOptionsString(config.shader_set_cfg);
+	Config_readCoreOptionsString(config.shader_set_override_cfg);
+
+	// Keep unsaved core changes that neither the old nor new set manages.
+	for (int i = 0; i < config.core.count; i++) {
+		int new_set_option = shaderSetTouchesKey(config.core.options[i].key);
+		if ((old_set_options[i] || new_set_option) &&
+			containsString(config.core.options[i].key, "palette"))
+			palette_changed = 1;
+		if (!old_set_options[i] &&
+			!new_set_option) {
+			config.core.options[i].value = old_values[i];
+			config.core.options[i].lock = old_locks[i];
+		}
+	}
+	if (has_custom_controllers && !old_set_gamepad && !new_set_gamepad) {
+		gamepad_type = old_gamepad;
+		int device = strtol(gamepad_values[gamepad_type], NULL, 0);
+		core.set_controller_port_device(0, device);
+	}
+	config.core.changed = 1;
+	has_pending_opt_change = 1;
+	if (palette_changed && exactMatch((char*)core.tag, "GB"))
+		Special_updatedDMGPalette(2);
+}
+
+static void resetShaderPragmas(int pass) {
+	ShaderParam *params = PLAT_getShaderPragmas(pass);
+	if (!params)
+		return;
+
+	for (int i = 0; i < 32; i++)
+		params[i].value = params[i].def;
+}
+
+static void reloadShaders(const int *old_values) {
+	for (int i = 0; config.shaders.options[i].key; i++) {
+		if (i == SH_EXTRASETTINGS || i == SH_SHADERS_PRESET)
+			continue;
+
+		if (i == SH_SHADER1 || i == SH_SHADER2 || i == SH_SHADER3) {
+			int pass = i == SH_SHADER1 ? 0 : i == SH_SHADER2 ? 1 : 2;
+			if (config.shaders.options[i].value != old_values[i])
+				Config_syncShaders(config.shaders.options[i].key, config.shaders.options[i].value);
+			else {
+				resetShaderPragmas(pass);
+				loadShaderSettings(pass);
+			}
+		}
+		else if (config.shaders.options[i].value != old_values[i]) {
+			Config_syncShaders(config.shaders.options[i].key, config.shaders.options[i].value);
+		}
+	}
+}
+
+bool Config_reloadFrontendShaders(void) {
+	int old_values[FE_OPT_COUNT];
+	int old_locks[FE_OPT_COUNT];
+	int old_set_options[FE_OPT_COUNT];
+	int old_shader_values[SH_NONE];
+	int core_count = config.core.count;
+	int old_core_values[core_count ? core_count : 1];
+	int old_core_locks[core_count ? core_count : 1];
+	int old_core_set_options[core_count ? core_count : 1];
+	int old_gamepad = gamepad_type;
+	int old_set_gamepad = shaderSetTouchesGamepad();
+	int reload_core = old_set_gamepad;
+	int apply_overclock = 0;
+	int apply_sync_ref = 0;
+
+	for (int i = 0; i < FE_OPT_COUNT; i++) {
+		old_values[i] = config.frontend.options[i].value;
+		old_locks[i] = config.frontend.options[i].lock;
+		old_set_options[i] = shaderSetTouchesFrontendOption(i);
+	}
+	for (int i = 0; i < SH_NONE; i++)
+		old_shader_values[i] = config.shaders.options[i].value;
+	for (int i = 0; i < core_count; i++) {
+		old_core_values[i] = config.core.options[i].value;
+		old_core_locks[i] = config.core.options[i].lock;
+		old_core_set_options[i] = shaderSetTouchesKey(config.core.options[i].key);
+		if (old_core_set_options[i]) reload_core = 1;
+	}
+
+	Config_loadShaderSet();
+	if (shaderSetTouchesGamepad())
+		reload_core = 1;
+	for (int i = 0; i < config.core.count && !reload_core; i++) {
+		if (shaderSetTouchesKey(config.core.options[i].key))
+			reload_core = 1;
+	}
+	if (reload_core)
+		reloadCoreOptions(old_core_values, old_core_locks, old_core_set_options,
+			old_gamepad, old_set_gamepad);
+
+	resetFrontendShaders();
+	readEffectiveFrontendShaders(0);
+
+	for (int i = 0; i < FE_OPT_COUNT; i++) {
+		int new_set_option = shaderSetTouchesFrontendOption(i);
+		if (!old_set_options[i] && !new_set_option) {
+			config.frontend.options[i].value = old_values[i];
+			config.frontend.options[i].lock = old_locks[i];
+		}
+		else if (config.frontend.options[i].value != old_values[i]) {
+			Config_syncFrontend(config.frontend.options[i].key, config.frontend.options[i].value);
+			if (i == FE_OPT_OVERCLOCK) apply_overclock = 1;
+			if (i == FE_OPT_SYNC_REFERENCE) apply_sync_ref = 1;
+		}
+	}
+
+	if (apply_overclock) setOverclock(overclock);
+	if (apply_sync_ref) chooseSyncRef();
+
+	reloadShaders(old_shader_values);
+	readEffectiveShaderOptions();
+	applyShaderSettings();
+	apply_live_video_reset();
+	return true;
 }
 
 /* -----------------------------------------------------------------------
@@ -1717,6 +2279,7 @@ struct Config config = {
 		[SHORTCUT_HOLD_REWIND]			= {"Hold Rewind",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_GAMESWITCHER]			= {"Game Switcher",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_SCREENSHOT]           = {"Screenshot",        -1, BTN_ID_NONE, 0},
+		[SHORTCUT_NEXT_SHADER_SET]      = {"Next Shader Set",    -1, BTN_ID_NONE, 0},
 		// Trimui only
 		[SHORTCUT_TOGGLE_TURBO_A]		= {"Toggle Turbo A",	-1, BTN_ID_NONE, 0},
 		[SHORTCUT_TOGGLE_TURBO_B]		= {"Toggle Turbo B",	-1, BTN_ID_NONE, 0},
@@ -1730,5 +2293,3 @@ struct Config config = {
 		{NULL}
 	},
 };
-
-
