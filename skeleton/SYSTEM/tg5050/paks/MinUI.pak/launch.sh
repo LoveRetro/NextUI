@@ -26,6 +26,15 @@ export HOOKS_PATH="$USERDATA_PATH/.hooks"
 export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
 export HOME="$USERDATA_PATH"
 
+# alsa-lib >= 1.1.2 guards each snd_pcm_t with a recursive lock. On the
+# bluealsa sink that lock ends up held by the thread that opened the PCM and
+# never released, so SDL's audio thread blocks inside libasound forever: no
+# sound over bluetooth, and SDL_CloseAudioDevice() then deadlocks the game
+# loop joining that thread when the headset disconnects. We never touch one
+# PCM from two threads at once (SDL serialises that itself), so alsa's own
+# locking buys us nothing - turn it off.
+export LIBASOUND_THREAD_SAFE=0
+
 #######################################
 
 if [ -f "/tmp/poweroff" ]; then

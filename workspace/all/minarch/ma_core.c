@@ -152,10 +152,9 @@ void Core_reset(void) {
 	Rewind_on_state_change();
 }
 void Core_unload(void) {
-	// Disabling this is a dumb hack for bluetooth, we should really be using 
-	// bluealsa with --keep-alive=-1 - but SDL wont reconnect the stream on next start.
-	// Reenable as soon as we have a more recent SDL available, if ever.
-	//SND_quit();
+	// Audio teardown deliberately does not happen here: SND_quit() frees the
+	// sample buffer, and the core can still emit audio from unload_game(),
+	// which runs later in Core_quit(). It is done at the end of main().
 }
 void Core_quit(void) {
 	if (core.initialized) {
