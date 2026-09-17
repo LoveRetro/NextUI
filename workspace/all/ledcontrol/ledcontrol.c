@@ -29,23 +29,44 @@ const char *lr_effect_names[] = {
     "Blink 1", "Blink 2", "Blink 3", "Rainbow", "Twinkle",
     "Fire", "Glitter", "NeonGlow", "Firefly", "Aurora", "Reactive", "LR Rainbow", "LR Reactive"};
 
+// Resolves an effect id to the index the platform's effect list holds it at,
+// so left/right walk the list the hardware actually supports. Falls back to the
+// first entry for ids that aren't offered here (a settings file carried over
+// from another device, or one of the profile-only ids).
+static int effect_index_of(int effect_id) {
+    int count = PLAT_getLedEffectCount();
+    for (int i = 0; i < count; ++i) {
+        if (PLAT_getLedEffectId(i) == effect_id) return i;
+    }
+    return 0;
+}
+
+// Platforms that don't name their own effects keep the historical tables below.
+static const char *effect_name_for(int light_index, int effect_id) {
+    const char *name = PLAT_getLedEffectName(effect_id);
+    if (name) return name;
+
+    const char **table = effect_names;
+    int count = sizeof(effect_names) / sizeof(effect_names[0]);
+    if (light_index == 3) {
+        table = lr_effect_names;
+        count = sizeof(lr_effect_names) / sizeof(lr_effect_names[0]);
+    }
+    else if (light_index == 2) {
+        table = topbar_effect_names;
+        count = sizeof(topbar_effect_names) / sizeof(topbar_effect_names[0]);
+    }
+    // effect comes from a user-editable ini, so it can be anything
+    if (effect_id < 1 || effect_id > count) return "Unknown";
+    return table[effect_id - 1];
+}
+
 void save_settings() {
     LOG_debug("saving settings plat\n");
     char diskfilename[256];
-    char* device = getenv("DEVICE");
-    int maxlights = 3;
+    int maxlights = LEDS_getCount();
     // TODO: this shouldnt be in shared userdata
-    if(exactMatch("brick", device)) {
-        maxlights = 4;
-        snprintf(diskfilename, sizeof(diskfilename), SHARED_USERDATA_PATH "/ledsettings_brick.txt");
-    }
-    else if (exactMatch("brickpro", device)) {
-        maxlights = 5;
-        snprintf(diskfilename, sizeof(diskfilename), SHARED_USERDATA_PATH "/ledsettings_brickpro.txt");
-    }
-    else {
-        snprintf(diskfilename, sizeof(diskfilename), SHARED_USERDATA_PATH "/ledsettings.txt");
-    }
+    snprintf(diskfilename, sizeof(diskfilename), SHARED_USERDATA_PATH "/%s", PLAT_getLedSettingsFile());
 
     FILE *file = fopen(diskfilename, "w");
 
@@ -100,15 +121,20 @@ void handle_light_input(LightSettings *light, SDL_Event *event, int selected_set
     switch (selected_setting)
     {
     case 0: // Effect
-    if (PAD_justPressed(BTN_RIGHT))
+    {
+        int effect_count = PLAT_getLedEffectCount();
+        if (effect_count > 0 && PAD_justPressed(BTN_RIGHT))
         {
-            light->effect = (light->effect % 6) + 1; // Increase effect (1 to 8)
+            int index = (effect_index_of(light->effect) + 1) % effect_count;
+            light->effect = PLAT_getLedEffectId(index);
         }
-        else if (PAD_justPressed(BTN_LEFT))
+        else if (effect_count > 0 && PAD_justPressed(BTN_LEFT))
         {
-            light->effect = (light->effect - 2 + 6) % 6 + 1; // Decrease effect (1 to 8)
+            int index = (effect_index_of(light->effect) - 1 + effect_count) % effect_count;
+            light->effect = PLAT_getLedEffectId(index);
         }
         break;
+    }
     case 1: // Color
     if (PAD_justPressed(BTN_RIGHT))
         {
@@ -217,28 +243,10 @@ void handle_light_input(LightSettings *light, SDL_Event *event, int selected_set
 int main(int argc, char *argv[])
 {
     char* device = getenv("DEVICE");
-    
+
 	InitSettings();
     PWR_setCPUSpeed(CPU_SPEED_AUTO);
 
-    int numOfLights = 3;
-    int combinedBrightness = 1;
-    if (exactMatch("brick", device)) {
-        const char *brick_names[] = {"F1 key", "F2 key", "Top bar", "L&R triggers"};
-        memcpy(lightnames, brick_names, sizeof(brick_names)); // Copy values
-        numOfLights = 4;
-        combinedBrightness = 0;
-    }
-    else if (exactMatch("brickpro", device)) {
-        const char *brickpro_names[] = {"F1 key", "F2 key", "Top bar", "Joysticks", "Triggers"};
-        memcpy(lightnames, brickpro_names, sizeof(brickpro_names)); // Copy values
-        numOfLights = 5;
-        combinedBrightness = 0;
-    } else {
-        const char *default_names[] = {"Joystick L","Joystick R", "Logo"};
-        memcpy(lightnames, default_names, sizeof(default_names)); // Copy values
-    }
-    
     SDL_Surface* screen = GFX_init(MODE_MAIN);
 	PAD_init();
 	PWR_init();
@@ -246,6 +254,58 @@ int main(int argc, char *argv[])
     GFX_clearAll();
 	GFX_clearLayers(0);
 	GFX_flip(screen);
+
+    // GFX_init() is what gets the platform far enough along to answer this
+    // (the trimui platforms only learn their model in PLAT_initPlatform)
+    int numOfLights = LEDS_getCount();
+
+    if (numOfLights == 0) {
+        // devices in this platform's family that simply have no RGB lights
+        int quit_msg = 0;
+        int msg_dirty = 1;
+        while (!quit_msg) {
+            GFX_startFrame();
+            PAD_poll();
+            if (PAD_justPressed(BTN_B)) quit_msg = 1;
+
+            if (msg_dirty) {
+                GFX_clear(screen);
+                GFX_blitMessage(font.large, "This device has no RGB lights.", screen,
+                    &(SDL_Rect){0, 0, screen->w, screen->h});
+                GFX_blitButtonGroup((char*[]){ "B","BACK", NULL }, 1, screen, 1);
+                GFX_flip(screen);
+                msg_dirty = 0;
+            }
+            else GFX_sync();
+        }
+        PWR_quit();
+        PAD_quit();
+        GFX_quit();
+        QuitSettings();
+        return 0;
+    }
+
+    // brightness is a single global control unless the hardware exposes one
+    // per light (the Brick family does, via its per-zone max_scale nodes)
+    int combinedBrightness = 1;
+    if (exactMatch("brick", device)) {
+        const char *brick_names[] = {"F1 key", "F2 key", "Top bar", "L&R triggers"};
+        memcpy(lightnames, brick_names, sizeof(brick_names)); // Copy values
+        combinedBrightness = 0;
+    }
+    else if (exactMatch("brickpro", device)) {
+        const char *brickpro_names[] = {"F1 key", "F2 key", "Top bar", "Joysticks", "Triggers"};
+        memcpy(lightnames, brickpro_names, sizeof(brickpro_names)); // Copy values
+        combinedBrightness = 0;
+    } else {
+        const char *default_names[] = {"Joystick L","Joystick R", "Logo"};
+        memcpy(lightnames, default_names, sizeof(default_names)); // Copy values
+    }
+    // platforms that name their own lights win over the tables above
+    for (int i = 0; i < numOfLights && i < 5; ++i) {
+        const char *name = PLAT_getLedLabel(i);
+        if (name) lightnames[i] = name;
+    }
 
     bool running = true;
     int selected_light = 0;
@@ -354,7 +414,7 @@ int main(int argc, char *argv[])
                 int y = SCALE1(PADDING + PILL_SIZE * (j + 1));
 
                 if (j == 0) { // Display effect name instead of number
-                    snprintf(setting_text, sizeof(setting_text), "%s: %s", settings_labels[j], selected_light == 3 ? lr_effect_names[settings_values[j] - 1] : selected_light == 2 ? topbar_effect_names[settings_values[j] - 1] : effect_names[settings_values[j] - 1]);
+                    snprintf(setting_text, sizeof(setting_text), "%s: %s", settings_labels[j], effect_name_for(selected_light, settings_values[j]));
                     SDL_Surface *text = TTF_RenderUTF8_Blended(font.medium, setting_text, current_color);
                     int text_width = text->w + SCALE1(BUTTON_PADDING * 2);
                     GFX_blitPill(selected ? ASSET_WHITE_PILL : ASSET_BLACK_PILL, screen,

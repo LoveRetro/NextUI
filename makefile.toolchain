@@ -9,9 +9,11 @@ endif
 HOST_WORKSPACE=$(shell pwd)/workspace
 GUEST_WORKSPACE=/root/workspace
 
-GIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain
-INIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain/.build
-IMAGE_NAME=ghcr.io/loveretro/$(PLATFORM)-toolchain:latest
+TOOLCHAIN_NAME=$(PLATFORM)
+
+GIT_IF_NECESSARY=toolchains/$(TOOLCHAIN_NAME)-toolchain
+INIT_IF_NECESSARY=toolchains/$(TOOLCHAIN_NAME)-toolchain/.build
+IMAGE_NAME=ghcr.io/loveretro/$(TOOLCHAIN_NAME)-toolchain:latest
 
 CONTAINER_RUNTIME ?= $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
 ifeq (,$(CONTAINER_RUNTIME))
@@ -28,18 +30,19 @@ LAST_RUNTIME := $(shell cat $(RUNTIME_MARKER) 2>/dev/null)
 CURRENT_RUNTIME := $(notdir $(CONTAINER_RUNTIME))
 
 all: $(INIT_IF_NECESSARY)
-	$(CONTAINER_RUNTIME) run -it --rm $(CONTAINER_MOUNT_OPTS) -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) $(IMAGE_NAME) /bin/bash
+	$(CONTAINER_RUNTIME) run -it --rm $(CONTAINER_MOUNT_OPTS) \
+		-v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) $(IMAGE_NAME) /bin/bash
 
 $(INIT_IF_NECESSARY): $(GIT_IF_NECESSARY)
-	cd toolchains/$(PLATFORM)-toolchain && make .build
+	cd toolchains/$(TOOLCHAIN_NAME)-toolchain && make .build
 
 $(GIT_IF_NECESSARY):
 	mkdir -p toolchains
-	git clone https://github.com/LoveRetro/$(PLATFORM)-toolchain/ toolchains/$(PLATFORM)-toolchain
-	$(CONTAINER_RUNTIME) pull $(IMAGE_NAME) && touch toolchains/$(PLATFORM)-toolchain/.build
+	git clone https://github.com/LoveRetro/$(TOOLCHAIN_NAME)-toolchain/ toolchains/$(TOOLCHAIN_NAME)-toolchain
+	$(CONTAINER_RUNTIME) pull $(IMAGE_NAME) && touch toolchains/$(TOOLCHAIN_NAME)-toolchain/.build
 
 clean:
-	cd toolchains/$(PLATFORM)-toolchain && make clean
+	cd toolchains/$(TOOLCHAIN_NAME)-toolchain && make clean
 
 _runtime_check:
 	@if [ -n "$(LAST_RUNTIME)" ] && [ "$(LAST_RUNTIME)" != "$(CURRENT_RUNTIME)" ]; then \
@@ -55,17 +58,24 @@ _runtime_check:
 		fi; \
 	fi
 
+# The platform reaches the guest build through the environment only, never as a
+# `make PLATFORM=...` argument. A command-line variable lands in MAKEOVERRIDES and
+# overrides same-named assignments in *every* recursive make, including each core's
+# own `PLATFORM = libretro` (picodrive, pcsx_rearmed) — those then build without
+# their libretro frontend and link to an entry-point-less stub. Environment values
+# lose to a makefile assignment, which is what workspace/makefile expects.
+
 build: $(INIT_IF_NECESSARY) _runtime_check
-	$(CONTAINER_RUNTIME) run --rm $(CONTAINER_MOUNT_OPTS) -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && cd /root/workspace && make'
+	$(CONTAINER_RUNTIME) run --rm $(CONTAINER_MOUNT_OPTS) -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) -e PLATFORM=$(PLATFORM) -e UNION_PLATFORM=$(PLATFORM) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && export PLATFORM=$(PLATFORM) UNION_PLATFORM=$(PLATFORM) && cd /root/workspace && make'
 	@echo "$(CURRENT_RUNTIME)" > $(RUNTIME_MARKER)
 
 build-cores: $(INIT_IF_NECESSARY) _runtime_check
-	$(CONTAINER_RUNTIME) run --rm $(CONTAINER_MOUNT_OPTS) -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && cd /root/workspace && make cores'
+	$(CONTAINER_RUNTIME) run --rm $(CONTAINER_MOUNT_OPTS) -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) -e PLATFORM=$(PLATFORM) -e UNION_PLATFORM=$(PLATFORM) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && export PLATFORM=$(PLATFORM) UNION_PLATFORM=$(PLATFORM) && cd /root/workspace && make cores'
 	@echo "$(CURRENT_RUNTIME)" > $(RUNTIME_MARKER)
 
 build-core: $(INIT_IF_NECESSARY) _runtime_check
 ifndef CORE
 	$(error CORE is not set)
 endif
-	$(CONTAINER_RUNTIME) run --rm $(CONTAINER_MOUNT_OPTS) -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) -e CORE=$(CORE) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && cd /root/workspace && make core'
+	$(CONTAINER_RUNTIME) run --rm $(CONTAINER_MOUNT_OPTS) -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -e COMPILE_CORES=$(COMPILE_CORES) -e CORE=$(CORE) -e PLATFORM=$(PLATFORM) -e UNION_PLATFORM=$(PLATFORM) $(IMAGE_NAME) /bin/bash -c '. ~/.bashrc && export PLATFORM=$(PLATFORM) UNION_PLATFORM=$(PLATFORM) && cd /root/workspace && make core'
 	@echo "$(CURRENT_RUNTIME)" > $(RUNTIME_MARKER)

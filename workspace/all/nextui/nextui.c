@@ -3412,7 +3412,7 @@ int main (int argc, char *argv[]) {
 			Entry* entry = top->entries->items[top->selected];
 			LOG_info("restarting after HDMI change... (%s)\n", entry->path);
 			saveLast(entry->path); // NOTE: doesn't work in Recents (by design)
-			sleep(4);
+			sleep(1); // cable-seating debounce; the output switch itself happens at next app start
 			quit = 1;
 		}
 	}

@@ -36,6 +36,14 @@ TRIMUI SMART PRO / TRIMUI BRICK
 
 Copy the "trimui" folder and "MinUI.zip" (without unzipping) to the root of the SD card.
 
+ANBERNIC RG XX (H700) DEVICES
+
+Copy "MinUI.zip" (without unzipping) to the root of the SD card.
+
+Copy the "dmenu.bin" file (found inside the "h700" folder) to the root of your stock OS card's ROMS partition. You can delete it later to uninstall and return to stock.
+
+IMPORTANT: In the stock OS, set the user interface theme to "old style" (default) — not "MU style 1" or "MU style 2", otherwise NextUI will not start.
+
 MIYOO FLIP
 
 Copy the "miyoo355" folder and "MinUI.zip" (without unzipping) to the root of the SD card. Put the SD card into the right slot (beneath the power button).
@@ -59,6 +67,11 @@ TRIMUI SMART PRO / TRIMUI BRICK
 TRIMUI BRICK / BRICK PRO / SMART PRO S
 
   Buttons with no action of their own can be assigned a pak to launch: L3/R3 on the Brick, L4/R4 on the Brick Pro, and HOME on the Brick Pro and Smart Pro S. Assign them under Settings > Assignments. Assignments only apply in the main menu, not in-game. HOME no longer acts as a second menu button.
+
+ANBERNIC RG XX
+
+  Menu button: Quick menu
+  Select button: Game switcher
 
 ----------------------------------------
 Quicksave & auto-resume
@@ -153,7 +166,7 @@ Not simple enough for you (or maybe your kids)? NextUI has a simple mode that hi
 ----------------------------------------
 Advanced
 
-NextUI can automatically run a user-authored shell script on boot. Just place a file named "auto.sh" in "/.userdata/<DEVICE>/". If you're on Windows, make sure your text editor uses Unix line-endings (eg. `\n`), these devices usually choke on Windows line-endings (eg. `\r\n`).
+NextUI can automatically run a user-authored shell script on boot. Just place a file named "auto.sh" in "/.userdata/<PLATFORM>/" (eg. `/.userdata/h700/` or `/.userdata/tg5040/`). If you're on Windows, make sure your text editor uses Unix line-endings (eg. `\n`), these devices usually choke on Windows line-endings (eg. `\r\n`).
 
 ----------------------------------------
 Thanks

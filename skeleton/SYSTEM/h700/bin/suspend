@@ -1,0 +1,150 @@
+#!/bin/sh
+# NOTE: stock H700 /bin/sh does not support `set -o pipefail`;
+# using it makes the script exit 2 immediately, which NextUI treats
+# as a failed suspend and escalates to poweroff.
+set -u
+set +e
+exec 0<&-
+
+#logfile="/mnt/SDCARD/.userdata/h700/logs/suspend_$(date +%Y%m%d_%H%M%S).log"
+#exec >> "$logfile" 2>&1
+
+wifid_running=
+bluetoothd_running=
+
+sleep_retval=
+
+asound_state_dir=/tmp/asound-suspend
+
+before() {
+	>&2 echo "Preparing for suspend..."
+	echo 0 > /sys/class/power_supply/axp2202-battery/work_led 2>/dev/null || true
+	# RGB models: cut the LED MCU rail, otherwise the last frame stays lit for
+	# the whole sleep. NextUI repaints it on wake (PLAT_enableBacklight).
+	echo 0 > /sys/class/power_supply/axp2202-battery/mcu_pwr 2>/dev/null || true
+
+	# Run pre-sleep hooks synchronously before services are stopped.
+	# Subshell ensures a crashing hook cannot block suspend.
+	( "$SYSTEM_PATH/bin/run_hooks.sh" pre-sleep.d --sync-only ) >/dev/null 2>&1 || true
+
+	>&2 echo "Saving mixer state..."
+	mkdir -p "$asound_state_dir"
+	alsactl --file "$asound_state_dir/asound.state.pre" store || true
+
+	if pgrep bluetoothd; then
+		bluetoothd_running=1
+		>&2 echo "Stopping bluetoothd..."
+		"$SYSTEM_PATH/etc/bluetooth/bt_init.sh" stop || true
+	fi
+
+	if pgrep wpa_supplicant; then
+		wifid_running=1
+		>&2 echo "Stopping wpa_supplicant..."
+		"$SYSTEM_PATH/etc/wifi/wifi_init.sh" stop || true
+	fi
+}
+
+# Resume work that must finish BEFORE this script exits: the caller
+# (nextui/minarch) reinitializes the ALSA device as soon as system()
+# returns, and a concurrent alsactl restore makes that reinit block
+# for ~10s (buttons appear dead after wake).
+after_sync() {
+	>&2 echo "Resumed from suspend."
+	echo 1 > /sys/class/power_supply/axp2202-battery/work_led 2>/dev/null || true
+	echo 1 > /sys/class/power_supply/axp2202-battery/mcu_pwr 2>/dev/null || true
+
+	if [ -f "$asound_state_dir/asound.state.pre" ]; then
+		>&2 echo "Restoring mixer state..."
+		alsactl --file "$asound_state_dir/asound.state.pre" restore || true
+	fi
+
+	if [ -x "$SYSTEM_PATH/bin/syncsettings.elf" ]; then
+		>&2 echo "Restoring display settings..."
+		"$SYSTEM_PATH/bin/syncsettings.elf" || true
+	fi
+}
+
+# Slow resume work (radios take ~5s) that must NOT delay the script's
+# exit, or it freezes the caller's input handling for that long.
+after_async() {
+	if [ -n "$wifid_running" ]; then
+		>&2 echo "Starting wpa_supplicant..."
+		"$SYSTEM_PATH/etc/wifi/wifi_init.sh" start || true
+	fi
+
+	if [ -n "$bluetoothd_running" ]; then
+		>&2 echo "Starting bluetoothd..."
+		"$SYSTEM_PATH/etc/bluetooth/bt_init.sh" start || true
+	fi
+
+	# Run post-resume hooks after core services and display state are restored.
+	( "$SYSTEM_PATH/bin/run_hooks.sh" post-resume.d ) >/dev/null 2>&1
+}
+
+before
+
+hallkey=/sys/class/power_supply/axp2202-battery/hallkey
+os_sleep=/sys/class/power_supply/axp2202-battery/os_sleep
+
+>&2 echo "Suspending..."
+while :; do
+	sleep_max_tries=5
+	for i in $(seq 1 $sleep_max_tries); do
+		>&2 echo "Deep sleep attempt $i of $sleep_max_tries"
+
+		sleep_time=$(date +%s)
+
+		# Enable Super Standby before sleeping.
+		# 16 is the value used by stock and stockmod OS, so we preserve
+		# it, but any non-zero value has the same effect.
+		# Non-SP kernels do not expose this attribute and already use the
+		# full USB-controller suspend path.
+		[ -w "$os_sleep" ] && printf '16' > "$os_sleep"
+
+		# Now issue suspend-to-ram command.
+		echo mem >/sys/power/state
+		sleep_retval=$?
+
+		>&2 echo "Deep sleep: kernel returned $sleep_retval"
+		if [ $sleep_retval -eq 0 ]; then
+			break
+		fi
+
+		wake_time=$(date +%s)
+		time_asleep=$(($wake_time-$sleep_time))
+
+		# Workaround for a strange false negative case where
+		# the device sleeps properly but still returns non-zero.
+		# If unaddressed, the device would sleep again immediately
+		# after the user tried to wake it.
+
+		# If device has been asleep for longer than a set period,
+		# ignore the retval and continue with waking the device.
+		if [ $time_asleep -gt 5 ]; then
+			>&2 echo "Deep sleep: averting false negative retval - (sleep for $time_asleep secs)"
+			sleep_retval=0
+			break
+		fi
+
+
+		>&2 echo "Deep sleep failed: retrying in 3 seconds"
+		sleep 3
+	done
+
+	# Clamshells: a pocketed power press wakes the kernel even with the
+	# lid shut. Only hand control back to the caller (which turns the
+	# screen on) once the lid is actually open; otherwise re-suspend.
+	# Non-clamshell hallkey reads 1, and a suspend failure must still
+	# exit so the caller can escalate to poweroff.
+	if [ $sleep_retval -eq 0 ] && [ -r "$hallkey" ] && [ "$(cat "$hallkey")" = "0" ]; then
+		>&2 echo "Woke with lid closed; re-suspending"
+		sleep 1
+		continue
+	fi
+	break
+done
+
+after_sync
+after_async &
+
+exit $sleep_retval

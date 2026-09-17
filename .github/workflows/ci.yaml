@@ -42,6 +42,7 @@ jobs:
         toolchain:
           - tg5040
           - tg5050
+          - h700
 
     steps:
       - name: Checkout
@@ -64,6 +65,7 @@ jobs:
         toolchain:
           - tg5040
           - tg5050
+          - h700
         core: ${{ fromJson(needs.core-matrix.outputs.cores) }}
     steps:
       - name: Checkout
@@ -123,6 +125,18 @@ jobs:
         run: make tg5050
         env:
           PLATFORM: tg5050
+
+      - name: Download Cores (h700)
+        uses: actions/download-artifact@v4.3.0
+        with:
+          path: workspace/h700/cores/output/
+          pattern: core-h700-*
+          merge-multiple: true
+
+      - name: Build (h700)
+        run: make h700
+        env:
+          PLATFORM: h700
 
       - name: Special
         run: make special

@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <errno.h>
+#include <string.h>
 #include <signal.h>
 #include <msettings.h>
 
@@ -29,24 +32,56 @@ static SDL_Surface *screen;
 
 SDL_Surface** images;
 char **image_paths;
+static char basepath[MAX_PATH];
 static int selected = 0;
 static int count = 0;
+
+// returns a 90°-clockwise-rotated copy of the preset (or the original on
+// failure) so the preview matches what the rotated panel shows at boot
+static SDL_Surface* rotatePreviewCW(SDL_Surface* src)
+{
+    SDL_Surface* conv = SDL_ConvertSurfaceFormat(src, SDL_PIXELFORMAT_ARGB8888, 0);
+    if (!conv)
+        return src;
+    SDL_Surface* dst = SDL_CreateRGBSurfaceWithFormat(0, conv->h, conv->w, 32, SDL_PIXELFORMAT_ARGB8888);
+    if (!dst) {
+        SDL_FreeSurface(conv);
+        return src;
+    }
+    uint32_t* src_pixels = conv->pixels;
+    uint32_t* dst_pixels = dst->pixels;
+    int src_stride = conv->pitch / 4;
+    int dst_stride = dst->pitch / 4;
+    for (int y = 0; y < conv->h; y++)
+        for (int x = 0; x < conv->w; x++)
+            dst_pixels[x * dst_stride + (conv->h - 1 - y)] = src_pixels[y * src_stride + x];
+    SDL_FreeSurface(conv);
+    SDL_FreeSurface(src);
+    return dst;
+}
 
 int loadImages()
 {
     char* device = getenv("DEVICE");
-    // This needs to get a bit more flexible down the line, but for now we either expect the files
-    // in the pak root directory or in the "brick" subfolder.
-    char basepath[MAX_PATH];
-    if(exactMatch("brick", device) || exactMatch("brickpro", device)) {
+    if (exactMatch("h700", PLATFORM)) {
+        // H700 presets are shared between devices with the same panel resolution.
+        char* folder = "640x480";
+        if (exactMatch("rg28xx", device)) folder = "480x640";
+        else if (exactMatch("rg34xx", device) || exactMatch("rg34xxsp", device)
+            || exactMatch("rgsp", device)) folder = "720x480";
+        else if (exactMatch("rgcubexx", device)) folder = "720x720";
+        snprintf(basepath, sizeof(basepath), "%s/Bootlogo.pak/%s/", TOOLS_PATH, folder);
+    }
+    else if (exactMatch("brick", device) || exactMatch("brickpro", device)) {
         snprintf(basepath, sizeof(basepath), "%s/Bootlogo.pak/brick/", TOOLS_PATH);
     }
     else {
         snprintf(basepath, sizeof(basepath), "%s/Bootlogo.pak/smartpro/", TOOLS_PATH);
     }
 
-    // grab all bmp files in the directory and load them with IMG_Load, 
+    // grab all bmp files in the directory and load them with IMG_Load,
     // keep them in an array of SDL_Surface pointers
+    LOG_info("loading presets from %s (DEVICE=%s)\n", basepath, device ? device : "(unset)");
     DIR *dir;
     struct dirent *ent;
     if ((dir = opendir(basepath)) != NULL) {
@@ -55,24 +90,29 @@ int loadImages()
                 char path[MAX_PATH];
                 snprintf(path, sizeof(path), "%s%s", basepath, ent->d_name);
                 SDL_Surface *bmp = IMG_Load(path);
-                if (bmp) {
-                    count++;
-                    images = realloc(images, sizeof(SDL_Surface*) * count);
-                    images[count-1] = bmp;
-                    image_paths = realloc(image_paths, sizeof(char*) * count);
-                    image_paths[count-1] = strdup(path);
+                if (!bmp) {
+                    LOG_error("failed to load %s: %s\n", path, IMG_GetError());
+                    continue;
                 }
+                // RG28XX presets are panel-native; rotate previews to match their boot appearance.
+                if (exactMatch("h700", PLATFORM) && exactMatch("rg28xx", device))
+                    bmp = rotatePreviewCW(bmp);
+                count++;
+                images = realloc(images, sizeof(SDL_Surface*) * count);
+                images[count-1] = bmp;
+                image_paths = realloc(image_paths, sizeof(char*) * count);
+                image_paths[count-1] = strdup(path);
             }
         }
         closedir(dir);
     } else {
-        // could not open directory
-        LOG_error("could not open directory");
+        LOG_error("could not open %s: %s\n", basepath, strerror(errno));
         if (CFG_getHaptics()) {
             VIB_triplePulse(5, 150, 200);
         }
         return 0;
     }
+    LOG_info("loaded %i presets\n", count);
     return count;
 }
 
@@ -116,21 +156,21 @@ int main(int argc, char *argv[])
         }
         else
         {
-            if (PAD_justRepeated(BTN_LEFT))
+            if (PAD_justRepeated(BTN_LEFT) && count > 0)
             {
                 selected -= 1;
                 if (selected<0)
                     selected = count - 1;
                 dirty = 1;
             }
-            else if (PAD_justRepeated(BTN_RIGHT))
+            else if (PAD_justRepeated(BTN_RIGHT) && count > 0)
             {
                 selected += 1;
                 if (selected>=count)
                     selected = 0;
                 dirty = 1;
             }
-            else if (PAD_justPressed(BTN_A))
+            else if (PAD_justPressed(BTN_A) && count > 0)
             {
                 // apply with system calls
                 // BOOT_PATH=/mnt/boot/
@@ -142,8 +182,22 @@ int main(int argc, char *argv[])
                 // reboot
                 char* boot_path = "/mnt/boot/";
                 char* logo_path = image_paths[selected];
-                char cmd[256]; 
-                snprintf(cmd, sizeof(cmd), "mkdir -p %s && mount -t vfat /dev/mmcblk0p1 %s && cp \"%s\" %s/bootlogo.bmp && sync && umount %s && reboot", boot_path, boot_path, logo_path, boot_path, boot_path);
+                char cmd[1024];
+                if (exactMatch("h700", PLATFORM)) {
+                    // H700 uses partition 2; preserve the stock logo as a restorable preset.
+                    snprintf(cmd, sizeof(cmd),
+                        "mkdir -p %s && mount -t vfat /dev/mmcblk0p2 %s && "
+                        "([ -f \"%soriginal.bmp\" ] || cp %sbootlogo.bmp \"%soriginal.bmp\"; "
+                        "cp \"%s\" %sbootlogo.bmp && sync && umount %s && reboot)",
+                        boot_path, boot_path, basepath, boot_path, basepath,
+                        logo_path, boot_path, boot_path);
+                }
+                else {
+                    snprintf(cmd, sizeof(cmd),
+                        "mkdir -p %s && mount -t vfat /dev/mmcblk0p1 %s && "
+                        "cp \"%s\" %s/bootlogo.bmp && sync && umount %s && reboot",
+                        boot_path, boot_path, logo_path, boot_path, boot_path);
+                }
                 system(cmd);
             }
             else if (PAD_justPressed(BTN_B))
@@ -171,12 +225,35 @@ int main(int argc, char *argv[])
             if(count > 0) {
                 // render the selected image, centered on screen
                 SDL_Surface *image = images[selected];
-                SDL_Rect image_rect = {
-                    screen->w /2 - image->w /2,
-                    screen->h /2 - image->h / 2,
-                    image->w,
-                    image->h};
-                SDL_BlitSurface(image, NULL, screen, &image_rect);
+                if (image->w > screen->w || image->h > screen->h) {
+                    // aspect-fit oversized presets (e.g. custom logos larger than the UI)
+                    int fit_w = screen->w;
+                    int fit_h = image->h * screen->w / image->w;
+                    if (fit_h > screen->h) {
+                        fit_h = screen->h;
+                        fit_w = image->w * screen->h / image->h;
+                    }
+                    SDL_Rect image_rect = {
+                        screen->w / 2 - fit_w / 2,
+                        screen->h / 2 - fit_h / 2,
+                        fit_w,
+                        fit_h};
+                    SDL_BlitScaled(image, NULL, screen, &image_rect);
+                }
+                else {
+                    SDL_Rect image_rect = {
+                        screen->w /2 - image->w /2,
+                        screen->h /2 - image->h / 2,
+                        image->w,
+                        image->h};
+                    SDL_BlitSurface(image, NULL, screen, &image_rect);
+                }
+            }
+            else {
+                // surface the reason on-screen so it can be diagnosed without pulling logs
+                char msg[MAX_PATH + 32];
+                snprintf(msg, sizeof(msg), "No presets found in\n%s", basepath);
+                GFX_blitMessage(font.small, msg, screen, NULL);
             }
 
             GFX_blitButtonGroup((char *[]){"L/R", "SCROLL", NULL}, 0, screen, 0);

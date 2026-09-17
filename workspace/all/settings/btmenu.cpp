@@ -26,12 +26,12 @@ Menu::Menu(const int &globalQuit, int &globalDirty) : MenuList(MenuItemType::Fix
                               std::bind(&Menu::getBtDiagnosticsState, this),
                               std::bind(&Menu::setBtDiagnosticsState, this, std::placeholders::_1),
                               std::bind(&Menu::resetBtDiagnosticsState, this));
+    items.push_back(toggleItem);
+    items.push_back(diagItem);
     rateItem = new MenuItem(ListItemType::Generic, "Maximum sampling rate", "44100 Hz: better compatibility\n48000 Hz: better quality", {44100, 48000}, {"44100 Hz", "48000 Hz"},
                               std::bind(&Menu::getSamplerateMaximum, this),
                               std::bind(&Menu::setSamplerateMaximum, this, std::placeholders::_1),
                               std::bind(&Menu::resetSamplerateMaximum, this));
-    items.push_back(toggleItem);
-    items.push_back(diagItem);
     items.push_back(rateItem);
 
     // best effort layout based on the platform defines, user should really call performLayout manually
@@ -179,7 +179,7 @@ void Menu::updater()
                     items.clear();
                     items.push_back(toggleItem);
                     items.push_back(diagItem);
-                    items.push_back(rateItem);
+                    if (rateItem) items.push_back(rateItem);
                     layout_called = false;
 
                     for (auto &[s, r] : scanMap)
@@ -228,7 +228,7 @@ void Menu::updater()
             items.clear();
             items.push_back(toggleItem);
             items.push_back(diagItem);
-            items.push_back(rateItem);
+            if (rateItem) items.push_back(rateItem);
             layout_called = false;
             selectionDirty = true;
             pollSecs = 15;

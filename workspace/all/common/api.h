@@ -113,6 +113,7 @@ extern int currentshaderdsth;
 extern int currentshadertexw;
 extern int currentshadertexh;
 extern int should_rotate;
+extern int hdmi_active; // output selected at GFX_init; apps restart on HDMI changes
 enum {
 	ASSET_WHITE_PILL,
 	ASSET_BLACK_PILL,
@@ -573,6 +574,7 @@ int PWR_isPoweringOff(void);
 void PWR_sleep(void);
 int PWR_deepSleep(void);
 
+void PWR_requestSleep(void);
 void PWR_disableSleep(void);
 void PWR_enableSleep(void);
 
@@ -622,6 +624,9 @@ bool LEDS_pushProfileOverride(int profile);
 bool LEDS_popProfileOverride(int profile);
 // returns top of stack, or default if stack is empty
 int LEDS_getProfileOverride();
+
+// number of lights on this device, cached and clamped to [0, MAX_LIGHTS]
+int LEDS_getCount(void);
 
 // changes the active led profile, calls LEDS_updateLeds() implicitly if needed
 void LEDS_setProfile(int profile); // enum LightProfile
@@ -772,6 +777,27 @@ void PLAT_setLedBrightness(LightSettings *led);
 void PLAT_setLedInbrightness(LightSettings *led);
 void PLAT_setLedEffectSpeed(LightSettings *led);
 void PLAT_setLedEffectCycles(LightSettings *led);
+
+// How many lights this device actually has. MAX_LIGHTS is only a compile-time
+// ceiling: platforms that serve several models (tg5040, h700) populate fewer
+// slots than that, and the unpopulated ones are zeroed globals. Walking them
+// is not harmless -- on the trimui platforms a zeroed slot writes brightness 0
+// to the *global* led_anim/max_scale and extinguishes every LED -- so every
+// platform whose model count differs from MAX_LIGHTS must implement this.
+int PLAT_getNumLeds(void);
+// basename of the LedControl ini inside SHARED_USERDATA_PATH
+const char *PLAT_getLedSettingsFile(void);
+// user-visible name for a light, or NULL to let LedControl use its own table
+const char *PLAT_getLedLabel(int index);
+
+// The effect ids in LightSettings.effect are a shared (trimui-derived) space:
+// LEDS_initLeds() hardcodes 2 (breathe) and 3 (blink) for the battery/charging
+// profiles and GFX_setAmbientColor() hardcodes 4 (static). Platforms expose the
+// subset they can actually render via these hooks and translate internally --
+// they never renumber.
+int PLAT_getLedEffectCount(void);
+int PLAT_getLedEffectId(int index);
+const char *PLAT_getLedEffectName(int effect_id);
 
 bool PLAT_canTurbo(void);
 int PLAT_toggleTurbo(int btn_id);

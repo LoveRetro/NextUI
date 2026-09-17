@@ -15,6 +15,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "utils.h"
 #include "config.h"
@@ -90,6 +91,8 @@ static struct GFX_Context
 	int mode;
 	int vsync;
 } gfx;
+
+int hdmi_active = 0;
 
 static SDL_Rect asset_rects[ASSET_COUNT];
 static uint32_t asset_rgbs[ASSET_COLORS];
@@ -214,7 +217,7 @@ static struct SND_Context
 
 static int _;
 
-static double current_fps = SCREEN_FPS;
+static double current_fps = 60.0;
 static int fps_counter = 0;
 PerfProfile perf = {0};
 
@@ -276,9 +279,62 @@ FALLBACK_IMPLEMENTATION void PLAT_pinToCores(int core_type)
 	// no-op
 }
 
-FALLBACK_IMPLEMENTATION void *PLAT_cpu_monitor(void *arg)
-{
-	return NULL;
+static double get_time_sec() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+    return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+static double get_process_cpu_time_sec() {
+    struct timespec ts;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
+    return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+static pthread_mutex_t currentcpuinfo = PTHREAD_MUTEX_INITIALIZER;
+// Average 120 samples, about 12 seconds at the 100 ms polling interval.
+#define ROLLING_WINDOW 120
+
+FALLBACK_IMPLEMENTATION void *PLAT_cpu_monitor(void *arg) {
+    if (!Perf_tryBeginCPUMonitor()) return NULL;
+
+    double prev_real_time = get_time_sec();
+    double prev_cpu_time = get_process_cpu_time_sec();
+
+    double cpu_usage_history[ROLLING_WINDOW] = {0};
+    int history_index = 0;
+    int history_count = 0;
+
+    while (Perf_isCPUMonitorEnabled()) {
+        double curr_real_time = get_time_sec();
+        double curr_cpu_time = get_process_cpu_time_sec();
+
+        double elapsed_real_time = curr_real_time - prev_real_time;
+        double elapsed_cpu_time = curr_cpu_time - prev_cpu_time;
+
+        if (elapsed_real_time > 0) {
+            double cpu_usage = (elapsed_cpu_time / elapsed_real_time) * 100.0;
+
+            pthread_mutex_lock(&currentcpuinfo);
+
+            cpu_usage_history[history_index] = cpu_usage;
+            history_index = (history_index + 1) % ROLLING_WINDOW;
+            if (history_count < ROLLING_WINDOW) history_count++;
+
+            double sum_cpu_usage = 0;
+            for (int i = 0; i < history_count; i++) sum_cpu_usage += cpu_usage_history[i];
+            perf.cpu_usage = sum_cpu_usage / history_count;
+
+            pthread_mutex_unlock(&currentcpuinfo);
+        }
+
+        prev_real_time = curr_real_time;
+        prev_cpu_time = curr_cpu_time;
+        usleep(100000);
+    }
+
+    Perf_endCPUMonitor();
+    return NULL;
 }
 
 FALLBACK_IMPLEMENTATION void PLAT_getCPUTemp()
@@ -351,9 +407,17 @@ int GFX_updateColors(void)
 
 SDL_Surface *GFX_init(int mode)
 {
+	// Platform init may use the active output to select panel rotation.
+	hdmi_active = GetHDMI();
+
 	// Platform-specific init
 	// This might affect FIXED_SCALE, so do it first
 	PLAT_initPlatform();
+	// Switch output before SDL creates its video surface and reads the geometry.
+	SetHDMI(hdmi_active);
+
+	// The refresh rate can depend on the detected panel and active output.
+	current_fps = SCREEN_FPS;
 
 	gfx.screen = PLAT_initVideo();
 	gfx.vsync = VSYNC_STRICT;
@@ -658,19 +722,29 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 
 	uint32_t dominant_color = GFX_extract_average_color(data, width, height, pitch);
 
-	if (mode == 1 || mode == 2 || mode == 5)
+	// the zone indices below are the Brick layout (0/1 = FN keys or sticks,
+	// 2 = top bar, 3 = L/R). Devices with fewer lights simply don't have the
+	// higher ones, so every index has to be checked -- these are writes into
+	// a MAX_LIGHTS array and slot 3 is out of bounds on a 2-light device.
+	int count = LEDS_getCount();
+
+	if ((mode == 1 || mode == 2 || mode == 5) && count > 2)
 	{
 		(lightsAmbient)[2].color1 = dominant_color;
 		(lightsAmbient)[2].effect = 4;
 	}
 	if (mode == 1 || mode == 3)
 	{
-		(lightsAmbient)[0].color1 = dominant_color;
-		(lightsAmbient)[0].effect = 4;
-		(lightsAmbient)[1].color1 = dominant_color;
-		(lightsAmbient)[1].effect = 4;
+		if (count > 0) {
+			(lightsAmbient)[0].color1 = dominant_color;
+			(lightsAmbient)[0].effect = 4;
+		}
+		if (count > 1) {
+			(lightsAmbient)[1].color1 = dominant_color;
+			(lightsAmbient)[1].effect = 4;
+		}
 	}
-	if (mode == 1 || mode == 4 || mode == 5)
+	if ((mode == 1 || mode == 4 || mode == 5) && count > 3)
 	{
 		(lightsAmbient)[3].color1 = dominant_color;
 		(lightsAmbient)[3].effect = 4;
@@ -4195,6 +4269,11 @@ void PWR_update(int *_dirty, int *_show_setting, PWR_callback_t before_sleep, PW
 		*_show_setting = show_setting;
 }
 
+void PWR_requestSleep(void)
+{
+	pwr.requested_sleep = 1;
+}
+
 // TODO: this isn't whether it can sleep but more if it should sleep in response to the sleep button
 void PWR_disableSleep(void)
 {
@@ -4261,12 +4340,20 @@ void PWR_powerOff(int reboot)
 
 static void PWR_enterSleep(void)
 {
+#if defined(SND_CLOSE_ON_SLEEP) && SND_CLOSE_ON_SLEEP
+	// On H700, fully close the audio device before sleeping: a PCM left open
+	// across suspend-to-RAM ends up in a state SDL takes ~10s to close on
+	// wake, freezing the UI. PWR_exitSleep reopens it via SND_resetAudio.
+	SND_quit();
+#else
 	SND_pauseAudio(true);
+#endif
 	LEDS_pushProfileOverride(LIGHT_PROFILE_SLEEP);
 	if (GetHDMI())
 	{
 		PLAT_clearVideo(gfx.screen);
 		PLAT_flip(gfx.screen, 0);
+		PLAT_enableBacklight(0);
 	}
 	else
 	{
@@ -4297,7 +4384,7 @@ static void PWR_exitSleep(void)
 
 	if (GetHDMI())
 	{
-		// buh
+		PLAT_enableBacklight(1);
 	}
 	else
 	{
@@ -4460,6 +4547,26 @@ FALLBACK_IMPLEMENTATION void PLAT_setLedInbrightness(LightSettings *led) {}
 FALLBACK_IMPLEMENTATION void PLAT_setLedEffectCycles(LightSettings *led) {}
 FALLBACK_IMPLEMENTATION void PLAT_setLedEffectSpeed(LightSettings *led) {}
 
+FALLBACK_IMPLEMENTATION int PLAT_getNumLeds(void) { return MAX_LIGHTS; }
+FALLBACK_IMPLEMENTATION const char *PLAT_getLedSettingsFile(void) { return "ledsettings.txt"; }
+FALLBACK_IMPLEMENTATION const char *PLAT_getLedLabel(int index) { return NULL; }
+FALLBACK_IMPLEMENTATION int PLAT_getLedEffectCount(void) { return 6; } // LedControl's historical range
+FALLBACK_IMPLEMENTATION int PLAT_getLedEffectId(int index) { return index + 1; }
+FALLBACK_IMPLEMENTATION const char *PLAT_getLedEffectName(int effect_id) { return NULL; }
+
+int LEDS_getCount(void)
+{
+	static int count = -1;
+	if (count < 0) {
+		count = PLAT_getNumLeds();
+		// the arrays are MAX_LIGHTS long, so this is the hard backstop
+		// against a platform over-reporting and walking off the end
+		if (count < 0) count = 0;
+		if (count > MAX_LIGHTS) count = MAX_LIGHTS;
+	}
+	return count;
+}
+
 void LEDS_setProfile(int profile)
 {
 	if(lights_initialized == 0)
@@ -4556,10 +4663,7 @@ void LEDS_updateLeds(bool indicator_only)
 		return;
 	}
 		
-	char *device = getenv("DEVICE");
-	int lightsize = exactMatch("brick", device) ? 4 
-		: exactMatch("brickpro", device) ? 5 
-		: 3; // smartpro, smartpro s
+	int lightsize = LEDS_getCount();
 
 	if(!lights)
 	{

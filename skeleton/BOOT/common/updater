@@ -3,6 +3,10 @@
 # NOTE: becomes .tmp_update/updater
 
 INFO=`cat /proc/cpuinfo 2> /dev/null`
+MODEL=`cat /proc/device-tree/model 2> /dev/null`
+if echo "$MODEL" | grep -q "sun50iw9"; then
+	PLATFORM="h700" # Anbernic RG XX, Allwinner H700
+fi
 case $INFO in
 *"sun8i"*)
 	if [ -d /usr/miyoo ]; then
@@ -19,9 +23,6 @@ case $INFO in
 	;;
 *"TG5050"*)
 	PLATFORM="tg5050" # Trimui Smart Pro S
-	;;
-*"0xd03"*)
-	PLATFORM="zero28" # MagicX Mini Zero 28
 	;;
 *"0xd05"*)
 	PLATFORM="my355" # Miyoo Flip

@@ -1,0 +1,109 @@
+diff --git a/Makefile b/Makefile
+index d16a23d..3b979ff 100644
+--- a/Makefile
++++ b/Makefile
+@@ -8,8 +8,43 @@ endif
+ CXXFLAGS := -Os
+ #endif
+ 
++# platform dependant stuff - h700
++ifeq ($(PLATFORM),h700)
++SDCARD_ROOT := /mnt/SDCARD
++NEXTUI_SYSTEM_PATH := $(SDCARD_ROOT)/.system
++
++CXXFLAGS += -DPATH_DEFAULT=\"$(SDCARD_ROOT)\"
++CXXFLAGS += -DPATH_DEFAULT_RIGHT=\"$(SDCARD_ROOT)\"
++CXXFLAGS += -DFILE_SYSTEM=\"/dev/mmcblk1p1\"
++
++# Keys
++# Joys for Anbernic RG XX H700. The bundled SDL fork assigns joystick button
++# indices in ascending evdev keycode order, and the built-in pad exposes
++# ESC/VOL-/VOL+ (keycodes 1/114/115) before the gamepad buttons (304..316),
++# so the gamepad buttons start at index 3.
++CXXFLAGS += -DCMDR_KEY_UP=SDLK_UP
++CXXFLAGS += -DCMDR_KEY_RIGHT=SDLK_RIGHT
++CXXFLAGS += -DCMDR_KEY_DOWN=SDLK_DOWN
++CXXFLAGS += -DCMDR_KEY_LEFT=SDLK_LEFT
++CXXFLAGS += -DCMDR_KEY_OPEN=3		# A (304)
++CXXFLAGS += -DCMDR_KEY_PARENT=4		# B (305)
++CXXFLAGS += -DCMDR_KEY_OPERATION=6	# X (307)
++CXXFLAGS += -DCMDR_KEY_SYSTEM=5		# Y (306)
++CXXFLAGS += -DCMDR_KEY_PAGEUP=7		# L1 (308)
++CXXFLAGS += -DCMDR_KEY_PAGEDOWN=8	# R1 (309)
++CXXFLAGS += -DCMDR_KEY_SELECT=9		# SELECT (310)
++CXXFLAGS += -DCMDR_KEY_TRANSFER=10	# START (311)
++CXXFLAGS += -DCMDR_KEY_MENU=11		# MENU (312)
++
++# Screen
++CXXFLAGS += -DAUTOSCALE=1
++CXXFLAGS += -DAUTOSCALE_DPI=0
++CXXFLAGS += -DPPU_X=2
++CXXFLAGS += -DPPU_Y=2
++CXXFLAGS += -DSCREEN_BPP=32
++
+ # platform dependant stuff - tg5040 and tg5050
+-ifneq (,$(findstring tg50,$(PLATFORM)))
++else ifneq (,$(findstring tg50,$(PLATFORM)))
+ SDCARD_ROOT := /mnt/SDCARD
+ NEXTUI_SYSTEM_PATH := $(SDCARD_ROOT)/.system
+ 
+@@ -84,7 +119,13 @@ CXXFLAGS += -DSCREEN_BPP=32
+ endif
+ 
+ SDL := SDL2
++ifeq ($(PLATFORM),h700)
++CXXFLAGS += -I$(PREFIX_LOCAL)/include/$(SDL) -I$(PREFIX)/include/$(SDL)
++LINKFLAGS += -L$(PREFIX_LOCAL)/lib -L$(PREFIX)/lib
++else
+ CXXFLAGS += -I$(PREFIX)/include/$(SDL) -DUSE_$(SDL)
++endif
++CXXFLAGS += -DUSE_$(SDL)
+ 
+ #CXXFLAGS += $$(pkg-config --cflags sdl2 SDL2_image SDL2_ttf)
+ #LINKFLAGS += $$(pkg-config --libs sdl2 SDL2_image SDL2_ttf)
+diff --git a/src/screen.cpp b/src/screen.cpp
+index 43d31fa..c9818b1 100644
+--- a/src/screen.cpp
++++ b/src/screen.cpp
+@@ -80,8 +80,17 @@ int Screen::init()
+ 
+     int window_w = screen.actual_w;
+     int window_h = screen.actual_h;
++    // When autoscaling, size the window to the display: deriving it from
++    // disp_width * ppu can exceed what the driver supports (e.g. mali-fbdev
++    // fails to create a 3840x2880 surface on a 640x480 panel at high PPU).
++    SDL_DisplayMode dm;
++    if (cfg.disp_autoscale && SDL_GetCurrentDisplayMode(0, &dm) == 0
++        && dm.w > 0 && dm.h > 0) {
++        window_w = dm.w;
++        window_h = dm.h;
++    }
+     window = SDL_CreateWindow("Commander", SDL_WINDOWPOS_UNDEFINED,
+-        SDL_WINDOWPOS_UNDEFINED, window_h, window_h, window_flags);
++        SDL_WINDOWPOS_UNDEFINED, window_w, window_h, window_flags);
+     if (window == nullptr) {
+         SDL_Log("Failed to create window: %s", SDL_GetError());
+         return 1;
+diff --git a/src/window.cpp b/src/window.cpp
+index e3e646e..b42bb89 100644
+--- a/src/window.cpp
++++ b/src/window.cpp
+@@ -62,9 +62,18 @@ int CWindow::execute()
+     SDL_Event event;
+     bool l_loop(true);
+     bool l_render(true);
++    // Re-render the first few frames: on fbdev-style double-buffered targets a
++    // single startup flip can land on a page that the previous app (or the
++    // launcher handing off to us) still overwrites, leaving a stale screen
++    // until the next input-triggered render.
++    int l_warmup(8);
+     // Main loop
+     while (l_loop)
+     {
++        if (l_warmup > 0) {
++            --l_warmup;
++            l_render = true;
++        }
+         // Handle key press
+         while (SDL_PollEvent(&event))
+         {

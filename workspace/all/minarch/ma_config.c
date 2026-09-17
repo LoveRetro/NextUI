@@ -509,6 +509,8 @@ static void Config_readControlsString(char* cfg) {
 		mapping->mod = mod;
 	}
 }
+static void configureAmbientOption(void); // defined next to ambient_labels below
+
 void Config_load(void) {
 	LOG_info("Config_load\n");
 	
@@ -522,7 +524,9 @@ void Config_load(void) {
 	if (!GFX_supportsOverscan()) {
 		scaling_labels[4] = NULL;
 	}
-	
+
+	configureAmbientOption();
+
 	char* system_path = SYSTEM_PATH "/system.cfg";
 	
 	char device_system_path[MAX_PATH] = {0};
@@ -1303,6 +1307,24 @@ char* getScreenScalingDesc(void) {
 }
 int getScreenScalingCount(void) {
 	return GFX_supportsOverscan() ? 5 : 4;
+}
+
+// The ambient zone list is the Brick layout: All, Top bar, FN keys, L/R.
+// Devices with two lights only have the pair GFX_setAmbientColor() writes for
+// mode 1, so offer that as a plain on/off rather than four options that mostly
+// do nothing. No value remapping needed: index 1 is already mode 1. The menu
+// walks labels until NULL, so truncating that is what limits the choices.
+static void configureAmbientOption(void) {
+	Option* ambient_option = &config.frontend.options[FE_OPT_AMBIENT];
+	int lights = LEDS_getCount();
+	if (lights == 0) {
+		ambient_option->lock = 1; // nothing to light up, keep it out of the menu
+	}
+	else if (lights <= 2) {
+		ambient_labels[1] = "On";
+		ambient_labels[2] = NULL;
+		ambient_option->count = 2;
+	}
 }
 	
 
