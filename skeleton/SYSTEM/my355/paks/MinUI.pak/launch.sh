@@ -48,8 +48,15 @@ echo -n 0 > /sys/class/gpio/gpio20/value
 echo 0 > /sys/class/miyooio_chr_dev/joy_type
 
 #backlight, the driver's brightness-levels won't go below 7.8% duty
+#carry the driver's duty over so the panel is only dark for a few ms, keymon sets the real value later
+bl_duty=$(sed -n 's/.*(backlight.* duty: \([0-9]*\) ns.*/\1/p' /sys/kernel/debug/pwm)
 echo backlight > /sys/bus/platform/drivers/pwm-backlight/unbind
 echo 0 > /sys/class/pwm/pwmchip0/export
+if [ -n "$bl_duty" ]; then
+	echo 1250000 > /sys/class/pwm/pwmchip0/pwm0/period
+	echo $bl_duty > /sys/class/pwm/pwmchip0/pwm0/duty_cycle
+	echo 1 > /sys/class/pwm/pwmchip0/pwm0/enable
+fi
 
 # disable system-level lid handling
 mv /dev/input/event1 /dev/input/event1.disabled
