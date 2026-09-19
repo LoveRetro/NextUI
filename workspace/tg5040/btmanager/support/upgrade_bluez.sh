@@ -1,5 +1,9 @@
 #! /bin/sh
 
+if [ ! -d /usr/trimui ]; then
+	exit 0
+fi
+
 TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
 if [ "$TRIMUI_MODEL" = "Trimui Smart Pro S" ]; then
 	return 0

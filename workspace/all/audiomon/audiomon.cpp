@@ -300,6 +300,10 @@ int main(int argc, char* argv[]) {
     }
     log("Connected to system D-Bus");
 
+    // libdbus exits the process on disconnect by default, which would strand a
+    // stale .asoundrc and break audio for every other process until reboot
+    dbus_connection_set_exit_on_disconnect(conn, FALSE);
+
     dbus_bus_add_match(conn,
         "type='signal',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged'",
         nullptr);
@@ -407,6 +411,19 @@ int main(int argc, char* argv[]) {
                                             handleDeviceConnected(conn, path);
                                         else
                                             handleDeviceDisconnected(conn, path);
+                                    }
+                                    // BlueZ reports Connected before SDP finishes, so UUIDs can
+                                    // still be empty above and an audio device looks like a plain
+                                    // one. Check again once the services are actually resolved.
+                                    else if (std::string(key) == "ServicesResolved") {
+                                        dbus_message_iter_next(&dict);
+                                        DBusMessageIter variant;
+                                        dbus_message_iter_recurse(&dict, &variant);
+                                        dbus_bool_t resolved;
+                                        dbus_message_iter_get_basic(&variant, &resolved);
+
+                                        if (resolved)
+                                            handleDeviceConnected(conn, path);
                                     }
 
                                     dbus_message_iter_next(&changed);
