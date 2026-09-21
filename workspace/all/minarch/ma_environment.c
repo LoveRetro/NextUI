@@ -8,6 +8,8 @@
 
 static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
 	// TODO: handle other args? not sure I can
+	// keep the motor silent while rewinding, same as audio (see run_frame)
+	if (rewinding) return 1;
 	VIB_setStrength(strength);
 	return 1;
 }
