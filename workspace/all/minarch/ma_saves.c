@@ -368,6 +368,100 @@ error:
 	return success;
 }
 
+///////////////////////////////////////
+
+// Undo load state keeps the state from immediately before the last load in memory.
+// Undoing swaps that snapshot with the current state, so undoing twice returns to
+// the state that was loaded.
+static uint8_t* undo_state = NULL;
+static size_t undo_state_size = 0;
+static int undo_state_valid = 0;
+
+static int State_captureUndo(void) {
+	size_t state_size = core.serialize_size();
+	if (!state_size) return 0;
+
+	if (state_size != undo_state_size) {
+		uint8_t* buf = realloc(undo_state, state_size);
+		if (!buf) {
+			LOG_error("Couldn't allocate memory for undo state\n");
+			return 0;
+		}
+		undo_state = buf;
+		undo_state_size = state_size;
+	}
+
+	if (!core.serialize(undo_state, undo_state_size)) {
+		LOG_error("Error serializing undo state\n");
+		return 0;
+	}
+	return 1;
+}
+
+int State_readWithUndo(void) {
+	int captured = State_captureUndo();
+	int success = State_read();
+	undo_state_valid = captured && success;
+	return success;
+}
+
+int State_hasUndo(void) {
+	// the core can report a different size later on (eg. after a disc change),
+	// which would make the snapshot unusable
+	return undo_state_valid && undo_state_size==core.serialize_size();
+}
+
+int State_undoLoad(void) {
+	// Block load states in RetroAchievements hardcore mode
+	if (RA_isHardcoreModeActive()) {
+		LOG_info("Undo load blocked - hardcore mode active\n");
+		Notification_push(NOTIFICATION_ACHIEVEMENT, "Load states disabled in Hardcore mode", NULL);
+		return 0;
+	}
+
+	if (!State_hasUndo()) return 0;
+
+	int was_ff = fast_forward;
+	fast_forward = 0;
+
+	// hold on to the current state so undoing again returns to it
+	uint8_t* current = malloc(undo_state_size);
+	if (current && !core.serialize(current, undo_state_size)) {
+		free(current);
+		current = NULL;
+	}
+
+	int success = core.unserialize(undo_state, undo_state_size);
+	if (!success) {
+		LOG_error("Error restoring undo state\n");
+		undo_state_valid = 0;
+	}
+	else if (current) {
+		memcpy(undo_state, current, undo_state_size);
+	}
+	else {
+		undo_state_valid = 0; // nothing left to undo back to
+	}
+	if (current) free(current);
+
+	fast_forward = was_ff;
+	if (success) Rewind_on_state_change();
+	return success;
+}
+
+void State_invalidateUndo(void) {
+	undo_state_valid = 0;
+}
+
+void State_freeUndo(void) {
+	if (undo_state) free(undo_state);
+	undo_state = NULL;
+	undo_state_size = 0;
+	undo_state_valid = 0;
+}
+
+///////////////////////////////////////
+
 void State_autosave(void) {
 	int last_state_slot = state_slot;
 	state_slot = AUTO_RESUME_SLOT;

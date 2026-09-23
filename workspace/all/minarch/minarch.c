@@ -368,6 +368,7 @@ finish:
 	Notification_quit();
 	
 	Game_close();
+	State_freeUndo();
 	Rewind_free();
 	Core_unload();
 	Core_quit();

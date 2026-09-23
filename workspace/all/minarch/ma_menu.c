@@ -1688,6 +1688,7 @@ void Menu_loadState(void) {
 	Menu_updateState();
 
 	if (menu.save_exists) {
+		int disc_changed = 0;
 		if (menu.total_discs) {
 			char slot_disc_name[256];
 			getFile(menu.txt_path, slot_disc_name, 256);
@@ -1699,12 +1700,22 @@ void Menu_loadState(void) {
 			char* disc_path = menu.disc_paths[menu.disc];
 			if (!exactMatch(slot_disc_path, disc_path)) {
 				Game_changeDisc(slot_disc_path);
+				disc_changed = 1;
 			}
 		}
 
 		state_slot = menu.slot;
 		putInt(menu.slot_path, menu.slot);
-		int success = State_read();
+		int success;
+		if (disc_changed) {
+			// the state we'd be undoing back to belongs to the disc that was just
+			// ejected, so there's nothing safe to offer an undo for
+			State_invalidateUndo();
+			success = State_read();
+		}
+		else {
+			success = State_readWithUndo();
+		}
 		Rewind_on_state_change();
 		
 		// Show notification if enabled
@@ -1714,6 +1725,15 @@ void Menu_loadState(void) {
 			snprintf(msg, sizeof(msg), success ? "State Loaded - Slot %d" : "Load Failed - Slot %d", menu.slot + 1);
 			Notification_push(NOTIFICATION_LOAD_STATE, msg, NULL);
 		}
+	}
+}
+void Menu_undoLoadState(void) {
+	int success = State_undoLoad();
+
+	// Show notification if enabled (hardcore mode pushes its own message)
+	if (CFG_getNotifyLoad() && !RA_isHardcoreModeActive()) {
+		Notification_push(NOTIFICATION_LOAD_STATE,
+			success ? "Load State Undone" : "Nothing To Undo", NULL);
 	}
 }
 
@@ -1838,6 +1858,13 @@ void Menu_loop(void) {
 			status = STATUS_CONT;
 			show_menu = 0;
 		}
+		else if (PAD_justPressed(BTN_X)) {
+			if (selected==ITEM_LOAD && State_hasUndo()) {
+				Menu_undoLoadState();
+				status = STATUS_LOAD;
+				show_menu = 0;
+			}
+		}
 		else if (PAD_justPressed(BTN_A)) {
 			switch(selected) {
 				case ITEM_CONT:
@@ -1933,14 +1960,19 @@ void Menu_loop(void) {
 			
 			if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
 			else GFX_blitButtonGroup((char*[]){ BTN_SLEEP==BTN_POWER?"POWER":"MENU","SLEEP", NULL }, 0, screen, 0);
-			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, 1, screen, 1);
+			if (selected==ITEM_LOAD && State_hasUndo()) {
+				GFX_blitButtonGroup((char*[]){ "X","UNDO LOAD", "B","BACK", "A","LOAD", NULL }, 1, screen, 1);
+			}
+			else {
+				GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, 1, screen, 1);
+			}
 			
 			// list
 			oy = (((DEVICE_HEIGHT / FIXED_SCALE) - PADDING * 2) - (MENU_ITEM_COUNT * PILL_SIZE)) / 2;
 			for (int i=0; i<MENU_ITEM_COUNT; i++) {
 				char* item = menu.items[i];
 				SDL_Color text_color = COLOR_WHITE;
-				
+
 				if (i==selected) {
 					text_color = uintToColour(THEME_COLOR5_255);
 
@@ -1971,8 +2003,7 @@ void Menu_loop(void) {
 						SCALE1(PILL_SIZE)
 					});
 				}
-			
-				
+
 				// text
 				text = TTF_RenderUTF8_Blended(font.large, item, text_color);
 				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){

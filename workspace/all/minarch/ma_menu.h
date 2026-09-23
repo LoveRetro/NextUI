@@ -10,6 +10,7 @@ int  Menu_options(MenuList* list);
 void Menu_screenshot(void);
 void Menu_saveState(void);
 void Menu_loadState(void);
+void Menu_undoLoadState(void);
 void OptionSaveChanges_updateDesc(void);
 void OptionAchievements_updateDesc(void);
 bool getAlias(char* path, char* alias);
