@@ -33,6 +33,7 @@ libchdr
 **/other/fbset
 **/other/mkbootimg
 **/other/rsce-go
+**/other/7zip
 bl_enable
 bl_disable
 audiomon.elf
@@ -42,6 +43,7 @@ audiomon.elf
 workspace/hash.txt
 workspace/readmes
 workspace/.container_runtime
+workspace/desktop/.toolchain
 
 AGENTS.md
 CLAUDE.md
