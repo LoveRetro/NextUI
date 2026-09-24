@@ -478,6 +478,72 @@ int getInt(char* path) {
 	}
 	return i;
 }
+
+bool pakSupportsInGameShortcut(const char* pak_path) {
+	if (!pak_path || !pak_path[0]) return false;
+
+	char json_path[512];
+	if (snprintf(json_path, sizeof(json_path), "%s/pak.json", pak_path) >= (int)sizeof(json_path))
+		return false;
+
+	char* json = allocFile(json_path);
+	if (!json) return false;
+
+	const char* key = "\"in_game_shortcut\"";
+	char* value = strstr(json, key);
+	if (value) {
+		value += strlen(key);
+		while (isspace((unsigned char)*value)) value++;
+		if (*value == ':') value++;
+		else value = NULL;
+	}
+	if (value) {
+		while (isspace((unsigned char)*value)) value++;
+	}
+
+	bool supported = value && strncmp(value, "true", 4) == 0 &&
+		!isalnum((unsigned char)value[4]) && value[4] != '_';
+	free(json);
+	return supported;
+}
+
+static bool getPakJsonString(const char* json, const char* key, char* value, size_t value_size) {
+	char quoted_key[64];
+	if (!json || !value || value_size == 0 ||
+		snprintf(quoted_key, sizeof(quoted_key), "\"%s\"", key) >= (int)sizeof(quoted_key))
+		return false;
+
+	const char* start = strstr(json, quoted_key);
+	if (!start) return false;
+	start += strlen(quoted_key);
+	while (isspace((unsigned char)*start)) start++;
+	if (*start++ != ':') return false;
+	while (isspace((unsigned char)*start)) start++;
+	if (*start++ != '"') return false;
+
+	size_t length = 0;
+	while (*start && *start != '"' && length < PAK_SHORT_NAME_MAX && length + 1 < value_size)
+		value[length++] = *start++;
+	value[length] = '\0';
+	return length > 0;
+}
+
+bool getPakShortcutName(const char* pak_path, char* name, size_t name_size) {
+	if (!pak_path || !pak_path[0] || !name || name_size == 0) return false;
+	name[0] = '\0';
+
+	char json_path[512];
+	if (snprintf(json_path, sizeof(json_path), "%s/pak.json", pak_path) >= (int)sizeof(json_path))
+		return false;
+
+	char* json = allocFile(json_path);
+	if (!json) return false;
+
+	bool found = getPakJsonString(json, "short_name", name, name_size) ||
+		getPakJsonString(json, "name", name, name_size);
+	free(json);
+	return found;
+}
 void putInt(char* path, int value) {
 	char buffer[8];
 	sprintf(buffer, "%d", value);

@@ -60,6 +60,10 @@ TRIMUI BRICK / BRICK PRO / SMART PRO S
 
   Buttons with no action of their own can be assigned a pak to launch: L3/R3 on the Brick, L4/R4 on the Brick Pro, and HOME on the Brick Pro and Smart Pro S. Assign them under Settings > Assignments. Assignments only apply in the main menu, not in-game. HOME no longer acts as a second menu button.
 
+ALL
+
+  Compatible guide paks can be assigned under Settings > In-Game > Pak Shortcut. Open the in-game menu and press X to launch the assigned guide, then exit the guide to return to the paused game.
+
 ----------------------------------------
 Quicksave & auto-resume
 

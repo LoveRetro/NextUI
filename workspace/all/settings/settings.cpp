@@ -1014,6 +1014,7 @@ int main(int argc, char *argv[])
 
         auto minarchMenu = new MenuList(MenuItemType::List, "In-Game",
         {
+            buildPakShortcutItem(),
             new MenuItem{ListItemType::Generic, "Notifications", "Save state notifications", {}, {}, nullptr, nullptr, DeferToSubmenu, notificationsMenu},
             new MenuItem{ListItemType::Generic, "RetroAchievements", "Achievement tracking settings", {}, {}, nullptr, nullptr, DeferToSubmenu, retroAchievementsMenu},
         });

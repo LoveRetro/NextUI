@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <pthread.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -43,7 +45,7 @@ enum {
 void MSG_init(void) {
 	digits = SDL_CreateRGBSurface(SDL_SWSURFACE,SCALE2(DIGIT_WIDTH*DIGIT_COUNT,DIGIT_HEIGHT),FIXED_DEPTH, 0,0,0,0);
 	SDL_FillRect(digits, NULL, RGB_BLACK);
-	
+
 	SDL_Surface* digit;
 	char* chars[] = { "0","1","2","3","4","5","6","7","8","9","/",".","%","x","(",")", NULL };
 	char* c;
@@ -145,6 +147,7 @@ static struct {
 	char base_path[256];
 	char bmp_path[256];
 	char txt_path[256];
+	char pak_label[PAK_SHORT_NAME_MAX + 1];
 	int disc;
 	int total_discs;
 	int slot;
@@ -166,6 +169,53 @@ static struct {
 	}
 };
 
+static int Menu_launchPakShortcut(void) {
+	const char* action = CFG_getPakShortcut();
+	if (!action || !action[0]) return 0; // unassigned
+
+	size_t prefix_len = strlen(FN_ACTION_PAK_PREFIX);
+	if (strncmp(action, FN_ACTION_PAK_PREFIX, prefix_len) != 0) return 0;
+
+	const char* rel = action + prefix_len;
+	if (!rel[0]) return 0;
+
+	// Keep the core and game resident, but hand foreground input and audio to the pak
+	SND_pauseAudio(true);
+	system("gametimectl.elf stop_all");
+	PAD_quit();
+
+	char pak_path[512];
+	snprintf(pak_path, sizeof(pak_path), "%s/Tools/%s/%s", SDCARD_PATH, PLATFORM, rel);
+
+	char launch_path[512];
+	snprintf(launch_path, sizeof(launch_path), "%s/launch.sh", pak_path);
+	if (!exists(launch_path)) return 0; // stale binding, eg. the pak was deleted
+
+	// Exposing these lets the pak open context aware files/etc.
+	setenv("NEXTUI_ROM_PATH", game.path, 1);
+	setenv("NEXTUI_EMU_TAG", core.tag, 1);
+
+	LOG_info("Launching in-game pak shortcut: %s\n", launch_path);
+	pid_t pid = fork();
+	int result = -1;
+	if (pid == 0) {
+		execl("/bin/sh", "sh", launch_path, (char*)NULL);
+		_exit(127);
+	}
+	if (pid > 0) {
+		while (waitpid(pid, &result, 0) < 0 && errno == EINTR) {}
+	}
+	if (pid < 0 || !WIFEXITED(result) || WEXITSTATUS(result) != 0)
+		LOG_warn("In-game pak shortcut exited abnormally (status %d)\n", result);
+
+	PAD_init();
+	PAD_reset();
+	system("gametimectl.elf resume");
+	SND_pauseAudio(false);
+	GFX_clearAll();
+	return 1;
+}
+
 void Menu_init(void) {
 	menu.overlay = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE,
 		DEVICE_WIDTH,DEVICE_HEIGHT,
@@ -173,7 +223,18 @@ void Menu_init(void) {
 	SDL_SetSurfaceBlendMode(menu.overlay, SDL_BLENDMODE_BLEND);
 	Uint32 color = SDL_MapRGBA(menu.overlay->format, 0, 0, 0, 0);
 	SDL_FillRect(screen, NULL, color);
-	
+
+	strcpy(menu.pak_label, "PAK");
+	const char* action = CFG_getPakShortcut();
+	size_t prefix_len = strlen(FN_ACTION_PAK_PREFIX);
+	if (action && strncmp(action, FN_ACTION_PAK_PREFIX, prefix_len) == 0) {
+		char pak_path[512];
+		snprintf(pak_path, sizeof(pak_path), "%s/Tools/%s/%s", SDCARD_PATH, PLATFORM, action + prefix_len);
+		char pak_label[sizeof(menu.pak_label)];
+		if (getPakShortcutName(pak_path, pak_label, sizeof(pak_label)))
+			strcpy(menu.pak_label, pak_label);
+	}
+
 	char emu_name[256];
 	getEmuName(game.path, emu_name);
 	sprintf(menu.minui_dir, SHARED_USERDATA_PATH "/.minui/%s", emu_name);
@@ -1829,6 +1890,10 @@ void Menu_loop(void) {
 				dirty = 1;
 			}
 		}
+		else if (PAD_justPressed(BTN_X)) {
+			if (Menu_launchPakShortcut())
+				dirty = 1;
+		}
 		
 		if (dirty && (selected==ITEM_SAVE || selected==ITEM_LOAD)) {
 			Menu_updateState();
@@ -1932,7 +1997,13 @@ void Menu_loop(void) {
 			SDL_FreeSurface(text);
 			
 			if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
-			else GFX_blitButtonGroup((char*[]){ BTN_SLEEP==BTN_POWER?"POWER":"MENU","SLEEP", NULL }, 0, screen, 0);
+			else {
+				const char* action = CFG_getPakShortcut();
+				if (action && action[0])
+					GFX_blitButtonGroup((char*[]){ "X", menu.pak_label, NULL }, 0, screen, 0);
+				else
+					GFX_blitButtonGroup((char*[]){ BTN_SLEEP==BTN_POWER?"POWER":"MENU", "SLEEP", NULL }, 0, screen, 0);
+			}
 			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, 1, screen, 1);
 			
 			// list

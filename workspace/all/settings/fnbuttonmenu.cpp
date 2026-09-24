@@ -44,7 +44,7 @@ PakEntry pakEntry(const std::string &rel, const std::string &name)
 
 // Tools paks, including those one subfolder deep (Tools/<PLATFORM>/<group>/<name>.pak),
 // which is how larger pak collections tend to organize themselves.
-std::vector<PakEntry> enumerateToolPaks()
+std::vector<PakEntry> enumerateToolPaks(bool in_game_only = false)
 {
     std::vector<PakEntry> paks;
 
@@ -59,7 +59,8 @@ std::vector<PakEntry> enumerateToolPaks()
         std::string name(ent->d_name);
 
         if (isPak(tools_path, name)) {
-            paks.push_back(pakEntry(name, name));
+            if (!in_game_only || pakSupportsInGameShortcut((tools_path + "/" + name).c_str()))
+                paks.push_back(pakEntry(name, name));
             continue;
         }
 
@@ -73,6 +74,7 @@ std::vector<PakEntry> enumerateToolPaks()
             if (sub_ent->d_name[0] == '.') continue;
             std::string sub_name(sub_ent->d_name);
             if (!isPak(sub_path, sub_name)) continue;
+            if (in_game_only && !pakSupportsInGameShortcut((sub_path + "/" + sub_name).c_str())) continue;
             paks.push_back(pakEntry(name + "/" + sub_name, sub_name));
         }
         closedir(sub);
@@ -87,7 +89,7 @@ std::vector<PakEntry> enumerateToolPaks()
 
 // Row for one button. The label is read live from the config rather than from the
 // cycled index, so picking from the submenu updates the row too.
-class FnMenuItem : public MenuItem
+class ActionMenuItem : public MenuItem
 {
 public:
     using MenuItem::MenuItem;
@@ -162,7 +164,7 @@ MenuList* buildFnButtonMenu()
         }
         auto *submenu = new MenuList(MenuItemType::Fixed, button + " button", std::move(subItems));
 
-        items.push_back(new FnMenuItem{ListItemType::Generic, button + " button",
+        items.push_back(new ActionMenuItem{ListItemType::Generic, button + " button",
             "The pak to launch when this button is pressed in the main menu.",
             values, labels,
             [i]() -> std::any { return std::string(CFG_getFnAction(i)); },
@@ -177,4 +179,45 @@ MenuList* buildFnButtonMenu()
     items.push_back(new MenuItem{ListItemType::Button, "Reset to defaults",
         "Resets all options in this menu to their default values.", ResetCurrentMenu});
     return new MenuList(MenuItemType::Fixed, "Assignments", std::move(items));
+}
+
+AbstractMenuItem* buildPakShortcutItem()
+{
+    const auto paks = enumerateToolPaks(true);
+    std::vector<std::any> values = {std::string("")};
+    std::vector<std::string> labels = {"None"};
+
+    std::string current = CFG_getPakShortcut();
+    bool found = current.empty();
+    for (const auto &p : paks) {
+        if (p.action == current)
+            found = true;
+        values.push_back(p.action);
+        labels.push_back(p.label);
+    }
+    if (!found) {
+        values.push_back(current);
+        size_t separator = current.find(':');
+        std::string label = separator == std::string::npos ? current : current.substr(separator + 1);
+        labels.push_back(label + " (unavailable)");
+    }
+
+    std::vector<AbstractMenuItem *> subItems;
+    for (size_t i = 0; i < values.size(); i++) {
+        std::string action = std::any_cast<std::string>(values[i]);
+        subItems.push_back(new MenuItem{ListItemType::Button, labels[i], "",
+            [action](AbstractMenuItem &) -> InputReactionHint {
+                CFG_setPakShortcut(action.c_str());
+                return Exit;
+            }});
+    }
+    auto *submenu = new MenuList(MenuItemType::Fixed, "Pak Shortcut", std::move(subItems));
+
+    return new ActionMenuItem{ListItemType::Generic, "Pak Shortcut",
+        "The pak opened with X from the in-game menu.",
+        values, labels,
+        []() -> std::any { return std::string(CFG_getPakShortcut()); },
+        [](const std::any &value) { CFG_setPakShortcut(std::any_cast<std::string>(value).c_str()); },
+        []() { CFG_setPakShortcut(CFG_DEFAULT_PAK_SHORTCUT); },
+        DeferToSubmenu, submenu};
 }

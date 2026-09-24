@@ -9,6 +9,47 @@
 #include "utils.h"
 
 NextUISettings settings = {0};
+// CFG_init restores values through the public setters so validation stays in one
+// place. Those setters normally persist immediately; suppress that while the
+// settings file itself is being read or CFG_sync would truncate it mid-load.
+static bool cfg_loading = false;
+
+static void CFG_loadPakShortcutFile(void)
+{
+    const char *shared_userdata = getenv("SHARED_USERDATA_PATH");
+    if (!shared_userdata || !shared_userdata[0])
+        return;
+
+    char path[MAX_PATH];
+    snprintf(path, sizeof(path), "%s/pakshortcut.txt", shared_userdata);
+    FILE *file = fopen(path, "r");
+    if (!file)
+        return;
+
+    char value[sizeof(settings.pakShortcut)];
+    if (fgets(value, sizeof(value), file))
+    {
+        value[strcspn(value, "\r\n")] = 0;
+        strncpy(settings.pakShortcut, value, sizeof(settings.pakShortcut) - 1);
+        settings.pakShortcut[sizeof(settings.pakShortcut) - 1] = '\0';
+    }
+    fclose(file);
+}
+
+static void CFG_syncPakShortcutFile(void)
+{
+    const char *shared_userdata = getenv("SHARED_USERDATA_PATH");
+    if (!shared_userdata || !shared_userdata[0])
+        return;
+
+    char path[MAX_PATH];
+    snprintf(path, sizeof(path), "%s/pakshortcut.txt", shared_userdata);
+    FILE *file = fopen(path, "w");
+    if (!file)
+        return;
+    fprintf(file, "%s\n", settings.pakShortcut);
+    fclose(file);
+}
 
 // deprecated
 uint32_t THEME_COLOR1_255;
@@ -66,6 +107,7 @@ void CFG_defaults(NextUISettings *cfg)
         .muteLeds = CFG_DEFAULT_MUTELEDS,
 
         .fnAction = {CFG_DEFAULT_FN_ACTION, CFG_DEFAULT_FN_ACTION, CFG_DEFAULT_FN_ACTION},
+        .pakShortcut = CFG_DEFAULT_PAK_SHORTCUT,
 
         .screenTimeoutSecs = CFG_DEFAULT_SCREENTIMEOUTSECS,
         .suspendTimeoutSecs = CFG_DEFAULT_SUSPENDTIMEOUTSECS,
@@ -141,6 +183,7 @@ static void setPaletteNameRaw(const char *name);
 
 void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
 {
+    cfg_loading = true;
     CFG_defaults(&settings);
     settings.onFontChange = cb;
     settings.onColorSet = ccb;
@@ -366,6 +409,15 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 CFG_setFnAction(2, value);
                 continue;
             }
+            if (strncmp(line, "pakShortcut=", 12) == 0)
+            {
+                char *value = line + 12;
+                value[strcspn(value, "\r\n")] = 0;
+                // Migrate the short-lived minuisettings.txt representation to
+                // its independent file, which older config writers cannot drop.
+                CFG_setPakShortcut(value);
+                continue;
+            }
             if (sscanf(line, "artWidth=%i", &temp_value) == 1)
             {
                 CFG_setGameArtWidth((double)temp_value / 100.0);
@@ -522,6 +574,13 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
         }
         fclose(file);
     }
+
+    // This setting is intentionally independent of minuisettings.txt: every
+    // foreground utility historically rewrites that monolithic file, and an
+    // older utility would discard fields introduced by a newer build.
+    CFG_loadPakShortcutFile();
+
+    cfg_loading = false;
 
     // load gfx related stuff until we drop the indirection
     CFG_setColor(1, CFG_getColor(COLOR_MAIN));
@@ -946,6 +1005,20 @@ void CFG_setFnAction(int index, const char* action)
     strncpy(settings.fnAction[index], action, sizeof(settings.fnAction[index]) - 1);
     settings.fnAction[index][sizeof(settings.fnAction[index]) - 1] = '\0';
     CFG_sync();
+}
+
+const char* CFG_getPakShortcut(void)
+{
+    return settings.pakShortcut;
+}
+
+void CFG_setPakShortcut(const char* action)
+{
+    if (!action)
+        action = "";
+    strncpy(settings.pakShortcut, action, sizeof(settings.pakShortcut) - 1);
+    settings.pakShortcut[sizeof(settings.pakShortcut) - 1] = '\0';
+    CFG_syncPakShortcutFile();
 }
 
 double CFG_getGameArtWidth(void)
@@ -1453,6 +1526,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%s", CFG_getFnAction(2));
     }
+    else if (strcmp(key, "pakShortcut") == 0)
+    {
+        sprintf(value, "%s", CFG_getPakShortcut());
+    }
     else if (strcmp(key, "artWidth") == 0)
     {
         sprintf(value, "%i", (int)(CFG_getGameArtWidth()) * 100);
@@ -1579,6 +1656,9 @@ void CFG_get(const char *key, char *value)
 
 void CFG_sync(void)
 {
+    if (cfg_loading)
+        return;
+
     // write to file
     char settingsPath[MAX_PATH];
     const char *shared_userdata = getenv("SHARED_USERDATA_PATH");
@@ -1711,6 +1791,7 @@ void CFG_print(void)
     printf("\t\"fn1action\": \"%s\",\n", settings.fnAction[0]);
     printf("\t\"fn2action\": \"%s\",\n", settings.fnAction[1]);
     printf("\t\"fn3action\": \"%s\",\n", settings.fnAction[2]);
+    printf("\t\"pakShortcut\": \"%s\",\n", settings.pakShortcut);
     printf("\t\"artWidth\": %i,\n", (int)(settings.gameArtWidth * 100));
     printf("\t\"wifi\": %i,\n", settings.wifi);
     printf("\t\"defaultView\": %i,\n", settings.defaultView);
