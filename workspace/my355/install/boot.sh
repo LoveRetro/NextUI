@@ -32,7 +32,6 @@ if ! grep -q " /userdata/bluetooth " /proc/mounts; then
 		mkdir -p "$USERDATA_DIR/bin"
 		mkdir -p "$USERDATA_DIR/bluetooth"
 		mkdir -p "$USERDATA_DIR/cfg"
-		mkdir -p "$USERDATA_DIR/localtime"
 		mkdir -p "$USERDATA_DIR/timezone"
 		mkdir -p "$USERDATA_DIR/lib/bluetooth"
 		sync
