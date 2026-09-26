@@ -43,8 +43,8 @@ case "$MODE" in
                 set_policy /sys/devices/system/cpu/cpufreq/policy0 "schedutil" "second_max"
                 ;;
         performance)
-                # performance governor, max freq (1992 MHz on MY355)
-                set_policy /sys/devices/system/cpu/cpufreq/policy0 "performance" "max"
+                # performance governor, one step below max (1800 MHz on MY355, 1992 is turbo)
+                set_policy /sys/devices/system/cpu/cpufreq/policy0 "performance" "second_max"
                 ;;
         powersave)
                 # conservative governor, min freq to midpoint max (408-1104 MHz on MY355)
