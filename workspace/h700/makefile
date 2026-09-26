@@ -18,7 +18,7 @@ REQUIRES_SDL2=other/sdl2
 
 .PHONY: curl-runtime
 FILEMGR_PATCH=patches/NextCommander-h700.patch
-FILEMGR_STAMP=.patched-h700-v3
+FILEMGR_STAMP=.patched-h700-v4
 
 all: readmes
 
@@ -32,6 +32,8 @@ early: $(REQUIRES_EVTEST) $(REQUIRES_JSTEST) $(REQUIRES_UNZIP60) $(REQUIRES_FILE
 	cd $(REQUIRES_UNZIP60) && make -f unix/Makefile.trimuismart unzip
 	@test -e "$(PREFIX_LOCAL)/lib/libSDL2.so" -o -e "$(PREFIX_LOCAL)/lib/libSDL2-2.0.so.0" || \
 		(echo "error: prebaked SDL2 missing from PREFIX_LOCAL=$(PREFIX_LOCAL); use ghcr.io/loveretro/h700-toolchain" >&2; exit 1)
+	@grep -q SDL_JOYSTICK_H700_FIXED_LAYOUT "$(PREFIX_LOCAL)/lib/libSDL2-2.0.so.0" || \
+		(echo "error: this h700-toolchain image has the old SDL button layout; run: docker pull ghcr.io/loveretro/h700-toolchain:latest" >&2; exit 1)
 	mkdir -p $(REQUIRES_SDL2)/output
 	cp -a $(PREFIX_LOCAL)/lib/libSDL2*.so* $(REQUIRES_SDL2)/output/
 	cp -a $(PREFIX)/lib/libSDL2_image*.so* $(REQUIRES_SDL2)/output/ 2>/dev/null || true
@@ -40,7 +42,7 @@ early: $(REQUIRES_EVTEST) $(REQUIRES_JSTEST) $(REQUIRES_UNZIP60) $(REQUIRES_FILE
 	# SDL2_image dlopens libpng12.so.0 at runtime; the H700 stock OS only has
 	# a 32-bit copy under /mnt/vendor/lib, so bundle the toolchain's 64-bit one
 	cp -L $(PREFIX)/lib/libpng12.so.0 $(REQUIRES_SDL2)/output/
-	cd $(REQUIRES_FILEMGR) && ([ -f $(FILEMGR_STAMP) ] || (git checkout -- . && git apply --unidiff-zero ../../$(FILEMGR_PATCH) && touch $(FILEMGR_STAMP)))
+	cd $(REQUIRES_FILEMGR) && ([ -f $(FILEMGR_STAMP) ] || (git checkout -- . && git apply --unidiff-zero ../../$(FILEMGR_PATCH) && rm -rf output && touch $(FILEMGR_STAMP)))
 	cd $(REQUIRES_FILEMGR) && ([ -f output/.platform-h700 ] || make clean PLATFORM=h700)
 	cd $(REQUIRES_FILEMGR) && make -j PLATFORM=h700 && touch output/.platform-h700
 	cd boot && sh build.sh

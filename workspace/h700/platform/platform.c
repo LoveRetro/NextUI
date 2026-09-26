@@ -47,10 +47,10 @@ static void LED_shutdown(void);
 #define EV_KEY 0x01
 #define EV_ABS 0x03
 
-// Built-in controls use raw evdev codes. The in-tree SDL patch restores joystick
-// enumeration, but platform input deliberately skips this device because its SDL
-// button ordering differs from the external-pad JOY_* mapping and would duplicate
-// the evdev events.
+// Built-in controls use raw evdev codes (POWER is on another device, and MENU
+// tap-versus-hold needs the raw 312/354 timing). The toolchain's SDL gives this
+// pad the TrimUI button layout for SDL apps and paks; platform input skips it in
+// SDL (is_builtin_pad) so its presses aren't read twice.
 #define RAW_HATY 17
 #define RAW_HATX 16
 #define RAW_LSY  3
