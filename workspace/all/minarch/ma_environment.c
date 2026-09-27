@@ -75,9 +75,7 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 		return false;  // Indicate failure
 	}
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: { /* 11 */
-		// puts("RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS\n");
 		Input_init((const struct retro_input_descriptor *)data);
-		return false;
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE: { /* 13 */
