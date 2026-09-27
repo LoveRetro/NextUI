@@ -19,6 +19,8 @@ void chooseSyncRef(void) {
 		  use_core_fps ? "yes" : "no");
 }
 
+#define MAX_FRAME_GAP_US 0x80000
+
 static void limitFF(void) {
 	static uint64_t ff_frame_time = 0;
 	static uint64_t last_time = 0;
@@ -32,7 +34,7 @@ static void limitFF(void) {
 	if (fast_forward && max_ff_speed) {
 		if (last_time == 0) last_time = now;
 		int elapsed = now - last_time;
-		if (elapsed>0 && elapsed<0x80000) {
+		if (elapsed>0 && elapsed<MAX_FRAME_GAP_US) {
 			if (elapsed<ff_frame_time) {
 				int delay = (ff_frame_time - elapsed) / 1000;
 				if (delay>0 && delay<17) { // don't allow a delay any greater than a frame
@@ -44,6 +46,28 @@ static void limitFF(void) {
 		}
 	}
 	last_time = now;
+}
+
+static retro_usec_t frame_time_reference(void) {
+	if (core.frame_time_reference > 0) return core.frame_time_reference;
+	if (core.fps > 0.0) return (retro_usec_t)(1000000.0 / core.fps);
+	return (retro_usec_t)(1000000.0 / 60.0);
+}
+
+static void run_core(void) {
+	if (core.frame_time_callback) {
+		retro_usec_t usec;
+		uint64_t now = getMicroseconds();
+		if (fast_forward || rewinding) {
+			usec = frame_time_reference();
+		} else {
+			usec = core.frame_time_last ? (retro_usec_t)(now - core.frame_time_last) : frame_time_reference();
+			if (usec <= 0 || usec > MAX_FRAME_GAP_US) usec = frame_time_reference();
+		}
+		core.frame_time_last = now;
+		core.frame_time_callback(usec);
+	}
+	core.run();
 }
 
 void run_frame(void) {
@@ -58,7 +82,7 @@ void run_frame(void) {
 			// Actually stepped back - run one frame to render the restored state
 			rewinding = 1;
 			fast_forward = 0;
-			core.run();
+			run_core();
 		}
 		else if (rewind_result == REWIND_STEP_CADENCE) {
 			// Waiting for cadence - don't run core, just re-render current frame
@@ -87,7 +111,7 @@ void run_frame(void) {
 					Rewind_sync_encode_state();
 				}
 				rewinding = 0;
-				core.run();
+				run_core();
 				Rewind_push(0);
 			}
 		}
@@ -101,7 +125,7 @@ void run_frame(void) {
 			ff_paused_by_rewind_hold = 0;
 		}
 
-		core.run();
+		run_core();
 		Rewind_push(0);
 	}
 	limitFF();
