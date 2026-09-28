@@ -66,9 +66,6 @@ mv /dev/input/event1 /dev/input/event1.disabled
 export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/miyoo/lib:$LD_LIBRARY_PATH
 export PATH=$SYSTEM_PATH/bin:/usr/miyoo/bin:/usr/miyoo/sbin:$PATH
 
-#led
-echo 100 > /sys/class/leds/work/brightness
-
 # start stock gpio input daemon
 mkdir -p /tmp/miyoo_inputd
 miyoo_inputd &

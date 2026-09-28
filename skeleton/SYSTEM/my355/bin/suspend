@@ -86,10 +86,6 @@ after() {
 	# Run post-resume hooks in background immediately after wake.
 	( "$SYSTEM_PATH/bin/run_hooks.sh" post-resume.d ) >/dev/null 2>&1 &
 
-	log "Restoring brightness"
-	# TODO save and restore backlight settings
-	echo 100 > /sys/class/leds/work/brightness
-
 	# Backgrounded: the frontend is blocked in system() until this script
 	# exits, so it cannot poll input until network bring-up finishes.
 	(
