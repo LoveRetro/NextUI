@@ -161,6 +161,11 @@ int I18N_reload(const char *lang_code) {
     return load_lang(lang_code);
 }
 
+int I18N_load_extra(const char *path) {
+    if (!s_inited || !path) return 0;
+    return parse_file(path);
+}
+
 void I18N_quit(void) {
     table_clear();
     s_active_code[0] = '\0';
