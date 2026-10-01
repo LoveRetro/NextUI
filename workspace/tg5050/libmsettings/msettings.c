@@ -1035,7 +1035,8 @@ void SetRawVolume(int val) { // in: 0-100
 		}
     } 
 	else if (GetAudioSink() == AUDIO_SINK_USBDAC) {
-		// USB DAC path: grab the first card that is not called "audiocodec"
+		// USB DAC path: the card that audiomon routes the audio to (.asoundrc), else
+		// the first card that is not called "audiocodec"
 		int card_num = get_asoundrc_card_num();
 		if (card_num < 0) card_num = get_usbc_card_num();
 		if(card_num < 0) {
