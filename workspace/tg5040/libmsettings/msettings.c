@@ -1287,6 +1287,31 @@ static int get_usbc_card_num() {
 	return -1;
 }
 
+// The card that audiomon routes the audio to: the "card N" line that it writes into
+// .asoundrc for a USB audio device. A device can register more than one USB card
+// (a guitar amp: one card for itself and one for the playback), thus the first USB
+// card is not always the output. Returns -1 where the file names no card.
+static int get_asoundrc_card_num() {
+	const char *userdata = getenv("USERDATA_PATH");
+	if (!userdata) return -1;
+
+	char path[512];
+	snprintf(path, sizeof(path), "%s/.asoundrc", userdata);
+	FILE *fp = fopen(path, "r");
+	if (!fp) return -1;
+
+	char line[256];
+	int card_num = -1;
+	while (fgets(line, sizeof(line), fp)) {
+		const char *p = line;
+		while (*p == ' ' || *p == '\t') p++;
+		if (strncmp(p, "card ", 5) == 0 && sscanf(p + 5, "%d", &card_num) == 1) break;
+		card_num = -1;
+	}
+	fclose(fp);
+	return card_num;
+}
+
 static int get_audiocodec_card_num() {
 	FILE *fp = popen("cat /proc/asound/cards", "r");
 	if (!fp) return -1;
@@ -1303,6 +1328,38 @@ static int get_audiocodec_card_num() {
 	}
 
 	pclose(fp);
+	return -1;
+}
+
+// The rank of a mixer control of a USB audio device as its output volume, or -1 for a
+// control that is not the output: capture, the microphone, and an input played into
+// the output (sidetone, monitor, loopback, bypass, line in)
+static int get_dac_control_playback_priority(const char* control_name) {
+	int capture_control = strstr(control_name, "Capture")
+		|| strstr(control_name, "Mic");
+
+	int monitor_control = strstr(control_name, "Sidetone")
+		|| strstr(control_name, "Monitor")
+		|| strstr(control_name, "Loopback")
+		|| strstr(control_name, "Line Playback")
+		|| strstr(control_name, " In ")
+		|| strstr(control_name, "Bypass");
+
+	if (capture_control || monitor_control) return -1;
+
+	if (strstr(control_name, "Master")) return 3;
+
+	if (strstr(control_name, "Headphone")
+		|| strstr(control_name, "Headset")
+		|| strstr(control_name, "Speaker")
+		|| strstr(control_name, "Line Out")
+		|| strstr(control_name, "Digital Out")
+		|| strstr(control_name, "IEC958")) return 2;
+
+	if (strstr(control_name, "PCM")) return 1;
+
+	if (strstr(control_name, "Playback")) return 0;
+
 	return -1;
 }
 
@@ -1323,7 +1380,8 @@ void SetRawVolume(int val) { // in: 0-100
     } 
 	else if (GetAudioSink() == AUDIO_SINK_USBDAC) {
 		// USB DAC path: grab the first card that is not called "audiocodec"
-		int card_num = get_usbc_card_num();
+		int card_num = get_asoundrc_card_num();
+		if (card_num < 0) card_num = get_usbc_card_num();
 		if(card_num < 0) {
 			printf("Failed to find USB audio card\n"); fflush(stdout);
 			return;
@@ -1335,24 +1393,47 @@ void SetRawVolume(int val) { // in: 0-100
 			return;
 		}
 
-        const unsigned int num_controls = mixer_get_num_ctls(mixer);
-        for (unsigned int i = 0; i < num_controls; i++) {
-            struct mixer_ctl *ctl = mixer_get_ctl(mixer, i);
-            const char *name = mixer_ctl_get_name(ctl);
-            if (!name) continue;
+		const unsigned int num_controls = mixer_get_num_ctls(mixer);
 
-            if ((strstr(name, "PCM") || strstr(name, "Playback")) && (strstr(name, "Volume") || strstr(name, "volume"))) {
-                if (mixer_ctl_get_type(ctl) == MIXER_CTL_TYPE_INT) {
-                    int min = mixer_ctl_get_range_min(ctl);
-                    int max = mixer_ctl_get_range_max(ctl);
-                    int volume = min + (val * (max - min)) / 100;
-					unsigned int num_values = mixer_ctl_get_num_values(ctl);
-					for (unsigned int i = 0; i < num_values; i++)
-						mixer_ctl_set_value(ctl, i, volume);
-                }
-                break;
-            }
-        }
+		// find the best rank among the volume controls
+		int best_rank = -1;
+		for (unsigned int i = 0; i < num_controls; i++) {
+			struct mixer_ctl *ctl = mixer_get_ctl(mixer, i);
+			const char *name = mixer_ctl_get_name(ctl);
+			if (!name) continue;
+			if (!strstr(name, "Volume") && !strstr(name, "volume")) continue;
+
+			int rank = get_dac_control_playback_priority(name);
+			if (rank > best_rank) best_rank = rank;
+		}
+
+		// drive each volume and switch of that rank; the other controls keep their level
+		for (unsigned int i = 0; i < num_controls; i++) {
+			struct mixer_ctl *ctl = mixer_get_ctl(mixer, i);
+			const char *name = mixer_ctl_get_name(ctl);
+			if (!name) continue;
+
+			int rank = get_dac_control_playback_priority(name);
+			if (rank < 0 || rank != best_rank) continue;
+
+			enum mixer_ctl_type type = mixer_ctl_get_type(ctl);
+			unsigned int num_values = mixer_ctl_get_num_values(ctl);
+			int volume_control = strstr(name, "Volume") || strstr(name, "volume");
+			int switch_control = strstr(name, "Switch") || strstr(name, "switch");
+
+			if (volume_control && type == MIXER_CTL_TYPE_INT) {
+				int min = mixer_ctl_get_range_min(ctl);
+				int max = mixer_ctl_get_range_max(ctl);
+				int volume = min + (val * (max - min)) / 100;
+				for (unsigned int j = 0; j < num_values; j++)
+					mixer_ctl_set_value(ctl, j, volume);
+			}
+			else if (switch_control && type == MIXER_CTL_TYPE_BOOL) {
+				// the lowest step could still be audible, mute for real at 0
+				for (unsigned int j = 0; j < num_values; j++)
+					mixer_ctl_set_value(ctl, j, val > 0);
+			}
+		}
 		mixer_close(mixer);
 	}
 	else {
