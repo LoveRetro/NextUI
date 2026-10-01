@@ -1269,14 +1269,14 @@ static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
 }
 
 static int get_usbc_card_num() {
-	// first choice - .asoundrc maintained by audiomon
+	// first choice - .asoundrc maintained by audiomon (card from ctl.!default section)
+	// second choice - .asoundrc maintained by audiomon (any card)
 	const char *userdata = getenv("USERDATA_PATH");
 	if (userdata) {
 		char path[512];
 		snprintf(path, sizeof(path), "%s/.asoundrc", userdata);
 		FILE *rc = fopen(path, "r");
 		if (rc) {
-			// the mixer is the control interface: the card of ctl.!default, else any card
 			char line[256];
 			int in_ctl = 0, ctl_card = -1, any_card = -1, card_num;
 			while (fgets(line, sizeof(line), rc)) {
@@ -1295,7 +1295,7 @@ static int get_usbc_card_num() {
 		}
 	}
 
-	// second choice - first non-built-in card
+	// fallback - first non-built-in card
 	FILE *fp = popen("cat /proc/asound/cards", "r");
 	if (!fp) return -1;
 
