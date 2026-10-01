@@ -924,7 +924,31 @@ static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
     return 0;
 }
 
+// The USB audio card: the one that audiomon routes the audio to, from the "card N"
+// line that it writes into .asoundrc, else the first card that is not the built-in
+// codec. A device can register more than one USB card (the Spark 40 guitar amp: one
+// for the amp and one for the playback), thus the first USB card is not always the
+// output.
 static int get_usbc_card_num() {
+	const char *userdata = getenv("USERDATA_PATH");
+	if (userdata) {
+		char path[512];
+		snprintf(path, sizeof(path), "%s/.asoundrc", userdata);
+		FILE *rc = fopen(path, "r");
+		if (rc) {
+			char line[256];
+			int card_num = -1;
+			while (fgets(line, sizeof(line), rc)) {
+				const char *p = line;
+				while (*p == ' ' || *p == '\t') p++;
+				if (strncmp(p, "card ", 5) == 0 && sscanf(p + 5, "%d", &card_num) == 1) break;
+				card_num = -1;
+			}
+			fclose(rc);
+			if (card_num >= 0) return card_num;
+		}
+	}
+
 	FILE *fp = popen("cat /proc/asound/cards", "r");
 	if (!fp) return -1;
 
@@ -941,31 +965,6 @@ static int get_usbc_card_num() {
 
 	pclose(fp);
 	return -1;
-}
-
-// The card that audiomon routes the audio to: the "card N" line that it writes into
-// .asoundrc for a USB audio device. A device can register more than one USB card
-// (a guitar amp: one card for itself and one for the playback), thus the first USB
-// card is not always the output. Returns -1 where the file names no card.
-static int get_asoundrc_card_num() {
-	const char *userdata = getenv("USERDATA_PATH");
-	if (!userdata) return -1;
-
-	char path[512];
-	snprintf(path, sizeof(path), "%s/.asoundrc", userdata);
-	FILE *fp = fopen(path, "r");
-	if (!fp) return -1;
-
-	char line[256];
-	int card_num = -1;
-	while (fgets(line, sizeof(line), fp)) {
-		const char *p = line;
-		while (*p == ' ' || *p == '\t') p++;
-		if (strncmp(p, "card ", 5) == 0 && sscanf(p + 5, "%d", &card_num) == 1) break;
-		card_num = -1;
-	}
-	fclose(fp);
-	return card_num;
 }
 
 static int get_audiocodec_card_num() {
@@ -1035,10 +1034,8 @@ void SetRawVolume(int val) { // in: 0-100
 		}
     } 
 	else if (GetAudioSink() == AUDIO_SINK_USBDAC) {
-		// USB DAC path: the card that audiomon routes the audio to (.asoundrc), else
-		// the first card that is not called "audiocodec"
-		int card_num = get_asoundrc_card_num();
-		if (card_num < 0) card_num = get_usbc_card_num();
+		// USB DAC path: the card that audiomon routes the audio to (see get_usbc_card_num())
+		int card_num = get_usbc_card_num();
 		if(card_num < 0) {
 			printf("Failed to find USB audio card\n"); fflush(stdout);
 			return;
