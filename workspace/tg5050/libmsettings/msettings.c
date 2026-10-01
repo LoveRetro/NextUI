@@ -924,31 +924,34 @@ static int get_a2dp_simple_control_name(char *buf, size_t buflen) {
     return 0;
 }
 
-// The USB audio card: the one that audiomon routes the audio to, from the "card N"
-// line that it writes into .asoundrc, else the first card that is not the built-in
-// codec. A device can register more than one USB card (the Spark 40 guitar amp: one
-// for the amp and one for the playback), thus the first USB card is not always the
-// output.
 static int get_usbc_card_num() {
+	// first choice - .asoundrc maintained by audiomon
 	const char *userdata = getenv("USERDATA_PATH");
 	if (userdata) {
 		char path[512];
 		snprintf(path, sizeof(path), "%s/.asoundrc", userdata);
 		FILE *rc = fopen(path, "r");
 		if (rc) {
+			// the mixer is the control interface: the card of ctl.!default, else any card
 			char line[256];
-			int card_num = -1;
+			int in_ctl = 0, ctl_card = -1, any_card = -1, card_num;
 			while (fgets(line, sizeof(line), rc)) {
 				const char *p = line;
 				while (*p == ' ' || *p == '\t') p++;
-				if (strncmp(p, "card ", 5) == 0 && sscanf(p + 5, "%d", &card_num) == 1) break;
-				card_num = -1;
+				if (strncmp(p, "ctl.", 4) == 0) in_ctl = 1;
+				else if (strncmp(p, "pcm.", 4) == 0) in_ctl = 0;
+				else if (strncmp(p, "card ", 5) == 0 && sscanf(p + 5, "%d", &card_num) == 1) {
+					if (in_ctl && ctl_card < 0) ctl_card = card_num;
+					if (any_card < 0) any_card = card_num;
+				}
 			}
 			fclose(rc);
-			if (card_num >= 0) return card_num;
+			if (ctl_card >= 0) return ctl_card;
+			if (any_card >= 0) return any_card;
 		}
 	}
 
+	// second choice - first non-built-in card
 	FILE *fp = popen("cat /proc/asound/cards", "r");
 	if (!fp) return -1;
 
@@ -1034,7 +1037,6 @@ void SetRawVolume(int val) { // in: 0-100
 		}
     } 
 	else if (GetAudioSink() == AUDIO_SINK_USBDAC) {
-		// USB DAC path: the card that audiomon routes the audio to (see get_usbc_card_num())
 		int card_num = get_usbc_card_num();
 		if(card_num < 0) {
 			printf("Failed to find USB audio card\n"); fflush(stdout);
@@ -1049,7 +1051,7 @@ void SetRawVolume(int val) { // in: 0-100
 
 		const unsigned int num_controls = mixer_get_num_ctls(mixer);
 
-		// find the best rank among the volume controls
+		// find the best rank among the volume controls (-1 means not found)
 		int best_rank = -1;
 		for (unsigned int i = 0; i < num_controls; i++) {
 			struct mixer_ctl *ctl = mixer_get_ctl(mixer, i);
