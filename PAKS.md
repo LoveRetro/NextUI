@@ -104,4 +104,4 @@ But if a binary takes more than one second to initialize you might need to just 
 
 # Caveats
 
-NextUI currently only supports the RGB565 pixel format and does not implement the OpenGL libretro APIs. It may be possible to use the stock firmware's retroarch instead of NextUI's minarch to run certain cores but that is left as an exercise for the reader.
+NextUI currently only supports the XRGB8888 and RGB565 pixel formats and does not implement the OpenGL libretro APIs. It may be possible to use the stock firmware's retroarch instead of NextUI's minarch to run certain cores but that is left as an exercise for the reader.
