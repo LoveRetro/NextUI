@@ -241,7 +241,8 @@ namespace {
         enum Vendor {
             Unknown,
             Trimui,
-            Miyoo
+            Miyoo,
+            Anbernic
         };
 
         enum Model {
@@ -250,14 +251,26 @@ namespace {
             BrickPro,
             SmartPro,
             SmartProS,
-            Flip
+            Flip,
+            RG40XXV,
+            RG40XXH,
+            RG34XX,
+            RG34XXSP,
+            RGSP, // RG34XXSP panel, no sticks
+            RG35XXPlus, // Plus and 2024 both report RG35xx
+            RG35XXH,
+            RG35XXSP,
+            RG35XXPRO,
+            RG28XX,
+            RGCubeXX
         };
 
         enum Platform {
             UnknownPlatform,
             tg5040,
             tg5050,
-            my355
+            my355,
+            h700
         };
 
         DeviceInfo() {
@@ -283,6 +296,50 @@ namespace {
                     m_vendor = Trimui;
                     m_model = Flip;
                     m_platform = my355;
+                } else if(exactMatch("rg40xxv", device)) {
+                    m_vendor = Anbernic;
+                    m_model = RG40XXV;
+                    m_platform = h700;
+                } else if(exactMatch("rg40xxh", device)) {
+                    m_vendor = Anbernic;
+                    m_model = RG40XXH;
+                    m_platform = h700;
+                } else if(exactMatch("rg35xxplus", device)) {
+                    m_vendor = Anbernic;
+                    m_model = RG35XXPlus;
+                    m_platform = h700;
+                } else if(exactMatch("rg35xxh", device)) {
+                    m_vendor = Anbernic;
+                    m_model = RG35XXH;
+                    m_platform = h700;
+                } else if(exactMatch("rg35xxsp", device)) {
+                    m_vendor = Anbernic;
+                    m_model = RG35XXSP;
+                    m_platform = h700;
+                } else if(exactMatch("rg35xxpro", device)) {
+                    m_vendor = Anbernic;
+                    m_model = RG35XXPRO;
+                    m_platform = h700;
+                } else if(exactMatch("rg34xx", device)) {
+                    m_vendor = Anbernic;
+                    m_model = RG34XX;
+                    m_platform = h700;
+                } else if(exactMatch("rg34xxsp", device)) {
+                    m_vendor = Anbernic;
+                    m_model = RG34XXSP;
+                    m_platform = h700;
+                } else if(exactMatch("rgsp", device)) {
+                    m_vendor = Anbernic;
+                    m_model = RGSP;
+                    m_platform = h700;
+                } else if(exactMatch("rg28xx", device)) {
+                    m_vendor = Anbernic;
+                    m_model = RG28XX;
+                    m_platform = h700;
+                } else if(exactMatch("rgcubexx", device)) {
+                    m_vendor = Anbernic;
+                    m_model = RGCubeXX;
+                    m_platform = h700;
                 }
             }
         }
@@ -292,9 +349,11 @@ namespace {
         Platform getPlatform() const { return m_platform; }
 
         bool hasColorTemperature() const {
-            return m_platform == tg5040;
+            return m_platform == tg5040 || m_platform == h700;
         }
 
+        // the H700 disp driver doesn't support the enhance_* sysfs nodes,
+        // so contrast/saturation/exposure are hidden there
         bool hasContrastSaturation() const {
             return m_platform == my355 || m_platform == tg5040;
         }
@@ -304,7 +363,7 @@ namespace {
         }
 
         bool hasDisplayCal() const {
-            return m_platform == tg5040;
+            return m_platform == tg5040 || m_platform == h700;
         }
 
         bool hasActiveCooling() const {
@@ -316,15 +375,17 @@ namespace {
         }
 
         bool hasAnalogSticks() const {
-            return m_model == SmartPro || m_model == SmartProS || m_model == BrickPro;
+            return m_model == SmartPro || m_model == SmartProS || m_model == BrickPro
+                || m_model == RG40XXV || m_model == RG40XXH || m_model == RGCubeXX
+                || m_model == RG34XXSP || m_model == RG35XXH || m_model == RG35XXPRO;
         }
 
         bool hasWifi() const {
-            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355;
+            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355 || m_platform == h700;
         }
 
         bool hasBluetooth() const {
-            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355;
+            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355 || m_platform == h700;
         }
 
     private:
@@ -536,9 +597,21 @@ int main(int argc, char *argv[])
         if(deviceInfo.hasDisplayCal())
         {
             const DisplayCalDefaults defaultDisplayCal = DisplayCal_getDefaultSettings(
-                deviceInfo.getModel() == DeviceInfo::Brick ? DISPLAYCAL_PRESET_BRICK : 
+                deviceInfo.getModel() == DeviceInfo::Brick ? DISPLAYCAL_PRESET_BRICK :
                 deviceInfo.getModel() == DeviceInfo::BrickPro ? DISPLAYCAL_PRESET_BRICKPRO :
-                deviceInfo.getModel() == DeviceInfo::SmartPro ? DISPLAYCAL_PRESET_SMARTPRO : DISPLAYCAL_PRESET_DEFAULT);
+                deviceInfo.getModel() == DeviceInfo::SmartPro ? DISPLAYCAL_PRESET_SMARTPRO :
+                deviceInfo.getModel() == DeviceInfo::RG28XX ? DISPLAYCAL_PRESET_RG28XX :
+                deviceInfo.getModel() == DeviceInfo::RG34XX ? DISPLAYCAL_PRESET_RG34XX :
+                deviceInfo.getModel() == DeviceInfo::RG34XXSP ? DISPLAYCAL_PRESET_RG34XXSP :
+                deviceInfo.getModel() == DeviceInfo::RGSP ? DISPLAYCAL_PRESET_RGSP :
+                deviceInfo.getModel() == DeviceInfo::RG35XXPlus ? DISPLAYCAL_PRESET_RG35XXPLUS :
+                deviceInfo.getModel() == DeviceInfo::RG35XXH ? DISPLAYCAL_PRESET_RG35XXH :
+                deviceInfo.getModel() == DeviceInfo::RG35XXSP ? DISPLAYCAL_PRESET_RG35XXSP :
+                deviceInfo.getModel() == DeviceInfo::RG35XXPRO ? DISPLAYCAL_PRESET_RG35XXPRO :
+                deviceInfo.getModel() == DeviceInfo::RG40XXH ? DISPLAYCAL_PRESET_RG40XXH :
+                deviceInfo.getModel() == DeviceInfo::RG40XXV ? DISPLAYCAL_PRESET_RG40XXV :
+                deviceInfo.getModel() == DeviceInfo::RGCubeXX ? DISPLAYCAL_PRESET_RGCUBEXX :
+                DISPLAYCAL_PRESET_DEFAULT);
             displayItems.push_back(
                 new MenuItem{ListItemType::Generic, "White point correction", "Corrects the display white point to better match the \nsRGB standard, at the expense of some peak brightness.", {false, true}, on_off, []() -> std::any
                 { return GetDisplayCalEnabled() != 0; }, [](const std::any &value)
@@ -634,7 +707,10 @@ int main(int argc, char *argv[])
                 [](const std::any &value) { CFG_setPowerOffProtection(std::any_cast<bool>(value)); },
                 []() { CFG_setPowerOffProtection(CFG_DEFAULT_POWEROFFPROTECTION); }}
             );
+        }
 
+        if(deviceInfo.getPlatform() == DeviceInfo::tg5040 || deviceInfo.getPlatform() == DeviceInfo::h700)
+        {
             systemItems.push_back(
                 new MenuItem{ListItemType::Generic, "Keep awake over USB", "Prevent screen-off and sleep while connected to a\ncomputer as a USB device (not just charging).", {false, true}, on_off,
                 []() -> std::any { return CFG_getKeepAwakeWhenUSB(); },
@@ -1180,11 +1256,14 @@ int main(int argc, char *argv[])
                 // present
                 GFX_flip(ctx.screen);
                 ctx.dirty = false;
-
-                // hdmimon();
             }
             else
                 GFX_sync();
+
+            // exit so the relauncher can re-init video at the new output
+            // resolution (no-op on platforms whose GetHDMI() is stubbed)
+            if (GFX_hdmiChanged())
+                appQuit = true;
         }
 
         delete ctx.menu;

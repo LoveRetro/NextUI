@@ -654,7 +654,15 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION,"1");
 
 	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w,h, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN);
+	if (!vid.window) {
+		LOG_error("SDL_CreateWindow failed: %s\n", SDL_GetError());
+		exit(1);
+	}
 	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
+	if (!vid.renderer) {
+		LOG_error("SDL_CreateRenderer failed: %s\n", SDL_GetError());
+		exit(1);
+	}
 	SDL_SetRenderDrawBlendMode(vid.renderer, SDL_BLENDMODE_BLEND);
 	SDL_RendererInfo info;
 	SDL_GetRendererInfo(vid.renderer, &info);
@@ -677,6 +685,10 @@ SDL_Surface* PLAT_initVideo(void) {
 	}
 
 	vid.gl_context = SDL_GL_CreateContext(vid.window);
+	if (!vid.gl_context) {
+		LOG_error("SDL_GL_CreateContext failed: %s\n", SDL_GetError());
+		exit(1);
+	}
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
 	glViewport(0, 0, w, h);
 
