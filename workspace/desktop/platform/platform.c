@@ -22,9 +22,47 @@
 #include <dirent.h>
 
 static SDL_Joystick *joystick;
+
+// Logs the keyboard stand-ins for the device buttons, so a desktop build says
+// which keys it answers to. Unmapped controls are skipped.
+static void logKeyMap(void) {
+	static const struct { const char* button; int code; } key_map[] = {
+		{ "UP",     CODE_UP     },
+		{ "DOWN",   CODE_DOWN   },
+		{ "LEFT",   CODE_LEFT   },
+		{ "RIGHT",  CODE_RIGHT  },
+		{ "SELECT", CODE_SELECT },
+		{ "START",  CODE_START  },
+		{ "A",      CODE_A      },
+		{ "B",      CODE_B      },
+		{ "X",      CODE_X      },
+		{ "Y",      CODE_Y      },
+		{ "L1",     CODE_L1     },
+		{ "R1",     CODE_R1     },
+		{ "L2",     CODE_L2     },
+		{ "R2",     CODE_R2     },
+		{ "L3",     CODE_L3     },
+		{ "R3",     CODE_R3     },
+		{ "L4",     CODE_L4     },
+		{ "R4",     CODE_R4     },
+		{ "MENU",   CODE_MENU   },
+		{ "POWER",  CODE_POWER  },
+		{ "PLUS",   CODE_PLUS   },
+		{ "MINUS",  CODE_MINUS  },
+	};
+
+	LOG_info("Desktop UI keyboard map:\n");
+	for (size_t i = 0; i < sizeof(key_map) / sizeof(key_map[0]); i++) {
+		if (key_map[i].code == CODE_NA) continue;
+		LOG_info("  %-6s %s\n", key_map[i].button,
+			SDL_GetScancodeName((SDL_Scancode)key_map[i].code));
+	}
+}
+
 void PLAT_initInput(void) {
 	SDL_InitSubSystem(SDL_INIT_JOYSTICK);
 	joystick = SDL_JoystickOpen(0);
+	logKeyMap();
 }
 void PLAT_quitInput(void) {
 	SDL_JoystickClose(joystick);
