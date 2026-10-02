@@ -128,7 +128,15 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK: { /* 21 */
-		// LOG_info("%i: RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK\n", cmd);
+		const struct retro_frame_time_callback *cb = (const struct retro_frame_time_callback *)data;
+		if (cb) {
+			core.frame_time_callback = cb->callback;
+			core.frame_time_reference = cb->reference;
+		} else {
+			core.frame_time_callback = NULL;
+			core.frame_time_reference = 0;
+		}
+		core.frame_time_last = 0;
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_AUDIO_CALLBACK: { /* 22 */
@@ -375,10 +383,6 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 	}
 
 	// unused
-	// case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK: {
-	// 	puts("RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK"); fflush(stdout);
-	// 	break;
-	// }
 	// case RETRO_ENVIRONMENT_GET_THROTTLE_STATE: {
 	// 	puts("RETRO_ENVIRONMENT_GET_THROTTLE_STATE"); fflush(stdout);
 	// 	break;
