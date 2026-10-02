@@ -307,10 +307,6 @@ namespace {
             return m_platform == tg5040;
         }
 
-        bool hasStatusLeds() const {
-            return m_platform == my355;
-        }
-
         bool hasActiveCooling() const {
             return m_platform == tg5050;
         }
@@ -647,22 +643,6 @@ int main(int argc, char *argv[])
                 []() -> std::any { return CFG_getKeepAwakeWhenUSB(); },
                 [](const std::any &value) { CFG_setKeepAwakeWhenUSB(std::any_cast<bool>(value)); },
                 []() { CFG_setKeepAwakeWhenUSB(CFG_DEFAULT_KEEPAWAKEWHENUSB); }}
-            );
-        }
-
-        if(deviceInfo.hasStatusLeds())
-        {
-            systemItems.push_back(
-                new MenuItem{ListItemType::Generic, "Power LED", "Light the status LED while the device is on.", {false, true}, on_off,
-                []() -> std::any { return GetWorkLED() != 0; },
-                [](const std::any &value) { SetWorkLED(std::any_cast<bool>(value)); },
-                []() { SetWorkLED(SETTINGS_DEFAULT_WORK_LED); }}
-            );
-            systemItems.push_back(
-                new MenuItem{ListItemType::Generic, "Charging LED", "Light the charging LED while the battery charges.", {false, true}, on_off,
-                []() -> std::any { return GetChargerLED() != 0; },
-                [](const std::any &value) { SetChargerLED(std::any_cast<bool>(value)); },
-                []() { SetChargerLED(SETTINGS_DEFAULT_CHARGER_LED); }}
             );
         }
 

@@ -25,8 +25,7 @@ typedef struct SettingsV1 {
 	int contrast;
 	int saturation;
 	int exposure;
-	int work_led_off; // inverted, older files have zeroes here
-	int charger_led_off;
+	int unused[2]; // for future use
 	// NOTE: doesn't really need to be persisted but still needs to be shared
 	int jack;
 	int hdmi;
@@ -253,8 +252,6 @@ void InitSettings(void) {
 
 	SetVolume(GetVolume());
 	SetBrightness(GetBrightness());
-	SetWorkLED(GetWorkLED());
-	SetChargerLED(GetChargerLED());
 }
 int InitializedSettings(void) {
 	return (settings != NULL);
@@ -302,13 +299,6 @@ int GetHDMI(void) {
 
 int GetMute(void) { 
 	return 0; 
-}
-
-int GetWorkLED(void) {
-	return !settings->work_led_off;
-}
-int GetChargerLED(void) {
-	return !settings->charger_led_off;
 }
 
 int GetContrast(void)
@@ -449,37 +439,6 @@ void SetHDMI(int value){
 };
 
 void SetMute(int value){}
-
-// "none" stops the kernel relighting them; 5.10 restarts a rewritten
-// trigger dark until its next event, so leave an unchanged one alone
-static void set_led(const char* name, const char* trigger, int on) {
-	char path[64], current[1024], active[32];
-	const char* wanted = on ? trigger : "none";
-	snprintf(path, sizeof(path), "/sys/class/leds/%s/trigger", name);
-	current[0] = '\0';
-	getFile(path, current, sizeof(current));
-	snprintf(active, sizeof(active), "[%s]", wanted);
-	if (strstr(current, active)) return;
-
-	putFile(path, (char*)wanted);
-	snprintf(path, sizeof(path), "/sys/class/leds/%s/brightness", name);
-	if (!on) putInt(path, 0);
-	else if (exactMatch((char*)name, "charger")) {
-		char status[32] = "";
-		getFile("/sys/class/power_supply/battery/status", status, sizeof(status));
-		if (exactMatch(status, "Charging\n")) putInt(path, 255);
-	}
-}
-void SetWorkLED(int value) {
-	set_led("work", "default-on", value);
-	settings->work_led_off = !value;
-	SaveSettings();
-}
-void SetChargerLED(int value) {
-	set_led("charger", "battery-charging", value);
-	settings->charger_led_off = !value;
-	SaveSettings();
-}
 
 void SetContrast(int value)
 {

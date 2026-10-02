@@ -9,8 +9,6 @@
 #define SETTINGS_DEFAULT_VOLUME 8
 #define SETTINGS_DEFAULT_HEADPHONE_VOLUME 4
 #define SETTINGS_DEFAULT_FAN_SPEED 0
-#define SETTINGS_DEFAULT_WORK_LED 1
-#define SETTINGS_DEFAULT_CHARGER_LED 1
 
 #define SETTINGS_DEFAULT_MUTE_NO_CHANGE -69
 
@@ -62,11 +60,6 @@ void SetHDMI(int value); // 0-1
 
 int GetMute(void);
 void SetMute(int value); // 0-1
-
-int GetWorkLED(void);
-void SetWorkLED(int value); // 0-1
-int GetChargerLED(void);
-void SetChargerLED(int value); // 0-1
 
 // unused
 inline int GetFanSpeed(void) {

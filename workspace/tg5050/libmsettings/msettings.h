@@ -9,8 +9,6 @@
 #define SETTINGS_DEFAULT_VOLUME 8
 #define SETTINGS_DEFAULT_HEADPHONE_VOLUME 4
 #define SETTINGS_DEFAULT_FAN_SPEED -2 // Default fan curve
-#define SETTINGS_DEFAULT_WORK_LED 1
-#define SETTINGS_DEFAULT_CHARGER_LED 1
 
 #define SETTINGS_DEFAULT_MUTE_NO_CHANGE -69
 
@@ -65,20 +63,6 @@ void SetHDMI(int value); // 0-1
 
 int GetMute(void);
 void SetMute(int value); // 0-1
-
-// unused
-inline int GetWorkLED(void) {
-    return 0;
-}
-inline void SetWorkLED(int value) {
-    // do nothing
-}
-inline int GetChargerLED(void) {
-    return 0;
-}
-inline void SetChargerLED(int value) {
-    // do nothing
-}
 
 // custom mute mode persistence layer
 

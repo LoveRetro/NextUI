@@ -9,8 +9,6 @@
 #define SETTINGS_DEFAULT_VOLUME 8
 #define SETTINGS_DEFAULT_HEADPHONE_VOLUME 4
 #define SETTINGS_DEFAULT_FAN_SPEED 0
-#define SETTINGS_DEFAULT_WORK_LED 1
-#define SETTINGS_DEFAULT_CHARGER_LED 1
 
 #define SETTINGS_DEFAULT_MUTE_NO_CHANGE -69
 
@@ -68,20 +66,6 @@ inline int GetFanSpeed(void) {
     return 0;
 }
 inline void SetFanSpeed(int value) {
-    // do nothing
-}
-
-// unused
-inline int GetWorkLED(void) {
-    return 0;
-}
-inline void SetWorkLED(int value) {
-    // do nothing
-}
-inline int GetChargerLED(void) {
-    return 0;
-}
-inline void SetChargerLED(int value) {
     // do nothing
 }
 
