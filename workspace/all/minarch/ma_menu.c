@@ -2017,8 +2017,8 @@ void Menu_loop(void) {
 				else {
 					SDL_Rect preview_rect = {ox,oy,hw,hh};
 					SDL_FillRect(screen, &preview_rect, SDL_MapRGBA(screen->format,0,0,0,255));
-					if (menu.save_exists) GFX_blitMessage(font.large, "No Preview", screen, &preview_rect);
-					else GFX_blitMessage(font.large, "Empty Slot", screen, &preview_rect);
+					if (menu.save_exists) GFX_blitMessageColor(font.large, "No Preview", COLOR_WHITE, screen, &preview_rect);
+					else GFX_blitMessageColor(font.large, "Empty Slot", COLOR_WHITE, screen, &preview_rect);
 				}
 				
 				// pagination

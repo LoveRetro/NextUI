@@ -2095,6 +2095,11 @@ void GFX_blitButton(char *hint, char *button, SDL_Surface *dst, SDL_Rect *dst_re
 }
 void GFX_blitMessage(TTF_Font *font, char *msg, SDL_Surface *dst, SDL_Rect *dst_rect)
 {
+	GFX_blitMessageColor(font, msg, uintToColour(CFG_getColor(COLOR_LIST_TEXT)), dst, dst_rect);
+}
+
+void GFX_blitMessageColor(TTF_Font *font, char *msg, SDL_Color color, SDL_Surface *dst, SDL_Rect *dst_rect)
+{
 	if (!dst_rect)
 		dst_rect = &(SDL_Rect){0, 0, dst->w, dst->h};
 
@@ -2138,7 +2143,7 @@ void GFX_blitMessage(TTF_Font *font, char *msg, SDL_Surface *dst, SDL_Rect *dst_
 
 		if (len)
 		{
-			text = TTF_RenderUTF8_Blended_Wrapped(font, line, uintToColour(CFG_getColor(COLOR_LIST_TEXT)), dst_rect->w);
+			text = TTF_RenderUTF8_Blended_Wrapped(font, line, color, dst_rect->w);
 			int x = dst_rect->x;
 			x += (dst_rect->w - text->w) / 2;
 			SDL_BlitSurface(text, NULL, dst, &(SDL_Rect){x, y});
