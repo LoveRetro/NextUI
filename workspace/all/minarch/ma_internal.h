@@ -22,7 +22,7 @@ struct Core {
 	const char version[128]; // eg. Gambatte (v0.5.0-netlink 7e02df6)
 	const char extensions[128]; // eg. gb|gbc|dmg
 
-	const char config_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/rg35xx/GB-gambatte
+	const char config_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/h700/GB-gambatte
 	const char states_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/arm-480/GB-gambatte
 	const char saves_dir[MAX_PATH]; // eg. /mnt/sdcard/Saves/GB
 	const char bios_dir[MAX_PATH]; // eg. /mnt/sdcard/Bios/GB

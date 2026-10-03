@@ -104,5 +104,15 @@ void run_frame(void) {
 		core.run();
 		Rewind_push(0);
 	}
+
+	// A rewind must not leave the rumble motor latched on. Cores only push
+	// rumble on a change, so nothing clears a rumble we rewound past: kill it
+	// when rewind starts and again when it ends, and let the core re-assert it.
+	static int rumble_was_rewinding = 0;
+	if (rewinding != rumble_was_rewinding) {
+		rumble_was_rewinding = rewinding;
+		VIB_setStrength(0);
+	}
+
 	limitFF();
 }
