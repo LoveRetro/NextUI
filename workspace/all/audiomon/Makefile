@@ -28,6 +28,9 @@ CXX= $(CROSS_COMPILE)g++
 
 CXXFLAGS += $(OPT) $(CFLAGS) -I. -I../common/ -I../../$(PLATFORM)/platform/ 
 CXXFLAGS += -I$(PREFIX_LOCAL)/include -DPLATFORM=\"$(PLATFORM)\" $$(pkg-config --cflags dbus-1 libudev)
+ifeq ($(PLATFORM),h700)
+CXXFLAGS += -DH700_BLUEALSA_NO_DELAY
+endif
 LDFLAGS += -L$(PREFIX_LOCAL)/lib -lmsettings $$(pkg-config --libs dbus-1 libudev)
 
 SRCS = audiomon.cpp
@@ -40,7 +43,7 @@ all: $(PREFIX_LOCAL)/include/msettings.h $(PRODUCT)
 build/$(PLATFORM):
 	mkdir -p $@
 
-$(PRODUCT): build/$(PLATFORM) $(OBJS)
+$(PRODUCT): build/$(PLATFORM) $(OBJS) Makefile ../../$(PLATFORM)/platform/makefile.env
 	$(CXX) -o $@ $(OBJS) $(LDFLAGS)
 
 $(PREFIX_LOCAL)/include/msettings.h:
@@ -49,7 +52,7 @@ $(PREFIX_LOCAL)/include/msettings.h:
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-build/$(PLATFORM)/%.o: %.cpp
+build/$(PLATFORM)/%.o: %.cpp Makefile ../../$(PLATFORM)/platform/makefile.env
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:

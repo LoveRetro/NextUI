@@ -12,7 +12,7 @@ endif
 
 ifeq (,$(PLATFORMS))
 #PLATFORMS = miyoomini trimuismart rg35xx rg35xxplus my355 tg5040 zero28 rgb30 m17 gkdpixel my282 magicmini
-PLATFORMS =  tg5040 tg5050 my355
+PLATFORMS = tg5040 tg5050 h700 my355
 endif
 
 ###########################################################
@@ -103,8 +103,8 @@ ifneq ($(PLATFORM), desktop)
 	cp ./workspace/all/minput/build/$(PLATFORM)/minput.elf ./build/EXTRAS/Tools/$(PLATFORM)/Input.pak/
 	cp ./workspace/all/settings/build/$(PLATFORM)/settings.elf ./build/EXTRAS/Tools/$(PLATFORM)/Settings.pak/
 endif
- 
-ifneq (,$(filter $(PLATFORM),tg5040 tg5050))
+
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 h700))
 	cp ./workspace/all/ledcontrol/build/$(PLATFORM)/ledcontrol.elf ./build/EXTRAS/Tools/$(PLATFORM)/LedControl.pak/
 endif
 
@@ -113,7 +113,13 @@ ifeq ($(PLATFORM), tg5040)
 	cp ./workspace/$(PLATFORM)/poweroff_next/build/$(PLATFORM)/poweroff_next.elf ./build/SYSTEM/$(PLATFORM)/bin/poweroff_next
 endif
 
-ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))
+ifeq ($(PLATFORM), h700)
+	# Limbo fix (AXP2202 needs an explicit software power-off)
+	cp ./workspace/$(PLATFORM)/poweroff_next/build/$(PLATFORM)/poweroff_next.elf ./build/SYSTEM/$(PLATFORM)/bin/poweroff_next
+	cp ./workspace/$(PLATFORM)/poweroff_next/build/$(PLATFORM)/reboot_next.elf ./build/SYSTEM/$(PLATFORM)/bin/reboot_next
+endif
+
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 h700 my355))
 	cp ./workspace/all/bootlogo/build/$(PLATFORM)/bootlogo.elf ./build/EXTRAS/Tools/$(PLATFORM)/Bootlogo.pak/
 
 	# Audio resampling
@@ -129,7 +135,7 @@ ifneq (,$(filter $(PLATFORM),tg5040 tg5050 my355))
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libchdr.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libcrypto.so.* ./build/SYSTEM/$(PLATFORM)/lib/
 
-ifneq (,$(filter $(PLATFORM),tg5040 my355))
+ifneq (,$(filter $(PLATFORM),tg5040 h700 my355))
 	# liblz4 for Rewind support
 	cp ./workspace/all/minarch/build/$(PLATFORM)/liblz4.* ./build/SYSTEM/$(PLATFORM)/lib/
 endif
@@ -220,7 +226,7 @@ special:
 	mv ./build/BOOT/miyoo355 ./build/BASE/
 	mv ./build/BOOT/trimui ./build/BASE/
 	cp -R ./build/BOOT/.tmp_update ./build/BASE/miyoo355/app/
-	rm -rf ./build/BASE/miyoo355/app/.tmp_update/tg*
+	rm -rf ./build/BASE/miyoo355/app/.tmp_update/tg* ./build/BASE/miyoo355/app/.tmp_update/h700*
 	cp -R ./build/BOOT/.tmp_update ./build/BASE/trimui/app/
 	rm -rf ./build/BASE/trimui/app/.tmp_update/my355*
 ifneq (,$(findstring my355, $(PLATFORMS)))
@@ -268,7 +274,7 @@ package: tidy
 	mv $(VENDOR_DEST)/* ./build/BASE/
 
 	# TODO: can I just add everything in BASE to zip?
-	cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves Shaders Overlays trimui miyoo355 MinUI.zip *.pakz README.txt
+	cd ./build/BASE && zip -r ../../releases/$(RELEASE_NAME)-base.zip Bios Roms Saves Shaders Overlays trimui h700 miyoo355 MinUI.zip *.pakz README.txt
 	cd ./build/EXTRAS && zip -r ../../releases/$(RELEASE_NAME)-extras.zip Bios Emus Roms Saves Shaders Overlays Tools README.txt
 	echo "$(RELEASE_VERSION)" > ./build/latest.txt
 

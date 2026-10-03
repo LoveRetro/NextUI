@@ -62,6 +62,7 @@ jobs:
           - tg5040
           - tg5050
           - my355
+          - h700
 
     steps:
       - name: Checkout
@@ -85,6 +86,7 @@ jobs:
           - tg5040
           - tg5050
           - my355
+          - h700
         core: ${{ fromJson(needs.core-matrix.outputs.cores) }}
     steps:
       - name: Checkout
@@ -156,6 +158,18 @@ jobs:
         run: make my355
         env:
           PLATFORM: my355
+
+      - name: Download Cores (h700)
+        uses: actions/download-artifact@v4.3.0
+        with:
+          path: workspace/h700/cores/output/
+          pattern: core-h700-*
+          merge-multiple: true
+
+      - name: Build (h700)
+        run: make h700
+        env:
+          PLATFORM: h700
 
       - name: Special
         run: make special
@@ -239,4 +253,3 @@ jobs:
             ## How to install/update
             For a fresh installation, follow the instructions here: https://nextui.loveretro.games/getting-started/installation/
             When updating from a previous release: https://nextui.loveretro.games/getting-started/updating/
-

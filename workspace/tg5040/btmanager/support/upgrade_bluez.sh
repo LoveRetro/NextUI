@@ -1,6 +1,7 @@
 #! /bin/sh
 
-if [ ! -d /usr/trimui ]; then
+if [ "$PLATFORM" != "tg5040" ]; then
+	echo "Skipping tg5040 BlueZ update on $PLATFORM"
 	exit 0
 fi
 
