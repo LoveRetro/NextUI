@@ -596,12 +596,25 @@ void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &d
                 GFX_blitAssetCPP(ASSET_SCROLL_DOWN, {}, surface, {rect.x, rect.y + rect.h + (SCALE1(SCROLL_HEIGHT) / 2)});
         }
 
+        // item specific button hints, bottom left
+        int hintsRight = 0;
+        if (cur && !cur->getHints().empty())
+        {
+            char *pairs[5] = {nullptr};
+            const auto &hints = cur->getHints();
+            for (size_t i = 0; i < hints.size() && i < 4; i++)
+                pairs[i] = const_cast<char *>(hints[i].c_str());
+            hintsRight = SCALE1(PADDING) + GFX_blitButtonGroup(pairs, 0, surface, 0) + SCALE1(PADDING);
+        }
+
         if (cur && cur->getDesc().length() > 0)
         {
             int w, h;
             const auto description = cur->getDesc();
             GFX_sizeText(font.tiny, description.c_str(), SCALE1(FONT_SMALL), &w, &h);
-            GFX_blitTextCPP(font.tiny, description.c_str(), SCALE1(FONT_SMALL), uintToColour(THEME_COLOR4_255), surface, {(dst.x + dst.w - w) / 2, dst.y + dst.h - h, w, h});
+            // centered, unless the hints are in the way
+            int x = std::max((dst.x + dst.w - w) / 2, hintsRight);
+            GFX_blitTextCPP(font.tiny, description.c_str(), SCALE1(FONT_SMALL), uintToColour(THEME_COLOR4_255), surface, {x, dst.y + dst.h - h, w, h});
         }
     }
 
@@ -934,6 +947,170 @@ bool MenuList::isOverlayVisible()
     return overlayVisible;
 }
 
+// Greedy word wrap, hard breaks words that are wider than a line on their own.
+static std::vector<std::string> wrapText(TTF_Font *f, const std::string &text, int maxWidth)
+{
+    auto width = [&](const std::string &str) {
+        int w = 0;
+        TTF_SizeUTF8(f, str.c_str(), &w, nullptr);
+        return w;
+    };
+
+    std::vector<std::string> lines;
+    size_t pos = 0;
+    while (pos <= text.size())
+    {
+        size_t nl = text.find('\n', pos);
+        std::string para = text.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
+        pos = nl == std::string::npos ? text.size() + 1 : nl + 1;
+
+        if (para.empty())
+        {
+            lines.push_back("");
+            continue;
+        }
+
+        // keep the paragraph's indentation for continuation lines out of it, simple wrap only
+        std::string cur;
+        size_t wp = 0;
+        while (wp < para.size())
+        {
+            size_t sp = para.find(' ', wp);
+            std::string word = para.substr(wp, sp == std::string::npos ? std::string::npos : sp - wp);
+            wp = sp == std::string::npos ? para.size() : sp + 1;
+            if (word.empty())
+                continue;
+
+            std::string trial = cur.empty() ? word : cur + " " + word;
+            if (width(trial) <= maxWidth)
+            {
+                cur = trial;
+                continue;
+            }
+            if (!cur.empty())
+                lines.push_back(cur);
+            cur.clear();
+            // a single word that does not fit, split it on character boundaries
+            while (width(word) > maxWidth && word.size() > 1)
+            {
+                size_t n = 1;
+                while (n < word.size())
+                {
+                    size_t next = n + 1;
+                    while (next < word.size() && (word[next] & 0xC0) == 0x80)
+                        next++;
+                    if (width(word.substr(0, next)) > maxWidth)
+                        break;
+                    n = next;
+                }
+                lines.push_back(word.substr(0, n));
+                word = word.substr(n);
+            }
+            cur = word;
+        }
+        lines.push_back(cur);
+    }
+    return lines;
+}
+
+void MenuList::showTextViewer(const std::string &title, const std::string &text)
+{
+    SDL_Surface *screen = nullptr;
+    {
+        ReadLock r(overlayLock);
+        screen = overlaySurface;
+    }
+    if (!screen)
+        return;
+
+    TTF_Font *f = font.small;
+    const int pad = SCALE1(PADDING);
+    const int lineH = TTF_FontHeight(f) + SCALE1(2);
+    SDL_Rect area;
+    // PADDING from the screen edge, then inset by the pill's text padding
+    const int inset = pad + SCALE1(BUTTON_PADDING);
+    area.x = inset;
+    area.y = pad + SCALE1(PILL_SIZE) + SCALE1(PADDING);
+    area.w = screen->w - inset * 2;
+    area.h = screen->h - area.y - pad - SCALE1(PILL_SIZE) - SCALE1(PADDING);
+
+    const auto lines = wrapText(f, text, area.w);
+    const int visible = std::max(1, area.h / lineH);
+    const int maxTop = std::max(0, (int)lines.size() - visible);
+    int top = 0;
+    bool dirty = true;
+
+    while (true)
+    {
+        GFX_startFrame();
+        PAD_poll();
+
+        if (PAD_justPressed(BTN_B) || PAD_justPressed(BTN_A))
+            break;
+
+        int old = top;
+        if (PAD_justRepeated(BTN_UP))
+            top--;
+        else if (PAD_justRepeated(BTN_DOWN))
+            top++;
+        else if (PAD_justRepeated(BTN_LEFT) || PAD_justRepeated(BTN_L1))
+            top -= visible - 1;
+        else if (PAD_justRepeated(BTN_RIGHT) || PAD_justRepeated(BTN_R1))
+            top += visible - 1;
+        top = std::max(0, std::min(maxTop, top));
+        if (top != old)
+            dirty = true;
+
+        if (!dirty)
+        {
+            GFX_sync();
+            continue;
+        }
+        dirty = false;
+
+        uint32_t bgc = CFG_getColor(COLOR_BACKGROUND);
+        SDL_FillRect(screen, NULL, SDL_MapRGBA(screen->format, (bgc >> 24) & 0xFF, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
+
+        // title pill, same as the other full screen views
+        {
+            char display_name[256];
+            int pillW = GFX_truncateText(font.large, title.c_str(), display_name, screen->w - pad * 2, SCALE1(BUTTON_PADDING * 2));
+            SDL_Surface *t = TTF_RenderUTF8_Blended(font.large, display_name, uintToColour(THEME_COLOR6_255));
+            GFX_blitPillLightCPP(ASSET_WHITE_PILL, screen, {pad, pad, pillW, SCALE1(PILL_SIZE)});
+            SDL_BlitSurfaceCPP(t, {0, 0, pillW - SCALE1(BUTTON_PADDING * 2), t->h}, screen,
+                               {pad + SCALE1(BUTTON_PADDING), pad + (SCALE1(PILL_SIZE) - t->h + 1) / 2, 0, 0});
+            SDL_FreeSurface(t);
+        }
+
+        for (int i = 0; i < visible && top + i < (int)lines.size(); i++)
+        {
+            const std::string &line = lines[top + i];
+            if (line.empty())
+                continue;
+            SDL_Surface *t = TTF_RenderUTF8_Blended(f, line.c_str(), uintToColour(THEME_COLOR4_255));
+            if (!t)
+                continue;
+            SDL_BlitSurfaceCPP(t, {}, screen, {area.x, area.y + i * lineH, t->w, t->h});
+            SDL_FreeSurface(t);
+        }
+
+        if (maxTop > 0)
+        {
+            const int arrowX = (screen->w - SCALE1(24)) / 2;
+            if (top > 0)
+                GFX_blitAssetCPP(ASSET_SCROLL_UP, {}, screen, {arrowX, area.y - SCALE1(PADDING)});
+            if (top < maxTop)
+                GFX_blitAssetCPP(ASSET_SCROLL_DOWN, {}, screen, {arrowX, area.y + area.h});
+            char *scroll[] = {(char *)"U/D", (char *)"SCROLL", nullptr};
+            GFX_blitButtonGroup(scroll, 0, screen, 0);
+        }
+        char *back[] = {(char *)"B", (char *)"BACK", nullptr};
+        GFX_blitButtonGroup(back, 1, screen, 1);
+
+        GFX_flip(screen);
+    }
+}
+
 
 static void drawOverlayLocal(SDL_Surface* screen) {
     // ReadLock r(overlayLock); // Assumes caller held lock or is safe
@@ -963,6 +1140,12 @@ static void drawOverlayLocal(SDL_Surface* screen) {
             GFX_blitButtonGroup(hints, 1, screen, 1);
         } else if (overlayDismissMode == OverlayDismissMode::DismissOnA) {
             char *hints[] = {(char *)("A"), (char *)("OK"), NULL};
+            GFX_blitButtonGroup(hints, 1, screen, 1);
+        } else if (overlayDismissMode == OverlayDismissMode::CancelHint) {
+            char *hints[] = {(char *)("B"), (char *)("CANCEL"), NULL};
+            GFX_blitButtonGroup(hints, 1, screen, 1);
+        } else if (overlayDismissMode == OverlayDismissMode::AcceptOrReturn) {
+            char *hints[] = {(char *)("B"), (char *)("RETURN"), (char *)("A"), (char *)("ACCEPT"), NULL};
             GFX_blitButtonGroup(hints, 1, screen, 1);
         }
     }

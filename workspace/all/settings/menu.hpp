@@ -125,7 +125,11 @@ enum class OverlayDismissMode
 {
     None,
     DismissOnA,
-    DismissOnB
+    DismissOnB,
+    // Caller runs its own input loop and reads A (accept) / B (return)
+    AcceptOrReturn,
+    // Caller runs its own input loop and reads B (cancel), only shows the hint
+    CancelHint
 };
 
 class AbstractMenuItem;
@@ -155,6 +159,9 @@ protected:
 
     MenuList *submenu{nullptr};
     bool deferred{false};
+    // secondary button hints shown bottom left while this item is selected,
+    // flat list of {button, label} pairs (two pairs at most)
+    std::vector<std::string> hints;
 
     virtual void initSelection() {}
     virtual bool nextValue() { return next(1); };
@@ -181,6 +188,8 @@ public:
     const std::string &getName() const { return name; }
     const std::string &getDesc() const { return desc; }
     void setDesc(const std::string &d) { desc = d; }
+    const std::vector<std::string> &getHints() const { return hints; }
+    void setHints(const std::vector<std::string> &h) { hints = h; }
     const ListItemType getType() const { return type; }
 
     virtual void drawCustomItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected) const {}
@@ -330,6 +339,9 @@ public:
     static void showOverlay(const std::string& message, OverlayDismissMode dismissMode = OverlayDismissMode::None);
     static void hideOverlay();
     static bool isOverlayVisible();
+    // Full screen, scrollable read-only text. Blocks with its own input loop until the
+    // user closes it (B/A). Needs the list to have been drawn once.
+    static void showTextViewer(const std::string &title, const std::string &text);
 
     void performLayout(const SDL_Rect &dst);
     bool selectNext();
