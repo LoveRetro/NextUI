@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <signal.h>
 #include <msettings.h>
 
@@ -13,9 +14,7 @@
 #include <batmondb.h>
 
 #define GRAPH_LINE_WIDTH 1
-
-// Space between pixels, higher is more transparent
-#define GRAPH_BACKGROUND_OPACITY 4
+#define GRAPH_AREA_ALPHA 127
 
 // A multiple of 4 is recommended
 #define GRAPH_MAX_FULL_PAGES 8
@@ -304,6 +303,10 @@ void compute_graph(void)
                 }
 
                 current_index = (graph.layout.graph_max_size - 1) - duration_to_pixel(total_duration);
+                if (current_index < 0) {
+                    // the history fills the graph; this row is out of range
+                    break;
+                }
                 graph.graphic[current_index].is_charging = is_charging;
 
                 if (bat_perc > 100)
@@ -389,14 +392,14 @@ void compute_graph(void)
     }
 }
 
-void drawBatteryIcon(int percent, SDL_Rect dst) {
+void drawBatteryIcon(int percent, SDL_Rect dst, Uint32 color) {
     // taken from GFX_blitBattery
 
     int x = dst.x;
     int y = dst.y;
     //SDL_Rect rect = asset_rects[ASSET_BATTERY];
     SDL_Rect rect = (SDL_Rect){SCALE4(47,51,17,10)};
-    GFX_blitAsset(ASSET_BATTERY, NULL, screen, &(SDL_Rect){x,y});
+    GFX_blitAssetColor(ASSET_BATTERY, NULL, screen, &(SDL_Rect){x,y}, color);
     //rect = asset_rects[ASSET_BATTERY_FILL];
     rect = (SDL_Rect){SCALE4(81,33,12,6)};
     SDL_Rect clip = rect;
@@ -406,11 +409,71 @@ void drawBatteryIcon(int percent, SDL_Rect dst) {
     clip.x = rect.w - clip.w;
     clip.y = 0;
     
-    GFX_blitAsset(ASSET_BATTERY_FILL, &clip, screen, &(SDL_Rect){x+SCALE1(3)+clip.x,y+SCALE1(2)});
+    GFX_blitAssetColor(ASSET_BATTERY_FILL, &clip, screen, &(SDL_Rect){x+SCALE1(3)+clip.x,y+SCALE1(2)}, color);
+}
+
+// Returns pixel drawn over bg at the given alpha (Porter-Duff "over"). The screen surface
+// holds premultiplied alpha (the display composes it that way), thus a transparent bg
+// gives a translucent pixel and an opaque bg (a grid line) stays visible below.
+static Uint32 blendOver(const SDL_PixelFormat *format, Uint32 pixel, Uint32 bg, Uint8 alpha)
+{
+    Uint8 pr, pg, pb, pa, br, bgg, bb, ba;
+    SDL_GetRGBA(pixel, format, &pr, &pg, &pb, &pa);
+    SDL_GetRGBA(bg, format, &br, &bgg, &bb, &ba);
+    int sa = alpha * pa / 255; // effective alpha of the pixel
+    int inv = 255 - sa;
+    return SDL_MapRGBA(format,
+        (pr * sa + br * inv) / 255,
+        (pg * sa + bgg * inv) / 255,
+        (pb * sa + bb * inv) / 255,
+        sa + ba * inv / 255);
+}
+
+// Returns color1 mixed with color2 (percent1 : 100 - percent1), alpha included
+static SDL_Color mix_colors(SDL_Color color1, int percent1, SDL_Color color2)
+{
+    int percent2 = 100 - percent1;
+    return (SDL_Color){
+        (Uint8)((color1.r * percent1 + color2.r * percent2) / 100),
+        (Uint8)((color1.g * percent1 + color2.g * percent2) / 100),
+        (Uint8)((color1.b * percent1 + color2.b * percent2) / 100),
+        (Uint8)((color1.a * percent1 + color2.a * percent2) / 100)};
+}
+
+// Returns the RGBA (CFG_getColor) of the theme color with the larger chroma
+static uint32_t moreColorfulColor(int colorId1, int colorId2)
+{
+    int chroma[2];
+    int colors[2] = {colorId1, colorId2};
+    for (int i = 0; i < 2; i++) {
+        SDL_Color c = uintToColour(CFG_getColor(colors[i]));
+        int hi = c.r, lo = c.r;
+        if (c.g > hi) hi = c.g;
+        if (c.b > hi) hi = c.b;
+        if (c.g < lo) lo = c.g;
+        if (c.b < lo) lo = c.b;
+        chroma[i] = hi - lo;
+    }
+    return CFG_getColor(chroma[1] > chroma[0] ? colorId2 : colorId1);
 }
 
 void renderPage()
 {
+    const SDL_Color bg_color = uintToColour(CFG_getColor(COLOR_BACKGROUND));
+    const SDL_Color text_color = uintToColour(CFG_getColor(COLOR_LIST_TEXT));
+    const SDL_Color grid_color = mix_colors(bg_color, 80, text_color);
+    const SDL_Color discharging_color = text_color;
+    const SDL_Color charging_color = uintToColour(moreColorfulColor(COLOR_MAIN, COLOR_ACCENT));
+    const SDL_Color estimated_color = uintToColour(CFG_getColor(COLOR_HINT));
+
+    const Uint32 text_color_rgb = SDL_MapRGBA(screen->format, text_color.r, text_color.g, text_color.b, text_color.a);
+    const Uint32 grid_color_rgb = SDL_MapRGBA(screen->format, grid_color.r, grid_color.g, grid_color.b, grid_color.a);
+    const Uint32 discharging_color_rgb = SDL_MapRGBA(screen->format, discharging_color.r, discharging_color.g, discharging_color.b, discharging_color.a);
+    const Uint32 charging_color_rgb = SDL_MapRGBA(screen->format, charging_color.r, charging_color.g, charging_color.b, charging_color.a);
+    const Uint32 estimated_color_rgb = SDL_MapRGBA(screen->format, estimated_color.r, estimated_color.g, estimated_color.b, estimated_color.a);
+
+    const Uint32 red_battery_color = SDL_MapRGBA(screen->format, 255, 0, 0, 255);
+
     const struct SDL_Point tl = {graph.layout.graph_display_start_x, graph.layout.graph_display_start_y};
     const struct SDL_Point br = {graph.layout.graph_display_start_x + graph.layout.graph_display_size_x, graph.layout.graph_display_start_y + graph.layout.graph_display_size_y};
     const int grid_step_x = 2 * (int)(graph.layout.graph_display_size_x / GRAPH_SEGMENTS); // every second "segment"
@@ -418,11 +481,11 @@ void renderPage()
 
     // grid verticals
     for (int x = tl.x; x <= br.x; x+= grid_step_x)
-        drawLine(x, tl.y, x, br.y, RGB_DARK_GRAY);
-    drawLine(br.x, tl.y, br.x, br.y, RGB_DARK_GRAY); // close the last segment early
+        drawLine(x, tl.y, x, br.y, grid_color_rgb);
+    drawLine(br.x, tl.y, br.x, br.y, grid_color_rgb); // close the last segment early
     // grid horizontals
     for (int y = tl.y; y <= br.y; y += grid_step_y)
-        drawLine(tl.x, y, br.x, y, RGB_DARK_GRAY);
+        drawLine(tl.x, y, br.x, y, grid_color_rgb);
 
     switch (current_zoom)
     {
@@ -453,45 +516,31 @@ void renderPage()
     switch_zoom_profile(segment_duration);
 
     // x axis labels
-    renderText(label[0], font.small, COLOR_WHITE, &(SDL_Rect){graph.layout.label1_x, graph.layout.label_y, 32, 32});
-    renderText(label[1], font.small, COLOR_WHITE, &(SDL_Rect){graph.layout.label2_x, graph.layout.label_y, 32, 32});
-    renderText(label[2], font.small, COLOR_WHITE, &(SDL_Rect){graph.layout.label3_x, graph.layout.label_y, 32, 32});
-    renderText(label[3], font.small, COLOR_WHITE, &(SDL_Rect){graph.layout.label4_x, graph.layout.label_y, 32, 32});
+    renderText(label[0], font.small, text_color, &(SDL_Rect){graph.layout.label1_x, graph.layout.label_y, 32, 32});
+    renderText(label[1], font.small, text_color, &(SDL_Rect){graph.layout.label2_x, graph.layout.label_y, 32, 32});
+    renderText(label[2], font.small, text_color, &(SDL_Rect){graph.layout.label3_x, graph.layout.label_y, 32, 32});
+    renderText(label[3], font.small, text_color, &(SDL_Rect){graph.layout.label4_x, graph.layout.label_y, 32, 32});
 
     // y axis "labels"
-    drawBatteryIcon(100, (SDL_Rect){graph.layout.icon_x, graph.layout.icon1_y});
-    drawBatteryIcon(66, (SDL_Rect){graph.layout.icon_x, graph.layout.icon2_y});
-    drawBatteryIcon(33, (SDL_Rect){graph.layout.icon_x, graph.layout.icon3_y});
-    drawBatteryIcon(0, (SDL_Rect){graph.layout.icon_x, graph.layout.icon4_y});
+    drawBatteryIcon(100, (SDL_Rect){graph.layout.icon_x, graph.layout.icon1_y}, text_color_rgb);
+    drawBatteryIcon(66, (SDL_Rect){graph.layout.icon_x, graph.layout.icon2_y}, text_color_rgb);
+    drawBatteryIcon(33, (SDL_Rect){graph.layout.icon_x, graph.layout.icon3_y}, text_color_rgb);
+    drawBatteryIcon(0, (SDL_Rect){graph.layout.icon_x, graph.layout.icon4_y}, text_color_rgb);
 
     char text_line[255];
     sprintf(text_line, "Since Charge: %s", session_duration);
-    renderText(text_line, font.medium, COLOR_WHITE, &(SDL_Rect){graph.layout.label_session_x, graph.layout.label_session_y, graph.layout.label_size_x, graph.layout.label_size_y});
+    renderText(text_line, font.medium, text_color, &(SDL_Rect){graph.layout.label_session_x, graph.layout.label_session_y, graph.layout.label_size_x, graph.layout.label_size_y});
 
     sprintf(text_line, "Current: %s", current_percentage);
-    renderText(text_line, font.medium, COLOR_WHITE, &(SDL_Rect){graph.layout.label_current_x, graph.layout.label_current_y, graph.layout.label_size_x, graph.layout.label_size_y});
+    renderText(text_line, font.medium, text_color, &(SDL_Rect){graph.layout.label_current_x, graph.layout.label_current_y, graph.layout.label_size_x, graph.layout.label_size_y});
 
     sprintf(text_line, "Remaining: %s", session_left);
-    renderTextAlignRight(text_line, font.medium, COLOR_WHITE, &(SDL_Rect){graph.layout.label_left_x, graph.layout.label_left_y, graph.layout.label_size_x, graph.layout.label_size_y});
+    renderTextAlignRight(text_line, font.medium, text_color, &(SDL_Rect){graph.layout.label_left_x, graph.layout.label_left_y, graph.layout.label_size_x, graph.layout.label_size_y});
 
     sprintf(text_line, "Longest: %s", session_best);
-    renderTextAlignRight(text_line, font.medium, COLOR_WHITE, &(SDL_Rect){graph.layout.label_best_x, graph.layout.label_best_y, graph.layout.label_size_x, graph.layout.label_size_y});
+    renderTextAlignRight(text_line, font.medium, text_color, &(SDL_Rect){graph.layout.label_best_x, graph.layout.label_best_y, graph.layout.label_size_x, graph.layout.label_size_y});
 
     int half_line_width = (int)(GRAPH_LINE_WIDTH) / 2;
-
-    Uint32 white_pixel_color = RGB_GRAY;
-    Uint32 red_pixel_color = RGB_WHITE;
-    Uint32 blue_pixel_color = RGB_LIGHT_GRAY;
-    Uint32 pixel_color = white_pixel_color;
-
-    // monochrome is more MinUI, but some colours are nice
-    const bool ilikeitcolourful = true;
-    if(ilikeitcolourful) {
-        white_pixel_color = SDL_MapRGBA(screen->format, 255, 255, 255, 255);
-        red_pixel_color = SDL_MapRGBA(screen->format, 255, 170, 170, 255);
-        blue_pixel_color = SDL_MapRGBA(screen->format, 89, 167, 255, 255);
-        pixel_color = white_pixel_color;
-    }
 
     int x;
     int y;
@@ -499,6 +548,7 @@ void renderPage()
     int y_end = 0;
 
     int zoom_level = (int)segment_duration / GRAPH_SEGMENT_HIGH;
+    Uint32 pixel_color = discharging_color_rgb;
 
     if (SDL_LockSurface(screen) == 0)
     {
@@ -513,14 +563,12 @@ void renderPage()
 
             bool is_charging = graph.graphic[i + current_index].is_charging;
             bool is_estimated = graph.graphic[i + current_index].is_estimated;
-            // if ((!is_charging)
-            if ((!is_charging) && (!is_estimated))
-                pixel_color = white_pixel_color;
-            else if (is_charging)
-                pixel_color = red_pixel_color;
+
+            if (is_charging)
+                pixel_color = charging_color_rgb;
             else if (is_estimated)
             {
-                pixel_color = blue_pixel_color;
+                pixel_color = estimated_color_rgb;
                 // magic numbers everywhere...
                 if (y < 5 && x < graph_display_right)
                 {
@@ -528,6 +576,8 @@ void renderPage()
                     y_end = graph_display_bottom - 45;
                 }
             }
+            else
+                pixel_color = discharging_color_rgb;
 
             if (x < graph_display_right && y > 0)
             {
@@ -542,22 +592,18 @@ void renderPage()
                 }
 
                 // Area under the graph
-                if ((x % GRAPH_BACKGROUND_OPACITY) == 0)
+                for (int k = y - half_line_width - 1; k > 0; k--)
                 {
-                    for (int k = y; k > 0; k--)
-                    {
-                        if ((k % GRAPH_BACKGROUND_OPACITY) == 0)
-                        {
-                            int index = (graph_display_bottom - k) * screen->pitch + x * screen->format->BytesPerPixel;
-                            *((Uint32 *)((Uint8 *)screen->pixels + index)) = pixel_color;
-                        }
-                    }
+                    int index = (graph_display_bottom - k) * screen->pitch + x * screen->format->BytesPerPixel;
+                    Uint32 *pixel = (Uint32 *)((Uint8 *)screen->pixels + index);
+                    *pixel = blendOver(screen->format, pixel_color, *pixel, GRAPH_AREA_ALPHA);
                 }
             }
         }
         SDL_UnlockSurface(screen);
-        if (x_end != 0)
-            GFX_blitAsset(ASSET_BATTERY_LOW, NULL, screen, &(SDL_Rect){x_end, y_end});
+        if (x_end != 0) {
+            GFX_blitAssetColor(ASSET_BATTERY_LOW, NULL, screen, &(SDL_Rect){x_end, y_end}, red_battery_color);
+        }
     }
 }
 
@@ -646,6 +692,8 @@ int main(int argc, char *argv[])
 
     signal(SIGINT, sigHandler);
     signal(SIGTERM, sigHandler);
+
+    const SDL_Color title_color = uintToColour(CFG_getColor(COLOR_HINT));
 
     initLayout();
     compute_graph();
@@ -750,7 +798,7 @@ int main(int argc, char *argv[])
                 max_width = MIN(max_width, text_width);
 
                 SDL_Surface *text;
-                text = TTF_RenderUTF8_Blended(font.large, title, COLOR_WHITE);
+                text = TTF_RenderUTF8_Blended(font.large, title, title_color);
                 
                 GFX_blitPill(ASSET_BLACK_PILL, screen, &(SDL_Rect){SCALE1(PADDING), SCALE1(PADDING), max_width, SCALE1(PILL_SIZE)});
                 SDL_BlitSurface(text, &(SDL_Rect){0, 0, max_width - SCALE1(BUTTON_PADDING * 2), text->h}, screen, &(SDL_Rect){SCALE1(PADDING + BUTTON_PADDING), SCALE1(PADDING + 4)});
