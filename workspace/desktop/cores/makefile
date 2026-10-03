@@ -71,7 +71,7 @@ picodrive_REPO = https://github.com/irixxxx/picodrive
 picodrive_MAKEFILE = Makefile.libretro
 # No background Audio on Sega CD
 # https://github.com/LoveRetro/NextUI/issues/68
-picodrive_HASH = b0be121
+picodrive_HASH = b0be121b7d58d6ee1ee2809974e62893c80a8264
 
 pokemini_REPO = https://github.com/libretro/PokeMini
 pokemini_MAKEFILE = Makefile.libretro

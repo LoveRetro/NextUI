@@ -149,7 +149,7 @@ int main(int argc , char* argv[]) {
 				if (has_R2) w += getButtonWidth("R2") + SCALE1(BUTTON_MARGIN);
 				if (has_R4) w += getButtonWidth("R4") + SCALE1(BUTTON_MARGIN);
 				
-				x = FIXED_WIDTH - w - SCALE1(BUTTON_MARGIN + PADDING);
+				x = screen->w - w - SCALE1(BUTTON_MARGIN + PADDING);
 				if (!has_R2 && !has_R4) x -= SCALE1(PILL_SIZE);
 					
 				GFX_blitPillLight(ASSET_WHITE_PILL, screen, &(SDL_Rect){x,y,w});
@@ -197,7 +197,7 @@ int main(int argc , char* argv[]) {
 			// ABXY group
 			{
 				// UP
-				int x = FIXED_WIDTH - SCALE1(PADDING + PILL_SIZE * 3) + SCALE1(PILL_SIZE);
+				int x = screen->w - SCALE1(PADDING + PILL_SIZE * 3) + SCALE1(PILL_SIZE);
 				int y = oy + SCALE1(PILL_SIZE*2);
 				int o = SCALE1(BUTTON_MARGIN);
 				
@@ -221,7 +221,7 @@ int main(int argc , char* argv[]) {
 			
 			// VOLUME group
 			if (has_volume) {
-				int x = (FIXED_WIDTH - SCALE1(99))/2;
+				int x = (screen->w - SCALE1(99))/2;
 				int y = oy + SCALE1(PILL_SIZE);
 				int w = SCALE1(42);
 				
@@ -239,7 +239,7 @@ int main(int argc , char* argv[]) {
 				int bw = 42;
 				int pw = has_both ? (bw*2 + BUTTON_MARGIN*3) : (bw + BUTTON_MARGIN*2);
 				
-				int x = (FIXED_WIDTH - SCALE1(pw))/2;
+				int x = (screen->w - SCALE1(pw))/2;
 				int y = oy + SCALE1(PILL_SIZE * 3);
 				int w = SCALE1(bw);
 				
@@ -258,7 +258,7 @@ int main(int argc , char* argv[]) {
 			
 			// META group
 			{
-				int x = (FIXED_WIDTH - SCALE1(99))/2;
+				int x = (screen->w - SCALE1(99))/2;
 				int y = oy + SCALE1(PILL_SIZE * 5);
 				int w = SCALE1(42);
 				
@@ -293,7 +293,7 @@ int main(int argc , char* argv[]) {
 			
 			// R3
 			if (has_R3) {
-				int x = FIXED_WIDTH - SCALE1(PADDING + PILL_SIZE * 3) + SCALE1(PILL_SIZE);
+				int x = screen->w - SCALE1(PADDING + PILL_SIZE * 3) + SCALE1(PILL_SIZE);
 				int y = oy + SCALE1(PILL_SIZE*6);
 				int o = SCALE1(BUTTON_MARGIN);
 				int travel = o * 2;

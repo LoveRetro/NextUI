@@ -293,7 +293,7 @@ namespace {
                     m_model = SmartProS;
                     m_platform = tg5050;
                 } else if(exactMatch("my355", device)) {
-                    m_vendor = Trimui;
+                    m_vendor = Miyoo;
                     m_model = Flip;
                     m_platform = my355;
                 } else if(exactMatch("rg40xxv", device)) {
@@ -375,7 +375,7 @@ namespace {
         }
 
         bool hasAnalogSticks() const {
-            return m_model == SmartPro || m_model == SmartProS || m_model == BrickPro
+            return m_platform == my355 || m_model == SmartPro || m_model == SmartProS || m_model == BrickPro
                 || m_model == RG40XXV || m_model == RG40XXH || m_model == RGCubeXX
                 || m_model == RG34XXSP || m_model == RG35XXH || m_model == RG35XXPRO;
         }
@@ -709,7 +709,7 @@ int main(int argc, char *argv[])
             );
         }
 
-        if(deviceInfo.getPlatform() == DeviceInfo::tg5040 || deviceInfo.getPlatform() == DeviceInfo::h700)
+        if(deviceInfo.getPlatform() == DeviceInfo::tg5040 || deviceInfo.getPlatform() == DeviceInfo::h700 || deviceInfo.getPlatform() == DeviceInfo::my355)
         {
             systemItems.push_back(
                 new MenuItem{ListItemType::Generic, "Keep awake over USB", "Prevent screen-off and sleep while connected to a\ncomputer as a USB device (not just charging).", {false, true}, on_off,

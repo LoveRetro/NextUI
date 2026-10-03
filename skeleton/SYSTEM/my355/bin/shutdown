@@ -1,0 +1,8 @@
+#!/bin/sh
+
+cat /dev/zero > /dev/fb0
+poweroff
+
+while :; do
+	sleep 5
+done
