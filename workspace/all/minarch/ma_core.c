@@ -103,11 +103,13 @@ void Core_applyCheats(struct Cheats *cheats)
 		return;
 
 	core.cheat_reset();
+	unsigned idx = 0;
 	for (int i = 0; i < cheats->count; i++) {
 		// no code means it describes a memory write, applied by Cheats_apply
-		if (cheats->cheats[i].enabled && cheats->cheats[i].code) {
-			core.cheat_set(i, cheats->cheats[i].enabled, cheats->cheats[i].code);
-		}
+		if (!cheats->cheats[i].code)
+			continue;
+
+		core.cheat_set(idx++, cheats->cheats[i].enabled, cheats->cheats[i].code);
 	}
 }
 

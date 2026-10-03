@@ -157,4 +157,38 @@ void Notification_setProgressIndicatorPersistent(bool persistent);
  */
 bool Notification_hasProgressIndicator(void);
 
+///////////////////////////////
+// Challenge Indicators
+// Shows a persistent trophy pill in the lower-right while one or more
+// "challenge" achievements are active (e.g. a no-damage run in progress).
+// Tracked by achievement id so duplicate SHOW or out-of-order HIDE events
+// are idempotent. A single trophy is shown for one active challenge, with a
+// "+N" counter when more than one is active.
+///////////////////////////////
+
+/**
+ * Mark a challenge achievement as active (RC_CLIENT_EVENT_ACHIEVEMENT_
+ * CHALLENGE_INDICATOR_SHOW). Idempotent for a given id.
+ * @param ach_id The rcheevos achievement id
+ */
+void Notification_showChallengeIndicator(uint32_t ach_id);
+
+/**
+ * Mark a challenge achievement as no longer active (CHALLENGE_INDICATOR_HIDE).
+ * Idempotent — a HIDE for an unknown id is a no-op.
+ * @param ach_id The rcheevos achievement id
+ */
+void Notification_hideChallengeIndicator(uint32_t ach_id);
+
+/**
+ * Clear all active challenge indicators (e.g. on game unload).
+ */
+void Notification_clearChallengeIndicators(void);
+
+/**
+ * Check if any challenge indicator is currently active.
+ * @return true if at least one challenge is active
+ */
+bool Notification_hasChallengeIndicator(void);
+
 #endif // __NOTIFICATION_H__
