@@ -554,6 +554,11 @@ void PLAT_updateInput(const SDL_Event *event) {
     }
 }
 
+int PLAT_supportsOverscan(void) { 
+	// Overscan is typically supported on square panels (e.g., 1:1 aspect ratio) - mostly Cube XX right now.
+	return panel_h == panel_w; 
+}
+
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	PLAT_getBatteryStatusFine(is_charging, charge);
 
