@@ -119,9 +119,11 @@ ifeq ($(PLATFORM), h700)
 	cp ./workspace/$(PLATFORM)/poweroff_next/build/$(PLATFORM)/reboot_next.elf ./build/SYSTEM/$(PLATFORM)/bin/reboot_next
 endif
 
-ifneq (,$(filter $(PLATFORM),tg5040 tg5050 h700 my355))
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 h700))
 	cp ./workspace/all/bootlogo/build/$(PLATFORM)/bootlogo.elf ./build/EXTRAS/Tools/$(PLATFORM)/Bootlogo.pak/
+endif
 
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 h700 my355))
 	# Audio resampling
 	cp ./workspace/all/minarch/build/$(PLATFORM)/libsamplerate.* ./build/SYSTEM/$(PLATFORM)/lib/
 
