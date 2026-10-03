@@ -429,6 +429,9 @@ void SetAudioSink(int value) {
 }
 
 void SetHDMI(int value){
+	// GFX_init calls this from every app, possibly before InitSettings(); keymon owns it
+	if (!settings || settings->hdmi == value) return;
+
 	printf("SetHDMI(%i)\n", value); fflush(stdout);
 
 	settings->hdmi = value;

@@ -131,7 +131,7 @@
 
 ///////////////////////////////
 
-int PLAT_onHDMI(void);
+extern int hdmi_active; // latched by GFX_init
 
 
 #define HAS_HDMI	1
@@ -143,8 +143,8 @@ int PLAT_onHDMI(void);
 ///////////////////////////////
 
 #define FIXED_SCALE 	2
-#define FIXED_WIDTH		(PLAT_onHDMI()?HDMI_WIDTH:640)
-#define FIXED_HEIGHT	(PLAT_onHDMI()?HDMI_HEIGHT:480)
+#define FIXED_WIDTH		(hdmi_active?HDMI_WIDTH:640)
+#define FIXED_HEIGHT	(hdmi_active?HDMI_HEIGHT:480)
 #define FIXED_BPP		2
 #define FIXED_DEPTH		(FIXED_BPP * 8)
 #define FIXED_PITCH		(FIXED_WIDTH * FIXED_BPP)
@@ -153,8 +153,8 @@ int PLAT_onHDMI(void);
 ///////////////////////////////
 
 // 720p values match tg5050
-#define MAIN_ROW_COUNT (PLAT_onHDMI()?10:6)
-#define QUICK_SWITCHER_COUNT (PLAT_onHDMI()?4:3)
+#define MAIN_ROW_COUNT (hdmi_active?10:6)
+#define QUICK_SWITCHER_COUNT (hdmi_active?4:3)
 #define PADDING 10
 
 ///////////////////////////////

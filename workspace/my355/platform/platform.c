@@ -26,19 +26,6 @@
 
 ///////////////////////////////
 
-#define HDMI_STATE_PATH "/sys/class/drm/card0-HDMI-A-1/status"
-
-// not GetHDMI(): minarch reads FIXED_WIDTH/HEIGHT before InitSettings()
-int PLAT_onHDMI(void) {
-	static int cached = -1;
-	if (cached<0) {
-		char value[64];
-		getFile(HDMI_STATE_PATH, value, 64);
-		cached = exactMatch(value, "connected\n");
-	}
-	return cached;
-}
-
 #define LID_PATH "/sys/devices/platform/hall-mh248/hallvalue" // 1 open, 0 closed
 void PLAT_initLid(void) {
 	lid.has_lid = exists(LID_PATH);
@@ -380,7 +367,7 @@ void PLAT_setCPUSpeed(int speed) {
 
 #define RUMBLE_PATH "/sys/class/gpio/gpio20/value"
 void PLAT_setRumble(int strength) {
-	if (PLAT_onHDMI()) return; // assume we're using a controller?
+	if (hdmi_active) return; // assume we're using a controller?
 	putInt(RUMBLE_PATH, strength?1:0);
 }
 
