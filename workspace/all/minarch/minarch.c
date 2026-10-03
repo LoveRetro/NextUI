@@ -121,7 +121,7 @@ void hdmimon(void) {
 
 		LOG_info("restarting after HDMI change...\n");
 		Menu_beforeSleep();
-		sleep(4);
+		sleep(1); // cable-seating debounce; the output switch itself happens at next app start
 		show_menu = 0;
 		quit = 1;
 	}
