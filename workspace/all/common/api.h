@@ -598,6 +598,7 @@ enum LightProfile {
 	LIGHT_PROFILE_CHARGING = 4, // derived from default
 	LIGHT_PROFILE_SLEEP = 5, // sleep mode
 	LIGHT_PROFILE_AMBIENT = 6, // ambient mode
+	LIGHT_PROFILE_APP_WARNING = 7, // any app warning the user of an imminent, forced action (blinks the main color)
 	LIGHT_PROFILE_COUNT
 };
 

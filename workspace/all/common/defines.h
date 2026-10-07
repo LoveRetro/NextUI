@@ -35,6 +35,8 @@
 #define CHANGE_DISC_PATH "/tmp/change_disc.txt"
 #define RESUME_SLOT_PATH "/tmp/resume_slot.txt"
 #define NOUI_PATH "/tmp/noui"
+// message an external process wants shown over the running game, see SIGUSR2 in minarch
+#define NOTIFY_PATH "/tmp/notify.txt"
 
 #define TRIAD_WHITE 		0xff,0xff,0xff
 #define TRIAD_BLACK 		0x00,0x00,0x00
