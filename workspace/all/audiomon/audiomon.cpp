@@ -59,9 +59,11 @@ void writeAudioFile(const std::string& device_identifier, DeviceType type) {
           << "    slave.pcm {\n"
           << "        type bluealsa\n"
           << "        device \"" << device_identifier << "\"\n"
-          << "        profile \"a2dp\"\n"
-          << "        delay 0\n"
-          << "    }\n"
+          << "        profile \"a2dp\"\n";
+#ifndef H700_BLUEALSA_NO_DELAY
+        f << "        delay 0\n";
+#endif
+        f << "    }\n"
           << "}\n"
           << "ctl.!default {\n"
           << "    type bluealsa\n"

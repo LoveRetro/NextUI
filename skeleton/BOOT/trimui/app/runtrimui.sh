@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# becomes /usr/trimui/bin/runtrimui.sh on tg5040/tg3040/tg5050
+# becomes /usr/trimui/bin/runtrimui.sh on tg5040/tg3040/tg5050/tg4040
 
 #wait for SDCARD mounted
 echo before mount `cat /proc/uptime` >> /tmp/nextui_boottime

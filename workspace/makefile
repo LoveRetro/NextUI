@@ -35,6 +35,9 @@ ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/btmanager && make all
 	cd ./$(PLATFORM)/poweroff_next/ && make
 endif
+ifeq ($(PLATFORM), h700)
+	cd ./$(PLATFORM)/poweroff_next/ && make
+endif
 	cd ./$(PLATFORM)/libmsettings && make
 	cd ./$(PLATFORM) && make early # eg. other libs
 	cd ./$(PLATFORM)/keymon && make
@@ -51,8 +54,12 @@ endif
 	cd ./all/syncsettings/ && make
 	cd ./all/nextval/ && make
 	cd ./all/settings/ && make
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 h700))
 	cd ./all/ledcontrol/ && make
+endif
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 h700))
 	cd ./all/bootlogo/ && make
+endif
 	cd ./all/audiomon && make all
 	cd ./all/show2/ && make
 endif
@@ -76,13 +83,20 @@ clean:
 ifneq ($(PLATFORM), desktop)
 	cd ./$(PLATFORM)/keymon && make clean
 	cd ./all/syncsettings/ && make clean
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 h700))
 	cd ./all/ledcontrol/ && make clean
+endif
+ifneq (,$(filter $(PLATFORM),tg5040 tg5050 h700))
 	cd ./all/bootlogo/ && make clean
+endif
 	cd ./all/show2/ && make clean
 	cd ./all/batmon/ && make clean
 ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/rfkill && make clean
 	cd ./$(PLATFORM)/btmanager && make clean
+	cd ./$(PLATFORM)/poweroff_next/ && make clean
+endif
+ifeq ($(PLATFORM), h700)
 	cd ./$(PLATFORM)/poweroff_next/ && make clean
 endif
 endif

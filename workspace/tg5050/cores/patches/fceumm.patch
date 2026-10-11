@@ -1,10 +1,9 @@
 diff --git forkSrcPrefix/Makefile.libretro forkDstPrefix/Makefile.libretro
-index 036c41f48b087c99b2276b2d41a71d661fd85145..891eb96ceeb1da868d6d2ed40392b51b65dcbb20 100644
+index 5b90d409271332a48ae726dca48a712c3be413be..cbdaf093812ebe934b915e9087e7f8518f45a611 100644
 --- forkSrcPrefix/Makefile.libretro
 +++ forkDstPrefix/Makefile.libretro
-@@ -461,6 +461,23 @@ else ifeq ($(platform), miyoo)
+@@ -458,5 +458,22 @@ else ifeq ($(platform), miyoo)
  	PLATFORM_DEFINES += -fomit-frame-pointer -ffast-math -mcpu=arm926ej-s
- 	EXTERNAL_ZLIB = 1
  
 +# target platform tg5050 trimUI smart pro s
 +else ifeq ($(platform), tg5050)

@@ -1,0 +1,9 @@
+version=1
+name=Charcoal Coral
+color1=0xFF6B5BFF
+color2=0x161416FF
+color3=0x2A0D06FF
+color4=0xF2F0ECFF
+color5=0x2A0D06FF
+color6=0x948F8CFF
+color7=0x1D1B1EFF

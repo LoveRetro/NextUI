@@ -16,6 +16,10 @@ asound_state_dir=/tmp/asound-suspend
 before() {
 	>&2 echo "Preparing for suspend..."
 
+	# Run pre-sleep hooks synchronously before services are stopped.
+	# Subshell ensures a crashing hook cannot block suspend.
+	( "$SYSTEM_PATH/bin/run_hooks.sh" pre-sleep.d --sync-only ) >/dev/null 2>&1 || true
+
 	>&2 echo "Saving mixer state..."
 	mkdir -p "$asound_state_dir"
 	alsactl --file "$asound_state_dir/asound.state.pre" store || true
@@ -35,6 +39,9 @@ before() {
 
 after() {
 	>&2 echo "Resumed from suspend."
+
+	# Run post-resume hooks in background immediately after wake.
+	( "$SYSTEM_PATH/bin/run_hooks.sh" post-resume.d ) >/dev/null 2>&1 &
 
 	if [ -n "$wifid_running" ]; then
 		>&2 echo "Starting wpa_supplicant..."

@@ -248,6 +248,11 @@ public:
 
     virtual InputReactionHint handleInput(int &dirty) override;
 
+    // Re-sync the selected index from on_get(). Useful when the underlying value
+    // can change from outside this item (e.g. a palette selection invalidated by
+    // editing an individual color elsewhere in the menu).
+    void reselect() { initSelection(); }
+
     const std::any getValue() const override
     {
         assert(valueIdx >= 0);
@@ -338,16 +343,16 @@ public:
 
     SDL_Rect itemSizeHint(const AbstractMenuItem &item);
 
-    void draw(SDL_Surface *surface, const SDL_Rect &dst);
-    void drawList(SDL_Surface *surface, const SDL_Rect &dst);
+    void draw(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle);
+    void drawList(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle);
     void drawListItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
-    void drawFixed(SDL_Surface *surface, const SDL_Rect &dst);
+    void drawFixed(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle);
     void drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
-    void drawInput(SDL_Surface *surface, const SDL_Rect &dst);
+    void drawInput(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle);
     void drawInputItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
-    void drawMain(SDL_Surface *surface, const SDL_Rect &dst);
+    void drawMain(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle);
     void drawMainItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
-    virtual void drawCustom(SDL_Surface *surface, const SDL_Rect &dst) {};
+    virtual void drawCustom(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle) {};
 };
 
 // Moved here to ensure MenuList is fully defined
@@ -374,3 +379,4 @@ const MenuListCallback ResetCurrentMenu = [](AbstractMenuItem &itm) -> InputReac
 {
     return InputReactionHint::ResetAllItems;
 };
+

@@ -58,9 +58,17 @@ static int getInt(char* path) {
 	return i;
 }
 
+int stringEquals(const char* str1, const char* str2) {
+	if (!str1 || !str2) return 0; // NULL isn't safe here
+	int len1 = strlen(str1);
+	if (len1!=strlen(str2)) return 0;
+	return (strncmp(str1,str2,len1)==0);
+}
+
 static pthread_t mute_pt;
 static void* watchMute(void *arg) {
 	int is_muted,was_muted;
+	int is_brickpro = stringEquals(getenv("DEVICE"), "brickpro");
 	
 	is_muted = was_muted = getInt(MUTE_STATE_PATH);
 	SetMute(is_muted);
@@ -75,7 +83,10 @@ static void* watchMute(void *arg) {
 			SetMute(is_muted);
 			if (GetMute()) {
 				// tmp solution
-				system("echo 1500000 > /sys/class/motor/voltage");
+				if (is_brickpro)
+					system("echo 900000 > /sys/class/motor/voltage");
+				else
+					system("echo 1500000 > /sys/class/motor/voltage");
 				system("echo 1 > /sys/class/gpio/gpio227/value");
 				usleep(100000);
 				system("echo 0 > /sys/class/gpio/gpio227/value");

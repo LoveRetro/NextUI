@@ -1,0 +1,9 @@
+version=1
+name=Catppuccin Mocha
+color1=0xCBA6F7FF
+color2=0x181825FF
+color3=0x1E1E2EFF
+color4=0xCDD6F4FF
+color5=0x1E1E2EFF
+color6=0xA6ADC8FF
+color7=0x1E1E2EFF

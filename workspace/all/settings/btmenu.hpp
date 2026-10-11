@@ -16,7 +16,7 @@ namespace Bluetooth
         // diagnostics on/off
         MenuItem *diagItem;
         // max sample rate
-        MenuItem *rateItem;
+        MenuItem *rateItem = nullptr;
         
         std::thread worker;
         bool quit = false;

@@ -21,9 +21,14 @@ int GetColortemp(void);
 int GetContrast(void);
 int GetSaturation(void);
 int GetExposure(void);
+int GetDisplayCalEnabled(void);
+int GetDisplayCalRedGain(void);
+int GetDisplayCalGreenGain(void);
+int GetDisplayCalBlueGain(void);
 int GetVolume(void);
 
 void SetRawBrightness(int value); // 0-255
+void SetRawDisplayCal(int enabled, int red_gain, int green_gain, int blue_gain);
 void SetRawVolume(int value); // 0-160
 
 void SetBrightness(int value); // 0-10
@@ -31,6 +36,10 @@ void SetColortemp(int value); // 0-40
 void SetContrast(int value); // -4-5
 void SetSaturation(int value); // -5-5
 void SetExposure(int value); // -4-5
+void SetDisplayCalEnabled(int value); // 0-1
+void SetDisplayCalRedGain(int value); // 0-200, 100 is neutral
+void SetDisplayCalGreenGain(int value); // 0-200, 100 is neutral
+void SetDisplayCalBlueGain(int value); // 0-200, 100 is neutral
 void SetVolume(int value); // 0-20
 
 int GetJack(void);

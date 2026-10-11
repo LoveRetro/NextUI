@@ -7,6 +7,7 @@ extern "C"
 #include "utils.h"
 }
 
+#include <cmath>
 #include <mutex>
 #include <shared_mutex>
 typedef std::shared_mutex Lock;
@@ -541,7 +542,7 @@ SDL_Rect MenuList::itemSizeHint(const AbstractMenuItem &item)
     }
 }
 
-void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
+void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle)
 {
     assert(layout_called);
     ReadLock r(itemLock);
@@ -550,7 +551,7 @@ void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
     if (cur && cur->isDeferred())
     {
         assert(cur->getSubMenu());
-        cur->getSubMenu()->draw(surface, dst);
+        cur->getSubMenu()->draw(surface, dst, dstTitle);
     }
     else
     {
@@ -558,20 +559,20 @@ void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
         switch (type)
         {
         case MenuItemType::List:
-            drawList(surface, dst);
+            drawList(surface, dst, dstTitle);
             break;
         case MenuItemType::Fixed:
-            drawFixed(surface, dst);
+            drawFixed(surface, dst, dstTitle);
             break;
         case MenuItemType::Var:
         case MenuItemType::Input:
-            drawInput(surface, dst);
+            drawInput(surface, dst, dstTitle);
             break;
         case MenuItemType::Main:
-            drawMain(surface, dst);
+            drawMain(surface, dst, dstTitle);
             break;
         case MenuItemType::Custom:
-            drawCustom(surface, dst);
+            drawCustom(surface, dst, dstTitle);
             return; // no further drawing over custom
         default:
             assert(false && "Unknown list type");
@@ -612,7 +613,7 @@ void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
     drawOverlayLocal(surface);
 }
 
-void MenuList::drawList(SDL_Surface *surface, const SDL_Rect &dst)
+void MenuList::drawList(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle)
 {
     // we ignore type here, it all paints the same.
     if (max_width == 0)
@@ -661,7 +662,7 @@ void MenuList::drawListItem(SDL_Surface *surface, const SDL_Rect &dst, const Abs
     SDL_FreeSurface(text);
 }
 
-void MenuList::drawFixed(SDL_Surface *surface, const SDL_Rect &dst)
+void MenuList::drawFixed(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle)
 {
     // NOTE: no need to calculate max width
     int mw = dst.w;
@@ -683,18 +684,19 @@ void MenuList::drawFixed(SDL_Surface *surface, const SDL_Rect &dst)
 // TODO: expose API functions that do the same
 namespace
 {
-    static inline void rgb_unpack(uint32_t col, int *r, int *g, int *b)
+    static inline void rgba_unpack(uint32_t col, int *r, int *g, int *b, int *a)
     {
-        *r = (col >> 16) & 0xff;
-        *g = (col >> 8) & 0xff;
-        *b = col & 0xff;
+        *r = (col >> 24) & 0xff;
+        *g = (col >> 16) & 0xff;
+        *b = (col >> 8) & 0xff;
+        *a = col & 0xff;
     }
 
     static inline uint32_t mapUint(SDL_Surface *surface, uint32_t col)
     {
-        int r, g, b;
-        rgb_unpack(col, &r, &g, &b);
-        return SDL_MapRGB(surface->format, r, g, b);
+        int r, g, b, a;
+        rgba_unpack(col, &r, &g, &b, &a);
+        return SDL_MapRGBA(surface->format, r, g, b, a);
     }
 }
 
@@ -719,7 +721,13 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
 
         if (item.getType() == ListItemType::Color)
         {
-            uint32_t color = mapUint(surface, std::any_cast<uint32_t>(item.getValue()));
+            // Read the live color directly from on_get() so the swatch and hex
+            // label always reflect the current value, even after the RGB picker
+            // sets an arbitrary color that is not in the predefined palette.
+            uint32_t rawColor = item.on_get
+                ? std::any_cast<uint32_t>(item.on_get())
+                : std::any_cast<uint32_t>(item.getValue());
+            uint32_t color = mapUint(surface, rawColor);
             SDL_Rect rect = {
                 dst.x + dst.w - SCALE1(OPTION_PADDING + FONT_TINY),
                 dst.y + SCALE1(BUTTON_SIZE - FONT_TINY) / 2,
@@ -730,6 +738,11 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
             rect.w -= 1;
             SDL_FillRect(surface, &rect, color);
 #define COLOR_PADDING 4
+            // Rerender the label from the live hex value
+            SDL_FreeSurface(text);
+            char hexLabel[12];
+            snprintf(hexLabel, sizeof(hexLabel), "0x%08X", rawColor);
+            text = TTF_RenderUTF8_Blended(font.tiny, hexLabel, text_color_value);
             SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + mw - text->w - SCALE1(OPTION_PADDING + COLOR_PADDING + FONT_TINY), dst.y + ((dst.h - text->h) / 2)});
         }
         else if(item.getType() == ListItemType::Button) {
@@ -759,7 +772,7 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
     SDL_FreeSurface(text);
 }
 
-void MenuList::drawInput(SDL_Surface *surface, const SDL_Rect &dst)
+void MenuList::drawInput(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle)
 {
     // TODO: handle type if we need it
     if (max_width == 0)
@@ -825,7 +838,7 @@ void MenuList::drawInputItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
     }
 }
 
-void MenuList::drawMain(SDL_Surface *surface, const SDL_Rect &dst)
+void MenuList::drawMain(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle)
 {
     // we ignore type here, it all paints the same.
     // no size calc to do here, each line is as wide as needed.
@@ -900,6 +913,10 @@ void MenuList::showOverlay(const std::string& message, OverlayDismissMode dismis
     // We want to force a draw right now since usually we are about to block
     WriteLock w(overlayLock);
     if (overlaySurface) {
+        // Clear the surface first to prevent text ghosting from previous
+        // overlay frames (the semi-transparent shadow doesn't fully obscure
+        // old content, causing overlap when updated repeatedly in a loop)
+        SDL_FillRect(overlaySurface, NULL, SDL_MapRGB(overlaySurface->format, 0, 0, 0));
         drawOverlayLocal(overlaySurface);
         GFX_flip(overlaySurface);
     }
@@ -916,6 +933,7 @@ bool MenuList::isOverlayVisible()
     ReadLock r(overlayLock);
     return overlayVisible;
 }
+
 
 static void drawOverlayLocal(SDL_Surface* screen) {
     // ReadLock r(overlayLock); // Assumes caller held lock or is safe

@@ -1,0 +1,9 @@
+version=1
+name=MinUI
+color1=0xffffffff
+color2=0x262626ff
+color3=0x999999ff
+color4=0xffffffff
+color5=0x000000ff
+color6=0xffffffff
+color7=0x000000ff

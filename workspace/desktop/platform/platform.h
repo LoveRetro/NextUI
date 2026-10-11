@@ -28,6 +28,8 @@
 #define BUTTON_R2		BUTTON_NA
 #define BUTTON_L3		BUTTON_NA
 #define BUTTON_R3		BUTTON_NA
+#define BUTTON_L4		BUTTON_NA
+#define BUTTON_R4		BUTTON_NA
 
 #define BUTTON_MENU		BUTTON_NA
 #define BUTTON_MENU_ALT	BUTTON_NA
@@ -39,28 +41,30 @@
 
 // see https://wiki.libsdl.org/SDL2/SDL_Scancode
 
-#define CODE_UP			82 // Up Arrow
-#define CODE_DOWN		81 // Down Arrow
-#define CODE_LEFT		80 // Left Arrow
-#define CODE_RIGHT		79 // Right Arrow
+#define CODE_UP			SDL_SCANCODE_UP
+#define CODE_DOWN		SDL_SCANCODE_DOWN
+#define CODE_LEFT		SDL_SCANCODE_LEFT
+#define CODE_RIGHT		SDL_SCANCODE_RIGHT
 
-#define CODE_SELECT		53 // ^
-#define CODE_START		40 // Return
+#define CODE_SELECT		SDL_SCANCODE_GRAVE // ` and ~ on ANSI keyboards
+#define CODE_START		SDL_SCANCODE_RETURN
 
-#define CODE_A			22 // S
-#define CODE_B			4  // A
-#define CODE_X			26 // W
-#define CODE_Y			20 // Q
+#define CODE_A			SDL_SCANCODE_S
+#define CODE_B			SDL_SCANCODE_A
+#define CODE_X			SDL_SCANCODE_W
+#define CODE_Y			SDL_SCANCODE_Q
 
-#define CODE_L1			43 // Tab
-#define CODE_R1			CODE_NA
+#define CODE_L1			SDL_SCANCODE_TAB
+#define CODE_R1			SDL_SCANCODE_B
 #define CODE_L2			CODE_NA
 #define CODE_R2			CODE_NA
 #define CODE_L3			CODE_NA
 #define CODE_R3			CODE_NA
+#define CODE_L4         CODE_NA
+#define CODE_R4         CODE_NA
 
-#define CODE_MENU		44 // Space
-#define CODE_POWER		42 // Backspace
+#define CODE_MENU		SDL_SCANCODE_SPACE
+#define CODE_POWER		SDL_SCANCODE_BACKSPACE
 
 #define CODE_PLUS		CODE_NA
 #define CODE_MINUS		CODE_NA
@@ -87,11 +91,22 @@
 #define JOY_R2			JOY_NA
 #define JOY_L3			JOY_NA
 #define JOY_R3			JOY_NA
+#define JOY_L4          JOY_NA
+#define JOY_R4          JOY_NA
 
 #define JOY_MENU		JOY_NA
 #define JOY_POWER		JOY_NA
 #define JOY_PLUS		JOY_NA
 #define JOY_MINUS		JOY_NA
+
+///////////////////////////////
+// USER-ASSIGNABLE BUTTONS
+#define BTN_FN1			BTN_NONE
+#define BTN_FN2			BTN_NONE
+#define BTN_FN3			BTN_NONE
+#define BTN_FN1_NAME	""
+#define BTN_FN2_NAME	""
+#define BTN_FN3_NAME	""
 
 ///////////////////////////////
 

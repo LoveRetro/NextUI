@@ -1,0 +1,30 @@
+$(PLATFORM):
+	# Boot file for the initial manual install onto the stock OS card.
+	mkdir -p ./build/BASE/h700
+	cp ./workspace/$@/boot/output/dmenu.bin ./build/BASE/h700/
+
+	# installer
+	cp ./workspace/$@/install/boot.sh ./build/BOOT/common/$@.sh
+	cp ./workspace/$@/install/update.sh ./build/SYSTEM/$@/bin/install.sh
+	# Ship the updated boot file in MinUI.zip to replace the initial-install copy.
+	mkdir -p ./build/SYSTEM/$@/dat
+	cp ./workspace/$@/boot/output/dmenu.bin ./build/SYSTEM/$@/dat/
+	mkdir -p ./build/BOOT/common/$@/
+	cp ./workspace/$@/install/*.png ./build/BOOT/common/$@/
+	cp ./workspace/$@/shim-common.sh ./build/BOOT/common/$@/
+	cp ./workspace/$@/install/h700-install.sh ./build/BOOT/common/$@/
+	cp ./workspace/all/show2/build/$@/show2.elf ./build/BOOT/common/$@/
+	cp ./workspace/$@/other/unzip60/unzip ./build/BOOT/common/$@/
+	cp -a ./workspace/$@/other/sdl2/output/libSDL2*.so* ./build/SYSTEM/$@/lib/
+	cp -a ./workspace/$@/other/sdl2/output/libtinyalsa.so* ./build/SYSTEM/$@/lib/ 2>/dev/null || true
+	cp -a ./workspace/$@/other/sdl2/output/libpng12.so* ./build/SYSTEM/$@/lib/
+	cp ./workspace/$@/other/evtest/evtest ./build/SYSTEM/$@/bin/
+	cp ./workspace/$@/other/jstest/jstest ./build/SYSTEM/$@/bin/
+	# Private curl runtime for stock Anbernic OS, which does not ship curl.
+	cp ./workspace/$@/curl/output/curl ./build/SYSTEM/$@/bin/
+	mkdir -p ./build/SYSTEM/$@/etc/ssl/certs
+	cp ./workspace/$@/curl/output/ca-certificates.crt ./build/SYSTEM/$@/etc/ssl/certs/
+
+	# extras
+	cp ./workspace/$@/other/NextCommander/output/NextCommander ./build/EXTRAS/Tools/$@/Files.pak/
+	cp -r ./workspace/$@/other/NextCommander/res ./build/EXTRAS/Tools/$@/Files.pak/

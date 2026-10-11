@@ -71,10 +71,39 @@ enum {
 	RA_SORT_COUNT
 };
 
+// Theme colors
+enum {
+	COLOR_MAIN = 1,
+	COLOR_ACCENT = 2,
+	COLOR_ACCENT2 = 3,
+	COLOR_LIST_TEXT = 4,
+	COLOR_LIST_TEXT_SELECTED = 5,
+	COLOR_HINT = 6,
+	COLOR_BACKGROUND = 7
+};
+
+// Number of user-assignable button slots (FN1/FN2/FN3). Slots are fixed and global,
+// not per-device: which of them a given device actually exposes is a UI question.
+#define FN_BUTTON_COUNT 3
+
+// Prefix for the "launch a Tools pak" action, followed by a path relative to
+// Tools/<PLATFORM> (e.g. "pak:Bootlogo.pak"). The platform dir is resolved at launch
+// time rather than stored, so settings stay portable when a card moves between devices.
+#define FN_ACTION_PAK_PREFIX "pak:"
+
+// Input hint styles
+enum {
+	INPUT_STYLE_TEXT = -1, // Rendered text
+	INPUT_STYLE_ABXY = 0, // ABXY button icons
+	INPUT_STYLE_CARDINALS = 1, // Cardinal direction button icons
+	INPUT_STYLE_SHAPES = 2, // Shape button icons (PlayStation-style)
+};
+
 typedef struct
 {
 	// Theme
-	int font;
+	char fontFile[256];
+	int fontStyle; // 0x00 = TTF_STYLE_NORMAL, 0x01 = TTF_STYLE_BOLD, etc.
 	uint32_t color1_255; // not screen mapped
 	uint32_t color2_255; // not screen mapped
 	uint32_t color3_255; // not screen mapped
@@ -84,7 +113,12 @@ typedef struct
 	uint32_t color7_255; // not screen mapped
 	int thumbRadius;
 	int gameSwitcherScaling; // enum
+	int gameSwitcherCurtain;
 	double gameArtWidth;	 // [0,1] -> 0-100% of screen width
+	int inputPromptStyle; // enum
+	char paletteName[64]; // selected predefined color palette; empty == custom colors. keep in sync with PALETTE_NAME_MAX in palette.h
+	uint32_t customColors[7]; // last custom (non-palette) colors, restored by CFG_selectCustomPalette.
+	                          // in-memory only (not persisted): resets to defaults each app launch
 
 	// font loading/unloading callback
     FontLoad_callback_t onFontChange;
@@ -97,7 +131,7 @@ typedef struct
 	bool clock24h;
 	bool showBatteryPercent;
 	bool showMenuAnimations;
-	bool showMenuTransitions;
+	int showMenuTransitions; // 0=off, 1=snappy, 2=comfy
 	bool showRecents;
 	bool showTools;
 	bool showCollections;
@@ -110,10 +144,15 @@ typedef struct
 	// Mute switch
 	bool muteLeds;
 
+	// User-assignable buttons (see BTN_FN1/BTN_FN2/BTN_FN3 in platform.h).
+	// Action strings, "" == unassigned. See CFG_getFnAction().
+	char fnAction[FN_BUTTON_COUNT][256];
+
 	// Power
 	uint32_t screenTimeoutSecs;
 	uint32_t suspendTimeoutSecs;
 	bool powerOffProtection;
+	bool keepAwakeWhenUSB;
 
 	// Emulator
 	int saveFormat;
@@ -122,7 +161,7 @@ typedef struct
 
 	// Haptic
 	bool haptics;
-	
+
 	// Networking
 	bool ntp;
 	int currentTimezone; // index of timezone in tz database
@@ -145,28 +184,44 @@ typedef struct
 	char raPassword[128];
 	bool raHardcoreMode;
 	char raToken[64];           // API token (stored after successful auth)
+	char raServerUsername[64];  // Server's internal username (from avatar URL, used for sync hash)
 	bool raAuthenticated;       // Whether we have a valid token
 	bool raShowNotifications;   // Show achievement unlock notifications
+	bool raShowChallengeIndicators; // Show on-screen indicator while a challenge achievement is active
 	int raNotificationDuration; // Duration for achievement notifications (1-5 seconds)
 	int raProgressNotificationDuration; // Duration for progress notifications (0-5 seconds, 0 = disabled)
 	int raAchievementSortOrder; // Sort order for achievements list (RA_SORT_* enum)
 
 } NextUISettings;
 
-#define CFG_DEFAULT_FONT_ID 1  // Next
-#define CFG_DEFAULT_COLOR1 0xffffffU
-#define CFG_DEFAULT_COLOR2 0x9b2257U
-#define CFG_DEFAULT_COLOR3 0x1e2329U
-#define CFG_DEFAULT_COLOR4 0xffffffU
-#define CFG_DEFAULT_COLOR5 0x000000U
-#define CFG_DEFAULT_COLOR6 0xffffffU
-#define CFG_DEFAULT_COLOR7 0x000000U
+// Transition mode constants
+#define TRANSITION_OFF    0
+#define TRANSITION_SNAPPY 1
+#define TRANSITION_COMFY  2
+
+#define CFG_DEFAULT_FONT_FILE "font1.ttf"  // Next
+#define CFG_DEFAULT_FONT_STYLE 0x01 // TTF_STYLE_BOLD (MinUI default)
+#define CFG_DEFAULT_COLOR1 0xffffffffU
+#define CFG_DEFAULT_COLOR2 0x9b2257ffU
+#define CFG_DEFAULT_COLOR3 0x1e2329ffU
+#define CFG_DEFAULT_COLOR4 0xffffffffU
+#define CFG_DEFAULT_COLOR5 0x000000ffU
+#define CFG_DEFAULT_COLOR6 0xffffffffU
+#define CFG_DEFAULT_COLOR7 0x000000ffU
+#define CFG_DEFAULT_COLOR_MAIN CFG_DEFAULT_COLOR1
+#define CFG_DEFAULT_COLOR_ACCENT CFG_DEFAULT_COLOR2
+#define CFG_DEFAULT_COLOR_ACCENT2 CFG_DEFAULT_COLOR3
+#define CFG_DEFAULT_COLOR_LIST_TEXT CFG_DEFAULT_COLOR4
+#define CFG_DEFAULT_COLOR_LIST_TEXT_SELECTED CFG_DEFAULT_COLOR5
+#define CFG_DEFAULT_COLOR_HINT CFG_DEFAULT_COLOR6
+#define CFG_DEFAULT_COLOR_BACKGROUND CFG_DEFAULT_COLOR7
+#define CFG_DEFAULT_PALETTE_NAME "" // empty == custom colors
 #define CFG_DEFAULT_THUMBRADIUS 20 // unscaled!
 #define CFG_DEFAULT_SHOWCLOCK false
 #define CFG_DEFAULT_CLOCK24H true
 #define CFG_DEFAULT_SHOWBATTERYPERCENT false
 #define CFG_DEFAULT_SHOWMENUANIMATIONS true
-#define CFG_DEFAULT_SHOWMENUTRANSITIONS true
+#define CFG_DEFAULT_SHOWMENUTRANSITIONS TRANSITION_SNAPPY
 #define CFG_DEFAULT_SHOWRECENTS true
 #define CFG_DEFAULT_SHOWCOLLECTIONS true
 #define CFG_DEFAULT_SHOWGAMEART true
@@ -175,12 +230,14 @@ typedef struct
 #define CFG_DEFAULT_SCREENTIMEOUTSECS 60
 #define CFG_DEFAULT_SUSPENDTIMEOUTSECS 30
 #define CFG_DEFAULT_POWEROFFPROTECTION true
+#define CFG_DEFAULT_KEEPAWAKEWHENUSB false
 #define CFG_DEFAULT_HAPTICS false
 #define CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND true
 #define CFG_DEFAULT_SAVEFORMAT SAVE_FORMAT_SAV
 #define CFG_DEFAULT_STATEFORMAT STATE_FORMAT_SAV
 #define CFG_DEFAULT_EXTRACTEDFILENAME false
 #define CFG_DEFAULT_MUTELEDS false
+#define CFG_DEFAULT_FN_ACTION "" // unassigned
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
@@ -192,6 +249,8 @@ typedef struct
 #define CFG_DEFAULT_BLUETOOTH_MAXRATE 48000
 #define CFG_DEFAULT_NTP false
 #define CFG_DEFAULT_TIMEZONE 320 // Europe/Berlin
+#define CFG_DEFAULT_GAMESWITCHER_CURTAIN 0
+#define CFG_DEFAULT_INPUT_PROMPT_STYLE INPUT_STYLE_TEXT
 
 // Notification defaults
 #define CFG_DEFAULT_NOTIFY_MANUAL_SAVE true
@@ -206,28 +265,60 @@ typedef struct
 #define CFG_DEFAULT_RA_PASSWORD ""
 #define CFG_DEFAULT_RA_HARDCOREMODE false
 #define CFG_DEFAULT_RA_TOKEN ""
+#define CFG_DEFAULT_RA_SERVER_USERNAME ""
 #define CFG_DEFAULT_RA_AUTHENTICATED false
 #define CFG_DEFAULT_RA_SHOW_NOTIFICATIONS true
+#define CFG_DEFAULT_RA_SHOW_CHALLENGE_INDICATORS true
 #define CFG_DEFAULT_RA_NOTIFICATION_DURATION 3
 #define CFG_DEFAULT_RA_PROGRESS_NOTIFICATION_DURATION 1
 #define CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER RA_SORT_UNLOCKED_FIRST
+
+// Transition animation parameters (fixed per mode)
+#define TRANSITION_SNAPPY_DURATION  150
+#define TRANSITION_COMFY_DURATION   250
+#define TRANSITION_CURVE            1   // ANIM_EASE_OUT
+#define TRANSITION_INTENSITY        3
 
 void CFG_init(FontLoad_callback_t fontCallback, ColorSet_callback_t ccb);
 void CFG_print(void);
 void CFG_get(const char *key, char * value);
 // void CFG_defaults(NextUISettings*);
-//  The font id to use as the UI font.
-//  0 - Default MinUI font
-//  1 - Default NextUI font (default)
-int CFG_getFontId(void);
-void CFG_setFontId(int fontid);
-// The colors to use for the UI. These are 0xRRGGBB values.
+// The font filename to use as the UI font.
+// Built-in: "font1.ttf" (Next, default), "font2.ttf" (OG)
+// Custom fonts go in RES_PATH alongside built-in fonts.
+const char* CFG_getFontFile(void);
+void CFG_setFontFile(const char* filename);
+// The font style to use for the UI font.
+int CFG_getFontStyle(void);
+void CFG_setFontStyle(int style);
+// The colors to use for the UI. These are packed 0xRRGGBBAA values.
 // 0 - Color1 (primary hint/asset colour)
 // 1 - Color2 (accent colour)
 // 2 - Color3 (secondary accent colour
 // 3 - Background Color (unused)
 uint32_t CFG_getColor(int id);
 void CFG_setColor(int id, uint32_t color);
+// Parse a hex color string into a packed 0xRRGGBBAA value. Accepts both legacy
+// RGB (RRGGBB, treated as opaque) and RGBA (RRGGBBAA), with or without "0x".
+uint32_t CFG_parseHexColor(const char *hexColor);
+// The name of the currently selected predefined color palette (see palette.h), or
+// "" for custom colors.
+const char* CFG_getPaletteName(void);
+// Atomically set all 7 UI colors and record `name` as the selected palette, so the
+// persisted palette name can never point at a color set that doesn't match it.
+// This is the only way to select a named (non-custom) palette; there is no setter
+// for the name alone. If a palette isn't already active, the current colors are
+// preserved first so CFG_selectCustomPalette() can restore them later.
+void CFG_applyPalette(const char *name, const uint32_t colors[7]);
+// Detach from any predefined palette without changing the current colors ("Custom").
+// Used when an individual color edit invalidates the current palette selection -
+// deliberately does not restore the pre-palette colors, since the edit itself is
+// the new intended state. For that, see CFG_selectCustomPalette().
+void CFG_clearPalette(void);
+// Explicitly select "Custom": if a predefined palette is active, restores the
+// colors that were in effect before it was applied and clears the palette name.
+// A no-op if already on Custom (colors are left untouched, not reset).
+void CFG_selectCustomPalette(void);
 // Time in secs before the device enters screen-off mode.
 uint32_t CFG_getScreenTimeoutSecs(void);
 void CFG_setScreenTimeoutSecs(uint32_t secs);
@@ -237,6 +328,9 @@ void CFG_setSuspendTimeoutSecs(uint32_t secs);
 // Enable/disable PMIC power-off protection mode.
 bool CFG_getPowerOffProtection(void);
 void CFG_setPowerOffProtection(bool enable);
+// Keep the device awake while it is connected to a host as a USB device.
+bool CFG_getKeepAwakeWhenUSB(void);
+void CFG_setKeepAwakeWhenUSB(bool enable);
 // Show/hide clock in the status pill.
 bool CFG_getShowClock(void);
 void CFG_setShowClock(bool show);
@@ -249,9 +343,9 @@ void CFG_setShowBatteryPercent(bool show);
 // Show/hide menu animations in main menu.
 bool CFG_getMenuAnimations(void);
 void CFG_setMenuAnimations(bool show);
-// Show/hide menu transitions between screens in main menu.
-bool CFG_getMenuTransitions(void);
-void CFG_setMenuTransitions(bool show);
+// Menu transition mode: TRANSITION_OFF, TRANSITION_SNAPPY, TRANSITION_COMFY.
+int CFG_getMenuTransitions(void);
+void CFG_setMenuTransitions(int mode);
 // Set thumbnail rounding radius.
 int CFG_getThumbnailRadius(void);
 void CFG_setThumbnailRadius(int radius);
@@ -292,6 +386,15 @@ void CFG_setUseExtractedFileName(bool);
 // Enable/disable mute also shutting off LEDs.
 bool CFG_getMuteLEDs(void);
 void CFG_setMuteLEDs(bool);
+// The action bound to a user-assignable button, where `index` is 0 (FN1), 1 (FN2) or
+// 2 (FN3, the "HOME" button).
+// The value is a "<kind>:<arg>" action string so more kinds can be added later without
+// migrating existing settings; "" means unassigned. The only kind today is
+// FN_ACTION_PAK_PREFIX. Callers must ignore kinds they don't recognise, so a card
+// configured on a newer build degrades to "does nothing" on an older one.
+// Returns "" for an out of range index.
+const char* CFG_getFnAction(int index);
+void CFG_setFnAction(int index, const char* action);
 // Set game art width percentage.
 double CFG_getGameArtWidth(void);
 void CFG_setGameArtWidth(double zeroToOne);
@@ -326,6 +429,12 @@ void CFG_setNTP(bool on);
 // Current timezone index in tz database
 int CFG_getCurrentTimezone(void);
 void CFG_setCurrentTimezone(int index);
+// Show/hide curtain on the game switcher screen (0-100% opacity)
+int CFG_getGameSwitcherCurtain(void);
+void CFG_setGameSwitcherCurtain(int opacity);
+// Input prompt style
+int CFG_getInputPromptStyle(void);
+void CFG_setInputPromptStyle(int style);
 
 // Notification settings
 bool CFG_getNotifyManualSave(void);
@@ -350,10 +459,20 @@ bool CFG_getRAHardcoreMode(void);
 void CFG_setRAHardcoreMode(bool enable);
 const char* CFG_getRAToken(void);
 void CFG_setRAToken(const char* token);
+const char* CFG_getRAServerUsername(void);
+void CFG_setRAServerUsername(const char* username);
+// Extract the RA server's internal username from any string containing
+// "/UserPic/USERNAME.png" (e.g. an avatar URL or raw JSON) and persist
+// it via CFG_setRAServerUsername().  Returns true if a username was
+// extracted and stored; returns false (and leaves any existing stored
+// value untouched) if the pattern is missing or malformed.
+bool CFG_setRAServerUsernameFromAvatarUrl(const char* str);
 bool CFG_getRAAuthenticated(void);
 void CFG_setRAAuthenticated(bool authenticated);
 bool CFG_getRAShowNotifications(void);
 void CFG_setRAShowNotifications(bool show);
+bool CFG_getRAShowChallengeIndicators(void);
+void CFG_setRAShowChallengeIndicators(bool show);
 int CFG_getRANotificationDuration(void);
 void CFG_setRANotificationDuration(int seconds);
 int CFG_getRAProgressNotificationDuration(void);

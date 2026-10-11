@@ -69,7 +69,7 @@ public:
     KeyboardPrompt(const std::string &title, MenuListCallback on_confirm = nullptr);
     ~KeyboardPrompt();
 
-    void drawCustom(SDL_Surface *surface, const SDL_Rect &dst) override;
+    void drawCustom(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle) override;
 
     InputReactionHint handleInput(int &dirty, int &quit) override;
 

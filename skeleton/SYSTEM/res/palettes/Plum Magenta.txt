@@ -1,0 +1,9 @@
+version=1
+name=Plum Magenta
+color1=0xD6559EFF
+color2=0x170F1DFF
+color3=0x2E0A1FFF
+color4=0xEEE6F2FF
+color5=0x2E0A1FFF
+color6=0x93849EFF
+color7=0x1F1526FF

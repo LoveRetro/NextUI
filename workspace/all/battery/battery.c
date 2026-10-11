@@ -487,9 +487,9 @@ void renderPage()
     // monochrome is more MinUI, but some colours are nice
     const bool ilikeitcolourful = true;
     if(ilikeitcolourful) {
-        white_pixel_color = SDL_MapRGB(screen->format, 255, 255, 255);
-        red_pixel_color = SDL_MapRGB(screen->format, 255, 170, 170);
-        blue_pixel_color = SDL_MapRGB(screen->format, 89, 167, 255);
+        white_pixel_color = SDL_MapRGBA(screen->format, 255, 255, 255, 255);
+        red_pixel_color = SDL_MapRGBA(screen->format, 255, 170, 170, 255);
+        blue_pixel_color = SDL_MapRGBA(screen->format, 89, 167, 255, 255);
         pixel_color = white_pixel_color;
     }
 
@@ -637,7 +637,7 @@ int main(int argc, char *argv[])
 {
     InitSettings();
 
-    PWR_setCPUSpeed(CPU_SPEED_MENU);
+    PWR_setCPUSpeed(CPU_SPEED_AUTO);
     device_model = PLAT_getModel();
 
     screen = GFX_init(MODE_MAIN);

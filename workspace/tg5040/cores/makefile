@@ -67,6 +67,10 @@ gambatte_REPO = https://github.com/libretro/gambatte-libretro
 
 mednafen_supafaust_REPO = https://github.com/libretro/supafaust
 
+# mGBA replaced Makefile.libretro with a CMake-based libretro build.
+mgba_CORE = build-tg5040/mgba_libretro.so
+mgba_MAKE = cmake -S . -B build-tg5040 -DCMAKE_BUILD_TYPE=Release -DLIBMGBA_ONLY=ON -DBUILD_LIBRETRO=ON -DLIBRETRO_STATIC=OFF -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_COMPILER=$(CROSS_COMPILE)gcc -DCMAKE_CXX_COMPILER=$(CROSS_COMPILE)g++ -DCMAKE_C_FLAGS="-fomit-frame-pointer -ffast-math -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a -fno-common -ftree-vectorize -funswitch-loops" -DCMAKE_CXX_FLAGS="-fomit-frame-pointer -ffast-math -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a -fno-common -ftree-vectorize -funswitch-loops" && cmake --build build-tg5040 --target mgba_libretro -- $(PROCS)
+
 pcsx_rearmed_MAKEFILE = Makefile.libretro
 # pcsx has a disabled submodule for gnulib, which takes forever to check out and is unused - skil checkout
 pcsx_rearmed_SUBMODULES = frontend/libpicofe

@@ -1,0 +1,9 @@
+version=1
+name=Slate Cyan
+color1=0x45CFC3FF
+color2=0x111A28FF
+color3=0x0A2320FF
+color4=0xE6EDF3FF
+color5=0x0A2320FF
+color6=0x7E8FA3FF
+color7=0x182233FF

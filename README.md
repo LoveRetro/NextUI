@@ -38,6 +38,18 @@ A CFW based of MinUI with a rebuild emulation engine and tons of added features 
 
 For other devices we recommend checking out [MinUI](https://github.com/shauninman/MinUI)
 
+## License
+
+This project is licensed under [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0).
+Personal, educational, and non-commercial use is freely permitted. Commercial use is not.
+See [LICENSE](LICENSE) and [NOTICE](NOTICE) for full details.
+
+> **Note:** This project was previously licensed under GPL 3.0. As of August 15, 2026, the license
+> has changed to PolyForm Noncommercial 1.0.0. The full transition history and rationale
+> is documented in [issue #765](https://github.com/LoveRetro/NextUI/issues/765).
+
+## Changes and additions
+
 - Fixed both screen tearing and sync stutter problems of MinUI by rebuilding the emulator engine core
 - Game switcher menu (Onion OS style) by [@frysee](https://github.com/frysee)
 - High audio quality, due to advanced resampling engine using [libsamplerate](https://github.com/libsndfile/libsamplerate) (with quality/performance setting per emulator)
@@ -120,6 +132,7 @@ Our wiki has a [list of all available Paks](https://nextui.loveretro.games/pak-s
 
 - [josegonzalez](https://github.com/josegonzalez) for [minui-keyboard](https://github.com/josegonzalez/minui-keyboard)
 - [knulli-cfw](https://github.com/knulli-cfw)/[Mikhailzrick](https://github.com/Mikhailzrick) for [fan-control-daemon](https://github.com/knulli-cfw/knulli-linux/commit/5c1b4724330b59cbe8af79d0a7f1dac86f1c221a)
+- [Kenney](www.kenney.nl) for [Input Prompts](https://kenney.nl/assets/input-prompts)
 
 ---
 

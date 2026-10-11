@@ -1,0 +1,9 @@
+version=1
+name=Mossy Sage
+color1=0x4B6B3FFF
+color2=0xE4EBD9FF
+color3=0xEBF3E4FF
+color4=0x1F2A1BFF
+color5=0xEBF3E4FF
+color6=0x647459FF
+color7=0xEEF2E6FF
