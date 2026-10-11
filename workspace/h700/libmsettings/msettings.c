@@ -353,9 +353,13 @@ void SetJack(int value) {
 	settings->jack = value;
 	SetVolume(GetVolume());
 }
+static void setHDMIAudioRoute(int on);
+
 // monitored and set by thread in audiomon
 void SetAudioSink(int value) {
 	settings->audiosink = value;
+	// audiomon deletes .asoundrc when Bluetooth or a USB DAC goes; HDMI gets the sound back
+	if (value == AUDIO_SINK_DEFAULT) setHDMIAudioRoute(hdmiOutputActive());
 	SetVolume(GetVolume());
 }
 
