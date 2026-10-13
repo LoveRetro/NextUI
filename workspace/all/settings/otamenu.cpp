@@ -883,7 +883,6 @@ namespace OTA
                 return NoOp;
             }
             menu.selected = target;
-            menu.updateStatus();
             dirty = 1;
             return NoOp;
         }
@@ -892,8 +891,7 @@ namespace OTA
     Menu::Menu() : MenuList(MenuItemType::Fixed, "OTA Update", {})
     {
         items.push_back(new StaticMenuItem(ListItemType::Generic, "Installed", "", [this]() -> std::any { return installedLabel(); }));
-        versionItem = new VersionItem(*this);
-        items.push_back(versionItem);
+        items.push_back(new VersionItem(*this));
         items.push_back(new MenuItem(ListItemType::Button, "Update (Base)", "Update MinUI.zip only",
                                      [this](AbstractMenuItem &) { return startUpdate(false); }));
         items.push_back(new MenuItem(ListItemType::Button, "Update (Full)", "Extract full zip files (base + extras)",
@@ -919,21 +917,6 @@ namespace OTA
             MenuList::showOverlay("No release notes available\nfor " + release.tag, OverlayDismissMode::DismissOnA);
         else
             MenuList::showTextViewer(release.tag, release.notes);
-    }
-
-    // The Version row's description tells the user what the current selection means.
-    void Menu::updateStatus()
-    {
-        std::string status;
-        if (releases.empty())
-            status = "";
-        else if (installed == selected)
-            status = selected == 0 ? "Up to date" : "Currently installed";
-        else if (installed < 0)
-            status = selected == 0 ? "Update available" : "Older release";
-        else
-            status = selected < installed ? "Update available" : "Downgrade";
-        versionItem->setDesc(status);
     }
 
     bool Menu::refresh(std::string &error)
@@ -1036,7 +1019,6 @@ namespace OTA
         installedName = instName;
         selected = 0;
         warned = false;
-        updateStatus();
         return true;
     }
 

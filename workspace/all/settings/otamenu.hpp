@@ -42,8 +42,6 @@ namespace OTA
         bool warned = false;   // downgrade warning accepted for this session
         std::string installedName;
 
-        AbstractMenuItem *versionItem = nullptr;
-
     public:
         Menu();
 
@@ -54,7 +52,6 @@ namespace OTA
 
     private:
         std::string installedLabel() const;
-        void updateStatus();
         void showNotes();
         bool confirmDowngrade();
         InputReactionHint startUpdate(bool full);
