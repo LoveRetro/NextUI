@@ -345,6 +345,8 @@ void GFX_flip_fixed_rate(SDL_Surface* screen, double target_fps); // if target_f
 void GFX_sync(void); // call this to maintain 60fps when not calling GFX_flip() this frame
 void GFX_delay(void); // gfx_sync() is only for everywhere where there is no audio buffer to rely on for delaying, stupid so doing gfx_delay() for like waiting for input loop in binding menu. Need to remove gfx_sync() everwhere eventually
 void GFX_quit(void);
+// Performa an animation of an translucent black curtain over the screenshout on the layer.
+void GFX_animateBlack(int layer, int start_opacity, int end_opacity, int duration_ms);
 
 enum {
 	VSYNC_OFF = 0,

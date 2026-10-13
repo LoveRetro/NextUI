@@ -347,7 +347,7 @@ int main(int argc , char* argv[]) {
 	screen = converted;
 	SDL_FreeSurface(rawSurface);
 	free(pixels); 
-	GFX_animateSurfaceOpacity(converted, 0, 0, cw, ch, 255, 0, CFG_getMenuTransitions() ? 200 : 20, 1);
+	GFX_animateSurfaceOpacity(converted, 0, 0, cw, ch, 255, 0, CFG_getAppStartExitAnimationDuration(), 1);
 	SDL_FreeSurface(converted); 
 	
 	Video_cleanup();

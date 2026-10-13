@@ -428,11 +428,6 @@ SDL_Surface *GFX_init(int mode)
 	
 	CFG_init(GFX_loadSystemFont, GFX_updateColors);
 
-	// by default, we will clear with whatever background color the user prefers
-	// if MODE_MENU /e.g. minarch, clear with default black)
-	if(mode == MODE_MAIN)
-		GFX_setClearColor(mapUint(CFG_getColor(COLOR_BACKGROUND)));
-
 	// We always have to symlink, does not depend on NTP being enabled
 	PLAT_initTimezones();
 	PLAT_setCurrentTimezone(PLAT_getCurrentTimezone());
@@ -570,8 +565,57 @@ SDL_Surface *GFX_init(int mode)
 
 	PLAT_clearAll();
 
+	if (mode == MODE_MENU)
+	{
+		// black-screen apps, e.g. minarch: keep the default black.
+	}
+	else
+	{
+		// regular apps: set background color from the user preferences.
+		// IMPORTANT: no screen flip here - the app may use fade-in, so the display
+		//   stays black (from the clear call) until then app flips its own frame.
+		GFX_setClearColor(mapUint(CFG_getColor(COLOR_BACKGROUND)));
+		GFX_clearLayers(LAYER_ALL);
+	}
+
 	return gfx.screen;
 }
+
+void GFX_animateBlack(int layer, int start_opacity, int end_opacity, int duration_ms)
+{
+	int width = gfx.screen->w;
+	int height = gfx.screen->h;
+	Uint32 format = gfx.screen->format->format;
+
+	// the frame is drawn into the screen surface but may not be composed yet. Compose it.
+	GFX_flipHidden();
+
+	SDL_Surface *screenshot = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, format);
+	SDL_Surface *black = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, format);
+	if (screenshot && black && PLAT_captureScreenshot(screenshot) == 0)
+	{
+		SDL_FillRect(black, NULL, SDL_MapRGBA(black->format, 0, 0, 0, 255));
+		GFX_animateAndFadeSurface(screenshot, 0, 0, 0, 0, width, height, duration_ms,
+								  black, 0, 0, 0, 0, width, height,
+								  start_opacity, end_opacity, layer,
+								  0, 0, 1);
+
+		if (end_opacity == 255)
+		{
+			// Fade-out: clear layer above main, draw black on the screen.
+			GFX_clearLayers(LAYER_ALL);
+			SDL_BlitSurface(black, NULL, gfx.screen, NULL);
+			GFX_flip(gfx.screen);
+		}
+		else
+		{
+			GFX_clearLayers(layer);
+		}
+	}
+	SDL_FreeSurface(black);
+	SDL_FreeSurface(screenshot);
+}
+
 void GFX_quit(void)
 {
 

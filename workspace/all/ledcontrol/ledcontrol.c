@@ -2,6 +2,7 @@
 #include <msettings.h>
 
 #include "sdl.h"
+#include "config.h"
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
@@ -251,9 +252,7 @@ int main(int argc, char *argv[])
 	PAD_init();
 	PWR_init();
 
-    GFX_clearAll();
-	GFX_clearLayers(0);
-	GFX_flip(screen);
+    bool firstFrame = true;
 
     // GFX_init() is what gets the platform far enough along to answer this
     // (the trimui platforms only learn their model in PLAT_initPlatform)
@@ -273,6 +272,11 @@ int main(int argc, char *argv[])
                 GFX_blitMessage(font.large, "This device has no RGB lights.", screen,
                     &(SDL_Rect){0, 0, screen->w, screen->h});
                 GFX_blitButtonGroup((char*[]){ "B","BACK", NULL }, 1, screen, 1);
+                if (firstFrame) {
+                    GFX_animateBlack(LAYER_SCROLLTEXT, 255, 0, CFG_getAppStartExitAnimationDuration());
+                    firstFrame = false;
+                }
+
                 GFX_flip(screen);
                 msg_dirty = 0;
             }
@@ -280,6 +284,7 @@ int main(int argc, char *argv[])
         }
         PWR_quit();
         PAD_quit();
+        GFX_animateBlack(LAYER_SCROLLTEXT, 0, 255, CFG_getAppStartExitAnimationDuration());
         GFX_quit();
         QuitSettings();
         return 0;
@@ -452,6 +457,11 @@ int main(int argc, char *argv[])
                 }
             }
 
+            if (firstFrame) {
+                GFX_animateBlack(LAYER_SCROLLTEXT, 255, 0, CFG_getAppStartExitAnimationDuration());
+                firstFrame = false;
+            }
+
             GFX_flip(screen);
             dirty = 0;
         }
@@ -459,6 +469,7 @@ int main(int argc, char *argv[])
     }
 	PWR_quit();
 	PAD_quit();
+	GFX_animateBlack(LAYER_SCROLLTEXT, 0, 255, CFG_getAppStartExitAnimationDuration());
 	GFX_quit();
     QuitSettings();
 
