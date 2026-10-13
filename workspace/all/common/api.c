@@ -98,6 +98,7 @@ static SDL_Rect asset_rects[ASSET_COUNT];
 static uint32_t asset_rgbs[ASSET_COLORS];
 static SDL_Rect input_rects[INPUT_COUNT];
 GFX_Fonts font;
+static int system_font_face_style = TTF_STYLE_NORMAL;
 
 ///////////////////////////////
 
@@ -380,6 +381,9 @@ int GFX_loadSystemFont(const char *fontPath)
 	font.tiny = TTF_OpenFont(fontPath, SCALE1(FONT_TINY));
 	font.micro = TTF_OpenFont(fontPath, SCALE1(FONT_MICRO));
 
+	// This value is only intrinsic before the configured style is applied.
+	system_font_face_style = font.large ? TTF_GetFontStyle(font.large) : TTF_STYLE_NORMAL;
+
 	TTF_SetFontStyle(font.large, CFG_getFontStyle());
 	TTF_SetFontStyle(font.medium, CFG_getFontStyle());
 	TTF_SetFontStyle(font.small, CFG_getFontStyle());
@@ -387,6 +391,11 @@ int GFX_loadSystemFont(const char *fontPath)
 	TTF_SetFontStyle(font.micro, CFG_getFontStyle());
 
 	return 0;
+}
+
+int GFX_getSystemFontFaceStyle(void)
+{
+	return system_font_face_style;
 }
 
 int GFX_updateColors(void)
