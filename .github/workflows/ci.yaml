@@ -103,7 +103,7 @@ jobs:
         run: make setup
 
       - name: Download Cores (tg5040)
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           path: workspace/tg5040/cores/output/
           pattern: core-tg5040-*
@@ -115,7 +115,7 @@ jobs:
           PLATFORM: tg5040
 
       - name: Download Cores (tg5050)
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           path: workspace/tg5050/cores/output/
           pattern: core-tg5050-*
@@ -127,7 +127,7 @@ jobs:
           PLATFORM: tg5050
 
       - name: Download Cores (h700)
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           path: workspace/h700/cores/output/
           pattern: core-h700-*
