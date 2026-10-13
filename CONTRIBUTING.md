@@ -21,7 +21,7 @@ Before opening an issue, search existing ones to avoid duplicates. When reportin
 
 1. Fork the repository and create a branch from `main`
 2. Keep changes focused — one fix or feature per PR
-3. Test your changes on hardware before submitting
+3. Test your changes on hardware before submitting (see [DEBUGGING.md](DEBUGGING.md))
 4. Write a clear PR description explaining what and why, not just what
 
 PRs that introduce large or unilateral changes without prior discussion may be closed. When in doubt, open an issue first.
