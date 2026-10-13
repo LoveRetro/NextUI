@@ -304,6 +304,20 @@ const KeyboardLayout &KeyboardPrompt::getCurrentLayout(const AppState &state)
 
 void KeyboardPrompt::drawKeyboard(SDL_Surface *screen, const AppState &state)
 {
+    const SDL_Color title_color = uintToColour(CFG_getColor(COLOR_HINT));
+    const SDL_Color theme_bg_color = uintToColour(CFG_getColor(COLOR_BACKGROUND));
+
+    const SDL_Color key_text_color = uintToColour(CFG_getColor(COLOR_LIST_TEXT));
+    const Uint32 key_text_color_rgba = SDL_MapRGBA(screen->format, key_text_color.r, key_text_color.g, key_text_color.b, key_text_color.a);
+
+    // Something in between bg color and text color
+    const SDL_Color key_body_color = {
+        (Uint8)((theme_bg_color.r * 80 + key_text_color.r * 20) / 100),
+        (Uint8)((theme_bg_color.g * 80 + key_text_color.g * 20) / 100),
+        (Uint8)((theme_bg_color.b * 80 + key_text_color.b * 20) / 100),
+        (Uint8)((theme_bg_color.a * 80 + key_text_color.a * 20) / 100)};
+    const Uint32 key_body_color_rgba = SDL_MapRGBA(screen->format, key_body_color.r, key_body_color.g, key_body_color.b, key_body_color.a);
+
     // determine which keyboard layout to use based on current state
     const KeyboardLayout *currentLayout = nullptr;
     if (state.keyboard.layout == 0)
@@ -318,13 +332,17 @@ void KeyboardPrompt::drawKeyboard(SDL_Surface *screen, const AppState &state)
     char *hints[] = {(char *)("Y"), (char *)("EXIT"), (char *)("X"), ((char *)"ENTER"), NULL};
     GFX_blitButtonGroup(hints, 1, screen, 1);
 
-    // draw keyboard title
+    // draw keyboard title, centered in the space left of the status pill
     if (!state.keyboard.title.empty())
     {
-        SDL_Surface *title = TTF_RenderUTF8_Blended(font.large, state.keyboard.title.c_str(), COLOR_WHITE);
+        int ow = GFX_blitHardwareGroup(screen, 0);
+        int max_width = screen->w - SCALE1(PADDING * 2) - ow;
+        char title_text[256];
+        GFX_truncateText(font.large, state.keyboard.title.c_str(), title_text, max_width, 0);
+        SDL_Surface *title = TTF_RenderUTF8_Blended(font.large, title_text, title_color);
         SDL_Rect title_pos = {
-            (screen->w - title->w) / 2, // center horizontally
-            20,                         // 20px from top
+            (screen->w - ow - title->w) / 2,
+            SCALE1(PADDING + 4),
             title->w,
             title->h};
         SDL_BlitSurface(title, NULL, screen, &title_pos);
@@ -333,8 +351,8 @@ void KeyboardPrompt::drawKeyboard(SDL_Surface *screen, const AppState &state)
 
     // draw input field with current text
     // todo: use TTF_SizeUTF8 to compute the width of the input field
-    SDL_Surface *input_placeholder = TTF_RenderUTF8_Blended(font.medium, "p", COLOR_WHITE);
-    SDL_Surface *input = TTF_RenderUTF8_Blended(font.medium, state.keyboard.current_text.c_str(), COLOR_WHITE);
+    SDL_Surface *input_placeholder = TTF_RenderUTF8_Blended(font.medium, "p", key_text_color);
+    SDL_Surface *input = TTF_RenderUTF8_Blended(font.medium, state.keyboard.current_text.c_str(), key_text_color);
     SDL_Rect input_pos = {
         (screen->w) / 2,
         input_placeholder->h * 2,
@@ -353,7 +371,7 @@ void KeyboardPrompt::drawKeyboard(SDL_Surface *screen, const AppState &state)
         input_placeholder->h * 2,
         screen->w - 80,
         input_placeholder->h};
-    SDL_FillRect(screen, &input_bg, SDL_MapRGB(screen->format, TRIAD_DARK_GRAY));
+    SDL_FillRect(screen, &input_bg, key_body_color_rgba);
     SDL_BlitSurface(input, NULL, screen, &input_pos);
     SDL_FreeSurface(input);
 
@@ -408,7 +426,9 @@ void KeyboardPrompt::drawKeyboard(SDL_Surface *screen, const AppState &state)
             if (key.empty())
                 continue;
 
-            SDL_Color text_color = (row == state.keyboard.row && col == state.keyboard.col) ? COLOR_BLACK : COLOR_WHITE;
+            bool key_selected = row == state.keyboard.row && col == state.keyboard.col;
+            SDL_Color text_color = key_selected ? key_body_color : key_text_color;
+            Uint32 bg_color = key_selected ? key_text_color_rgba : key_body_color_rgba;
             SDL_Surface *key_text = TTF_RenderUTF8_Blended(font.medium, key.c_str(), text_color);
 
             // special keys are not the same width as the other keys
@@ -426,9 +446,6 @@ void KeyboardPrompt::drawKeyboard(SDL_Surface *screen, const AppState &state)
                 default_key_size};
 
             // draw key background
-            Uint32 bg_color = (row == state.keyboard.row && col == state.keyboard.col) 
-                ? SDL_MapRGB(screen->format, TRIAD_WHITE) 
-                : SDL_MapRGB(screen->format, TRIAD_DARK_GRAY);
             SDL_FillRect(screen, &key_pos, bg_color);
 
             // center text in key

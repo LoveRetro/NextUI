@@ -196,6 +196,17 @@ void renderList(int count, int start, int end, int selected)
     char average[25];
     char plays[25];
 
+    uint32_t main_color_255 = CFG_getColor(COLOR_MAIN);
+    SDL_Color main_color = uintToColour(main_color_255);
+    Uint32 selected_row_bg_rgb = SDL_MapRGB(screen->format, main_color.r, main_color.g, main_color.b);
+    SDL_Color icon_bg_color = uintToColour(CFG_getColor(COLOR_ACCENT));
+    Uint32 icon_bg_color_rgb = SDL_MapRGB(screen->format, icon_bg_color.r, icon_bg_color.g, icon_bg_color.b);
+
+    SDL_Color textColorSelectedRow = uintToColour(CFG_getColor(COLOR_LIST_TEXT_SELECTED));
+    SDL_Color timeColorSelectedRow = uintToColour(CFG_getColor(COLOR_ACCENT));
+    SDL_Color textColorUnselectedRow = uintToColour(CFG_getColor(COLOR_LIST_TEXT));
+    SDL_Color timeColorUnselectedRow = uintToColour(CFG_getColor(COLOR_HINT));
+
     int num_width = 0;
 
     const int elemHeight = SCALE1(BIG_PILL_SIZE);
@@ -205,16 +216,20 @@ void renderList(int count, int start, int end, int selected)
     int selected_row = selected - start;
     for (int index=start,row=0; index<end; index++,row++) {
         bool isSelected = selected_row == row;
+        SDL_Color textColor = isSelected ? textColorSelectedRow : textColorUnselectedRow;
+        SDL_Color timeColor = isSelected ? timeColorSelectedRow : timeColorUnselectedRow;
 
         PlayActivity *entry = play_activities->play_activity[index];
         ROM *rom = entry->rom;
 
-        renderRoundedRectangle((SDL_Rect){
-            layout.list_display_start_x, 
-            layout.list_display_start_y + row * elemHeight, 
-            layout.list_display_size_x, 
-            elemHeight
-        }, isSelected ? RGB_WHITE : RGB_BLACK, SCALE1(24));
+        if (isSelected) {
+            renderRoundedRectangle((SDL_Rect){
+                layout.list_display_start_x, 
+                layout.list_display_start_y + row * elemHeight, 
+                layout.list_display_size_x, 
+                elemHeight
+            }, selected_row_bg_rgb, SCALE1(24));
+        }
 
         SDL_Surface *romImage = romImages[index];
         if (romImage) {
@@ -234,7 +249,7 @@ void renderList(int count, int start, int end, int selected)
                 SCALE1(IMG_MAX_HEIGHT)
             };
 
-            renderRoundedRectangle(rectRomImage, RGB_DARK_GRAY, SCALE1(18));
+            renderRoundedRectangle(rectRomImage, icon_bg_color_rgb, SCALE1(18));
 
             // TODO: no getter exposed for this right now
             //SDL_Rect rect = asset_rects[ASSET_GAMEPAD];
@@ -244,15 +259,10 @@ void renderList(int count, int start, int end, int selected)
             x += (SCALE1(IMG_MAX_WIDTH) - rect.w) / 2;
             y += (SCALE1(IMG_MAX_HEIGHT) - rect.h) / 2;
 
-            GFX_blitAssetColor(ASSET_GAMEPAD, NULL, screen, &(SDL_Rect){x,y}, THEME_COLOR1_255);
+            GFX_blitAssetColor(ASSET_GAMEPAD, NULL, screen, &(SDL_Rect){x,y}, main_color_255);
         }
 
         cleanName(rom_name, rom->name);
-        SDL_Color textColor = COLOR_WHITE;
-        if(isSelected) {
-            //textColor = uintToColour(THEME_COLOR1);
-            textColor = COLOR_BLACK;
-        }
         renderText(rom_name, font.medium, textColor, &(SDL_Rect){
             layout.list_display_start_x + num_width + thumbMargin + SCALE1(IMG_MAX_WIDTH), 
             layout.list_display_start_y + thumbMargin / 2 + elemHeight * row, 
@@ -271,9 +281,7 @@ void renderList(int count, int start, int end, int selected)
             textHeight
         };
         for (int i = 0; i < 6; i++) {
-            SDL_Color detailCol = i % 2 == 0 ? COLOR_DARK_TEXT : uintToColour(THEME_COLOR2_255);
-            //SDL_Color detailCol = uintToColour(i % 2 == 0 ? THEME_COLOR3_255 : THEME_COLOR2_255);
-            //SDL_Color detailCol = i % 2 == 0 ? COLOR_DARK_TEXT : COLOR_LIGHT_TEXT;
+            SDL_Color detailCol = i % 2 == 0 ? textColor : timeColor;
             detailsRect.x += renderText(details[i], font.small, detailCol, &detailsRect);
         }
     }
@@ -337,6 +345,9 @@ int main(int argc, char *argv[])
 
     initLayout();
     preloadRomImages();
+
+    SDL_Color titleColor = uintToColour(CFG_getColor(COLOR_HINT));
+
     int count = play_activities->count;
     int selected = 0;
     int start = 0;
@@ -414,8 +425,7 @@ int main(int argc, char *argv[])
                 max_width = MIN(max_width, text_width);
 
                 SDL_Surface *text;
-                text = TTF_RenderUTF8_Blended(font.large, title, COLOR_WHITE);
-                GFX_blitPill(ASSET_BLACK_PILL, screen, &(SDL_Rect){SCALE1(PADDING), SCALE1(PADDING), max_width, SCALE1(PILL_SIZE)});
+                text = TTF_RenderUTF8_Blended(font.large, title, titleColor);
                 SDL_BlitSurface(text, &(SDL_Rect){0, 0, max_width - SCALE1(BUTTON_PADDING * 2), text->h}, screen, &(SDL_Rect){SCALE1(PADDING + BUTTON_PADDING), SCALE1(PADDING + 4)});
                 SDL_FreeSurface(text);
             }

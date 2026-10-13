@@ -22,14 +22,15 @@ enum {
 int main(int argc , char* argv[]) {
 	PWR_setCPUSpeed(CPU_SPEED_AUTO);
 	
-	SDL_Surface* screen = GFX_init(MODE_MENU);
+	SDL_Surface* screen = GFX_init(MODE_MAIN);
 	PAD_init();
 	PWR_init();
 	InitSettings();
 	
-	// TODO: make use of SCALE1()
 	SDL_Surface* digits =  SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, SCALE1(120), SCALE1(16), 32, screen->format->format);
-	SDL_FillRect(digits, NULL, RGB_BLACK);
+	SDL_FillRect(digits, NULL, SDL_MapRGBA(digits->format, 0, 0, 0, 0));
+	SDL_Color text_color = uintToColour(CFG_getColor(COLOR_LIST_TEXT));
+	SDL_Color selected_bar_color = uintToColour(CFG_getColor(COLOR_HINT));
 	
 	SDL_Surface* digit;
 	char* chars[] = { "0","1","2","3","4","5","6","7","8","9","/",":", NULL };
@@ -41,7 +42,8 @@ int main(int argc , char* argv[]) {
 #define CHAR_SLASH 10
 #define CHAR_COLON 11
 	while (c = chars[i]) {
-		digit = TTF_RenderUTF8_Blended(font.large, c, COLOR_WHITE);
+		digit = TTF_RenderUTF8_Blended(font.large, c, text_color);
+		SDL_SetSurfaceBlendMode(digit, SDL_BLENDMODE_NONE); // copy glyph alpha into the transparent strip
 		int y = i==CHAR_COLON ? SCALE1(-1.5) : 0; // : sits too low naturally
 		// TODO: y offset is wrong here
 		// printf("%s x:%i y:%i SCALE1(DIGIT_HEIGHT):%i SCALE1(DIGIT_HEIGHT) - digit->h:%i\n", c, (i * SCALE1(DIGIT_WIDTH)), y, SCALE1(DIGIT_HEIGHT), SCALE1(DIGIT_HEIGHT) - digit->h); fflush(stdout);
@@ -73,7 +75,8 @@ int main(int argc , char* argv[]) {
 		return x + SCALE1(10);
 	}
 	void blitBar(int x, int y, int w) {
-		GFX_blitPill(ASSET_UNDERLINE, screen, &(SDL_Rect){x,y,w});
+		Uint32 bar_color_rgb = SDL_MapRGB(screen->format, selected_bar_color.r, selected_bar_color.g, selected_bar_color.b);
+		GFX_blitPillColor(ASSET_UNDERLINE, screen, &(SDL_Rect){x,y,w}, bar_color_rgb, RGB_WHITE);
 	}
 	int blitNumber(int num, int x, int y) {
 		int n;
@@ -294,7 +297,7 @@ int main(int argc , char* argv[]) {
 			int ampm_w;
 			if (!show_24hour) {
 				x += SCALE1(10); // space
-				SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, am_selected ? "AM" : "PM", COLOR_WHITE);
+				SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, am_selected ? "AM" : "PM", text_color);
 				ampm_w = text->w + SCALE1(2);
 				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){x,y-SCALE1(3)});
 				SDL_FreeSurface(text);
