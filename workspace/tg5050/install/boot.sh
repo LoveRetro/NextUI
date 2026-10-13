@@ -80,7 +80,7 @@ for pakz in $PAKZ_PATH; do
 	echo "TEXT:Extracting $pakz" > /tmp/show2.fifo
 	cd $(dirname "$0")/$PLATFORM
 
-	./unzip -o -d "$SDCARD_PATH" "$pakz" # >> $pakz.txt
+	./7zz x -y -o"$SDCARD_PATH" "$pakz" # >> $pakz.txt
 	rm -f "$pakz"
 
 	# run postinstall if present
@@ -108,7 +108,7 @@ if [ -f "$UPDATE_PATH" ]; then
 	rm -rf $SYSTEM_PATH/$PLATFORM/lib
 	rm -rf $SYSTEM_PATH/$PLATFORM/paks/MinUI.pak
 
-	./unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH" # &> /mnt/SDCARD/unzip.txt
+	./7zz x -y -o"$SDCARD_PATH" "$UPDATE_PATH" # &> /mnt/SDCARD/unzip.txt
 	rm -f "$UPDATE_PATH"
 
 	# the updated system finishes the install/update
