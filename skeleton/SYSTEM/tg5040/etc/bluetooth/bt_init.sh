@@ -38,6 +38,10 @@ start_hci_attach() {
 start_bt() {
 	rfkill.elf unblock bluetooth
 
+	# Fix for bluetooth stuttering by disabling wifi power management
+	ip link set wlan0 up 2>/dev/null
+	iw dev wlan0 set power_save off 2>/dev/null
+
 	if [ -d "/sys/class/bluetooth/hci0" ];then
 		echo "Bluetooth init has been completed!!"
 	else
@@ -54,7 +58,7 @@ start_bt() {
 	a=`ps | grep bluealsa | grep -v grep`
 	[ -z "$a" ] && {
 		# bluealsa -p a2dp-source --keep-alive=-1 &
-		bluealsa -p a2dp-source &
+		bluealsa -p a2dp-source --a2dp-volume &
 		sleep 1
 		# Power on adapter
 		bluetoothctl power on 2>/dev/null
@@ -75,6 +79,10 @@ start_bt() {
 
 ble_start() {
 	rfkill.elf unblock bluetooth
+
+	# Fix for bluetooth stuttering by disabling wifi power management
+	ip link set wlan0 up 2>/dev/null
+	iw dev wlan0 set power_save off 2>/dev/null
 
 	if [ -d "/sys/class/bluetooth/hci0" ];then
 		echo "Bluetooth init has been completed!!"
