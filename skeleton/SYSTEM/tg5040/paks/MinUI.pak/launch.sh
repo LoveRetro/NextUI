@@ -119,6 +119,14 @@ sh "$SYSTEM_PATH/bin/governor.sh" "auto"
 keymon.elf & # &> $SDCARD_PATH/keymon.txt &
 batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 
+# a USB DAC present at power-on takes card 0 from the codec; a software replug restores codec 0, DAC 1
+if grep -q '^ 0 \[.*\]: USB-Audio' /proc/asound/cards 2>/dev/null; then
+	usbdev=$(basename "$(dirname "$(readlink -f /sys/class/sound/card0/device)")")
+	echo "$usbdev" > /sys/bus/usb/drivers/usb/unbind
+	sleep 1
+	echo "$usbdev" > /sys/bus/usb/drivers/usb/bind
+fi
+
 # start fresh, will be populated on the next connect
 rm -f $USERDATA_PATH/.asoundrc
 audiomon.elf & # &> $SDCARD_PATH/audiomon.txt &
