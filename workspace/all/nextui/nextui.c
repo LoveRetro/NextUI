@@ -1255,7 +1255,15 @@ static int runFnAction(int index) {
 	// the pak comes back to the same spot in the list
 	if (top && top->entries->count>0) {
 		Entry* entry = top->entries->items[top->selected];
-		saveLast(entry->path);
+		// inside a collection, name the row the way Entry_open() does (<collection>/<file name>)
+		// so we come back to the collection instead of the game's system folder
+		char* slash = strrchr(entry->path, '/');
+		if (prefixMatch(COLLECTIONS_PATH, top->path) && !exactMatch(COLLECTIONS_PATH, top->path) && slash) {
+			char last_path[256];
+			snprintf(last_path, sizeof(last_path), "%s/%s", top->path, slash+1);
+			saveLast(last_path);
+		}
+		else saveLast(entry->path);
 	}
 
 	char cmd[256];
