@@ -74,6 +74,7 @@ LightSettings lightsLowBattery[MAX_LIGHTS];
 LightSettings lightsCriticalBattery[MAX_LIGHTS];
 LightSettings lightsSleep[MAX_LIGHTS];
 LightSettings lightsAmbient[MAX_LIGHTS];
+LightSettings lightsAppWarning[MAX_LIGHTS];
 LightSettings (*lights)[MAX_LIGHTS] = NULL;
 
 #define PROFILE_OVERRIDE_SIZE 4
@@ -4602,6 +4603,9 @@ void LEDS_setProfile(int profile)
 			new_lights = lightsAmbient;
 			indicator = false;
 			break;
+		case LIGHT_PROFILE_APP_WARNING:
+			new_lights = lightsAppWarning;
+			break;
 		default:
 			return;
 	}
@@ -4730,6 +4734,12 @@ void LEDS_initLeds()
 		// LIGHT_PROFILE_AMBIENT
 		// just to have sensible defaults, will be updated by GFX_setAmbientColor
 		lightsAmbient[i] = lightsDefault[i];
+
+		// LIGHT_PROFILE_APP_WARNING
+		lightsAppWarning[i] = lightsDefault[i];
+		lightsAppWarning[i].effect = 3; // blink
+		lightsAppWarning[i].color1 = CFG_getColor(COLOR_MAIN);
+		lightsAppWarning[i].cycles = -1; // infinite
 	}
 
 	// this might be called more than once (for reasons), so reset to consistent state

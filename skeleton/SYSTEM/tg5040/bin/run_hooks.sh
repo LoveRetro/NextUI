@@ -7,6 +7,12 @@
 #
 # By default, scripts run in the background. Scripts ending in .sync.sh
 # always run synchronously. All background scripts are waited on before exit.
+#
+# Veto: a synchronous hook that exits non-zero makes run_hooks.sh itself exit
+# non-zero, letting the caller cancel whatever the hooks were run ahead of
+# (see pre-launch.d in MinUI.pak/launch.sh). Background hooks cannot veto --
+# their exit status is not recoverable from `wait` in POSIX sh -- so only
+# .sync.sh hooks (or any hook under --sync-only) get a vote.
 
 DIR_NAME="$1"
 SYNC_ONLY="${2:-}"
@@ -25,12 +31,18 @@ case "$DIR_NAME" in
 esac
 export HOOK_CATEGORY="$DIR_NAME"
 
+VETOED=0
+
 for script in "$HOOK_DIR"/*.sh; do
 	[ -f "$script" ] || continue
 	if [ "$SYNC_ONLY" = "--sync-only" ] || echo "$script" | grep -q '\.sync\.sh$'; then
-		( "$script" ) > /dev/null 2>&1 || true
+		if ! ( "$script" ) > /dev/null 2>&1; then
+			VETOED=1
+		fi
 	else
 		( "$script" ) > /dev/null 2>&1 &
 	fi
 done
 wait
+
+exit $VETOED

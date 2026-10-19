@@ -23,6 +23,7 @@ typedef enum {
     NOTIFICATION_SETTING,       // volume/brightness/colortemp adjustments
     NOTIFICATION_ACHIEVEMENT,           // RetroAchievements unlocks
     NOTIFICATION_OFFLINE_ACHIEVEMENT,   // Offline RA unlocks (shows wifi-off icon)
+    NOTIFICATION_SYSTEM,        // pushed by an external process, see SIGUSR2 in minarch
 } NotificationType;
 
 typedef enum {

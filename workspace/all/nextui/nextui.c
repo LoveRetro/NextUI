@@ -1205,12 +1205,13 @@ static int autoResume(void) {
 
 	// putFile(LAST_PATH, FAUX_RECENT_PATH); // saveLast() will crash here because top is NULL
 
-	char act[256];
-	sprintf(act, "gametimectl.elf start '%s'", escapeSingleQuotes(sd_path));
-	system(act);
+	// gametimectl.elf start is now a pre-launch hook run by MinUI.pak/launch.sh,
+	// once the launch is confirmed to not be vetoed -- see run_hooks.sh /
+	// pak-hooks.sh. Still need the escaping side effect on sd_path below though.
+	escapeSingleQuotes(sd_path);
 
 	char cmd[256];
-	// dont escape sd_path again because it was already escaped for gametimectl and function modifies input str aswell
+	// dont escape sd_path again -- it was already escaped above, and the function modifies its input str
 	sprintf(cmd, "'%s' '%s'", escapeSingleQuotes(emu_path), sd_path);
 	putInt(RESUME_SLOT_PATH, AUTO_RESUME_SLOT);
 	queueNext(cmd);
@@ -1319,11 +1320,12 @@ static void openRom(char* path, char* last) {
 	// so we need to save the path before we call that
 	addRecent(recent_path, recent_alias); // yiiikes
 	saveLast(last==NULL ? sd_path : last);
-	char act[256];
-	sprintf(act, "gametimectl.elf start '%s'", escapeSingleQuotes(sd_path));
-	system(act);
+	// gametimectl.elf start is now a pre-launch hook run by MinUI.pak/launch.sh,
+	// once the launch is confirmed to not be vetoed -- see run_hooks.sh /
+	// pak-hooks.sh. Still need the escaping side effect on sd_path below though.
+	escapeSingleQuotes(sd_path);
 	char cmd[256];
-	// dont escape sd_path again because it was already escaped for gametimectl and function modifies input str aswell
+	// dont escape sd_path again -- it was already escaped above, and the function modifies its input str
 	sprintf(cmd, "'%s' '%s'", escapeSingleQuotes(emu_path), sd_path);
 	queueNext(cmd);
 }
@@ -2292,6 +2294,11 @@ int main (int argc, char *argv[]) {
 
 	// make sure we have no running games logged as active anymore (we might be launching back into the UI here)
 	system("gametimectl.elf stop_all");
+
+	// refresh the pak-scoped pre/post-launch hook cache here rather than on
+	// every single launch: a pak installed/removed while sitting at this menu
+	// is picked up on the very next launch instead of going stale until reboot
+	system("pak-hooks.sh rebuild-cache &");
 
 	GFX_setVsync(VSYNC_STRICT);
 	PWR_setCPUSpeed(CPU_SPEED_AUTO);
