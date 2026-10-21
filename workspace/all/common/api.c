@@ -13,9 +13,10 @@
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <unistd.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "utils.h"
 #include "config.h"
@@ -4404,7 +4405,7 @@ static void PWR_exitSleep(void)
 	sync();
 }
 
-static void PWR_waitForWake(void)
+static int PWR_waitForWake(void)
 {
 	uint32_t sleep_ticks = SDL_GetTicks();
 	int deep_sleep_attempts = 0;
@@ -4430,9 +4431,13 @@ static void PWR_waitForWake(void)
 				if (PLAT_supportsDeepSleep())
 				{
 					int ret = PWR_deepSleep();
-					if (ret == 0)
+					if (ret == PWR_DEEPSLEEP_RESUMED)
 					{
-						return;
+						return PWR_DEEPSLEEP_RESUMED;
+					}
+					else if (ret == PWR_DEEPSLEEP_SHUTDOWN_TIMEOUT)
+					{
+						return PWR_DEEPSLEEP_SHUTDOWN_TIMEOUT;
 					}
 					else
 					{
@@ -4447,7 +4452,7 @@ static void PWR_waitForWake(void)
 		}
 	}
 
-	return;
+	return PWR_DEEPSLEEP_RESUMED;
 }
 void PWR_sleep(void)
 {
@@ -4458,7 +4463,13 @@ void PWR_sleep(void)
 	GFX_clear(gfx.screen);
 	PAD_reset();
 	PWR_enterSleep();
-	PWR_waitForWake();
+	int wake_result = PWR_waitForWake();
+	if (wake_result == PWR_DEEPSLEEP_SHUTDOWN_TIMEOUT)
+	{
+		LOG_info("deep-sleep shutdown timeout reached - powering off\n");
+		PWR_powerOff(0);
+		return;
+	}
 	PWR_exitSleep();
 	PAD_reset();
 
@@ -4479,15 +4490,36 @@ int PWR_deepSleep(void)
 	{
 		LOG_info("suspending using platform suspend executable\n");
 
+		uint32_t shutdown_timeout_secs = pwr.can_poweroff ? CFG_getShutdownTimeoutSecs() : 0;
+		unsetenv("NEXTUI_SHUTDOWN_TIMEOUT_SECS");
+		if (shutdown_timeout_secs > 0)
+		{
+			char timeout[16];
+			snprintf(timeout, sizeof(timeout), "%u", shutdown_timeout_secs);
+			if (setenv("NEXTUI_SHUTDOWN_TIMEOUT_SECS", timeout, 1) != 0)
+			{
+				LOG_error("failed to configure shutdown timeout: %d\n", errno);
+			}
+		}
+
 		int ret = system(suspend_path);
+		unsetenv("NEXTUI_SHUTDOWN_TIMEOUT_SECS");
 		if (ret < 0)
 		{
 			LOG_error("failed to launch suspend executable: %d\n", errno);
-			return -1;
+			return PWR_DEEPSLEEP_FAILED;
 		}
 
 		LOG_info("suspend executable exited with %d\n", ret);
-		return ret == 0 ? 0 : -1;
+		if (WIFEXITED(ret))
+		{
+			int exit_status = WEXITSTATUS(ret);
+			if (exit_status == 0)
+				return PWR_DEEPSLEEP_RESUMED;
+			if (exit_status == 2)
+				return PWR_DEEPSLEEP_SHUTDOWN_TIMEOUT;
+		}
+		return PWR_DEEPSLEEP_FAILED;
 	}
 
 	return PLAT_deepSleep();

@@ -34,6 +34,7 @@ all:
 	mkdir -p $(BUILDDIR)
 	$(CC) $(SOURCE) -o $(BUILDDIR)/poweroff_next.elf $(CFLAGS) $(LDFLAGS)
 	$(CC) $(SOURCE) -o $(BUILDDIR)/reboot_next.elf $(CFLAGS) -DREBOOT_NEXT $(LDFLAGS)
+	$(CC) rtc_alarm.c -o $(BUILDDIR)/rtc_alarm.elf $(CFLAGS)
 
 clean:
 	rm -rf $(BUILDDIR)

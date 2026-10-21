@@ -151,6 +151,7 @@ typedef struct
 	// Power
 	uint32_t screenTimeoutSecs;
 	uint32_t suspendTimeoutSecs;
+	uint32_t shutdownTimeoutSecs;
 	bool powerOffProtection;
 	bool keepAwakeWhenUSB;
 
@@ -229,6 +230,7 @@ typedef struct
 #define CFG_DEFAULT_GAMESWITCHERSCALING GFX_SCALE_FULLSCREEN
 #define CFG_DEFAULT_SCREENTIMEOUTSECS 60
 #define CFG_DEFAULT_SUSPENDTIMEOUTSECS 30
+#define CFG_DEFAULT_SHUTDOWNTIMEOUTSECS 0
 #define CFG_DEFAULT_POWEROFFPROTECTION true
 #define CFG_DEFAULT_KEEPAWAKEWHENUSB false
 #define CFG_DEFAULT_HAPTICS false
@@ -325,6 +327,10 @@ void CFG_setScreenTimeoutSecs(uint32_t secs);
 // Time in secs before the device enters suspend mode (aka deep sleep).
 uint32_t CFG_getSuspendTimeoutSecs(void);
 void CFG_setSuspendTimeoutSecs(uint32_t secs);
+// Time in secs spent in deep sleep before the device wakes and powers off.
+// Zero disables automatic poweroff.
+uint32_t CFG_getShutdownTimeoutSecs(void);
+void CFG_setShutdownTimeoutSecs(uint32_t secs);
 // Enable/disable PMIC power-off protection mode.
 bool CFG_getPowerOffProtection(void);
 void CFG_setPowerOffProtection(bool enable);

@@ -135,6 +135,9 @@ static const std::vector<std::string> screen_timeout_labels = {"Never", "5s", "1
 static const std::vector<std::any>    sleep_timeout_secs = {5U, 10U, 15U, 30U, 45U, 60U, 90U, 120U, 240U, 360U, 600U};
 static const std::vector<std::string> sleep_timeout_labels = {"5s", "10s", "15s", "30s", "45s", "60s", "90s", "2m", "4m", "6m", "10m"};
 
+static const std::vector<std::any>    shutdown_timeout_secs = {0U, 60U, 300U, 600U, 900U, 1800U, 3600U, 7200U, 14400U, 28800U, 43200U, 86400U};
+static const std::vector<std::string> shutdown_timeout_labels = {"Never", "1m", "5m", "10m", "15m", "30m", "1h", "2h", "4h", "8h", "12h", "24h"};
+
 static const std::vector<std::string> on_off = {"Off", "On"};
 
 static const std::vector<std::string> scaling_strings = {"Fullscreen", "Fit", "Fill"};
@@ -653,6 +656,10 @@ int main(int argc, char *argv[])
             { return CFG_getSuspendTimeoutSecs(); }, [](const std::any &value)
             { CFG_setSuspendTimeoutSecs(std::any_cast<uint32_t>(value)); },
             []() { CFG_setSuspendTimeoutSecs(CFG_DEFAULT_SUSPENDTIMEOUTSECS);}},
+            new MenuItem{ListItemType::Generic, "Shutdown timeout", "Time in sleep mode before the device powers off", shutdown_timeout_secs, shutdown_timeout_labels, []() -> std::any
+            { return CFG_getShutdownTimeoutSecs(); }, [](const std::any &value)
+            { CFG_setShutdownTimeoutSecs(std::any_cast<uint32_t>(value)); },
+            []() { CFG_setShutdownTimeoutSecs(CFG_DEFAULT_SHUTDOWNTIMEOUTSECS);}},
             new MenuItem{ListItemType::Generic, "Haptic feedback", "Enable or disable haptic feedback on certain actions in the OS", {false, true}, on_off, []() -> std::any
             { return CFG_getHaptics(); }, [](const std::any &value)
             { CFG_setHaptics(std::any_cast<bool>(value)); },

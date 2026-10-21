@@ -573,6 +573,11 @@ void PWR_powerOff(int reboot);
 int PWR_isPoweringOff(void);
 
 void PWR_sleep(void);
+enum {
+	PWR_DEEPSLEEP_FAILED = -1,
+	PWR_DEEPSLEEP_RESUMED = 0,
+	PWR_DEEPSLEEP_SHUTDOWN_TIMEOUT = 1,
+};
 int PWR_deepSleep(void);
 
 void PWR_requestSleep(void);
