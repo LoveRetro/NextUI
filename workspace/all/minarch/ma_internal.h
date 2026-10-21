@@ -56,6 +56,10 @@ struct Core {
 	size_t (*get_memory_size)(unsigned id);
 
 	retro_core_options_update_display_callback_t update_visibility_callback;
+
+	retro_frame_time_callback_t frame_time_callback;
+	retro_usec_t frame_time_reference;
+	uint64_t frame_time_last;
 };
 
 struct Game {
