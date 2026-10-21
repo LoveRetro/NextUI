@@ -7,7 +7,8 @@
 #CORES+= fake-08 (clang)
 #CORES+= fbneo
 #CORES+= fceumm (clang)
-CORES= gambatte
+CORES= armgba
+CORES+= gambatte
 CORES+= gpsp
 #CORES+= libretro-cap32
 #CORES+= libretro-uae
@@ -61,6 +62,11 @@ fake-08_BUILD_PATH = fake-08/platform/libretro
 fceumm_REPO = https://github.com/libretro/libretro-fceumm
 
 gambatte_REPO = https://github.com/libretro/gambatte-libretro
+
+armgba_REPO = https://github.com/Jacob-Matthew-Cook/armGBA
+# macOS: no RWX mmap for the recompiler, so run the exact CPU; the output is a .dylib
+armgba_CORE = build-desktop/armgba_libretro.dylib
+armgba_MAKE = cmake -S . -B build-desktop -DCMAKE_BUILD_TYPE=Release -DARMGBA_JIT=OFF && cmake --build build-desktop --target armgba_libretro -- $(PROCS)
 
 mednafen_supafaust_REPO = https://github.com/libretro/supafaust
 

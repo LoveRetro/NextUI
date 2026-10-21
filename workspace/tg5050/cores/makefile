@@ -26,6 +26,7 @@ CORES+= vic
 CORES+= prboom
 CORES+= bluemsx
 CORES+= gearcoleco
+CORES+= armgba
 
 ###############################
 
@@ -70,6 +71,11 @@ mednafen_supafaust_REPO = https://github.com/libretro/supafaust
 # mGBA replaced Makefile.libretro with a CMake-based libretro build.
 mgba_CORE = build-tg5050/mgba_libretro.so
 mgba_MAKE = cmake -S . -B build-tg5050 -DCMAKE_BUILD_TYPE=Release -DLIBMGBA_ONLY=ON -DBUILD_LIBRETRO=ON -DLIBRETRO_STATIC=OFF -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_COMPILER=$(CROSS_COMPILE)gcc -DCMAKE_CXX_COMPILER=$(CROSS_COMPILE)g++ -DCMAKE_C_FLAGS="-fomit-frame-pointer -ffast-math -mcpu=cortex-a55 -fno-common -ftree-vectorize -funswitch-loops" -DCMAKE_CXX_FLAGS="-fomit-frame-pointer -ffast-math -mcpu=cortex-a55 -fno-common -ftree-vectorize -funswitch-loops" && cmake --build build-tg5050 --target mgba_libretro -- $(PROCS)
+
+# armGBA is CMake-based and picks its recompiler backend from CMAKE_SYSTEM_PROCESSOR.
+armgba_REPO = https://github.com/Jacob-Matthew-Cook/armGBA
+armgba_CORE = build-tg5050/armgba_libretro.so
+armgba_MAKE = cmake -S . -B build-tg5050 -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_COMPILER=$(CROSS_COMPILE)gcc -DCMAKE_CXX_COMPILER=$(CROSS_COMPILE)g++ -DCMAKE_C_FLAGS="-fomit-frame-pointer -mcpu=cortex-a55 -fno-common -ftree-vectorize -funswitch-loops" -DCMAKE_CXX_FLAGS="-fomit-frame-pointer -mcpu=cortex-a55 -fno-common -ftree-vectorize -funswitch-loops" && cmake --build build-tg5050 --target armgba_libretro -- $(PROCS)
 
 pcsx_rearmed_MAKEFILE = Makefile.libretro
 # pcsx has a disabled submodule for gnulib, which takes forever to check out and is unused - skil checkout

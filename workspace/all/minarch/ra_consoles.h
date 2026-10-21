@@ -57,6 +57,8 @@ static const RA_ConsoleMapping ra_console_table[] = {
 	{ "MD",      RC_CONSOLE_MEGA_DRIVE },
 	// GBA (mGBA)
 	{ "MGBA",    RC_CONSOLE_GAMEBOY_ADVANCE },
+	// GBA (armGBA)
+	{ "AGBA",    RC_CONSOLE_GAMEBOY_ADVANCE },
 	// MSX
 	{ "MSX",     RC_CONSOLE_MSX },
 	// Neo Geo Pocket

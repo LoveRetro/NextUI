@@ -1,0 +1,12 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f5fc6e4..bca847f 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -111,4 +111,6 @@ target_link_libraries(armgba_libretro armgba gambatte retro-archive m z)
+ # A toolchain file may leave C++ without an optimisation level
+ target_compile_options(armgba_libretro PRIVATE -O2)
+ set_target_properties(armgba_libretro PROPERTIES PREFIX "")
+-target_link_options(armgba_libretro PRIVATE -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/libretro/link.T -Wl,--no-undefined)
++if(NOT APPLE)
++	target_link_options(armgba_libretro PRIVATE -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/libretro/link.T -Wl,--no-undefined)
++endif()
