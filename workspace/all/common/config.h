@@ -346,6 +346,7 @@ void CFG_setMenuAnimations(bool show);
 // Menu transition mode: TRANSITION_OFF, TRANSITION_SNAPPY, TRANSITION_COMFY.
 int CFG_getMenuTransitions(void);
 void CFG_setMenuTransitions(int mode);
+int CFG_getAppStartExitAnimationDuration(void);
 // Set thumbnail rounding radius.
 int CFG_getThumbnailRadius(void);
 void CFG_setThumbnailRadius(int radius);

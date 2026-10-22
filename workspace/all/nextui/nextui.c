@@ -2286,9 +2286,12 @@ int main (int argc, char *argv[]) {
 		currentScreen = SCREEN_GAMESWITCHER;
 	}
 
-	// add a nice fade into the game switcher
-	if(currentScreen == SCREEN_GAMESWITCHER)
+	bool fadeInFromBlack = true;
+	if (currentScreen == SCREEN_GAMESWITCHER) {
 		lastScreen = SCREEN_GAME;
+		// Game switcher animates from screenshot on opening
+		fadeInFromBlack = false;
+	}
 
 	// make sure we have no running games logged as active anymore (we might be launching back into the UI here)
 	system("gametimectl.elf stop_all");
@@ -2637,7 +2640,10 @@ int main (int argc, char *argv[]) {
 			}
 		}
 
-		if(dirty) {
+		// When a game or pak starts, keep the last frame as it is: the exit fade-out
+		// captures the frame the user saw. A redraw here would show the screen the
+		// launcher returns to instead (e.g. the game list behind the quick menu).
+		if(dirty && !startgame) {
 			SDL_Surface *tmpOldScreen = NULL;
 			SDL_Surface * switcherSur = NULL;
 			// NOTE:22 This causes slowdown when CFG_getMenuTransitions is set to false because animationdirection turns > 0 somewhere but is never set back to 0 and so this code runs on every action, will fix later
@@ -2819,14 +2825,6 @@ int main (int argc, char *argv[]) {
 					}
 				}
 				lastScreen = SCREEN_QUICKMENU;
-			}
-			else if(startgame) {
-				//pilltargetY = +screen->w;
-				//animationdirection = ANIM_NONE;
-				GFX_clearLayers(LAYER_ALL);
-				GFX_clear(screen);
-				GFX_flipHidden();
-				GFX_animateSurfaceOpacity(tmpOldScreen,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 150:20,LAYER_BACKGROUND);
 			}
 			else if(currentScreen == SCREEN_GAMESWITCHER) {
 				GFX_clearLayers(LAYER_ALL);
@@ -3157,9 +3155,6 @@ int main (int argc, char *argv[]) {
 							animationdirection = ANIM_NONE;
 						}
 					}
-					if(lastScreen==SCREEN_OFF) {
-						GFX_animateSurfaceOpacity(blackBG,0,0,screen->w,screen->h,255,0,CFG_getMenuTransitions() ? 200:20,LAYER_THUMBNAIL);
-					}
 
 					previous_row = selected_row;
 					previous_depth = stack->count;
@@ -3271,11 +3266,17 @@ int main (int argc, char *argv[]) {
 				}
 				SDL_UnlockMutex(animMutex);
 			}
-			if(!startgame) // dont flip if game gonna start
+			if (fadeInFromBlack) {
+				// The fade uses the scroll-text layer (the top one in use) for the picture
+				// and its cover, and clears it after. The next pass draws it again.
+				GFX_animateBlack(LAYER_SCROLLTEXT, 255, 0, CFG_getAppStartExitAnimationDuration());
+				fadeInFromBlack = 0;
+				dirty = 1;
+			} else {
 				GFX_flip(screen);
-
-			dirty = 0;
-		} else if(getAnimationDraw() || folderbgchanged || thumbchanged || is_scrolling) {
+				dirty = 0;
+			}
+		} else if(!startgame && (getAnimationDraw() || folderbgchanged || thumbchanged || is_scrolling)) {
 			// honestly this whole thing is here only for the scrolling text, I set it now to run this at 30fps which is enough for scrolling text, should move this to seperate animation function eventually
 			Uint32 now = SDL_GetTicks();
 			Uint32 frame_start = now;
@@ -3424,6 +3425,7 @@ int main (int argc, char *argv[]) {
 	// Cleanup worker threads and their synchronization primitives
 	cleanupImageLoaderPool();
 
+	GFX_animateBlack(LAYER_SCROLLTEXT, 0, 255, CFG_getAppStartExitAnimationDuration());
 	GFX_quit(); // Cleanup video subsystem first to stop GPU threads
 
 	// Now safe to free surfaces after GPU threads are stopped
