@@ -113,11 +113,12 @@ void MSG_quit(void) {
 
 ///////////////////////////////////////
 
-#define MENU_ITEM_COUNT 5
+#define MENU_ITEM_COUNT 6
 #define MENU_SLOT_COUNT 8
 
 enum {
 	ITEM_CONT,
+	ITEM_EJECT,
 	ITEM_SAVE,
 	ITEM_LOAD,
 	ITEM_OPTS,
@@ -139,6 +140,8 @@ static struct {
 	SDL_Surface* bitmap;
 	SDL_Surface* overlay;
 	char* items[MENU_ITEM_COUNT];
+	int item_ids[MENU_ITEM_COUNT];
+	int item_count;
 	char* disc_paths[9]; // up to 9 paths, Arc the Lad Collection is 7 discs
 	char minui_dir[256];
 	char slot_path[256];
@@ -159,6 +162,7 @@ static struct {
 	
 	.items = {
 		[ITEM_CONT] = "Continue",
+		[ITEM_EJECT] = "Eject Disc",
 		[ITEM_SAVE] = "Save",
 		[ITEM_LOAD] = "Load",
 		[ITEM_OPTS] = "Options",
@@ -1760,6 +1764,23 @@ void Menu_loadState(void) {
 	}
 }
 
+/// @brief Sets the disc items menu entries based on the drive and disc insertion status
+/// @param has_drive 
+static void Menu_setDiscItems(int has_drive) {
+	menu.item_count = 0;
+	menu.item_ids[menu.item_count++] = ITEM_CONT;
+	if (has_drive) {
+		menu.item_ids[menu.item_count++] = ITEM_EJECT;
+	}
+	menu.item_ids[menu.item_count++] = ITEM_SAVE;
+	menu.item_ids[menu.item_count++] = ITEM_LOAD;
+	menu.item_ids[menu.item_count++] = ITEM_OPTS;
+	menu.item_ids[menu.item_count++] = ITEM_QUIT;
+}
+
+
+/// @brief 
+/// @param  
 void Menu_loop(void) {
 
 	int cw, ch;
@@ -1813,11 +1834,17 @@ void Menu_loop(void) {
 	int rom_disc = -1;
 	char disc_name[16];
 	if (menu.total_discs) {
-		rom_disc = menu.disc;
+		rom_disc = menu.disc; // store the current disc index for comparison later
 		sprintf(disc_name, "Disc %i", menu.disc+1);
 	}
 		
 	int selected = 0; // resets every launch
+	int tray_state = Game_getDiscEjectState();
+	int disc_inserted = Game_getDiscInsertedState();
+	int has_drive = tray_state >= 0 && disc_inserted >= 0; // TODO: check for drive presence on systems with no disc drive (eg. smart)
+	int disc_selection_changed = 0;
+
+	Menu_setDiscItems(has_drive);
 	Menu_initState();
 	
 	int status = STATUS_CONT; // TODO: no longer used?
@@ -1837,43 +1864,50 @@ void Menu_loop(void) {
 		PAD_poll();
 		
 		if (PAD_justPressed(BTN_UP)) {
-			selected -= 1;
-			if (selected<0) selected += MENU_ITEM_COUNT;
+			do {
+				selected = (selected + menu.item_count - 1) % menu.item_count; // wrap around menu entries
+			} while (menu.item_ids[selected]==ITEM_EJECT && disc_inserted<=0); // skip eject if no disc inserted
 			dirty = 1;
 		}
 		else if (PAD_justPressed(BTN_DOWN)) {
-			selected += 1;
-			if (selected>=MENU_ITEM_COUNT) selected -= MENU_ITEM_COUNT;
+			do {
+				selected = (selected + 1) % menu.item_count; // wrap around menu entries
+			} while (menu.item_ids[selected]==ITEM_EJECT && disc_inserted<=0); // skip eject if no disc inserted
 			dirty = 1;
 		}
 		else if (PAD_justPressed(BTN_LEFT)) {
-			if (menu.total_discs>1 && selected==ITEM_CONT) {
-				menu.disc -= 1;
+			if (menu.total_discs>1 && menu.item_ids[selected]==ITEM_CONT) {
+				menu.disc = Game_getDiscInsertedState() ? menu.disc - 1 : rom_disc; // reset to current disc if not changed yet
+				//menu.disc = 1;
 				if (menu.disc<0) menu.disc += menu.total_discs;
+				disc_selection_changed = 1;
 				dirty = 1;
 				sprintf(disc_name, "Disc %i", menu.disc+1);
 			}
-			else if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
+			else if (menu.item_ids[selected]==ITEM_SAVE || menu.item_ids[selected]==ITEM_LOAD) {
 				menu.slot -= 1;
 				if (menu.slot<0) menu.slot += MENU_SLOT_COUNT;
 				dirty = 1;
 			}
 		}
 		else if (PAD_justPressed(BTN_RIGHT)) {
-			if (menu.total_discs>1 && selected==ITEM_CONT) {
-				menu.disc += 1;
+			if (menu.total_discs>1 && menu.item_ids[selected]==ITEM_CONT) {
+				menu.disc = Game_getDiscInsertedState() ? menu.disc + 1 : rom_disc; // reset to current disc if not changed yet
+				//menu.disc += 1;
 				if (menu.disc==menu.total_discs) menu.disc -= menu.total_discs;
+				disc_selection_changed = 1;
 				dirty = 1;
 				sprintf(disc_name, "Disc %i", menu.disc+1);
 			}
-			else if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
+			else if (menu.item_ids[selected]==ITEM_SAVE || menu.item_ids[selected]==ITEM_LOAD) {
 				menu.slot += 1;
 				if (menu.slot>=MENU_SLOT_COUNT) menu.slot -= MENU_SLOT_COUNT;
 				dirty = 1;
 			}
 		}
 		
-		if (dirty && (selected==ITEM_SAVE || selected==ITEM_LOAD)) {
+		int selected_item = menu.item_ids[selected];
+		if (dirty && (selected_item==ITEM_SAVE || selected_item==ITEM_LOAD)) {
 			Menu_updateState();
 		}
 		
@@ -1882,17 +1916,30 @@ void Menu_loop(void) {
 			show_menu = 0;
 		}
 		else if (PAD_justPressed(BTN_A)) {
-			switch(selected) {
-				case ITEM_CONT:
-				if (menu.total_discs && rom_disc!=menu.disc) {
+			switch(selected_item) {
+				case ITEM_CONT:  //&& rom_disc!=menu.disc && disc_inserted != 0) {
+				if (menu.total_discs && disc_selection_changed) { // TODO: check for disc change on systems with no disc drive (eg. smart) 
 						status = STATUS_DISC;
-						char* disc_path = menu.disc_paths[menu.disc];
-						Game_changeDisc(disc_path);
+						char* disc_path = menu.total_discs ? menu.disc_paths[menu.disc] : game.path;
+						Game_changeDisc(disc_path); // TODO: check for disc change on systems with no disc drive (eg. smart)
+						disc_inserted = Game_getDiscInsertedState(); // update disc state after change
 					}
 					else {
 						status = STATUS_CONT;
 					}
 					show_menu = 0;
+				break;
+				case ITEM_EJECT:
+					if (disc_inserted > 0 && Game_setDiscEjectState(1)) {
+						tray_state = Game_getDiscEjectState();
+						disc_inserted = Game_getDiscInsertedState();
+						if (tray_state >= 0 && disc_inserted >= 0) {
+							Menu_setDiscItems(has_drive);
+							if (disc_inserted == 0) selected = 0;
+							disc_selection_changed = 0;
+							dirty = 1;
+						}
+					}
 				break;
 				
 				case ITEM_SAVE: {
@@ -1979,30 +2026,24 @@ void Menu_loop(void) {
 			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, 1, screen, 1);
 			
 			// list
-			oy = (((DEVICE_HEIGHT / FIXED_SCALE) - PADDING * 2) - (MENU_ITEM_COUNT * PILL_SIZE)) / 2;
-			for (int i=0; i<MENU_ITEM_COUNT; i++) {
-				char* item = menu.items[i];
+			oy = (((DEVICE_HEIGHT / FIXED_SCALE) - PADDING * 2) - (menu.item_count * PILL_SIZE)) / 2;
+			for (int i=0; i<menu.item_count; i++) {
+				int item_id = menu.item_ids[i];
+				char* item = menu.items[item_id];
 				SDL_Color text_color = COLOR_WHITE;
 				
 				if (i==selected) {
 					text_color = uintToColour(THEME_COLOR5_255);
 
-					// disc change
-					if (menu.total_discs>1 && i==ITEM_CONT) {				
+					if ((menu.total_discs>1 && item_id==ITEM_CONT) ||
+						(has_drive && item_id==ITEM_CONT) || item_id==ITEM_EJECT) {
 						GFX_blitPillDark(ASSET_WHITE_PILL, screen, &(SDL_Rect){
 							SCALE1(PADDING),
-							SCALE1(oy + PADDING),
+							SCALE1(oy + PADDING + (i * PILL_SIZE)),
 							screen->w - SCALE1(PADDING * 2),
 							SCALE1(PILL_SIZE)
 						});
-						text = TTF_RenderUTF8_Blended(font.large, disc_name, text_color);
-						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
-							screen->w - SCALE1(PADDING + BUTTON_PADDING) - text->w,
-							SCALE1(oy + PADDING + 4)
-						});
-						SDL_FreeSurface(text);
 					}
-					
 					TTF_SizeUTF8(font.large, item, &ow, NULL);
 					ow += SCALE1(BUTTON_PADDING*2);
 					
@@ -2014,7 +2055,9 @@ void Menu_loop(void) {
 						SCALE1(PILL_SIZE)
 					});
 				}
-			
+				if (item_id==ITEM_EJECT && disc_inserted <= 0) {
+					text_color = uintToColour(THEME_COLOR3_255);
+				}
 				
 				// text
 				text = TTF_RenderUTF8_Blended(font.large, item, text_color);
@@ -2023,10 +2066,26 @@ void Menu_loop(void) {
 					SCALE1(oy + PADDING + (i * PILL_SIZE) + 4)
 				});
 				SDL_FreeSurface(text);
+
+				if ((menu.total_discs>1 && item_id==ITEM_CONT) || (has_drive && item_id==ITEM_CONT)) {
+					SDL_Color state_color = i==selected ? uintToColour(THEME_COLOR5_255) : COLOR_WHITE;
+					const char* state_text = disc_inserted > 0
+						? (menu.total_discs ? disc_name : "Inserted")
+						: (disc_selection_changed ? disc_name : "No Disc");
+					if (disc_inserted == 0 && !disc_selection_changed) {
+						state_color = uintToColour(THEME_COLOR3_255);
+					}
+					text = TTF_RenderUTF8_Blended(font.large, state_text, state_color);
+					SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+						screen->w - SCALE1(PADDING + BUTTON_PADDING) - text->w,
+						SCALE1(oy + PADDING + (i * PILL_SIZE) + 4)
+					});
+					SDL_FreeSurface(text);
+				}
 			}
 			
 			// slot preview
-			if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
+			if (selected_item==ITEM_SAVE || selected_item==ITEM_LOAD) {
 				#define WINDOW_RADIUS 4 // TODO: this logic belongs in blitRect?
 				#define PAGINATION_HEIGHT 6
 				// unscaled

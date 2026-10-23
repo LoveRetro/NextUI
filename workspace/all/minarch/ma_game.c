@@ -11,9 +11,12 @@
 
 struct Game game;
 struct retro_disk_control_ext_callback disk_control_ext;
+static unsigned disc_index_to_restore;
+static int has_disc_index_to_restore;
 
 void Game_open(char* path) {
 	LOG_info("Game_open\n");
+	has_disc_index_to_restore = 0;
 	int skipzip = 0;
 	memset(&game, 0, sizeof(game));
 
@@ -144,19 +147,120 @@ void Game_close(void) {
 	VIB_setStrength(0); // just in case
 }
 
+/// @brief Return -1 if the core doesn't support ejecting and inserting discs, 0 if the disc is ejected, 1 if a disc is inserted
+/// @param  
+/// @return 
+int Game_getDiscEjectState(void) {
+	if (!disk_control_ext.get_eject_state || !disk_control_ext.set_eject_state) return -1;
+	return disk_control_ext.get_eject_state() ? 1 : 0;
+}
+
+/// @brief Return -1 if the core doesn't support ejecting and inserting discs, 0 if the disc is ejected, 1 if a disc is inserted
+/// @param  
+/// @return 
+int Game_getDiscInsertedState(void) {
+	if (!disk_control_ext.get_eject_state || !disk_control_ext.set_eject_state ||
+		!disk_control_ext.get_image_index || !disk_control_ext.set_image_index ||
+		!disk_control_ext.get_num_images) return -1;
+	if (disk_control_ext.get_eject_state()) return 0;
+	unsigned image_count = disk_control_ext.get_num_images();
+	if (image_count == 0) return -1;
+	return disk_control_ext.get_image_index() < image_count;
+}
+
+/// @brief Eject or insert the disc tray. If ejecting, the current disc index will be saved and restored when inserting.
+int Game_setDiscEjectState(int ejected) {
+	if (!disk_control_ext.get_eject_state || !disk_control_ext.set_eject_state ||
+		!disk_control_ext.get_image_index || !disk_control_ext.set_image_index ||
+		!disk_control_ext.get_num_images) {
+		LOG_error("Core does not support ejecting and inserting discs\n");
+		return 0;
+	}
+
+	unsigned image_count = disk_control_ext.get_num_images();
+	if (image_count == 0) {
+		LOG_error("Core has no disc images to eject or insert\n");
+		return 0;
+	}
+
+	if (ejected) { // Eject the disc tray
+		unsigned image_index = disk_control_ext.get_image_index();
+		if (image_index < image_count) {
+			disc_index_to_restore = image_index;
+			has_disc_index_to_restore = 1;
+		}
+
+		if (!disk_control_ext.set_eject_state(true)) {
+			LOG_error("Failed to eject disc tray\n");
+			return 0;
+		}
+		if (!disk_control_ext.set_image_index(image_count)) { // 
+			LOG_warn("Core rejected empty disc index; leaving drive ejected\n");
+		}
+		return 1;
+	}
+
+	if (!disk_control_ext.get_eject_state()) return 1; // Already inserted
+
+	unsigned current_index = disk_control_ext.get_image_index();
+	unsigned restore_index = current_index < image_count ? current_index :
+		(has_disc_index_to_restore ? disc_index_to_restore : 0);
+	if (restore_index >= image_count) restore_index = 0;
+	if (!disk_control_ext.set_image_index(restore_index)) {
+		LOG_error("Failed to insert disc\n");
+		return 0;
+	}
+	if (!disk_control_ext.set_eject_state(false)) {
+		LOG_error("Failed to close disc tray\n");
+		return 0;
+	}
+	has_disc_index_to_restore = 0;
+	return 1;
+}
+
 void Game_changeDisc(char* path) {
 
-	if (exactMatch(game.path, path) || !exists(path)) return;
+	if (!exists(path)) return;
+	if (exactMatch(game.path, path) && Game_getDiscInsertedState() != 0) return;
+
+	if (!disk_control_ext.set_eject_state || !disk_control_ext.replace_image_index) {
+		LOG_error("Core does not support changing discs\n");
+		return;
+	}
+
+	if (!disk_control_ext.set_eject_state(true)) {
+		LOG_error("Failed to eject disc tray\n");
+		return;
+	}
 
 	Game_close();
 	Game_open(path);
+
+	if (!game.is_open) {
+		LOG_error("Failed to open disc: %s\n", path);
+		if (!disk_control_ext.set_eject_state(false)) {
+			LOG_error("Failed to close disc tray\n");
+		}
+		return;
+	}
 
 	struct retro_game_info game_info = {};
 	game_info.path = game.path;
 	game_info.data = game.data;
 	game_info.size = game.size;
 
-	disk_control_ext.replace_image_index(0, &game_info);
+	if (!disk_control_ext.replace_image_index(0, &game_info)) {
+		LOG_error("Failed to replace disc with: %s\n", path);
+		if (!disk_control_ext.set_eject_state(false)) {
+			LOG_error("Failed to close disc tray\n");
+		}
+		return;
+	}
+
+	if (!disk_control_ext.set_eject_state(false)) {
+		LOG_error("Failed to close disc tray\n");
+	}
+
 	putFile(CHANGE_DISC_PATH, path); // NextUI still needs to know this to update recents.txt
 }
 
