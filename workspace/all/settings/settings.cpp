@@ -380,12 +380,15 @@ namespace {
                 || m_model == RG34XXSP || m_model == RG35XXH || m_model == RG35XXPRO;
         }
 
+        // Platforms not listed (rgds) say so through the platform layer.
         bool hasWifi() const {
-            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355 || m_platform == h700;
+            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355 || m_platform == h700
+                || PLAT_hasWifi();
         }
 
         bool hasBluetooth() const {
-            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355 || m_platform == h700;
+            return m_platform == tg5050 || m_platform == tg5040 || m_platform == my355 || m_platform == h700
+                || PLAT_hasBluetooth();
         }
 
     private:
