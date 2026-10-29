@@ -3029,6 +3029,12 @@ int main (int argc, char *argv[]) {
 				}
 				// load game thumbnails
 				if (total > 0) {
+					{
+						// let a second screen (rgds) show the selection
+						char artpath[1024];
+						snprintf(artpath, sizeof(artpath), "%s/.media/%s.png", rompath, res_copy);
+						PLAT_selectionChanged(entry->name, artpath);
+					}
 					if(CFG_getShowGameArt()) {
 						char thumbpath[1024];
 						snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);

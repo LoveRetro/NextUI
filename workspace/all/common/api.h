@@ -802,6 +802,8 @@ int PLAT_getLedEffectId(int index);
 const char *PLAT_getLedEffectName(int effect_id);
 
 bool PLAT_canTurbo(void);
+// The launcher selection changed (name, expected box art path); used by secondary displays.
+void PLAT_selectionChanged(const char* name, const char* art_path);
 int PLAT_toggleTurbo(int btn_id);
 void PLAT_clearTurbo();
 
