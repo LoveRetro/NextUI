@@ -271,6 +271,168 @@ bool PLAT_btIsConnected(void) {
 
 /////////////////////////
 
+// Date, time zones and network time, as on tg5050: zoneinfo from tzdata, /etc/localtime links to
+// /tmp/localtime (the root filesystem is read-only), the RTC is the rk817's; NTP via SYSTEM_PATH/etc/ntp.sh.
+int PLAT_setDateTime(int y, int m, int d, int h, int i, int s) {
+	char cmd[512];
+	sprintf(cmd, "date -s '%d-%d-%d %d:%d:%d'; hwclock -u -w", y,m,d,h,i,s);
+	system(cmd);
+	return 0; // why does this return an int?
+}
+
+#define MAX_LINE_LENGTH 200
+#define ZONE_PATH "/usr/share/zoneinfo"
+#define ZONE_TAB_PATH ZONE_PATH "/zone.tab"
+
+static char cached_timezones[MAX_TIMEZONES][MAX_TZ_LENGTH];
+static int cached_tz_count = -1;
+
+int compare_timezones(const void *a, const void *b) {
+    return strcmp((const char *)a, (const char *)b);
+}
+
+void PLAT_initTimezones() {
+    if (cached_tz_count != -1) { // Already initialized
+        return;
+    }
+    
+    FILE *file = fopen(ZONE_TAB_PATH, "r");
+    if (!file) {
+        LOG_info("Error opening file %s\n", ZONE_TAB_PATH);
+        return;
+    }
+    
+    char line[MAX_LINE_LENGTH];
+    cached_tz_count = 0;
+    
+    while (fgets(line, sizeof(line), file)) {
+        // Skip comment lines
+        if (line[0] == '#' || strlen(line) < 3) {
+            continue;
+        }
+        
+        char *token = strtok(line, "\t"); // Skip country code
+        if (!token) continue;
+        
+        token = strtok(NULL, "\t"); // Skip latitude/longitude
+        if (!token) continue;
+        
+        token = strtok(NULL, "\t\n"); // Extract timezone
+        if (!token) continue;
+        
+        // Check for duplicates before adding
+        int duplicate = 0;
+        for (int i = 0; i < cached_tz_count; i++) {
+            if (strcmp(cached_timezones[i], token) == 0) {
+                duplicate = 1;
+                break;
+            }
+        }
+        
+        if (!duplicate && cached_tz_count < MAX_TIMEZONES) {
+            strncpy(cached_timezones[cached_tz_count], token, MAX_TZ_LENGTH - 1);
+            cached_timezones[cached_tz_count][MAX_TZ_LENGTH - 1] = '\0'; // Ensure null-termination
+            cached_tz_count++;
+        }
+    }
+    
+    fclose(file);
+    
+    // Sort the list alphabetically
+    qsort(cached_timezones, cached_tz_count, MAX_TZ_LENGTH, compare_timezones);
+}
+
+void PLAT_getTimezones(char timezones[MAX_TIMEZONES][MAX_TZ_LENGTH], int *tz_count) {
+    if (cached_tz_count == -1) {
+        LOG_warn("Error: Timezones not initialized. Call PLAT_initTimezones first.\n");
+        *tz_count = 0;
+        return;
+    }
+    
+    memcpy(timezones, cached_timezones, sizeof(cached_timezones));
+    *tz_count = cached_tz_count;
+}
+
+char *PLAT_getCurrentTimezone() {
+	// easy enough, get current index from config and return the string
+	int tz_index = CFG_getCurrentTimezone();
+	if (tz_index < 0 || tz_index >= cached_tz_count) {
+		LOG_warn("Error: Current timezone index %d out of bounds.\n", tz_index);
+		return NULL;
+	}
+
+	char *output = (char *)malloc(256);
+	if (!output)
+		return NULL;
+
+	strncpy(output, cached_timezones[tz_index], 256 - 1);
+	output[256 - 1] = '\0'; // Ensure null-termination
+
+	return output;
+}
+
+void PLAT_setCurrentTimezone(const char* tz) {
+	if (cached_tz_count == -1) {
+		LOG_warn("Error: Timezones not initialized. Call PLAT_initTimezones first.\n");
+        return;
+    }
+
+	if(!tz || strlen(tz) == 0) {
+		LOG_warn("Error: Invalid timezone string.\n");
+		return;
+	}
+
+	// get index of timezone
+	int tz_index = -1;
+	for (int i = 0; i < cached_tz_count; i++) {
+		if (strcmp(cached_timezones[i], tz) == 0) {
+			tz_index = i;
+			break;
+		}
+	}
+
+	if (tz_index == -1) {
+		LOG_warn("Error: Timezone %s not found in cached list.\n", tz);
+		return;
+	}
+
+	// set in config
+	CFG_setCurrentTimezone(tz_index);
+
+	// This fixes the timezone until the next reboot
+	char *tz_path = (char *)malloc(256);
+	if (!tz_path) {
+		return;
+	}
+	snprintf(tz_path, 256, ZONE_PATH "/%s", tz);
+	// replace existing symlink
+	if (unlink("/tmp/localtime") == -1) {
+		LOG_debug("Failed to remove existing symlink: %s\n", strerror(errno));
+	}
+	if (symlink(tz_path, "/tmp/localtime") == -1) {
+		LOG_error("Failed to set timezone: %s\n", strerror(errno));
+	}
+	free(tz_path);
+
+	// apply timezone to RTC and kernel
+	system("hwclock -u -w && hwclock --systz -u");
+}
+
+bool PLAT_getNetworkTimeSync(void) {
+	return CFG_getNTP();
+}
+
+void PLAT_setNetworkTimeSync(bool on) {
+	CFG_setNTP(on);
+	if (on) {
+		system(SYSTEM_PATH "/etc/ntp.sh start > /dev/null 2>&1 &");
+	} else {
+		system(SYSTEM_PATH "/etc/ntp.sh stop > /dev/null 2>&1 &");
+	}
+}
+
+/////////////////////////
+
 // Generic wifi (wpa_supplicant) and bluetooth (bluez) implementations; scripts in SYSTEM_PATH/etc.
 #define WIFI_SOCK_DIR "/tmp/wifi/sockets"
 #include "generic_wifi.c"
