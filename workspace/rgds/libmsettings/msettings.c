@@ -673,10 +673,11 @@ int scaleVolume(int value) {
     return 5 * value;
 }
 
+// RG DS panels: levels 0-10 cover 10%..100% of the pwm-backlight (stock TrimUI table topped out at 86%).
 int scaleBrightness(int value) {
-	if (value <= 0) return 10;
-    if (value >= 10) return 220;
-    return 10 + 21 * value;
+	if (value <= 0) return 26;
+	if (value >= 10) return 255;
+	return 26 + (255 - 26) * value / 10;
 }
 int scaleColortemp(int value) {
 	int raw;
