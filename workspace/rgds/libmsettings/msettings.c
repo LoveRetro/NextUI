@@ -805,7 +805,7 @@ void SetRawVolume(int val) { // in: 0-100
 		val = scaleVolume(GetMutedVolume());
 
 	char cmd[128];
-	snprintf(cmd, sizeof(cmd), "amixer -q sset '" SOFTVOL_CONTROL "' %d%% >/dev/null 2>&1", val);
+	snprintf(cmd, sizeof(cmd), "amixer -q -c 0 cset name='" SOFTVOL_CONTROL "' %d%% >/dev/null 2>&1", val);
 	system(cmd);
 }
 
