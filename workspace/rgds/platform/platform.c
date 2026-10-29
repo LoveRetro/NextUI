@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 // rgds: Anbernic RG DS (RK3568) on the ROCKNIX kernel
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
@@ -222,12 +223,42 @@ void PLAT_getOsVersionInfo(char* output_str, size_t max_len) {
 	getFile("/etc/nextui-duo-version", output_str, max_len);
 }
 
+// Wifi/bluetooth: Realtek RTL8821CS (SDIO wifi via rtw88_8821cs, UART bluetooth via hci_uart/btrtl),
+// driven by the generic wpa_supplicant/bluez implementations below. Status as on tg5050.
+static struct WIFI_connection connection = {
+	.valid = false, .freq = -1, .link_speed = -1, .noise = -1, .rssi = -1, .ip = {0}, .ssid = {0},
+};
+static bool bluetoothConnected = false;
+
+static inline void connection_reset(struct WIFI_connection *connection_info) {
+	connection_info->valid = false;
+	connection_info->freq = -1;
+	connection_info->link_speed = -1;
+	connection_info->noise = -1;
+	connection_info->rssi = -1;
+	*connection_info->ip = 0;
+	*connection_info->ssid = 0;
+}
+
 void PLAT_getNetworkStatus(int* is_online) {
-	if (is_online) *is_online = 0;
+	if (WIFI_enabled())
+		WIFI_connectionInfo(&connection);
+	else
+		connection_reset(&connection);
+	if (is_online) *is_online = connection.valid && connection.ssid[0] != '\0';
+	bluetoothConnected = BT_enabled() && PLAT_bluetoothConnected();
 }
 
 ConnectionStrength PLAT_connectionStrength(void) {
-	return SIGNAL_STRENGTH_OFF;
+	if (!WIFI_enabled() || !connection.valid || connection.rssi == -1) return SIGNAL_STRENGTH_OFF;
+	if (connection.rssi == 0) return SIGNAL_STRENGTH_DISCONNECTED;
+	if (connection.rssi >= -60) return SIGNAL_STRENGTH_HIGH;
+	if (connection.rssi >= -70) return SIGNAL_STRENGTH_MED;
+	return SIGNAL_STRENGTH_LOW;
+}
+
+bool PLAT_btIsConnected(void) {
+	return bluetoothConnected;
 }
 
 /////////////////////////
@@ -237,3 +268,11 @@ ConnectionStrength PLAT_connectionStrength(void) {
 
 // We use the generic video implementation here
 #include "generic_video.c"
+
+/////////////////////////
+
+// Generic wifi (wpa_supplicant) and bluetooth (bluez) implementations; scripts in SYSTEM_PATH/etc.
+#define WIFI_SOCK_DIR "/tmp/wifi/sockets"
+#include "generic_wifi.c"
+
+#include "generic_bt.c"

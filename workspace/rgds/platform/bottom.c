@@ -14,6 +14,24 @@ static char bottom_art[1024];
 static int bottom_dirty = 1;
 static time_t bottom_drawn_at;
 
+// Test hook: touching /tmp/nextui-shot saves the next frame of each panel to
+// /tmp/nextui-shot-top.ppm and /tmp/nextui-shot-bottom.ppm.
+static int shot_pending;
+static void saveShot(SDL_Renderer* r, const char* path) {
+	int w, h;
+	if (SDL_GetRendererOutputSize(r, &w, &h) != 0) return;
+	Uint8* px = malloc((size_t)w * h * 3);
+	if (px && SDL_RenderReadPixels(r, NULL, SDL_PIXELFORMAT_RGB24, px, w * 3) == 0) {
+		FILE* f = fopen(path, "wb");
+		if (f) {
+			fprintf(f, "P6 %d %d 255\n", w, h);
+			fwrite(px, 3, (size_t)w * h, f);
+			fclose(f);
+		}
+	}
+	free(px);
+}
+
 // KMSDRM numbers displays in connector order: DSI-1 (bottom panel) first, DSI-2 (top) second.
 static int topDisplay(void) {
 	const char* v = getenv("NEXTUI_TOP_DISPLAY");
@@ -84,6 +102,10 @@ static void bottomDraw(void) {
 	snprintf(status, sizeof(status), "%d%%%s", charge, charging ? " charging" : "");
 	bottomText(bottom_font, status, grey, W / 2, H - 34, W);
 
+	if (shot_pending) {
+		saveShot(bottom_renderer, "/tmp/nextui-shot-bottom.ppm");
+		shot_pending = 0;
+	}
 	SDL_RenderPresent(bottom_renderer);
 }
 
@@ -114,6 +136,10 @@ static void rgds_GL_SwapWindow(SDL_Window* window) {
 
 // The launcher presents its menus with SDL_RenderPresent (games/shaders use the GL swap above).
 static void rgds_RenderPresent(SDL_Renderer* renderer) {
+	if (renderer != bottom_renderer && unlink("/tmp/nextui-shot") == 0) {
+		saveShot(renderer, "/tmp/nextui-shot-top.ppm");
+		shot_pending = bottom_dirty = 1;
+	}
 	SDL_RenderPresent(renderer);
 	if (renderer != bottom_renderer && bottom_renderer && (bottom_dirty || time(NULL) - bottom_drawn_at >= 15)) {
 		SDL_GLContext ctx = SDL_GL_GetCurrentContext();
