@@ -112,6 +112,17 @@ static void rgds_GL_SwapWindow(SDL_Window* window) {
 	}
 }
 
+// The launcher presents its menus with SDL_RenderPresent (games/shaders use the GL swap above).
+static void rgds_RenderPresent(SDL_Renderer* renderer) {
+	SDL_RenderPresent(renderer);
+	if (renderer != bottom_renderer && bottom_renderer && (bottom_dirty || time(NULL) - bottom_drawn_at >= 15)) {
+		SDL_GLContext ctx = SDL_GL_GetCurrentContext();
+		SDL_Window* win = SDL_GL_GetCurrentWindow();
+		bottomDraw();
+		if (ctx && win) SDL_GL_MakeCurrent(win, ctx);
+	}
+}
+
 static void rgds_DestroyWindow(SDL_Window* window) {
 	if (bottom_renderer) { SDL_DestroyRenderer(bottom_renderer); bottom_renderer = NULL; }
 	if (bottom_window) { SDL_DestroyWindow(bottom_window); bottom_window = NULL; }
@@ -123,3 +134,4 @@ static void rgds_DestroyWindow(SDL_Window* window) {
 #define SDL_CreateWindow rgds_CreateWindow
 #define SDL_GL_SwapWindow rgds_GL_SwapWindow
 #define SDL_DestroyWindow rgds_DestroyWindow
+#define SDL_RenderPresent rgds_RenderPresent
