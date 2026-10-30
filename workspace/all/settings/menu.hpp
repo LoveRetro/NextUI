@@ -327,6 +327,8 @@ public:
     ~MenuList();
     MenuList(MenuList &) = delete;
 
+    // painter that showOverlay() uses to repaint the app background before it draws
+    static void setBackgroundPainter(std::function<void(SDL_Surface *)> painter);
     static void showOverlay(const std::string& message, OverlayDismissMode dismissMode = OverlayDismissMode::None);
     static void hideOverlay();
     static bool isOverlayVisible();

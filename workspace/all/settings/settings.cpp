@@ -1171,6 +1171,18 @@ int main(int argc, char *argv[])
             bgbmp = scaled;
         }
 
+        auto drawBackground = [bgbmp](SDL_Surface *surface) {
+            GFX_clear(surface);
+            if(bgbmp) {
+                SDL_Rect image_rect = {0, 0, surface->w, surface->h};
+                SDL_BlitSurface(bgbmp, NULL, surface, &image_rect);
+            } else {
+                SDL_Color bg_color = uintToColour(CFG_getColor(COLOR_BACKGROUND));
+                SDL_FillRect(surface, NULL, SDL_MapRGBA(surface->format, bg_color.r, bg_color.g, bg_color.b, bg_color.a));
+            }
+        };
+        MenuList::setBackgroundPainter(drawBackground);
+
         // main content (list)
         // PADDING all around
         SDL_Rect listRect = {SCALE1(PADDING), SCALE1(PADDING), ctx.screen->w - SCALE1(PADDING * 2), ctx.screen->h - SCALE1(PADDING * 2)};
@@ -1204,14 +1216,7 @@ int main(int argc, char *argv[])
 
             if (ctx.dirty)
             {
-                GFX_clear(ctx.screen);
-                if(bgbmp) {
-                    SDL_Rect image_rect = {0, 0, ctx.screen->w, ctx.screen->h};
-                    SDL_BlitSurface(bgbmp, NULL, ctx.screen, &image_rect);
-                } else {
-                    uint32_t bgc = CFG_getColor(COLOR_BACKGROUND);
-                    SDL_FillRect(ctx.screen, NULL, SDL_MapRGBA(ctx.screen->format, (bgc >> 24) & 0xFF, (bgc >> 16) & 0xFF, (bgc >> 8) & 0xFF, bgc & 0xFF));
-                }
+                drawBackground(ctx.screen);
 
                 int ow = 0;
 
@@ -1229,8 +1234,9 @@ int main(int argc, char *argv[])
                     int text_width = GFX_truncateText(font.large, "Some title", display_name, max_width, SCALE1(BUTTON_PADDING * 2));
                     max_width = MIN(max_width, text_width);
 
+                    SDL_Color title_color = uintToColour(CFG_getColor(COLOR_HINT));
                     SDL_Surface *text;
-                    text = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_WHITE);
+                    text = TTF_RenderUTF8_Blended(font.large, display_name, title_color);
                     SDL_Rect target = {SCALE1(PADDING), SCALE1(PADDING), max_width, SCALE1(PILL_SIZE)};
                     GFX_blitPillLight(ASSET_WHITE_PILL, ctx.screen, &target);
                     SDL_BlitSurfaceCPP(text, {0, 0, max_width - SCALE1(BUTTON_PADDING * 2), text->h}, ctx.screen, {SCALE1(PADDING + BUTTON_PADDING), SCALE1(PADDING + 4)});

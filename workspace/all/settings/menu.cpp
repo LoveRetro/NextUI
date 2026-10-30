@@ -19,6 +19,7 @@ static bool overlayVisible = false;
 static OverlayDismissMode overlayDismissMode = OverlayDismissMode::None;
 static SDL_Surface* overlaySurface = nullptr;
 static Lock overlayLock;
+static std::function<void(SDL_Surface *)> backgroundPainter;
 
 static void drawOverlayLocal(SDL_Surface* screen);
 
@@ -913,13 +914,22 @@ void MenuList::showOverlay(const std::string& message, OverlayDismissMode dismis
     // We want to force a draw right now since usually we are about to block
     WriteLock w(overlayLock);
     if (overlaySurface) {
-        // Clear the surface first to prevent text ghosting from previous
+        // Repaint the background first to prevent text ghosting from previous
         // overlay frames (the semi-transparent shadow doesn't fully obscure
         // old content, causing overlap when updated repeatedly in a loop)
-        SDL_FillRect(overlaySurface, NULL, SDL_MapRGB(overlaySurface->format, 0, 0, 0));
+        if (backgroundPainter)
+            backgroundPainter(overlaySurface);
+        else
+            GFX_clear(overlaySurface);
         drawOverlayLocal(overlaySurface);
         GFX_flip(overlaySurface);
     }
+}
+
+void MenuList::setBackgroundPainter(std::function<void(SDL_Surface *)> painter)
+{
+    WriteLock w(overlayLock);
+    backgroundPainter = std::move(painter);
 }
 
 void MenuList::hideOverlay()
@@ -951,6 +961,10 @@ static void drawOverlayLocal(SDL_Surface* screen) {
         SDL_FillRect(shadow, NULL, SDL_MapRGB(shadow->format, 0, 0, 0));
         SDLX_SetAlpha(shadow, SDL_SRCALPHA, 200); // Semi-transparent black
     }
+
+    // can't be done in shadow initialization since color may change
+    SDL_Color bg_color = uintToColour(CFG_getColor(COLOR_BACKGROUND));
+    SDL_FillRect(shadow, NULL, SDL_MapRGB(shadow->format, bg_color.r, bg_color.g, bg_color.b));
     SDL_BlitSurface(shadow, NULL, screen, NULL);
 
     SDL_Rect screenRect = {0, 0, screen->w, screen->h};

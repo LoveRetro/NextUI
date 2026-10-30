@@ -22,7 +22,7 @@ int Menu_messageWithFont(char* message, char** pairs, TTF_Font* f) {
 
 
 		GFX_clear(screen);
-		GFX_blitMessage(f, message, screen, &(SDL_Rect){SCALE1(PADDING),SCALE1(PADDING),screen->w-SCALE1(2*PADDING),screen->h-SCALE1(PILL_SIZE+PADDING)});
+		GFX_blitMessageColor(f, message, COLOR_WHITE, screen, &(SDL_Rect){SCALE1(PADDING),SCALE1(PADDING),screen->w-SCALE1(2*PADDING),screen->h-SCALE1(PILL_SIZE+PADDING)});
 		GFX_blitButtonGroup(pairs, 0, screen, 1);
 		GFX_flip(screen);
 		dirty = 0;
