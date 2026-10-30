@@ -221,8 +221,16 @@ int GetBrightness(void) { // 0-10
 int GetColortemp(void) { // 0-10
 	return settings->colortemperature;
 }
+static int hdmiOutputActive(void);
+
+// Headphones, Bluetooth, a USB DAC and HDMI share the headphone level, thus the
+// level of the speaker is only for the speaker.
+static int headphoneLevelActive(void) {
+	return settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT || hdmiOutputActive();
+}
+
 int GetVolume(void) { // 0-20
-	if(settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
+	if (headphoneLevelActive())
 		return settings->headphones;
 
 	return settings->speaker;
@@ -334,7 +342,7 @@ void SetDisplayCalBlueGain(int value) {
 void SetVolume(int value) // 0-20
 {
 	SetRawVolume(scaleVolume(value));
-	if (settings->jack || settings->audiosink != AUDIO_SINK_DEFAULT)
+	if (headphoneLevelActive())
 		settings->headphones = value;
 	else
 		settings->speaker = value;
@@ -345,9 +353,13 @@ void SetJack(int value) {
 	settings->jack = value;
 	SetVolume(GetVolume());
 }
+static void setHDMIAudioRoute(int on);
+
 // monitored and set by thread in audiomon
 void SetAudioSink(int value) {
 	settings->audiosink = value;
+	// audiomon deletes .asoundrc when Bluetooth or a USB DAC goes; HDMI gets the sound back
+	if (value == AUDIO_SINK_DEFAULT) setHDMIAudioRoute(hdmiOutputActive());
 	SetVolume(GetVolume());
 }
 
@@ -369,6 +381,9 @@ void SetAudioSink(int value) {
 #define DISP_SWITCH_HDMI_PARAM "4 10 0 0 0x4 0x101 0 0 0 8"
 #define DISP_SWITCH_LCD_PARAM "1 0"
 #define ASOUNDRC_HDMI_MARKER "# nextui-hdmi"
+// The HDMI card has no volume control. The softvol plugin of the HDMI route adds
+// this one to the card when an app first opens the default PCM.
+#define HDMI_VOLUME_CONTROL "HDMI Playback Volume"
 
 static void panelSize(int* w, int* h) {
 	char* device = getenv("DEVICE");
@@ -536,8 +551,15 @@ static void setHDMIAudioRoute(int on) {
 			"pcm.!default {\n"
 			"    type plug\n"
 			"    slave.pcm {\n"
-			"        type hw\n"
-			"        card ahubhdmi\n"
+			"        type softvol\n"
+			"        slave.pcm {\n"
+			"            type hw\n"
+			"            card ahubhdmi\n"
+			"        }\n"
+			"        control {\n"
+			"            name \"" HDMI_VOLUME_CONTROL "\"\n"
+			"            card ahubhdmi\n"
+			"        }\n"
 			"    }\n"
 			"}\n"
 			"ctl.!default {\n"
@@ -593,6 +615,9 @@ void SetHDMI(int value) {
 	}
 
 	setHDMIAudioRoute(value);
+	// the volume goes to the mixer of the new output
+	if (settings)
+		SetVolume(GetVolume());
 }
 
 ///////// Platform specific scaling
@@ -805,13 +830,14 @@ static int get_usbc_card_num() {
 	return -1;
 }
 
-static int get_audiocodec_card_num() {
+// Returns the number of the card whose line in /proc/asound/cards has the name, or -1.
+static int get_named_card_num(const char* name) {
 	FILE *fp = popen("cat /proc/asound/cards", "r");
 	if (!fp) return -1;
 
 	char line[256];
 	while (fgets(line, sizeof(line), fp)) {
-		if (strstr(line, "audiocodec") != NULL) { // look for the built-in codec
+		if (strstr(line, name) != NULL) {
 			int card_num;
 			if (sscanf(line, " %d ", &card_num) == 1) {
 				pclose(fp);
@@ -876,9 +902,28 @@ void SetRawVolume(int val) { // in: 0-100
         }
 		mixer_close(mixer);
 	}
+	else if (hdmiOutputActive()) {
+		int card_num = get_named_card_num("ahubhdmi");
+		if (card_num < 0) return;
+
+		struct mixer *mixer = mixer_open(card_num);
+		if (!mixer) {
+			printf("Failed to open mixer\n"); fflush(stdout);
+			return;
+		}
+
+		// absent until an app opens the default PCM; that app sets the volume again
+		struct mixer_ctl *volume = mixer_get_ctl_by_name(mixer, HDMI_VOLUME_CONTROL);
+		if (volume) {
+			// softvol mutes at the lowest step
+			for (unsigned int i = 0; i < mixer_ctl_get_num_values(volume); i++)
+				mixer_ctl_set_percent(volume, i, val);
+		}
+		mixer_close(mixer);
+	}
 	else {
 		// Speaker path: grab the card that is called "audiocodec"
-		int card_num = get_audiocodec_card_num();
+		int card_num = get_named_card_num("audiocodec");
 		if(card_num < 0) {
 			card_num = 0; // fallback to card 0 if we can't find it
 		}

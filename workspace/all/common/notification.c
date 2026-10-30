@@ -2,6 +2,7 @@
 #include "defines.h"
 #include "api.h"
 #include "config.h"
+#include <msettings.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -702,6 +703,8 @@ void Notification_quit(void) {
 void Notification_showSystemIndicator(SystemIndicatorType type) {
     if (!initialized) return;
     if (type == SYSTEM_INDICATOR_NONE) return;
+    // HDMI turns the panel off, thus only the volume applies there
+    if (type != SYSTEM_INDICATOR_VOLUME && GetHDMI()) return;
     
     // Update or start the indicator
     system_indicator_type = type;

@@ -2362,7 +2362,8 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 	int oy;
 	int ow = 0;
 
-	if (show_setting && !GetHDMI())
+	// HDMI turns the panel off, thus only the volume applies there
+	if (show_setting == INDICATOR_VOLUME || (show_setting && !GetHDMI()))
 	{
 		// Use the helper function to render the indicator at the standard position
 		ow = SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
