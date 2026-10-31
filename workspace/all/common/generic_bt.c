@@ -21,6 +21,9 @@
 
 #include <pthread.h>
 #include <unistd.h>
+#include <signal.h>
+#include <fcntl.h>
+#include <sys/wait.h>
 
 bool PLAT_hasBluetooth() { return true; }
 bool PLAT_bluetoothEnabled() { return CFG_getBluetooth(); }
@@ -75,6 +78,11 @@ static bool bt_version_gte(int major, int minor) {
 #define GET_MAJOR_CLASS(cod) ((cod & COD_MAJOR_MASK) >> 8)
 #define BT_CLASS_AUDIO_VIDEO 0x04
 #define BT_CLASS_PERIPHERAL  0x05
+
+// Upper bounds for blocking bluetoothctl operations, bluez itself waits far longer
+#define BT_PAIR_TIMEOUT_SEC    15
+#define BT_CONNECT_TIMEOUT_SEC 10
+#define BT_EXIT_TIMEOUT        124
 
 // Maximum discovered devices to track
 #define MAX_DISCOVERED_DEVICES 64
@@ -245,6 +253,64 @@ static bool bt_is_powered(void) {
 		return strstr(output, "yes") != NULL;
 	}
 	return false;
+}
+
+// Check whether bluetoothctl info reports the given "Key: yes" line for a device.
+// bluetoothctl's exit status is unreliable in one-shot mode, so verify the result instead.
+static bool bt_device_has(const char *addr, const char *line) {
+	char cmd[256];
+	char output[2048];
+	snprintf(cmd, sizeof(cmd), "bluetoothctl info %s 2>/dev/null | grep '%s'", addr, line);
+	return bt_run_cmd(cmd, output, sizeof(output)) == 0 && strstr(output, line) != NULL;
+}
+
+// Run bluetoothctl with the given arguments, giving up after timeout_sec seconds.
+// If done_addr/done_line are set, stop early (successfully) as soon as
+// "bluetoothctl info <done_addr>" reports done_line.
+// Returns the exit status, or BT_EXIT_TIMEOUT if it had to be killed.
+static int bt_ctl_timeout(int timeout_sec, const char *done_addr, const char *done_line, const char *arg1, const char *arg2) {
+	btlog("Running bluetoothctl %s %s (timeout %ds)\n", arg1, arg2 ? arg2 : "", timeout_sec);
+	pid_t pid = fork();
+	if (pid < 0) {
+		LOG_error("Failed to fork bluetoothctl\n");
+		return -1;
+	}
+	if (pid == 0) {
+		int devnull = open("/dev/null", O_RDWR);
+		if (devnull >= 0) {
+			dup2(devnull, STDIN_FILENO);
+			dup2(devnull, STDOUT_FILENO);
+			dup2(devnull, STDERR_FILENO);
+		}
+		execlp("bluetoothctl", "bluetoothctl", arg1, arg2, (char *)NULL);
+		_exit(127);
+	}
+
+	int status = 0;
+	int ticks = 0;
+	int max_ticks = timeout_sec * 10;
+	while (ticks < max_ticks) {
+		pid_t r = waitpid(pid, &status, WNOHANG);
+		if (r == pid)
+			return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+		usleep(100000);
+		ticks++;
+		// check roughly once per second to avoid spawning too many processes
+		if (done_addr && ticks % 10 == 0 && bt_device_has(done_addr, done_line)) {
+			kill(pid, SIGTERM);
+			waitpid(pid, &status, 0);
+			return 0;
+		}
+	}
+
+	LOG_error("bluetoothctl %s timed out after %ds\n", arg1, timeout_sec);
+	kill(pid, SIGTERM);
+	usleep(200000);
+	if (waitpid(pid, &status, WNOHANG) != pid) {
+		kill(pid, SIGKILL);
+		waitpid(pid, &status, 0);
+	}
+	return BT_EXIT_TIMEOUT;
 }
 
 /////////////////////////////////
@@ -452,7 +518,7 @@ int PLAT_bluetoothPaired(struct BT_devicePaired *paired, int max) {
 	return count;
 }
 
-void PLAT_bluetoothPair(char *addr) {
+bool PLAT_bluetoothPair(char *addr) {
 	btlog("Pairing with %s\n", addr);
 	
 	char cmd[256];
@@ -465,13 +531,15 @@ void PLAT_bluetoothPair(char *addr) {
 	usleep(100000);
 	
 	// Pair with the device
-	snprintf(cmd, sizeof(cmd), "bluetoothctl pair %s 2>/dev/null", addr);
-	int ret = system(cmd);
-	if (ret != 0) {
+	int ret = bt_ctl_timeout(BT_PAIR_TIMEOUT_SEC, addr, "Paired: yes", "pair", addr);
+	if (ret == BT_EXIT_TIMEOUT) {
+		// don't leave bluez stuck mid-pairing, the next attempt would fail
+		bt_ctl_timeout(3, NULL, NULL, "cancel-pairing", addr);
+	} else if (ret != 0) {
 		LOG_error("BT pair failed: %d\n", ret);
 		// In newer versions, try alternative pairing method
 		if (bt_version_gte(5, 70)) {
-			snprintf(cmd, sizeof(cmd), "echo 'pair %s' | bluetoothctl 2>/dev/null", addr);
+			snprintf(cmd, sizeof(cmd), "echo 'pair %s' | timeout %d bluetoothctl 2>/dev/null", addr, BT_PAIR_TIMEOUT_SEC);
 			ret = system(cmd);
 			if (ret != 0) {
 				LOG_error("BT pair (alternative method) failed: %d\n", ret);
@@ -479,8 +547,14 @@ void PLAT_bluetoothPair(char *addr) {
 		}
 	}
 	
-	// Remove from discovered list since it's now paired
-	bt_remove_discovered_device(addr);
+	bool paired = bt_device_has(addr, "Paired: yes");
+	if (paired) {
+		// Remove from discovered list since it's now paired
+		bt_remove_discovered_device(addr);
+	} else {
+		LOG_error("BT pair of %s did not result in a paired device\n", addr);
+	}
+	return paired;
 }
 
 void PLAT_bluetoothUnpair(char *addr) {
@@ -500,16 +574,22 @@ void PLAT_bluetoothUnpair(char *addr) {
 	}
 }
 
-void PLAT_bluetoothConnect(char *addr) {
+bool PLAT_bluetoothConnect(char *addr) {
 	btlog("Connecting to %s\n", addr);
 	
-	char cmd[256];
-	snprintf(cmd, sizeof(cmd), "bluetoothctl connect %s 2>/dev/null", addr);
-	int ret = system(cmd);
+	int ret = bt_ctl_timeout(BT_CONNECT_TIMEOUT_SEC, addr, "Connected: yes", "connect", addr);
 	if (ret != 0) {
 		LOG_error("BT connect failed: %d\n", ret);
 	}
 	LOG_info("BT connect returned: %d\n", ret);
+
+	// the link can take a moment to come up after the command returns
+	for (int i = 0; i < 6; i++) {
+		if (bt_device_has(addr, "Connected: yes"))
+			return true;
+		usleep(500000);
+	}
+	return false;
 }
 
 void PLAT_bluetoothDisconnect(char *addr) {

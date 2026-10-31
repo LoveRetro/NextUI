@@ -514,6 +514,11 @@ typedef struct PAD_Context {
 	uint32_t repeat_at[BTN_ID_COUNT];
 	PAD_Axis laxis;
 	PAD_Axis raxis;
+	// last raw input event (KEY/BTN/HAT/AXIS), for the minput readout; raw_kind is 0 until one arrives
+	char raw_kind;
+	int raw_code;
+	int raw_value;
+	char raw_device[64]; // name of the device that sent it, empty if unknown
 } PAD_Context;
 extern PAD_Context pad;
 
@@ -954,11 +959,11 @@ int PLAT_bluetoothScan(struct BT_device *devices, int max);
 // returns the list of paired devices
 int PLAT_bluetoothPaired(struct BT_devicePaired *devices, int max);
 // pair with the given address
-void PLAT_bluetoothPair(char *addr);
+bool PLAT_bluetoothPair(char *addr);
 // unpair from the given address
 void PLAT_bluetoothUnpair(char *addr);
 // connect with the given address
-void PLAT_bluetoothConnect(char *addr);
+bool PLAT_bluetoothConnect(char *addr);
 // disconnect from the given address
 void PLAT_bluetoothDisconnect(char *addr);
 // returns true if connected to at least one sink

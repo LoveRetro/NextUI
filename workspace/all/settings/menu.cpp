@@ -390,7 +390,7 @@ std::string MenuList::getSelectedItemName() const
         return "";
 
     int selected_row = scope.selected - scope.start;
-    return items.at(selected_row)->getName();
+    return items.at(selected_row)->getKey();
 }
 
 bool MenuList::selectByName(const std::string &name)
@@ -400,7 +400,7 @@ bool MenuList::selectByName(const std::string &name)
 
     int toSelect = -1;
     for (int i = 0; i < items.size() && toSelect < 0; i++)
-        if(items.at(i)->getName() == name)
+        if(items.at(i)->getKey() == name)
             toSelect = i;
     //LOG_info("Found element %s (%d) at pos %d\n", name.c_str(), scope.selected - scope.start, toSelect);
     if (toSelect >= 0)

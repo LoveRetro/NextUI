@@ -59,6 +59,26 @@ static void fillCircle(SDL_Surface* dst, int cx, int cy, int radius, uint32_t co
 	}
 }
 
+typedef struct {
+	const char* label;
+	int btn;
+	int id;
+} ButtonInfo;
+
+// logical button IDs (BTN_ID_*) alongside their bitmask, for the pressed-button readout
+static const ButtonInfo buttons[] = {
+	{"U", BTN_DPAD_UP, BTN_ID_DPAD_UP}, {"D", BTN_DPAD_DOWN, BTN_ID_DPAD_DOWN},
+	{"L", BTN_DPAD_LEFT, BTN_ID_DPAD_LEFT}, {"R", BTN_DPAD_RIGHT, BTN_ID_DPAD_RIGHT},
+	{"A", BTN_A, BTN_ID_A}, {"B", BTN_B, BTN_ID_B}, {"X", BTN_X, BTN_ID_X}, {"Y", BTN_Y, BTN_ID_Y},
+	{"START", BTN_START, BTN_ID_START}, {"SELECT", BTN_SELECT, BTN_ID_SELECT},
+	{"L1", BTN_L1, BTN_ID_L1}, {"R1", BTN_R1, BTN_ID_R1},
+	{"L2", BTN_L2, BTN_ID_L2}, {"R2", BTN_R2, BTN_ID_R2},
+	{"L3", BTN_L3, BTN_ID_L3}, {"R3", BTN_R3, BTN_ID_R3},
+	{"L4", BTN_L4, BTN_ID_L4}, {"R4", BTN_R4, BTN_ID_R4},
+	{"MENU", BTN_MENU, BTN_ID_MENU}, {"POWER", BTN_POWER, BTN_ID_POWER},
+	{"VOL+", BTN_PLUS, BTN_ID_PLUS}, {"VOL-", BTN_MINUS, BTN_ID_MINUS},
+};
+
 int main(int argc , char* argv[]) {
 	PWR_setCPUSpeed(CPU_SPEED_AUTO);
 	
@@ -89,6 +109,9 @@ int main(int argc , char* argv[]) {
 	// int show_setting = 0;
 	PAD_Axis last_laxis = {0,0};
 	PAD_Axis last_raxis = {0,0};
+	char last_raw_kind = 0;
+	char last_raw_device[64] = "";
+	int last_raw_code = 0, last_raw_value = 0;
 	while(!quit) {
 		GFX_startFrame();
 		uint32_t frame_start = SDL_GetTicks();
@@ -96,6 +119,13 @@ int main(int argc , char* argv[]) {
 		PAD_poll();
 
 		if (PAD_anyPressed() || PAD_anyJustReleased()) dirty = 1;
+		if (pad.raw_kind && (pad.raw_code!=last_raw_code || pad.raw_value!=last_raw_value || pad.raw_kind!=last_raw_kind || strcmp(pad.raw_device, last_raw_device))) {
+			snprintf(last_raw_device, sizeof(last_raw_device), "%s", pad.raw_device);
+			dirty = 1;
+			last_raw_kind = pad.raw_kind;
+			last_raw_code = pad.raw_code;
+			last_raw_value = pad.raw_value;
+		}
 		if (pad.laxis.x!=last_laxis.x || pad.laxis.y!=last_laxis.y || pad.raxis.x!=last_raxis.x || pad.raxis.y!=last_raxis.y) {
 			dirty = 1;
 			last_laxis = pad.laxis;
@@ -305,6 +335,44 @@ int main(int argc , char* argv[]) {
 				int dx = MAX(-travel, MIN(travel, (pad.raxis.x * travel) / STICK_AXIS_MAX));
 				int dy = MAX(-travel, MIN(travel, (pad.raxis.y * travel) / STICK_AXIS_MAX));
 				blitButton("R3", screen, PAD_isPressed(BTN_R3), x+o+dx, y+o+dy,0);
+			}
+
+			// PRESSED readout: name and ID of every held button
+			{
+				char line[128] = "";
+				size_t n = 0;
+				for (size_t i = 0; i < sizeof(buttons)/sizeof(buttons[0]); i++) {
+					if (!PAD_isPressed(buttons[i].btn)) continue;
+					n += snprintf(line+n, sizeof(line)-n, "%s%s=%d", n ? "  " : "", buttons[i].label, buttons[i].id);
+					if (n >= sizeof(line)) break;
+				}
+				if (n) {
+					SDL_Surface* text = TTF_RenderUTF8_Blended(font.small, line, uintToColour(THEME_COLOR6_255));
+					int max_w = FIXED_WIDTH - SCALE1(PADDING + PILL_SIZE * 4) * 2;
+					SDL_Rect src = {0, 0, MIN(text->w, max_w), text->h};
+					SDL_BlitSurface(text, &src, screen, &(SDL_Rect){(FIXED_WIDTH-src.w)/2, oy + SCALE1(PILL_SIZE*6) + (SCALE1(PILL_SIZE)-text->h)/2});
+					SDL_FreeSurface(text);
+				}
+			}
+
+			// last raw event: kind, code and value as reported by the device
+			if (pad.raw_kind) {
+				const char* kinds = "KEY\0JOY\0HAT\0AXIS";
+				const char* kind = pad.raw_kind=='K' ? kinds : pad.raw_kind=='J' ? kinds+4 : pad.raw_kind=='H' ? kinds+8 : kinds+12;
+				char line[64];
+				snprintf(line, sizeof(line), "RAW %s %d = %d", kind, pad.raw_code, pad.raw_value);
+				SDL_Surface* text = TTF_RenderUTF8_Blended(font.small, line, uintToColour(THEME_COLOR6_255));
+				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){(FIXED_WIDTH-text->w)/2, oy + SCALE1(PILL_SIZE*4) + (SCALE1(PILL_SIZE)-text->h)/2});
+				SDL_FreeSurface(text);
+
+				// name of the device that sent it, so built-in and external pads can be told apart
+				if (pad.raw_device[0]) {
+					text = TTF_RenderUTF8_Blended(font.tiny, pad.raw_device, uintToColour(THEME_COLOR6_255));
+					int max_w = FIXED_WIDTH - SCALE1(PADDING + PILL_SIZE * 4) * 2;
+					SDL_Rect src = {0, 0, MIN(text->w, max_w), text->h};
+					SDL_BlitSurface(text, &src, screen, &(SDL_Rect){(FIXED_WIDTH-src.w)/2, oy + SCALE1(PILL_SIZE*2) + (SCALE1(PILL_SIZE)-text->h)/2});
+					SDL_FreeSurface(text);
+				}
 			}
 
 			GFX_flip(screen);

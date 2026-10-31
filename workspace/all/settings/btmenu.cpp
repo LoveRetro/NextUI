@@ -33,6 +33,11 @@ Menu::Menu(const int &globalQuit, int &globalDirty) : MenuList(MenuItemType::Fix
                               std::bind(&Menu::setSamplerateMaximum, this, std::placeholders::_1),
                               std::bind(&Menu::resetSamplerateMaximum, this));
     items.push_back(rateItem);
+    resetItem = new MenuItem(ListItemType::Button, "Reset Bluetooth", "Forget all devices and restore Bluetooth defaults.",
+                             DeferToSubmenu,
+                             new MenuList(MenuItemType::List, "Options", {new ResetAllItem(selectionDirty)}));
+    resetItem->setKey("reset");
+    items.push_back(resetItem);
 
     // best effort layout based on the platform defines, user should really call performLayout manually
     MenuList::performLayout((SDL_Rect){0, 0, FIXED_WIDTH, FIXED_HEIGHT});
@@ -153,7 +158,7 @@ void Menu::updater()
             std::vector<BT_device> sr(SCAN_MAX_RESULTS);
             int cnt = BT_availableDevices(sr.data(), SCAN_MAX_RESULTS);
             for (int i = 0; i < cnt; i++)
-                scanMap.emplace(sr[i].name, sr[i]);
+                scanMap.emplace(sr[i].addr, sr[i]);
 
             // dont repopulate if any submenu is open
             bool menuOpen = false;
@@ -180,6 +185,7 @@ void Menu::updater()
                     items.push_back(toggleItem);
                     items.push_back(diagItem);
                     if (rateItem) items.push_back(rateItem);
+                    if (resetItem) items.push_back(resetItem);
                     layout_called = false;
 
                     for (auto &[s, r] : scanMap)
@@ -187,6 +193,7 @@ void Menu::updater()
                         MenuList *options;
                         options = new MenuList(MenuItemType::List, "Options", {new PairNewItem(r, selectionDirty)});
                         auto itm = new PairableItem{r, options};
+                        itm->setKey(r.addr);
                         items.push_back(itm);
                     }
 
@@ -208,6 +215,7 @@ void Menu::updater()
                                                                                 });
                         }
                         auto itm = new PairedItem{r, options};
+                        itm->setKey(r.remote_addr);
                         itm->setDesc(std::string(r.remote_addr) + " | " + std::to_string(r.rssi));
                         items.push_back(itm);
                     }
@@ -229,6 +237,7 @@ void Menu::updater()
             items.push_back(toggleItem);
             items.push_back(diagItem);
             if (rateItem) items.push_back(rateItem);
+            if (resetItem) items.push_back(resetItem);
             layout_called = false;
             selectionDirty = true;
             pollSecs = 15;
@@ -248,11 +257,38 @@ void Menu::updater()
 PairNewItem::PairNewItem(BT_device d, bool& dirty)
     : MenuItem(ListItemType::Button, "Pair", "Pair this device.", 
         [&](AbstractMenuItem &item) -> InputReactionHint {
-            ScopedOverlay overlay("Pairing...");
-            BT_pair(dev.addr); 
+            const char *failure = nullptr;
+            {
+                ScopedOverlay overlay("Pairing...");
+                if (!BT_pair(dev.addr))
+                    failure = "Pairing failed.\n"
+                              "Put the device in pairing mode\n"
+                              "and try again.";
+                else if (!BT_connect(dev.addr))
+                    failure = "Paired, but could not connect.\n"
+                              "Try Connect, or put the device\n"
+                              "in pairing mode and pair again.";
+            }
+            if (failure)
+                MenuList::showOverlay(failure, OverlayDismissMode::DismissOnA);
             dirty = true;
             return Exit; 
         }), dev(d)
+{}
+
+ResetAllItem::ResetAllItem(bool& dirty)
+    : MenuItem(ListItemType::Button, "Confirm reset", "Forget all paired devices and reset Bluetooth settings.",
+        [&](AbstractMenuItem &item) -> InputReactionHint {
+            ScopedOverlay overlay("Resetting Bluetooth...");
+            std::vector<BT_devicePaired> paired(SCAN_MAX_RESULTS);
+            int known = BT_pairedDevices(paired.data(), SCAN_MAX_RESULTS);
+            for (int i = 0; i < known; i++)
+                BT_unpair(paired[i].remote_addr);
+            BT_diagnosticsEnable(false);
+            CFG_setBluetoothSamplingrateLimit(CFG_DEFAULT_BLUETOOTH_MAXRATE);
+            dirty = true;
+            return Exit;
+        })
 {}
 
 UnpairItem::UnpairItem(BT_devicePaired d, bool& dirty)
@@ -267,8 +303,16 @@ UnpairItem::UnpairItem(BT_devicePaired d, bool& dirty)
 ConnectKnownItem::ConnectKnownItem(BT_devicePaired d, bool& dirty)
     : MenuItem(ListItemType::Button, "Connect", "Connect this device.",
         [&](AbstractMenuItem &item) -> InputReactionHint {
-            ScopedOverlay overlay("Connecting...");
-            BT_connect(dev.remote_addr); 
+            bool connected;
+            {
+                ScopedOverlay overlay("Connecting...");
+                connected = BT_connect(dev.remote_addr);
+            }
+            if (!connected)
+                MenuList::showOverlay("Could not connect.\n"
+                                      "Make sure the device is on, or put it\n"
+                                      "in pairing mode and Forget/pair again.",
+                                      OverlayDismissMode::DismissOnA);
             dirty = true;
             return Exit; 
         }), dev(d)

@@ -145,7 +145,7 @@ protected:
     friend class MenuList;
 
     ListItemType type;
-    std::string name, desc;
+    std::string name, desc, key;
 
     MenuListCallback on_confirm; // handling drill-down and other custom item stuff
     ValueGetCallback on_get;
@@ -181,6 +181,9 @@ public:
     const std::string &getName() const { return name; }
     const std::string &getDesc() const { return desc; }
     void setDesc(const std::string &d) { desc = d; }
+    // Identity used to restore the selection after a relayout; defaults to the name.
+    const std::string &getKey() const { return key.empty() ? name : key; }
+    void setKey(const std::string &k) { key = k; }
     const ListItemType getType() const { return type; }
 
     virtual void drawCustomItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected) const {}

@@ -3354,13 +3354,13 @@ void PAD_setAnalog(int neg_id, int pos_id, int value, int repeat_at)
 		if (pad.is_pressed & neg)
 		{							  // was pressing
 			pad.is_pressed &= ~neg;	  // unset
-			pad.just_repeated &= neg; // unset
+			pad.just_repeated &= ~neg; // unset
 			pad.just_released |= neg; // set
 		}
 		if (pad.is_pressed & pos)
 		{							  // was pressing
 			pad.is_pressed &= ~pos;	  // unset
-			pad.just_repeated &= pos; // unset
+			pad.just_repeated &= ~pos; // unset
 			pad.just_released |= pos; // set
 		}
 	}
@@ -3374,6 +3374,12 @@ void PAD_reset(void)
 	pad.just_released = BTN_NONE;
 	pad.just_repeated = BTN_NONE;
 }
+static void PAD_setRawDevice(SDL_JoystickID which)
+{
+	SDL_Joystick *joy = SDL_JoystickFromInstanceID(which);
+	snprintf(pad.raw_device, sizeof(pad.raw_device), "%s", joy ? SDL_JoystickName(joy) : "");
+}
+
 FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 {
 	// reset transient state
@@ -3399,6 +3405,30 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void)
 		int btn = BTN_NONE;
 		int pressed = 0; // 0=up,1=down
 		int id = -1;
+		if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+			pad.raw_kind = 'K';
+			pad.raw_code = event.key.keysym.scancode;
+			pad.raw_value = event.type == SDL_KEYDOWN;
+			pad.raw_device[0] = '\0';
+		}
+		else if (event.type == SDL_JOYBUTTONDOWN || event.type == SDL_JOYBUTTONUP) {
+			pad.raw_kind = 'J';
+			pad.raw_code = event.jbutton.button;
+			pad.raw_value = event.type == SDL_JOYBUTTONDOWN;
+			PAD_setRawDevice(event.jbutton.which);
+		}
+		else if (event.type == SDL_JOYHATMOTION) {
+			pad.raw_kind = 'H';
+			pad.raw_code = event.jhat.hat;
+			pad.raw_value = event.jhat.value;
+			PAD_setRawDevice(event.jhat.which);
+		}
+		else if (event.type == SDL_JOYAXISMOTION && abs(event.jaxis.value) > 16384) { // ignore stick jitter
+			pad.raw_kind = 'A';
+			pad.raw_code = event.jaxis.axis;
+			pad.raw_value = event.jaxis.value;
+			PAD_setRawDevice(event.jaxis.which);
+		}
 		if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP)
 		{
 			uint8_t code = event.key.keysym.scancode;
@@ -4860,9 +4890,9 @@ FALLBACK_IMPLEMENTATION void PLAT_bluetoothDiscovery(int on) {}
 FALLBACK_IMPLEMENTATION bool PLAT_bluetoothDiscovering() { return false; }
 FALLBACK_IMPLEMENTATION int PLAT_bluetoothScan(struct BT_device *devices, int max) { return 0; }
 FALLBACK_IMPLEMENTATION int PLAT_bluetoothPaired(struct BT_devicePaired *devices, int max) { return 0; }
-FALLBACK_IMPLEMENTATION void PLAT_bluetoothPair(char *addr) {}
+FALLBACK_IMPLEMENTATION bool PLAT_bluetoothPair(char *addr) { return false; }
 FALLBACK_IMPLEMENTATION void PLAT_bluetoothUnpair(char *addr) {}
-FALLBACK_IMPLEMENTATION void PLAT_bluetoothConnect(char *addr) {}
+FALLBACK_IMPLEMENTATION bool PLAT_bluetoothConnect(char *addr) { return false; }
 FALLBACK_IMPLEMENTATION void PLAT_bluetoothDisconnect(char *addr) {}
 FALLBACK_IMPLEMENTATION bool PLAT_bluetoothConnected() { return false; }
 FALLBACK_IMPLEMENTATION bool PLAT_btIsConnected(void) { return PLAT_bluetoothConnected(); }
