@@ -2245,6 +2245,10 @@ void cleanupImageLoaderPool() {
 }
 ///////////////////////////////////////
 
+// Cocoon HOME (art-driven rail + hero backdrop) for the rgds launcher.
+static int cocoon_mode = 1;
+#include "cocoon.c"
+
 int main (int argc, char *argv[]) {
 	// LOG_info("time from launch to:\n");
 	// unsigned long main_begin = SDL_GetTicks();
@@ -2334,6 +2338,9 @@ int main (int argc, char *argv[]) {
 		int total = top->entries->count;
 
 		PWR_update(&dirty, &show_setting, NULL, NULL);
+
+		// the Cocoon HOME runs a few extra frames after a selection change (logo fade, rail bounce)
+		if (cocoon_mode && currentScreen == SCREEN_GAMELIST && cocoonFrameWanted()) dirty = 1;
 
 		// user-assignable buttons, handled before the per-screen input so they work
 		// from the game list, the game switcher and the quick menu alike.
@@ -2546,8 +2553,13 @@ int main (int argc, char *argv[]) {
 					}
 				}
 				if (PAD_justRepeated(BTN_LEFT)) {
-					selected -= MAIN_ROW_COUNT;
-					if (selected<0) {
+					selected -= cocoon_mode ? 1 : MAIN_ROW_COUNT;
+					if (cocoon_mode && selected < 0) {
+						selected = total - 1;
+						top->start = 0;
+						top->end = (total<MAIN_ROW_COUNT) ? total : MAIN_ROW_COUNT;
+					}
+					else if (selected<0) {
 						selected = 0;
 						top->start = 0;
 						top->end = (total<MAIN_ROW_COUNT) ? total : MAIN_ROW_COUNT;
@@ -2559,8 +2571,13 @@ int main (int argc, char *argv[]) {
 					}
 				}
 				else if (PAD_justRepeated(BTN_RIGHT)) {
-					selected += MAIN_ROW_COUNT;
-					if (selected>=total) {
+					selected += cocoon_mode ? 1 : MAIN_ROW_COUNT;
+					if (cocoon_mode && selected >= total) {
+						selected = 0;
+						top->start = 0;
+						top->end = (total<MAIN_ROW_COUNT) ? total : MAIN_ROW_COUNT;
+					}
+					else if (selected>=total) {
 						selected = total-1;
 						int start = total - MAIN_ROW_COUNT;
 						top->start = (start<0) ? 0 : start;
@@ -3031,11 +3048,14 @@ int main (int argc, char *argv[]) {
 				if (total > 0) {
 					{
 						// let a second screen (rgds) show the selection
-						char artpath[1024];
-						snprintf(artpath, sizeof(artpath), "%s/.media/%s.png", rompath, res_copy);
-						PLAT_selectionChanged(entry->name, artpath);
+						cocoonPublishSelection(entry);
 					}
-					if(CFG_getShowGameArt()) {
+					if (cocoon_mode) {
+						// the rail draws its own art; no separate thumbnail layer
+						had_thumb = 0;
+						ox = screen->w;
+					}
+					else if(CFG_getShowGameArt()) {
 						char thumbpath[1024];
 						snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
 						had_thumb = 0;
@@ -3054,6 +3074,7 @@ int main (int argc, char *argv[]) {
 				}
 
 				// buttons
+				if (!cocoon_mode) {
 				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
 				else if (can_resume) GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, 0, screen, 0);
 				else GFX_blitButtonGroup((char*[]){
@@ -3074,9 +3095,15 @@ int main (int argc, char *argv[]) {
 						GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, 0, screen, 1);
 					}
 				}
+				}
 
 				// list
 				if (total > 0) {
+					if (cocoon_mode) {
+						cocoonPublishRail();
+						cocoonDraw(top->entries->items[top->selected], total, show_setting);
+					}
+					else {
 					selected_row = top->selected - top->start;
 					previousY = previous_row * PILL_SIZE;
 					targetY = selected_row * PILL_SIZE;
@@ -3169,10 +3196,12 @@ int main (int argc, char *argv[]) {
 
 					previous_row = selected_row;
 					previous_depth = stack->count;
+					}
 				}
 				else {
 					// TODO: for some reason screen's dimensions end up being 0x0 in GFX_blitMessage...
 					GFX_blitMessage(font.large, "Empty folder", screen, &(SDL_Rect){0,0,screen->w,screen->h}); //, NULL);
+					if (cocoon_mode) cocoonDrawEmpty(show_setting);
 				}
 
 				lastScreen = SCREEN_GAMELIST;
@@ -3271,7 +3300,7 @@ int main (int argc, char *argv[]) {
 				GFX_clearLayers(LAYER_SCROLLTEXT);
 
 				SDL_LockMutex(animMutex);
-				if (list_show_entry_names) {
+				if (list_show_entry_names && !cocoon_mode) {
 					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
 					GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
 				}
@@ -3327,7 +3356,7 @@ int main (int argc, char *argv[]) {
 			SDL_LockMutex(animMutex);
 			if (getAnimationDraw()) {
 				GFX_clearLayers(LAYER_TRANSITION);
-				if (list_show_entry_names)
+				if (list_show_entry_names && !cocoon_mode)
 					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
 				setAnimationDraw(0);
 			}
@@ -3370,7 +3399,7 @@ int main (int argc, char *argv[]) {
 					GFX_clearLayers(LAYER_TRANSITION);
 					GFX_clearLayers(LAYER_SCROLLTEXT);
 					SDL_LockMutex(animMutex);
-					if (list_show_entry_names) {
+					if (list_show_entry_names && !cocoon_mode) {
 						GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
 						GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
 					}

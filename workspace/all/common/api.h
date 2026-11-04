@@ -449,6 +449,12 @@ void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius)
 void GFX_ApplyRoundedCorners_4444(SDL_Surface* surface, SDL_Rect* rect, int radius);
 // for both ARGB8888 and RGBA8888
 void GFX_ApplyRoundedCorners_8888(SDL_Surface* surface, SDL_Rect* rect, int radius);
+// Separable box blur over an ARGB8888/ARGB4444 surface (alpha kept). Used for the Cocoon backdrop.
+void GFX_boxBlur(SDL_Surface* surface, int radius);
+// A filled rounded rectangle as a new ARGB8888 surface (caller frees); used by the Cocoon HOME chrome.
+SDL_Surface* GFX_roundRectSurface(int w, int h, int radius, int r, int g, int b, int a);
+// A rounded rim of `thickness` on a transparent middle, same size contract as above.
+SDL_Surface* GFX_ringSurface(int w, int h, int radius, int thickness, int r, int g, int b, int a);
 ///////////////////////////////
 
 typedef struct SND_Frame {
@@ -802,8 +808,25 @@ int PLAT_getLedEffectId(int index);
 const char *PLAT_getLedEffectName(int effect_id);
 
 bool PLAT_canTurbo(void);
-// The launcher selection changed (name, expected box art path); used by secondary displays.
-void PLAT_selectionChanged(const char* name, const char* art_path);
+// What the launcher tells a second panel about the current selection (rgds bottom panel).
+typedef struct {
+	const char* name;	// display name
+	const char* art;	// box art path, "" when it has none
+	const char* hero;	// wide hero art, "" when it has none
+	const char* logo;	// transparent logo art, "" when it has none
+	const char* line1;	// quiet second line, e.g. the system name
+	const char* line2;	// quiet third line, e.g. "12 games"
+	int index;			// position in the folder, for the rail's ring
+} PLAT_Selection;
+void PLAT_selectionChanged(const PLAT_Selection* selection);
+
+// The entries of the current folder, for a second panel that draws the rail itself (rgds bottom).
+typedef struct {
+	const char* name;	// display name
+	const char* art;	// cover art or system icon path, "" when it has neither
+	int icon;			// 1 when `art` is a small icon to centre on a card, 0 for cover art
+} PLAT_RailItem;
+void PLAT_railChanged(const PLAT_RailItem* items, int count, int selected);
 int PLAT_toggleTurbo(int btn_id);
 void PLAT_clearTurbo();
 

@@ -20,13 +20,13 @@ SDL?=SDL
 ###########################################################
 
 TARGET = nextui
-INCDIR = -I. -I../common/ -I../../$(PLATFORM)/platform/
+INCDIR = -I. -I../common/ -I../libgametimedb -I../../$(PLATFORM)/platform/
 SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/config.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
 
 CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(OPT)
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99
-LDFLAGS	 += -lmsettings
+LDFLAGS	 += -lmsettings -lgametimedb
 
 PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 

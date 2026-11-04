@@ -1733,8 +1733,7 @@ void GFX_ApplyRoundedCorners_4444(SDL_Surface *surface, SDL_Rect *rect, int radi
 }
 
 void GFX_ApplyRoundedCorners_8888(SDL_Surface *surface, SDL_Rect *rect, int radius)
-{
-	if (!surface || 
+{	if (!surface || 
 		(surface->format->format != SDL_PIXELFORMAT_RGBA8888 && surface->format->format != SDL_PIXELFORMAT_ARGB8888))
 		return;
 
@@ -1769,6 +1768,97 @@ void GFX_ApplyRoundedCorners_8888(SDL_Surface *surface, SDL_Rect *rect, int radi
 			}
 		}
 	}
+}
+
+// Separable box blur, for backgrounds that are upscaled art (the Cocoon HOME's backdrop and the
+// rgds bottom panel's ground). Software, once per selection, on an ARGB8888 surface.
+// A filled rounded rectangle as a fresh ARGB8888 surface; the caller frees it.
+SDL_Surface* GFX_roundRectSurface(int w, int h, int radius, int r, int g, int b, int a)
+{
+	SDL_Surface* s = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
+	if (!s) return NULL;
+	SDL_FillRect(s, NULL, SDL_MapRGBA(s->format, r, g, b, a));
+	if (radius > 0) GFX_ApplyRoundedCorners_8888(s, NULL, radius);
+	return s;
+}
+
+// The rim of a rounded rectangle: `thickness` wide, transparent inside.
+SDL_Surface* GFX_ringSurface(int w, int h, int radius, int thickness, int r, int g, int b, int a)
+{
+	SDL_Surface* outer = GFX_roundRectSurface(w, h, radius, r, g, b, a);
+	if (!outer) return NULL;
+	if (thickness > 0) {
+		SDL_Surface* inner = GFX_roundRectSurface(w - 2 * thickness, h - 2 * thickness,
+			radius - thickness > 0 ? radius - thickness : 0, 0, 0, 0, 0);
+		if (inner) {
+			SDL_SetSurfaceBlendMode(outer, SDL_BLENDMODE_NONE);
+			SDL_BlitSurface(inner, NULL, outer, &(SDL_Rect){thickness, thickness, 0, 0});
+			SDL_SetSurfaceBlendMode(outer, SDL_BLENDMODE_BLEND);
+			SDL_FreeSurface(inner);
+		}
+	}
+	return outer;
+}
+
+void GFX_boxBlur(SDL_Surface *surface, int radius)
+{
+	if (!surface || radius < 1) return;
+	if (surface->format->format != SDL_PIXELFORMAT_ARGB8888 && surface->format->format != SDL_PIXELFORMAT_RGBA8888) return;
+
+	const int w = surface->w, h = surface->h;
+	int pitch = surface->pitch / 4;
+	Uint32 *pixels = (Uint32 *)surface->pixels;
+	const int n = 2 * radius + 1;
+	Uint32 *line = malloc(sizeof(Uint32) * (w > h ? w : h));
+	if (!line) return;
+
+	for (int y = 0; y < h; y++)
+	{
+		Uint32 *row = pixels + y * pitch;
+		int a = 0, r = 0, g = 0, b = 0;
+		for (int i = -radius; i <= radius; i++)
+		{
+			int x = i < 0 ? 0 : (i >= w ? w - 1 : i);
+			Uint32 c = row[x];
+			a += (c >> 24) & 0xFF; r += (c >> 16) & 0xFF; g += (c >> 8) & 0xFF; b += c & 0xFF;
+		}
+		for (int x = 0; x < w; x++)
+		{
+			line[x] = (Uint32)((a / n) << 24 | (r / n) << 16 | (g / n) << 8 | (b / n));
+			int xo = x - radius < 0 ? 0 : x - radius;
+			int xi = x + radius + 1 >= w ? w - 1 : x + radius + 1;
+			Uint32 co = row[xo], ci = row[xi];
+			a += ((ci >> 24) & 0xFF) - ((co >> 24) & 0xFF);
+			r += ((ci >> 16) & 0xFF) - ((co >> 16) & 0xFF);
+			g += ((ci >> 8) & 0xFF) - ((co >> 8) & 0xFF);
+			b += (ci & 0xFF) - (co & 0xFF);
+		}
+		memcpy(row, line, sizeof(Uint32) * w);
+	}
+
+	for (int x = 0; x < w; x++)
+	{
+		int a = 0, r = 0, g = 0, b = 0;
+		for (int i = -radius; i <= radius; i++)
+		{
+			int y = i < 0 ? 0 : (i >= h ? h - 1 : i);
+			Uint32 c = pixels[y * pitch + x];
+			a += (c >> 24) & 0xFF; r += (c >> 16) & 0xFF; g += (c >> 8) & 0xFF; b += c & 0xFF;
+		}
+		for (int y = 0; y < h; y++)
+		{
+			line[y] = (Uint32)((a / n) << 24 | (r / n) << 16 | (g / n) << 8 | (b / n));
+			int yo = y - radius < 0 ? 0 : y - radius;
+			int yi = y + radius + 1 >= h ? h - 1 : y + radius + 1;
+			Uint32 co = pixels[yo * pitch + x], ci = pixels[yi * pitch + x];
+			a += ((ci >> 24) & 0xFF) - ((co >> 24) & 0xFF);
+			r += ((ci >> 16) & 0xFF) - ((co >> 16) & 0xFF);
+			g += ((ci >> 8) & 0xFF) - ((co >> 8) & 0xFF);
+			b += (ci & 0xFF) - (co & 0xFF);
+		}
+		for (int y = 0; y < h; y++) pixels[y * pitch + x] = line[y];
+	}
+	free(line);
 }
 
 void GFX_blitSurfaceColor(SDL_Surface *src, SDL_Rect *src_rect, SDL_Surface *dst, SDL_Rect *dst_rect, uint32_t asset_color)
@@ -4785,7 +4875,8 @@ int LEDS_getProfileOverride()
 /////////////////////////////////////////////////////////////////////////////////////////
 
 FALLBACK_IMPLEMENTATION bool PLAT_canTurbo(void) { return false; }
-FALLBACK_IMPLEMENTATION void PLAT_selectionChanged(const char* name, const char* art_path) {}
+FALLBACK_IMPLEMENTATION void PLAT_selectionChanged(const PLAT_Selection* selection) {}
+FALLBACK_IMPLEMENTATION void PLAT_railChanged(const PLAT_RailItem* items, int count, int selected) {}
 FALLBACK_IMPLEMENTATION int PLAT_toggleTurbo(int btn_id) { return 0; }
 FALLBACK_IMPLEMENTATION void PLAT_clearTurbo() {}
 FALLBACK_IMPLEMENTATION void PLAT_updateInput(const SDL_Event *event) {}
