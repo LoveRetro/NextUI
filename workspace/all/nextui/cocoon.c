@@ -370,8 +370,23 @@ void cocoonDraw(Entry* selected_entry, int total, int show_setting) {
 						SDL_SetSurfaceBlendMode(scaled, SDL_BLENDMODE_BLEND);
 						// fades in over the entrance frames, and rises a few pixels into place
 						int rise = (int)((float)SCALE1(8) * (float)anim_step / 6.0f);
+						int lx = (screen->w - w) / 2, ly = title_y - h - SCALE1(6) + rise;
+						// a soft shadow so a pale logo still reads over bright hero art
+						SDL_Surface* shade = cocoonSurface(w, h);
+						if (shade) {
+							SDL_SetSurfaceBlendMode(shade, SDL_BLENDMODE_NONE);
+							SDL_BlitScaled(conv, NULL, shade, NULL);
+							SDL_SetSurfaceBlendMode(shade, SDL_BLENDMODE_BLEND);
+							SDL_SetSurfaceAlphaMod(shade, (Uint8)((float)anim_alpha * 0.55f));
+							SDL_SetSurfaceColorMod(shade, 0, 0, 0);
+							for (int oy = -1; oy <= 1; oy++)
+								for (int ox = -1; ox <= 1; ox++)
+									if (ox || oy) cocoonBlit(shade, lx + ox * SCALE1(1), ly + oy * SCALE1(1));
+							SDL_SetSurfaceColorMod(shade, 255, 255, 255);
+							SDL_FreeSurface(shade);
+						}
 						SDL_SetSurfaceAlphaMod(scaled, (Uint8)anim_alpha);
-						cocoonBlit(scaled, (screen->w - w) / 2, title_y - h - SCALE1(6) + rise);
+						cocoonBlit(scaled, lx, ly);
 						SDL_FreeSurface(scaled);
 					}
 					SDL_FreeSurface(conv);
@@ -387,7 +402,18 @@ void cocoonDraw(Entry* selected_entry, int total, int show_setting) {
 		char counter[32];
 		snprintf(counter, sizeof(counter), "%d of %d", i + 1, total);
 		SDL_Color muted = (SDL_Color){COCOON_MUTED_R, COCOON_MUTED_G, COCOON_MUTED_B, 255};
-		cocoonTextRight(font.small, counter, muted, screen->w - SCALE1(PADDING),
+		// a quiet dark pill behind it so the count reads over bright art
+		int cw = 0, ch = 0;
+		TTF_SizeUTF8(font.small, counter, &cw, &ch);
+		int pill_w = cw + SCALE1(14), pill_h = SCALE1(PILL_SIZE - 6);
+		int pill_x = screen->w - SCALE1(PADDING) - pill_w;
+		int pill_y = SCALE1(PADDING + PILL_SIZE + 8) - (pill_h - ch) / 2;
+		SDL_Surface* countpill = GFX_roundRectSurface(pill_w, pill_h, pill_h / 2, 0, 0, 0, 150);
+		if (countpill) {
+			cocoonBlit(countpill, pill_x, pill_y);
+			SDL_FreeSurface(countpill);
+		}
+		cocoonTextRight(font.small, counter, muted, screen->w - SCALE1(PADDING) - SCALE1(7),
 			SCALE1(PADDING + PILL_SIZE + 8), SCALE1(80));
 	}
 

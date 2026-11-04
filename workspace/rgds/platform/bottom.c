@@ -406,7 +406,9 @@ static void bottomDraw(void) {
 
 	// title and the quiet lines under the rail
 	int ty = 306;
-	bottomTextCentre(bottom_font_title, bottom_name, white, W / 2, ty, W - 80);
+	char fitted[BOTTOM_NAME_MAX];
+	GFX_truncateText(bottom_font_title, bottom_name, fitted, W - 80, 12);
+	bottomTextCentre(bottom_font_title, fitted, white, W / 2, ty, W - 80);
 	ty += 42;
 	bottomTextCentre(bottom_font_small, bottom_line1, muted, W / 2, ty, W - 80);
 	if (bottom_line2[0]) {
