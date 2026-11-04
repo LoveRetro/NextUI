@@ -179,9 +179,21 @@ static void cocoonBackdropPath(const Entry* entry, char* out, size_t out_size) {
 }
 
 // --- Backdrop ----------------------------------------------------------------
+// --- Backdrop ----------------------------------------------------------------
+//
+// Building a backdrop means decoding a 1920x620 hero PNG (60-100 ms on the RK3568), so the result
+// lives in a small cache and the next/previous entries are built ahead of time on a worker thread.
+// What is drawn per frame is only LAYER_BACKGROUND on the GPU plus the logo/title/chrome.
 
-static char cocoon_bg_path[MAX_PATH];
-static SDL_Surface* cocoon_bg_surf = NULL;
+#define COCOON_BG_CACHE 5
+static struct {
+	char path[MAX_PATH];
+	SDL_Surface* surf;
+	unsigned long used;
+} cocoon_bg_cache[COCOON_BG_CACHE];
+static unsigned long cocoon_bg_clock;
+static SDL_mutex* cocoon_bg_mutex;
+static int cocoon_redraw;	// set when a prefetch landed for the current selection
 
 // Cover-fill `src` into a w x h surface (crop, no letterbox).
 static SDL_Surface* cocoonFill(SDL_Surface* src, int w, int h) {
@@ -191,9 +203,11 @@ static SDL_Surface* cocoonFill(SDL_Surface* src, int w, int h) {
 	return dst;
 }
 
-// A vertical grade over the backdrop: dark at the top and bottom, lighter in the middle band,
-// so the pill, the logo and the title always read.
-static void cocoonGrade(int w, int h) {
+// A vertical grade baked into the backdrop surface: dark at the top and bottom, lighter in the
+// middle band, so the pill, the logo and the title always read over any art. SDL_FillRect overwrites
+// pixels instead of blending, so the ramp is built on its own surface and blitted over the art.
+static void cocoonGradeInto(SDL_Surface* dst) {
+	int w = dst->w, h = dst->h;
 	SDL_Surface* grade = cocoonSurface(w, h);
 	if (!grade) return;
 	SDL_FillRect(grade, NULL, SDL_MapRGBA(grade->format, 0, 0, 0, 0));
@@ -205,44 +219,156 @@ static void cocoonGrade(int w, int h) {
 		else a = 36 + (int)(186.0f * ((t - 0.58f) / 0.42f));					// bottom shade
 		SDL_FillRect(grade, &(SDL_Rect){0, y, w, 1}, SDL_MapRGBA(grade->format, 0, 0, 0, a));
 	}
-	SDL_BlitSurface(grade, NULL, screen, NULL);
+	SDL_BlitSurface(grade, NULL, dst, NULL);
 	SDL_FreeSurface(grade);
 }
 
-static void cocoonDrawBackdrop(const Entry* entry) {
-	char path[MAX_PATH];
-	cocoonBackdropPath(entry, path, sizeof(path));
-	if (strcmp(path, cocoon_bg_path) != 0) {
-		if (cocoon_bg_surf) {
-			SDL_FreeSurface(cocoon_bg_surf);
-			cocoon_bg_surf = NULL;
-		}
-		snprintf(cocoon_bg_path, sizeof(cocoon_bg_path), "%s", path);
-		if (path[0]) {
-			SDL_Surface* src = IMG_Load(path);
-			if (src) {
-				SDL_Surface* conv = SDL_ConvertSurfaceFormat(src, SDL_PIXELFORMAT_ARGB8888, 0);
-				SDL_FreeSurface(src);
-				if (conv) {
-					SDL_Surface* filled = cocoonFill(conv, screen->w, screen->h);
-					SDL_FreeSurface(conv);
-					// wide hero art fills the panel almost 1:1; a 2:3 cover has to be enlarged, so soften it
-					if (filled && !strstr(path, "-hero")) GFX_boxBlur(filled, 5);
-					cocoon_bg_surf = filled;
-				}
-			}
+// Decode + cover-fill + soften + grade. Runs on the main thread or on the prefetch worker.
+static SDL_Surface* cocoonBuildBackdrop(const char* path, int w, int h) {
+	if (!path || !path[0]) return NULL;
+	SDL_Surface* src = IMG_Load(path);
+	if (!src) return NULL;
+	SDL_Surface* conv = SDL_ConvertSurfaceFormat(src, SDL_PIXELFORMAT_ARGB8888, 0);
+	SDL_FreeSurface(src);
+	if (!conv) return NULL;
+	SDL_Surface* filled = cocoonFill(conv, w, h);
+	SDL_FreeSurface(conv);
+	if (filled) {
+		// wide hero art fills the panel almost 1:1; a 2:3 cover has to be enlarged, so soften it
+		if (!strstr(path, "-hero")) GFX_boxBlur(filled, 5);
+		cocoonGradeInto(filled);
+	}
+	return filled;
+}
+
+static SDL_Surface* cocoonCacheGet(const char* path) {
+	if (!cocoon_bg_mutex) return NULL;
+	SDL_LockMutex(cocoon_bg_mutex);
+	SDL_Surface* found = NULL;
+	for (int i = 0; i < COCOON_BG_CACHE; i++) {
+		if (cocoon_bg_cache[i].surf && strcmp(cocoon_bg_cache[i].path, path) == 0) {
+			cocoon_bg_cache[i].used = ++cocoon_bg_clock;
+			found = cocoon_bg_cache[i].surf;
+			break;
 		}
 	}
-	if (cocoon_bg_surf) {
-		SDL_SetClipRect(screen, NULL);
-		SDL_SetSurfaceBlendMode(cocoon_bg_surf, SDL_BLENDMODE_NONE);
-		SDL_BlitScaled(cocoon_bg_surf, NULL, screen, NULL);
-		SDL_SetSurfaceBlendMode(cocoon_bg_surf, SDL_BLENDMODE_BLEND);
+	SDL_UnlockMutex(cocoon_bg_mutex);
+	return found;
+}
+
+static void cocoonCachePut(const char* path, SDL_Surface* surf) {
+	if (!cocoon_bg_mutex || !surf) return;
+	SDL_LockMutex(cocoon_bg_mutex);
+	int slot = 0;
+	for (int i = 1; i < COCOON_BG_CACHE; i++) {
+		if (!cocoon_bg_cache[i].surf || cocoon_bg_cache[i].used < cocoon_bg_cache[slot].used) slot = i;
+	}
+	if (cocoon_bg_cache[slot].surf) SDL_FreeSurface(cocoon_bg_cache[slot].surf);
+	cocoon_bg_cache[slot].surf = surf;
+	snprintf(cocoon_bg_cache[slot].path, sizeof(cocoon_bg_cache[slot].path), "%s", path);
+	cocoon_bg_cache[slot].used = ++cocoon_bg_clock;
+	SDL_UnlockMutex(cocoon_bg_mutex);
+}
+
+static int cocoonCacheHas(const char* path) {
+	return cocoonCacheGet(path) != NULL;
+}
+
+// One worker, one pending request: build the neighbour that the rail is about to show.
+static SDL_Thread* cocoon_prefetch_thread;
+static SDL_mutex* cocoon_prefetch_mutex;
+static SDL_cond* cocoon_prefetch_cond;
+static char cocoon_prefetch_want[MAX_PATH];
+static int cocoon_prefetch_busy;
+static int cocoon_prefetch_quit;
+
+static int cocoonPrefetchWorker(void* unused) {
+	(void)unused;
+	for (;;) {
+		SDL_LockMutex(cocoon_prefetch_mutex);
+		while (!cocoon_prefetch_want[0] && !cocoon_prefetch_quit) SDL_CondWait(cocoon_prefetch_cond, cocoon_prefetch_mutex);
+		if (cocoon_prefetch_quit) {
+			SDL_UnlockMutex(cocoon_prefetch_mutex);
+			break;
+		}
+		char path[MAX_PATH];
+		snprintf(path, sizeof(path), "%s", cocoon_prefetch_want);
+		cocoon_prefetch_want[0] = '\0';
+		cocoon_prefetch_busy = 1;
+		SDL_UnlockMutex(cocoon_prefetch_mutex);
+
+		if (!cocoonCacheHas(path)) {
+			int w = screen ? screen->w : 640, h = screen ? screen->h : 480;
+			SDL_Surface* built = cocoonBuildBackdrop(path, w, h);
+			if (built) cocoonCachePut(path, built);
+		}
+
+		SDL_LockMutex(cocoon_prefetch_mutex);
+		cocoon_prefetch_busy = 0;
+		SDL_UnlockMutex(cocoon_prefetch_mutex);
+		cocoon_redraw = 1;
+	}
+	return 0;
+}
+
+static void cocoonPrefetch(const char* path) {
+	if (!path || !path[0] || !cocoon_prefetch_mutex) return;
+	if (cocoonCacheHas(path)) return;
+	SDL_LockMutex(cocoon_prefetch_mutex);
+	if (cocoon_prefetch_busy || cocoon_prefetch_want[0]) {	// already working on something
+		SDL_UnlockMutex(cocoon_prefetch_mutex);
+		return;
+	}
+	snprintf(cocoon_prefetch_want, sizeof(cocoon_prefetch_want), "%s", path);
+	SDL_CondSignal(cocoon_prefetch_cond);
+	SDL_UnlockMutex(cocoon_prefetch_mutex);
+}
+
+static void cocoonInitBackdrop(void) {
+	if (cocoon_bg_mutex) return;
+	cocoon_bg_mutex = SDL_CreateMutex();
+	cocoon_prefetch_mutex = SDL_CreateMutex();
+	cocoon_prefetch_cond = SDL_CreateCond();
+	cocoon_prefetch_thread = SDL_CreateThread(cocoonPrefetchWorker, "cocoon-prefetch", NULL);
+}
+
+// The backdrop of the current selection: a cache hit is instant, a miss builds it here (first visit
+// of a game) while the neighbours are being prepared on the worker.
+static void cocoonDrawBackdrop(const Entry* entry) {
+	cocoonInitBackdrop();
+	char path[MAX_PATH];
+	cocoonBackdropPath(entry, path, sizeof(path));
+
+	SDL_Surface* bg = cocoonCacheGet(path);
+	if (!bg && path[0]) {
+		unsigned long t0 = SDL_GetTicks();
+		bg = cocoonBuildBackdrop(path, screen->w, screen->h);
+		if (bg) cocoonCachePut(path, bg);
+		LOG_info("cocoon: backdrop %lu ms (%s)\n", SDL_GetTicks() - t0, path);
+	}
+	if (bg) {
+		// the surface is cached (decode once per game), so per frame this is one 640x480 blit; the
+		// panel composite itself is still done by the GPU in PLAT_flip
+		SDL_SetSurfaceBlendMode(bg, SDL_BLENDMODE_NONE);
+		SDL_BlitSurface(bg, NULL, screen, NULL);
+		SDL_SetSurfaceBlendMode(bg, SDL_BLENDMODE_BLEND);
 	}
 	else {
 		SDL_FillRect(screen, NULL, SDL_MapRGBA(screen->format, COCOON_BG_R, COCOON_BG_G, COCOON_BG_B, 255));
 	}
-	cocoonGrade(screen->w, screen->h);
+}
+
+// Ask the worker for the entries either side of the selection.
+static void cocoonPrefetchNeighbours(int total) {
+	if (total < 2 || !top->entries) return;
+	int i = top->selected;
+	for (int d = -1; d <= 1; d += 2) {
+		int idx = (i + d + total) % total;
+		Entry* e = top->entries->items[idx];
+		char path[MAX_PATH];
+		cocoonBackdropPath(e, path, sizeof(path));
+		cocoonPrefetch(path);
+	}
 }
 
 // Trim the sorting metadata NextUI keeps on display names the way the list does.
@@ -267,6 +393,11 @@ static void cocoonAnimStart(const char* key) {
 }
 
 int cocoonFrameWanted(void) {
+	// one extra frame when a prefetched backdrop landed, so the GPU layer catches up
+	if (cocoon_redraw) {
+		cocoon_redraw = 0;
+		return 1;
+	}
 	return cocoon_anim > 0;
 }
 
@@ -280,10 +411,11 @@ static int cocoonAnimStep(void) {
 
 void cocoonDraw(Entry* selected_entry, int total, int show_setting) {
 	int i = top->selected;
-	// start from opaque black: the stream layer is composited premultiplied, so a stray transparent
-	// pixel would show whatever the layer below still holds
-	SDL_FillRect(screen, NULL, SDL_MapRGBA(screen->format, 0, 0, 0, 255));
+	// the screen stays transparent: the backdrop lives on LAYER_BACKGROUND and only the logo, the
+	// title and the chrome are drawn here, so the panel is composited by the GPU
 	cocoonDrawBackdrop(selected_entry);
+	// prepare the neighbours once this frame is on screen
+	cocoonPrefetchNeighbours(total);
 
 	// header: the open folder, quiet and small, top-left
 	{
