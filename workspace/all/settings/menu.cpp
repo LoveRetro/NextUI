@@ -312,9 +312,71 @@ MenuList::MenuList(MenuItemType type, const std::string &descp, std::vector<Abst
 MenuList::~MenuList()
 {
     WriteLock w(itemLock);
-    for (auto item : items)
+    // with conditional visibility, hidden items are only referenced by all_items
+    for (auto item : all_items.empty() ? items : all_items)
         delete item;
     items.clear();
+    all_items.clear();
+}
+
+void MenuList::setVisibleIf(AbstractMenuItem *item, std::function<bool()> predicate)
+{
+    {
+        WriteLock w(itemLock);
+        if (all_items.empty())
+            all_items = items;
+        visible_if[item] = predicate;
+    }
+    refreshVisibility();
+}
+
+bool MenuList::refreshVisibility()
+{
+    if (visible_if.empty())
+        return false;
+
+    WriteLock w(itemLock);
+
+    std::vector<AbstractMenuItem*> visible;
+    for (auto itm : all_items)
+    {
+        auto it = visible_if.find(itm);
+        if (it == visible_if.end() || !it->second || it->second())
+            visible.push_back(itm);
+    }
+    if (visible == items)
+        return false;
+
+    // keep the same item selected, or the same row if it was the one hidden
+    AbstractMenuItem *selected = (scope.selected >= 0 && scope.selected < (int)items.size()) ? items[scope.selected] : nullptr;
+    int previous_index = scope.selected;
+
+    // items that just appeared may hold a stale value (eg. after a reset while hidden)
+    for (auto itm : visible)
+        if (std::find(items.begin(), items.end(), itm) == items.end())
+            itm->initSelection();
+
+    items = visible;
+
+    int count = (int)items.size();
+    int index = (int)(std::find(items.begin(), items.end(), selected) - items.begin());
+    if (index >= count)
+        index = std::min(std::max(previous_index, 0), std::max(count - 1, 0));
+
+    int rows = std::min(count, scope.max_visible_options);
+    int start = scope.start;
+    if (index < start)
+        start = index;
+    if (index >= start + rows)
+        start = index - rows + 1;
+    start = std::max(0, std::min(start, count - rows));
+
+    scope.count = count;
+    scope.visible_rows = rows;
+    scope.selected = index;
+    scope.start = start;
+    scope.end = start + rows;
+    return true;
 }
 
 void MenuList::performLayout(const SDL_Rect &dst)
@@ -418,6 +480,10 @@ bool MenuList::selectByName(const std::string &name)
 // returns true if the input was handled
 InputReactionHint MenuList::handleInput(int &dirty, int &quit)
 {
+    // pick up option changes from the previous frame that show/hide other items
+    if (refreshVisibility())
+        dirty = 1;
+
     bool tryDismiss = false;
     {
         ReadLock r(overlayLock);
@@ -892,7 +958,8 @@ void MenuList::drawMainItem(SDL_Surface *surface, const SDL_Rect &dst, const Abs
 void MenuList::resetAllItems()
 {
     ReadLock r(itemLock);
-    for(auto item : items) {
+    // reset hidden items too, they are part of the menu even when not shown
+    for(auto item : all_items.empty() ? items : all_items) {
         if(item->on_reset) {
             item->on_reset();
             item->initSelection();

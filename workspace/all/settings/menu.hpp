@@ -14,6 +14,7 @@ extern "C"
 #include <algorithm>
 #include <any>
 #include <numeric>
+#include <map>
 #include <shared_mutex>
 
 // leftovers to port
@@ -322,6 +323,14 @@ protected:
 
     std::shared_mutex itemLock;
 
+    // Optional conditional visibility (see setVisibleIf). When used, all_items holds
+    // every item in order and items only the currently visible ones. Lists that
+    // never call setVisibleIf leave all_items empty and behave as before.
+    std::vector<AbstractMenuItem*> all_items;
+    std::map<AbstractMenuItem*, std::function<bool()>> visible_if;
+    // re-evaluates visible_if, returns true if the visible items changed
+    bool refreshVisibility();
+
 public:
     MenuList(MenuItemType type, const std::string &desc, std::vector<AbstractMenuItem*> items, MenuListCallback on_change = nullptr, MenuListCallback on_confirm = nullptr);
     ~MenuList();
@@ -337,6 +346,11 @@ public:
     std::string getSelectedItemName() const;
     bool selectByName(const std::string &name);
     void resetAllItems();
+
+    // Only show item while predicate returns true, eg. an option that only applies
+    // when another option has a certain value. Re-evaluated on every handleInput.
+    // item must already be part of this list.
+    void setVisibleIf(AbstractMenuItem *item, std::function<bool()> predicate);
 
     // returns true if the input was handled
     virtual InputReactionHint handleInput(int &dirty, int &quit);

@@ -60,6 +60,8 @@ void CFG_defaults(NextUISettings *cfg)
         .showGameArt = CFG_DEFAULT_SHOWGAMEART,
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
         .defaultView = CFG_DEFAULT_VIEW,
+        .contentLayout = CFG_DEFAULT_CONTENTLAYOUT,
+        .gridRows = CFG_DEFAULT_GRIDROWS,
         .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
         .gameSwitcherCurtain = CFG_DEFAULT_GAMESWITCHER_CURTAIN,
 
@@ -380,6 +382,16 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "defaultView=%i", &temp_value) == 1)
             {
                 CFG_setDefaultView(temp_value);
+                continue;
+            }
+            if (sscanf(line, "contentLayout=%i", &temp_value) == 1)
+            {
+                CFG_setContentLayout(temp_value);
+                continue;
+            }
+            if (sscanf(line, "gridRows=%i", &temp_value) == 1)
+            {
+                CFG_setGridRows(temp_value);
                 continue;
             }
             if (sscanf(line, "quickSwitcherUi=%i", &temp_value) == 1)
@@ -987,6 +999,28 @@ void CFG_setDefaultView(int view)
     CFG_sync();
 }
 
+int CFG_getContentLayout(void)
+{
+    return settings.contentLayout;
+}
+
+void CFG_setContentLayout(int layout)
+{
+    settings.contentLayout = (layout == CONTENT_LAYOUT_GRID) ? CONTENT_LAYOUT_GRID : CONTENT_LAYOUT_LIST;
+    CFG_sync();
+}
+
+int CFG_getGridRows(void)
+{
+    return settings.gridRows;
+}
+
+void CFG_setGridRows(int rows)
+{
+    settings.gridRows = clamp(rows, GRID_ROWS_MIN, GRID_ROWS_MAX);
+    CFG_sync();
+}
+
 bool CFG_getShowQuickswitcherUI(void)
 {
     return settings.showQuickSwitcherUi;
@@ -1482,6 +1516,14 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getDefaultView()));
     }
+    else if (strcmp(key, "contentLayout") == 0)
+    {
+        sprintf(value, "%i", CFG_getContentLayout());
+    }
+    else if (strcmp(key, "gridRows") == 0)
+    {
+        sprintf(value, "%i", CFG_getGridRows());
+    }
     else if (strcmp(key, "quickSwitcherUi") == 0)
     {
         sprintf(value, "%i", (int)(CFG_getShowQuickswitcherUI()));
@@ -1661,6 +1703,8 @@ void CFG_sync(void)
     fprintf(file, "artWidth=%i\n", (int)(settings.gameArtWidth * 100));
     fprintf(file, "wifi=%i\n", settings.wifi);
     fprintf(file, "defaultView=%i\n", settings.defaultView);
+    fprintf(file, "contentLayout=%i\n", settings.contentLayout);
+    fprintf(file, "gridRows=%i\n", settings.gridRows);
     fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
     fprintf(file, "wifiDiagnostics=%i\n", settings.wifiDiagnostics);
     fprintf(file, "bluetooth=%i\n", settings.bluetooth);
@@ -1736,6 +1780,8 @@ void CFG_print(void)
     printf("\t\"artWidth\": %i,\n", (int)(settings.gameArtWidth * 100));
     printf("\t\"wifi\": %i,\n", settings.wifi);
     printf("\t\"defaultView\": %i,\n", settings.defaultView);
+    printf("\t\"contentLayout\": %i,\n", settings.contentLayout);
+    printf("\t\"gridRows\": %i,\n", settings.gridRows);
     printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
     printf("\t\"wifiDiagnostics\": %i,\n", settings.wifiDiagnostics);
     printf("\t\"bluetooth\": %i,\n", settings.bluetooth);

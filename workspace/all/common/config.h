@@ -55,6 +55,14 @@ enum {
 	SCREEN_OFF
 };
 
+// How the game list and system list are laid out
+enum {
+	CONTENT_LAYOUT_LIST,
+	CONTENT_LAYOUT_GRID,
+};
+#define GRID_ROWS_MIN 1
+#define GRID_ROWS_MAX 4
+
 // Achievement sort order options
 enum {
 	RA_SORT_UNLOCKED_FIRST,
@@ -140,6 +148,8 @@ typedef struct
 	bool romsUseFolderBackground;
 	bool showQuickSwitcherUi;
 	int defaultView;
+	int contentLayout;   // CONTENT_LAYOUT_*
+	int gridRows;        // GRID_ROWS_MIN..GRID_ROWS_MAX
 
 	// Mute switch
 	bool muteLeds;
@@ -241,6 +251,8 @@ typedef struct
 #define CFG_DEFAULT_GAMEARTWIDTH 0.45
 #define CFG_DEFAULT_WIFI false
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
+#define CFG_DEFAULT_CONTENTLAYOUT CONTENT_LAYOUT_LIST
+#define CFG_DEFAULT_GRIDROWS 2
 #define CFG_DEFAULT_SHOWQUICKWITCHERUI true
 #define CFG_DEFAULT_WIFI_DIAG false
 #define CFG_DEFAULT_SHOWTOOLS true
@@ -407,6 +419,12 @@ void CFG_setWifi(bool on);
 // Default view on boot
 int CFG_getDefaultView(void);
 void CFG_setDefaultView(int view);
+// Game/system list layout: CONTENT_LAYOUT_LIST or CONTENT_LAYOUT_GRID
+int CFG_getContentLayout(void);
+void CFG_setContentLayout(int layout);
+// Number of tile rows in grid layout (GRID_ROWS_MIN..GRID_ROWS_MAX)
+int CFG_getGridRows(void);
+void CFG_setGridRows(int rows);
 // Quick switcher UI painting on/off
 bool CFG_getShowQuickswitcherUI(void);
 void CFG_setShowQuickswitcherUI(bool on);

@@ -215,6 +215,7 @@ typedef struct Directory {
 	int selected;
 	int start;
 	int end;
+	int grid_col; // first visible column in grid layout
 } Directory;
 
 static int getIndexChar(char* str) {
@@ -384,6 +385,9 @@ static Directory* Directory_new(char* path, int selected) {
 	}
 	self->alphas = IntArray_new();
 	self->selected = selected;
+	self->start = 0;
+	self->end = 0;
+	self->grid_col = 0;
 	Directory_index(self);
 	return self;
 }
@@ -1776,6 +1780,350 @@ static inline int getAnimationDraw(void) { return SDL_AtomicGet(&animationDrawAt
 static inline void setNeedDraw(int v) { SDL_AtomicSet(&needDrawAtomic, v); }
 static inline int getNeedDraw(void) { return SDL_AtomicGet(&needDrawAtomic); }
 
+///////////////////////////////////////
+// Grid layout: tiles laid out column-major (top to bottom, then the next column)
+// so the content scrolls horizontally. Up/Down move within a column, Left/Right
+// move between columns. Used for every game list screen when the content layout
+// setting is "Grid"; the list renderer is untouched otherwise.
+
+typedef struct GridLayout {
+	int rows;
+	int cols;   // visible columns
+	int tile_w;
+	int tile_h;
+	int gap;
+	int x;      // left edge of the first visible column
+	int y;      // top edge of the first row
+} GridLayout;
+
+static int Grid_active(void) {
+	return CFG_getContentLayout() == CONTENT_LAYOUT_GRID;
+}
+
+static void Grid_getLayout(GridLayout* g) {
+	// leave the top row for the title pill and hardware status, the bottom row for button hints
+	int top = SCALE1(PADDING * 2 + PILL_SIZE);
+	int bottom = screen->h - SCALE1(PADDING * 2 + PILL_SIZE);
+	int area_w = screen->w - SCALE1(PADDING * 2);
+	int area_h = bottom - top;
+
+	g->gap = SCALE1(BUTTON_MARGIN * 2);
+	g->rows = clamp(CFG_getGridRows(), GRID_ROWS_MIN, GRID_ROWS_MAX);
+	g->tile_h = (area_h - g->gap * (g->rows - 1)) / g->rows;
+	g->tile_w = g->tile_h;
+
+	// keep at least a few columns visible so horizontal scrolling reads as a grid,
+	// tiles become portrait (box art shaped) when rows are tall
+	const int min_cols = 3;
+	int max_tile_w = (area_w - g->gap * (min_cols - 1)) / min_cols;
+	if (g->tile_w > max_tile_w) g->tile_w = max_tile_w;
+
+	g->cols = (area_w + g->gap) / (g->tile_w + g->gap);
+	if (g->cols < 1) g->cols = 1;
+
+	int used_w = g->cols * g->tile_w + (g->cols - 1) * g->gap;
+	g->x = (screen->w - used_w) / 2;
+	g->y = top;
+}
+
+// Returns the new selection after moving by (dx, dy) tiles. wrap allows jumping
+// from the first column to the last (and back), only used on a fresh press so
+// holding the d-pad stops at the edges, same as the list.
+static int Grid_move(int selected, int total, int rows, int dx, int dy, int wrap) {
+	if (total <= 0) return 0;
+	int row = selected % rows;
+	int col = selected / rows;
+	int last_col = (total - 1) / rows;
+
+	if (dy < 0) return (row > 0) ? selected - 1 : selected;
+	if (dy > 0) return (row < rows - 1 && selected + 1 < total) ? selected + 1 : selected;
+
+	if (dx > 0) {
+		if (col < last_col) return MIN(selected + rows, total - 1);
+		return wrap ? MIN(row, total - 1) : selected;
+	}
+	if (dx < 0) {
+		if (col > 0) return selected - rows;
+		return wrap ? MIN(last_col * rows + row, total - 1) : selected;
+	}
+	return selected;
+}
+
+// Keeps the selected tile's column on screen.
+static void Grid_scrollTo(Directory* dir, const GridLayout* g) {
+	int total_cols = (dir->entries->count + g->rows - 1) / g->rows;
+	int col = dir->selected / g->rows;
+	if (col < dir->grid_col) dir->grid_col = col;
+	if (col >= dir->grid_col + g->cols) dir->grid_col = col - g->cols + 1;
+	dir->grid_col = clamp(dir->grid_col, 0, MAX(0, total_cols - g->cols));
+}
+
+// Tile art uses the same files as game art: <parent>/.media/<name>.png.
+// Folders (eg. systems) fall back to their own .media/bg.png.
+static int Grid_findArt(Entry* entry, char* out, size_t out_size) {
+	char path_copy[MAX_PATH];
+	strncpy(path_copy, entry->path, sizeof(path_copy) - 1);
+	path_copy[sizeof(path_copy) - 1] = '\0';
+
+	char* name = strrchr(path_copy, '/');
+	if (!name) return 0;
+	*name = '\0';
+	name++;
+
+	char base[MAX_PATH];
+	strncpy(base, name, sizeof(base) - 1);
+	base[sizeof(base) - 1] = '\0';
+	if (entry->type != ENTRY_DIR) {
+		char* dot = strrchr(base, '.');
+		if (dot) *dot = '\0';
+	}
+
+	snprintf(out, out_size, "%s/.media/%s.png", path_copy, base);
+	if (exists(out)) return 1;
+
+	if (entry->type == ENTRY_DIR) {
+		snprintf(out, out_size, "%s/.media/bg.png", entry->path);
+		if (exists(out)) return 1;
+	}
+	return 0;
+}
+
+// Tile corner radius: the "Game art corner radius" setting, so tiles match game art
+// elsewhere in the UI, limited on small tiles so they don't turn into circles.
+static int Grid_cornerRadius(int w, int h) {
+	return MAX(0, MIN(SCALE1(CFG_getThumbnailRadius()), MIN(w, h) / 4));
+}
+
+// Fills rect on screen with color and rounds its corners (pixels outside the
+// radius become transparent, letting the background layer show through).
+static void Grid_fillRounded(SDL_Rect* rect, Uint32 color, int radius) {
+	SDL_FillRect(screen, rect, color);
+	if (radius <= 0) return;
+
+	// GFX_ApplyRoundedCorners_8888 writes pixels directly, keep it on-surface
+	SDL_Rect clipped;
+	if (!SDL_IntersectRect(rect, &(SDL_Rect){ 0, 0, screen->w, screen->h }, &clipped)) return;
+	if (clipped.w != rect->w || clipped.h != rect->h) return; // partially off-screen, leave square
+	GFX_ApplyRoundedCorners_8888(screen, rect, radius);
+}
+
+static SDL_Surface* Grid_loadArt(const char* path, int max_w, int max_h) {
+	SDL_Surface* image = IMG_Load(path);
+	if (!image) return NULL;
+	SDL_Surface* src = SDL_ConvertSurfaceFormat(image, screen->format->format, 0);
+	SDL_FreeSurface(image);
+	if (!src) return NULL;
+
+	double scale = MIN((double)max_w / src->w, (double)max_h / src->h);
+	int w = MAX(1, (int)(src->w * scale));
+	int h = MAX(1, (int)(src->h * scale));
+
+	SDL_Surface* dst = SDL_CreateRGBSurfaceWithFormat(0, w, h, screen->format->BitsPerPixel, screen->format->format);
+	if (dst) {
+		SDL_FillRect(dst, NULL, 0);
+		SDL_SetSurfaceBlendMode(src, SDL_BLENDMODE_NONE);
+#if SDL_VERSION_ATLEAST(2, 0, 16)
+		if (SDL_SoftStretchLinear(src, NULL, dst, NULL) != 0)
+#endif
+			SDL_BlitScaled(src, NULL, dst, NULL);
+
+		int radius = MIN(Grid_cornerRadius(max_w, max_h), MIN(w, h) / 2);
+		if (radius > 0)
+			GFX_ApplyRoundedCorners_8888(dst, &(SDL_Rect){0, 0, w, h}, radius);
+		SDL_SetSurfaceBlendMode(dst, SDL_BLENDMODE_BLEND);
+	}
+	SDL_FreeSurface(src);
+	return dst;
+}
+
+// Small LRU cache of scaled tile art keyed by entry path and tile size. Entries
+// without art are cached too (surface == NULL) so they aren't probed every frame.
+#define GRID_ART_CACHE_SIZE 48
+typedef struct GridArt {
+	char key[MAX_PATH];
+	int w;
+	int h;
+	SDL_Surface* surface;
+	unsigned int used;
+} GridArt;
+static GridArt grid_art[GRID_ART_CACHE_SIZE];
+static unsigned int grid_art_clock = 0;
+
+static SDL_Surface* Grid_getArt(Entry* entry, int max_w, int max_h) {
+	int victim = -1;
+	for (int i = 0; i < GRID_ART_CACHE_SIZE; i++) {
+		GridArt* slot = &grid_art[i];
+		if (!slot->key[0]) {
+			if (victim < 0 || grid_art[victim].key[0]) victim = i; // prefer an empty slot
+			continue;
+		}
+		if (slot->w == max_w && slot->h == max_h && exactMatch(slot->key, entry->path)) {
+			slot->used = ++grid_art_clock;
+			return slot->surface;
+		}
+		if (victim < 0 || (grid_art[victim].key[0] && slot->used < grid_art[victim].used)) victim = i;
+	}
+
+	GridArt* slot = &grid_art[victim];
+	if (slot->surface) SDL_FreeSurface(slot->surface);
+	slot->surface = NULL;
+
+	char art_path[MAX_PATH];
+	if (Grid_findArt(entry, art_path, sizeof(art_path)))
+		slot->surface = Grid_loadArt(art_path, max_w, max_h);
+
+	strncpy(slot->key, entry->path, sizeof(slot->key) - 1);
+	slot->key[sizeof(slot->key) - 1] = '\0';
+	slot->w = max_w;
+	slot->h = max_h;
+	slot->used = ++grid_art_clock;
+	return slot->surface;
+}
+
+// Tiles without art show the first letter of the name, rendered with the UI font
+// opened at a size that suits the tile (kept open while the tile size is unchanged).
+static TTF_Font* grid_letter_font = NULL;
+static int grid_letter_font_px = 0;
+
+static TTF_Font* Grid_getLetterFont(int px) {
+	if (grid_letter_font && grid_letter_font_px == px) return grid_letter_font;
+
+	const char* path = GFX_getSystemFontPath();
+	TTF_Font* opened = (path && path[0]) ? TTF_OpenFont(path, px) : NULL;
+	if (!opened) return font.large;
+	TTF_SetFontStyle(opened, CFG_getFontStyle());
+
+	if (grid_letter_font) TTF_CloseFont(grid_letter_font);
+	grid_letter_font = opened;
+	grid_letter_font_px = px;
+	return grid_letter_font;
+}
+
+// First letter or digit of name (skipping leading punctuation like "[" or "'"),
+// uppercased. Non-ASCII characters are copied whole as UTF-8. out needs 5 bytes.
+static void Grid_getInitial(const char* name, char* out) {
+	const unsigned char* pick = NULL;
+	for (const unsigned char* c = (const unsigned char*)name; *c; c++) {
+		if (*c >= 0xC0 || isalnum(*c)) { pick = c; break; }
+	}
+	if (!pick) pick = (const unsigned char*)name;
+	if (!pick[0]) { strcpy(out, "?"); return; }
+
+	int len = 1;
+	if (pick[0] >= 0xF0) len = 4;
+	else if (pick[0] >= 0xE0) len = 3;
+	else if (pick[0] >= 0xC0) len = 2;
+
+	int i = 0;
+	for (; i < len && pick[i]; i++) out[i] = pick[i];
+	out[i] = '\0';
+	if (len == 1) out[0] = toupper((unsigned char)out[0]);
+}
+
+static void Grid_freeArt(void) {
+	for (int i = 0; i < GRID_ART_CACHE_SIZE; i++) {
+		if (grid_art[i].surface) SDL_FreeSurface(grid_art[i].surface);
+		grid_art[i].surface = NULL;
+		grid_art[i].key[0] = '\0';
+	}
+	if (grid_letter_font) TTF_CloseFont(grid_letter_font);
+	grid_letter_font = NULL;
+	grid_letter_font_px = 0;
+}
+
+// Draws the visible tiles of dir onto screen, plus a title pill with the selected
+// entry's name in the top row (when names are shown). ow is the width taken by
+// the hardware status group in the top-right corner.
+static void Grid_render(Directory* dir, int show_names, int ow) {
+	GridLayout g;
+	Grid_getLayout(&g);
+	Grid_scrollTo(dir, &g);
+
+	int total = dir->entries->count;
+	int first = dir->grid_col * g.rows;
+	int last = MIN(total, first + g.cols * g.rows);
+	int border = SCALE1(2);
+
+	SDL_Color text_color = uintToColour(THEME_COLOR4_255);
+	SDL_Color selected_text_color = uintToColour(THEME_COLOR5_255);
+	SDL_Color tile_rgb = uintToColour(THEME_COLOR3_255);
+	Uint32 tile_fill = SDL_MapRGBA(screen->format, tile_rgb.r, tile_rgb.g, tile_rgb.b, 0xC0);
+
+	// art-less tiles show a single large initial; no wrapping or "..." truncation,
+	// which GFX_truncateText can't do safely in very narrow tiles
+	SDL_LockMutex(fontMutex);
+	TTF_Font* letter_font = Grid_getLetterFont(MAX(1, MIN(g.tile_w, g.tile_h) * 55 / 100));
+	SDL_UnlockMutex(fontMutex);
+
+	for (int i = first; i < last; i++) {
+		Entry* entry = dir->entries->items[i];
+		int col = i / g.rows - dir->grid_col;
+		int row = i % g.rows;
+		int is_selected = (i == dir->selected);
+		SDL_Rect tile = {
+			g.x + col * (g.tile_w + g.gap),
+			g.y + row * (g.tile_h + g.gap),
+			g.tile_w,
+			g.tile_h
+		};
+
+		int radius = Grid_cornerRadius(tile.w, tile.h);
+		SDL_Surface* art = Grid_getArt(entry, tile.w, tile.h);
+		if (art) {
+			SDL_Rect art_rect = { tile.x + (tile.w - art->w) / 2, tile.y + (tile.h - art->h) / 2, art->w, art->h };
+			if (is_selected) {
+				// frame follows the art's rounded corners, offset by the border width
+				int art_radius = MIN(radius, MIN(art->w, art->h) / 2);
+				SDL_Rect frame = { art_rect.x - border, art_rect.y - border, art_rect.w + border * 2, art_rect.h + border * 2 };
+				Grid_fillRounded(&frame, THEME_COLOR1, art_radius > 0 ? art_radius + border : 0);
+			}
+			SDL_BlitSurface(art, NULL, screen, &art_rect);
+			continue;
+		}
+
+		// no art: a plain tile with the name's first letter
+		Grid_fillRounded(&tile, is_selected ? THEME_COLOR1 : tile_fill, radius);
+
+		char* label = entry->name;
+		trimSortingMeta(&label);
+		char initial[5];
+		Grid_getInitial(label, initial);
+
+		SDL_LockMutex(fontMutex);
+		SDL_Surface* letter = TTF_RenderUTF8_Blended(letter_font, initial, is_selected ? selected_text_color : text_color);
+		SDL_UnlockMutex(fontMutex);
+		if (letter) {
+			// clip to the tile in case a glyph renders larger than expected
+			SDL_Rect src = { MAX(0, (letter->w - tile.w) / 2), MAX(0, (letter->h - tile.h) / 2), MIN(letter->w, tile.w), MIN(letter->h, tile.h) };
+			SDL_Rect dst = { tile.x + (tile.w - src.w) / 2, tile.y + (tile.h - src.h) / 2, 0, 0 };
+			SDL_BlitSurface(letter, &src, screen, &dst);
+			SDL_FreeSurface(letter);
+		}
+	}
+
+	// title pill with the selected entry's full name
+	if (show_names && dir->selected >= 0 && dir->selected < total) {
+		Entry* entry = dir->entries->items[dir->selected];
+		char* label = entry->unique ? entry->unique : entry->name;
+		trimSortingMeta(&label);
+
+		char display_name[256];
+		int max_width = screen->w - SCALE1(BUTTON_MARGIN + PADDING) - ow;
+		SDL_LockMutex(fontMutex);
+		int text_width = GFX_getTextWidth(font.large, label, display_name, max_width, SCALE1(BUTTON_PADDING * 2));
+		int pill_width = MIN(max_width, text_width);
+		GFX_blitPillDark(ASSET_WHITE_PILL, screen, &(SDL_Rect){ SCALE1(BUTTON_MARGIN), SCALE1(PADDING), pill_width, SCALE1(PILL_SIZE) });
+		SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, selected_text_color);
+		SDL_UnlockMutex(fontMutex);
+		if (text) {
+			int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
+			SDL_BlitSurface(text, &(SDL_Rect){ 0, 0, pill_width - SCALE1(BUTTON_PADDING * 2), text->h }, screen,
+				&(SDL_Rect){ SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING) + text_offset_y });
+			SDL_FreeSurface(text);
+		}
+	}
+}
+
 static void updatePillTextSurface(const char* entry_name, int move_w, SDL_Color text_color) {
 	int crop_w = move_w - SCALE1(BUTTON_PADDING * 2);
 	if (crop_w <= 0) return;
@@ -2509,6 +2857,18 @@ int main (int argc, char *argv[]) {
 				switcher_selected = 0;
 				dirty = 1;
 			}
+			else if (total>0 && Grid_active()) {
+				GridLayout grid;
+				Grid_getLayout(&grid);
+				if (PAD_justRepeated(BTN_UP))
+					selected = Grid_move(selected, total, grid.rows, 0, -1, 0);
+				else if (PAD_justRepeated(BTN_DOWN))
+					selected = Grid_move(selected, total, grid.rows, 0, 1, 0);
+				else if (PAD_justRepeated(BTN_LEFT))
+					selected = Grid_move(selected, total, grid.rows, -1, 0, PAD_justPressed(BTN_LEFT));
+				else if (PAD_justRepeated(BTN_RIGHT))
+					selected = Grid_move(selected, total, grid.rows, 1, 0, PAD_justPressed(BTN_RIGHT));
+			}
 			else if (total>0) {
 				if (PAD_justRepeated(BTN_UP)) {
 					if (selected==0 && !PAD_justPressed(BTN_UP)) {
@@ -3027,8 +3387,17 @@ int main (int argc, char *argv[]) {
 					// Safeguard: If no background is available, still render the text to leave the user a way out
 					list_show_entry_names = true;
 				}
+				// grid tiles show their own art, and the selection pill/scroll text layers are list-only
+				int grid_mode = Grid_active();
+				int grid_show_names = list_show_entry_names;
+				if (grid_mode) {
+					list_show_entry_names = false;
+					had_thumb = 0;
+					ox = screen->w;
+				}
+
 				// load game thumbnails
-				if (total > 0) {
+				if (total > 0 && !grid_mode) {
 					if(CFG_getShowGameArt()) {
 						char thumbpath[1024];
 						snprintf(thumbpath, sizeof(thumbpath), "%s/.media/%s.png", rompath, res_copy);
@@ -3075,7 +3444,11 @@ int main (int argc, char *argv[]) {
 					previousY = previous_row * PILL_SIZE;
 					targetY = selected_row * PILL_SIZE;
 					SDL_Color text_color = uintToColour(THEME_COLOR4_255); // list text color
-					for (int i = top->start, j = 0; i < top->end; i++, j++) {
+					if (grid_mode) {
+						Grid_render(top, grid_show_names, ow);
+						is_scrolling = 0;
+					}
+					for (int i = top->start, j = 0; !grid_mode && i < top->end; i++, j++) {
 						Entry* entry = top->entries->items[i];
 						char* entry_name = entry->name;
 						char* entry_unique = entry->unique;
@@ -3430,6 +3803,7 @@ int main (int argc, char *argv[]) {
 	if(blackBG)	SDL_FreeSurface(blackBG);
 	if (folderbgbmp) SDL_FreeSurface(folderbgbmp);
 	if (thumbbmp) SDL_FreeSurface(thumbbmp);
+	Grid_freeArt();
 
 	QuitSettings();
 }

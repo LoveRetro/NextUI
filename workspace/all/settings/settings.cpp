@@ -518,6 +518,17 @@ int main(int argc, char *argv[])
             []() -> std::any { return CFG_getShowFolderNamesAtRoot(); },
             [](const std::any &value) { CFG_setShowFolderNamesAtRoot(std::any_cast<bool>(value)); },
             []() { CFG_setShowFolderNamesAtRoot(CFG_DEFAULT_SHOWFOLDERNAMESATROOT);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Content layout", "Show systems and games as a vertical list,\nor as a grid of tiles that scrolls horizontally.",
+            {(int)CONTENT_LAYOUT_LIST, (int)CONTENT_LAYOUT_GRID}, {"List", "Grid"},
+            []() -> std::any { return CFG_getContentLayout(); },
+            [](const std::any &value) { CFG_setContentLayout(std::any_cast<int>(value)); },
+            []() { CFG_setContentLayout(CFG_DEFAULT_CONTENTLAYOUT);}});
+        auto *gridRowsItem = new MenuItem{ListItemType::Generic, "Grid rows", "Number of tile rows shown in the grid layout.",
+            {1, 2, 3, 4}, {"1", "2", "3", "4"},
+            []() -> std::any { return CFG_getGridRows(); },
+            [](const std::any &value) { CFG_setGridRows(std::any_cast<int>(value)); },
+            []() { CFG_setGridRows(CFG_DEFAULT_GRIDROWS);}};
+        appearanceItems.push_back(gridRowsItem);
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show Recents", "Show \"Recently Played\" menu entry in game list.", {false, true}, on_off,
             []() -> std::any { return CFG_getShowRecents(); },
             [](const std::any &value) { CFG_setShowRecents(std::any_cast<bool>(value)); },
@@ -554,6 +565,8 @@ int main(int argc, char *argv[])
         // []() { CFG_setGameSwitcherScaling(CFG_DEFAULT_GAMESWITCHERSCALING);}},
         appearanceItems.push_back(new MenuItem{ListItemType::Button, "Reset to defaults", "Resets all options in this menu to their default values.", ResetCurrentMenu});
         auto *appearanceMenu = new MenuList(MenuItemType::Fixed, "Appearance", std::move(appearanceItems));
+        // options that only apply to another option's value are hidden otherwise
+        appearanceMenu->setVisibleIf(gridRowsItem, []() { return CFG_getContentLayout() == CONTENT_LAYOUT_GRID; });
 
         std::vector<AbstractMenuItem*> displayItems = {
             new MenuItem{ListItemType::Generic, "Brightness", "Display brightness (0 to 10)", 0, 10, "",[]() -> std::any
