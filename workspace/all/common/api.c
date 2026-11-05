@@ -362,11 +362,24 @@ FALLBACK_IMPLEMENTATION void PLAT_getGPUUsage()
 	perf.gpu_usage = 0.0;
 }
 
+static char system_font_path[MAX_PATH] = "";
+
+const char *GFX_getSystemFontPath(void)
+{
+	return system_font_path;
+}
+
 int GFX_loadSystemFont(const char *fontPath)
 {
 	// Load/Reload fonts
 	if (!TTF_WasInit())
 		TTF_Init();
+
+	if (fontPath && fontPath != system_font_path)
+	{
+		strncpy(system_font_path, fontPath, sizeof(system_font_path) - 1);
+		system_font_path[sizeof(system_font_path) - 1] = '\0';
+	}
 
 	TTF_CloseFont(font.large);
 	TTF_CloseFont(font.medium);

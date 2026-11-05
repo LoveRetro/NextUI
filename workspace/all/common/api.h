@@ -449,6 +449,8 @@ void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius)
 void GFX_ApplyRoundedCorners_4444(SDL_Surface* surface, SDL_Rect* rect, int radius);
 // for both ARGB8888 and RGBA8888
 void GFX_ApplyRoundedCorners_8888(SDL_Surface* surface, SDL_Rect* rect, int radius);
+// Path of the currently loaded UI font file ("" before GFX_init), for opening it at other sizes
+const char* GFX_getSystemFontPath(void);
 ///////////////////////////////
 
 typedef struct SND_Frame {
