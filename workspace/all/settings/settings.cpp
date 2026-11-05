@@ -719,10 +719,18 @@ int main(int argc, char *argv[])
             { return CFG_getStateFormat(); }, [](const std::any &value)
             { CFG_setStateFormat(std::any_cast<int>(value)); },
             []() { CFG_setStateFormat(CFG_DEFAULT_STATEFORMAT);}},
+            new MenuItem{ListItemType::Generic, "Resume with A", "When a game has a save state, A resumes it\nand X starts the game fresh.", {false, true}, on_off,
+            []() -> std::any{ return CFG_getResumeWithA(); },
+            [](const std::any &value){ CFG_setResumeWithA(std::any_cast<bool>(value)); },
+            []() { CFG_setResumeWithA(CFG_DEFAULT_RESUMEWITHA);}},
             new MenuItem{ListItemType::Generic, "Use extracted file name", "Use the extracted file name instead of the archive name.\nOnly applies to cores that do not handle archives natively", {false, true}, on_off,
             []() -> std::any{ return CFG_getUseExtractedFileName(); },
             [](const std::any &value){ CFG_setUseExtractedFileName(std::any_cast<bool>(value)); },
-            []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}}
+            []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}},
+            new MenuItem{ListItemType::Generic, "Save & Quit in menu", "Add Save & Quit above Quit in the in-game menu\nonce you've resumed from or saved a slot.", {false, true}, on_off,
+            []() -> std::any{ return CFG_getSaveQuitMenu(); },
+            [](const std::any &value){ CFG_setSaveQuitMenu(std::any_cast<bool>(value)); },
+            []() { CFG_setSaveQuitMenu(CFG_DEFAULT_SAVEQUITMENU);}}
         };
 
         if(deviceInfo.getPlatform() == DeviceInfo::tg5040)

@@ -153,6 +153,7 @@ typedef struct
 	int gridRows;        // GRID_ROWS_MIN..GRID_ROWS_MAX
 	int screenMargin;    // unscaled px between screen edges and edge UI, SCREEN_MARGIN_DEFAULT = PADDING
 	bool allGamesView;   // root shows every game (A-Z) instead of the system list
+	bool resumeWithA;    // A resumes a game's last save state, X starts it fresh
 
 	// Mute switch
 	bool muteLeds;
@@ -170,6 +171,7 @@ typedef struct
 	// Emulator
 	int saveFormat;
 	int stateFormat;
+	bool saveQuitMenu;   // in-game menu offers Save & Quit into the session's slot
 	bool useExtractedFileName;
 
 	// Haptic
@@ -248,6 +250,7 @@ typedef struct
 #define CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND true
 #define CFG_DEFAULT_SAVEFORMAT SAVE_FORMAT_SAV
 #define CFG_DEFAULT_STATEFORMAT STATE_FORMAT_SAV
+#define CFG_DEFAULT_SAVEQUITMENU false
 #define CFG_DEFAULT_EXTRACTEDFILENAME false
 #define CFG_DEFAULT_MUTELEDS false
 #define CFG_DEFAULT_FN_ACTION "" // unassigned
@@ -262,6 +265,7 @@ typedef struct
 #define SCREEN_MARGIN_MAX 20
 #define CFG_DEFAULT_SCREENMARGIN SCREEN_MARGIN_DEFAULT
 #define CFG_DEFAULT_ALLGAMESVIEW false
+#define CFG_DEFAULT_RESUMEWITHA false
 #define CFG_DEFAULT_SHOWQUICKWITCHERUI true
 #define CFG_DEFAULT_SHOWQUICKMENUTITLE true
 #define CFG_DEFAULT_WIFI_DIAG false
@@ -402,6 +406,10 @@ void CFG_setSaveFormat(int);
 // 1 - .state.<n> (compressed rzip)
 int CFG_getStateFormat(void);
 void CFG_setStateFormat(int);
+// Show Save & Quit (above Quit) in the in-game menu once the session has a save
+// slot: the slot it resumed from, or one saved/loaded during play.
+bool CFG_getSaveQuitMenu(void);
+void CFG_setSaveQuitMenu(bool on);
 // use extracted file name instead of archive name (for cores that do not support archives natively)
 bool CFG_getUseExtractedFileName(void);
 void CFG_setUseExtractedFileName(bool);
@@ -439,6 +447,10 @@ void CFG_setGridRows(int rows);
 // for the platform's PADDING. Use GFX_getScreenMargin() for the scaled value.
 int CFG_getScreenMargin(void);
 void CFG_setScreenMargin(int margin);
+// Swap the game list's A and X: A resumes the last save state (when there is one)
+// and X starts the game fresh, instead of A open / X resume.
+bool CFG_getResumeWithA(void);
+void CFG_setResumeWithA(bool on);
 // Skip the system list and show every game on one page, sorted A-Z
 bool CFG_getAllGamesView(void);
 void CFG_setAllGamesView(bool on);
