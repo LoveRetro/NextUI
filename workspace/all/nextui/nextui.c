@@ -856,6 +856,15 @@ static Array* getQuickEntries(void) {
 	return entries;
 }
 
+// Display name for a Quick Menu item, shown in the title pill. Toggles are
+// identified by their internal names (see toggleQuick), so only relabel here.
+static const char* QuickMenu_label(Entry* item) {
+	if (!item) return "";
+	if (!strcmp(item->name, "Wifi")) return "Wi-Fi";
+	if (!strcmp(item->name, "Poweroff")) return "Power off";
+	return item->name;
+}
+
 static Array* getQuickToggles(void) {
 	Array *entries = Array_new();
 
@@ -2173,6 +2182,32 @@ static void Grid_freeArt(void) {
 	grid_letter_font_px = 0;
 }
 
+// Draws label in a pill in the top-left corner, eg. the selected grid tile or
+// Quick Menu item. It sits the screen margin away from the edges, like the status
+// pill and button hints, and always keeps one margin of space before the status
+// pill on the right (ow is that pill's width, from GFX_blitHardwareGroup).
+static void drawTitlePill(const char* label, int ow) {
+	if (!label || !label[0]) return;
+
+	int margin = GFX_getScreenMargin();
+	char display_name[256];
+	int max_width = MAX(0, screen->w - margin * 3 - ow);
+	SDL_LockMutex(fontMutex);
+	int text_width = GFX_getTextWidth(font.large, label, display_name, max_width, SCALE1(BUTTON_PADDING * 2));
+	int pill_width = MIN(max_width, text_width);
+	if (pill_width > 0)
+		GFX_blitPillDark(ASSET_WHITE_PILL, screen, &(SDL_Rect){ margin, margin, pill_width, SCALE1(PILL_SIZE) });
+	SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, uintToColour(THEME_COLOR5_255));
+	SDL_UnlockMutex(fontMutex);
+	int text_w = pill_width - SCALE1(BUTTON_PADDING * 2);
+	if (text && text_w > 0) {
+		int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
+		SDL_BlitSurface(text, &(SDL_Rect){ 0, 0, text_w, text->h }, screen,
+			&(SDL_Rect){ margin + SCALE1(BUTTON_PADDING), margin + text_offset_y });
+	}
+	if (text) SDL_FreeSurface(text);
+}
+
 // Draws the visible tiles of dir onto screen, plus a title pill with the selected
 // entry's name in the top row (when names are shown). ow is the width taken by
 // the hardware status group in the top-right corner.
@@ -2248,26 +2283,7 @@ static void Grid_render(Directory* dir, int show_names, int ow) {
 		Entry* entry = dir->entries->items[dir->selected];
 		char* label = entry->unique ? entry->unique : entry->name;
 		trimSortingMeta(&label);
-
-		// same screen margin as the status pill and button hints, and at least one
-		// margin of space between the title and the status pill on the right
-		int margin = GFX_getScreenMargin();
-		char display_name[256];
-		int max_width = MAX(0, screen->w - margin * 3 - ow);
-		SDL_LockMutex(fontMutex);
-		int text_width = GFX_getTextWidth(font.large, label, display_name, max_width, SCALE1(BUTTON_PADDING * 2));
-		int pill_width = MIN(max_width, text_width);
-		if (pill_width > 0)
-			GFX_blitPillDark(ASSET_WHITE_PILL, screen, &(SDL_Rect){ margin, margin, pill_width, SCALE1(PILL_SIZE) });
-		SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, selected_text_color);
-		SDL_UnlockMutex(fontMutex);
-		int text_w = pill_width - SCALE1(BUTTON_PADDING * 2);
-		if (text && text_w > 0) {
-			int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
-			SDL_BlitSurface(text, &(SDL_Rect){ 0, 0, text_w, text->h }, screen,
-				&(SDL_Rect){ margin + SCALE1(BUTTON_PADDING), margin + text_offset_y });
-		}
-		if (text) SDL_FreeSurface(text);
+		drawTitlePill(label, ow);
 	}
 }
 
@@ -3204,6 +3220,9 @@ int main (int argc, char *argv[]) {
 				GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
 
 				if(CFG_getShowQuickswitcherUI()) {
+					// the bottom row is icons only, so name the selected item in the top row
+					drawTitlePill(QuickMenu_label(current), ow);
+
 					#define MENU_ITEM_SIZE 72 // item size, top line
 					#define MENU_MARGIN_Y 32 // space between main UI elements and quick menu
 					#define MENU_MARGIN_X 40 // space between main UI elements and quick menu
