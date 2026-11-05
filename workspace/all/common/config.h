@@ -150,6 +150,7 @@ typedef struct
 	int defaultView;
 	int contentLayout;   // CONTENT_LAYOUT_*
 	int gridRows;        // GRID_ROWS_MIN..GRID_ROWS_MAX
+	int screenMargin;    // unscaled px between screen edges and edge UI, SCREEN_MARGIN_DEFAULT = PADDING
 	bool allGamesView;   // root shows every game (A-Z) instead of the system list
 
 	// Mute switch
@@ -254,6 +255,11 @@ typedef struct
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
 #define CFG_DEFAULT_CONTENTLAYOUT CONTENT_LAYOUT_LIST
 #define CFG_DEFAULT_GRIDROWS 2
+// Screen margin: PADDING until changed (or reset). PADDING can depend on the
+// active display at runtime (eg. h700 HDMI/720p), so the default is a sentinel.
+#define SCREEN_MARGIN_DEFAULT -1
+#define SCREEN_MARGIN_MAX 20
+#define CFG_DEFAULT_SCREENMARGIN SCREEN_MARGIN_DEFAULT
 #define CFG_DEFAULT_ALLGAMESVIEW false
 #define CFG_DEFAULT_SHOWQUICKWITCHERUI true
 #define CFG_DEFAULT_WIFI_DIAG false
@@ -427,6 +433,10 @@ void CFG_setContentLayout(int layout);
 // Number of tile rows in grid layout (GRID_ROWS_MIN..GRID_ROWS_MAX)
 int CFG_getGridRows(void);
 void CFG_setGridRows(int rows);
+// Screen margin in unscaled px (0..SCREEN_MARGIN_MAX), or SCREEN_MARGIN_DEFAULT
+// for the platform's PADDING. Use GFX_getScreenMargin() for the scaled value.
+int CFG_getScreenMargin(void);
+void CFG_setScreenMargin(int margin);
 // Skip the system list and show every game on one page, sorted A-Z
 bool CFG_getAllGamesView(void);
 void CFG_setAllGamesView(bool on);

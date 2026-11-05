@@ -2369,18 +2369,25 @@ SDL_Surface* GFX_createScreenFormatSurface(int width, int height)
 	);
 }
 
+int GFX_getScreenMargin(void)
+{
+	int margin = CFG_getScreenMargin();
+	return SCALE1(margin < 0 ? PADDING : margin);
+}
+
 int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 {
 	int ox;
 	int oy;
 	int ow = 0;
+	int margin = GFX_getScreenMargin();
 
 	if (show_setting && !GetHDMI())
 	{
 		// Use the helper function to render the indicator at the standard position
 		ow = SCALE1(PILL_SIZE + SETTINGS_WIDTH + 10 + 4);
-		ox = dst->w - SCALE1(PADDING) - ow;
-		oy = SCALE1(PADDING);
+		ox = dst->w - margin - ow;
+		oy = margin;
 		GFX_blitHardwareIndicator(dst, ox, oy, (IndicatorType)show_setting);
 	}
 	else
@@ -2397,8 +2404,8 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 		if (!show_bt && !show_wifi && !show_clock)
 		{
 			ow = SCALE1(PILL_SIZE);
-			ox = dst->w - SCALE1(PADDING) - ow;
-			oy = SCALE1(PADDING);
+			ox = dst->w - margin - ow;
+			oy = margin;
 
 			GFX_blitPillColor(ASSET_WHITE_PILL, dst, &(SDL_Rect){ox, oy, ow, SCALE1(PILL_SIZE)}, THEME_COLOR2, RGB_WHITE);
 
@@ -2448,8 +2455,8 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 				ow += clock_width + SCALE1(BUTTON_MARGIN);
 			}
 
-			ox = dst->w - SCALE1(PADDING) - ow;
-			oy = SCALE1(PADDING);
+			ox = dst->w - margin - ow;
+			oy = margin;
 			GFX_blitPillColor(ASSET_WHITE_PILL, dst, &(SDL_Rect){ox, oy, ow, SCALE1(PILL_SIZE)}, THEME_COLOR2, RGB_WHITE);
 
 			ox += SCALE1(BUTTON_MARGIN);
@@ -2536,8 +2543,9 @@ int GFX_blitButtonGroup(char **pairs, int primary, SDL_Surface *dst, int align_r
 	int w = 0; // individual button dimension
 	int h = 0; // hints index
 	ow = 0;	   // full pill width
-	ox = align_right ? dst->w - SCALE1(PADDING) : SCALE1(PADDING);
-	oy = dst->h - SCALE1(PADDING + PILL_SIZE);
+	int margin = GFX_getScreenMargin();
+	ox = align_right ? dst->w - margin : margin;
+	oy = dst->h - margin - SCALE1(PILL_SIZE);
 
 	for (int i = 0; i < 2; i++)
 	{

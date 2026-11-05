@@ -62,6 +62,7 @@ void CFG_defaults(NextUISettings *cfg)
         .defaultView = CFG_DEFAULT_VIEW,
         .contentLayout = CFG_DEFAULT_CONTENTLAYOUT,
         .gridRows = CFG_DEFAULT_GRIDROWS,
+        .screenMargin = CFG_DEFAULT_SCREENMARGIN,
         .allGamesView = CFG_DEFAULT_ALLGAMESVIEW,
         .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
         .gameSwitcherCurtain = CFG_DEFAULT_GAMESWITCHER_CURTAIN,
@@ -393,6 +394,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "gridRows=%i", &temp_value) == 1)
             {
                 CFG_setGridRows(temp_value);
+                continue;
+            }
+            if (sscanf(line, "screenMargin=%i", &temp_value) == 1)
+            {
+                CFG_setScreenMargin(temp_value);
                 continue;
             }
             if (sscanf(line, "allGamesView=%i", &temp_value) == 1)
@@ -1027,6 +1033,17 @@ void CFG_setGridRows(int rows)
     CFG_sync();
 }
 
+int CFG_getScreenMargin(void)
+{
+    return settings.screenMargin;
+}
+
+void CFG_setScreenMargin(int margin)
+{
+    settings.screenMargin = (margin < 0) ? SCREEN_MARGIN_DEFAULT : clamp(margin, 0, SCREEN_MARGIN_MAX);
+    CFG_sync();
+}
+
 bool CFG_getAllGamesView(void)
 {
     return settings.allGamesView;
@@ -1541,6 +1558,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getGridRows());
     }
+    else if (strcmp(key, "screenMargin") == 0)
+    {
+        sprintf(value, "%i", CFG_getScreenMargin());
+    }
     else if (strcmp(key, "allGamesView") == 0)
     {
         sprintf(value, "%i", (int)(CFG_getAllGamesView()));
@@ -1726,6 +1747,7 @@ void CFG_sync(void)
     fprintf(file, "defaultView=%i\n", settings.defaultView);
     fprintf(file, "contentLayout=%i\n", settings.contentLayout);
     fprintf(file, "gridRows=%i\n", settings.gridRows);
+    fprintf(file, "screenMargin=%i\n", settings.screenMargin);
     fprintf(file, "allGamesView=%i\n", settings.allGamesView);
     fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
     fprintf(file, "wifiDiagnostics=%i\n", settings.wifiDiagnostics);
@@ -1804,6 +1826,7 @@ void CFG_print(void)
     printf("\t\"defaultView\": %i,\n", settings.defaultView);
     printf("\t\"contentLayout\": %i,\n", settings.contentLayout);
     printf("\t\"gridRows\": %i,\n", settings.gridRows);
+    printf("\t\"screenMargin\": %i,\n", settings.screenMargin);
     printf("\t\"allGamesView\": %i,\n", settings.allGamesView);
     printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
     printf("\t\"wifiDiagnostics\": %i,\n", settings.wifiDiagnostics);

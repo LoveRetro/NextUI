@@ -401,7 +401,10 @@ int GFX_getButtonWidth(char* hint, char* button);
 void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rect);
 void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_rect);
 
-int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
+int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting); // returns the status pill's width
+// Scaled distance between the screen edges and edge-anchored UI (status pill,
+// button hints, list title): the "Screen margin" setting, PADDING by default.
+int GFX_getScreenMargin(void);
 void GFX_blitHardwareHints(SDL_Surface* dst, int show_setting);
 void GFX_blitTopCurtain(SDL_Surface* dst);
 void GFX_blitBottomCurtain(SDL_Surface* dst);
