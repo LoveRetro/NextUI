@@ -150,6 +150,7 @@ typedef struct
 	int defaultView;
 	int contentLayout;   // CONTENT_LAYOUT_*
 	int gridRows;        // GRID_ROWS_MIN..GRID_ROWS_MAX
+	bool allGamesView;   // root shows every game (A-Z) instead of the system list
 
 	// Mute switch
 	bool muteLeds;
@@ -253,6 +254,7 @@ typedef struct
 #define CFG_DEFAULT_VIEW SCREEN_GAMELIST
 #define CFG_DEFAULT_CONTENTLAYOUT CONTENT_LAYOUT_LIST
 #define CFG_DEFAULT_GRIDROWS 2
+#define CFG_DEFAULT_ALLGAMESVIEW false
 #define CFG_DEFAULT_SHOWQUICKWITCHERUI true
 #define CFG_DEFAULT_WIFI_DIAG false
 #define CFG_DEFAULT_SHOWTOOLS true
@@ -425,6 +427,9 @@ void CFG_setContentLayout(int layout);
 // Number of tile rows in grid layout (GRID_ROWS_MIN..GRID_ROWS_MAX)
 int CFG_getGridRows(void);
 void CFG_setGridRows(int rows);
+// Skip the system list and show every game on one page, sorted A-Z
+bool CFG_getAllGamesView(void);
+void CFG_setAllGamesView(bool on);
 // Quick switcher UI painting on/off
 bool CFG_getShowQuickswitcherUI(void);
 void CFG_setShowQuickswitcherUI(bool on);
