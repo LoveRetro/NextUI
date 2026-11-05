@@ -170,6 +170,7 @@ typedef struct
 	// Emulator
 	int saveFormat;
 	int stateFormat;
+	bool saveQuitMenu;   // in-game menu offers Save & Quit into the session's slot
 	bool useExtractedFileName;
 
 	// Haptic
@@ -248,6 +249,7 @@ typedef struct
 #define CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND true
 #define CFG_DEFAULT_SAVEFORMAT SAVE_FORMAT_SAV
 #define CFG_DEFAULT_STATEFORMAT STATE_FORMAT_SAV
+#define CFG_DEFAULT_SAVEQUITMENU false
 #define CFG_DEFAULT_EXTRACTEDFILENAME false
 #define CFG_DEFAULT_MUTELEDS false
 #define CFG_DEFAULT_FN_ACTION "" // unassigned
@@ -402,6 +404,10 @@ void CFG_setSaveFormat(int);
 // 1 - .state.<n> (compressed rzip)
 int CFG_getStateFormat(void);
 void CFG_setStateFormat(int);
+// Show Save & Quit (above Quit) in the in-game menu once the session has a save
+// slot: the slot it resumed from, or one saved/loaded during play.
+bool CFG_getSaveQuitMenu(void);
+void CFG_setSaveQuitMenu(bool on);
 // use extracted file name instead of archive name (for cores that do not support archives natively)
 bool CFG_getUseExtractedFileName(void);
 void CFG_setUseExtractedFileName(bool);

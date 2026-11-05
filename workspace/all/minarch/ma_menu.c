@@ -113,7 +113,7 @@ void MSG_quit(void) {
 
 ///////////////////////////////////////
 
-#define MENU_ITEM_COUNT 5
+#define MENU_ITEM_COUNT 6
 #define MENU_SLOT_COUNT 8
 
 enum {
@@ -121,6 +121,7 @@ enum {
 	ITEM_SAVE,
 	ITEM_LOAD,
 	ITEM_OPTS,
+	ITEM_SAVE_QUIT, // only shown when Menu_itemVisible() says so
 	ITEM_QUIT,
 };
 
@@ -162,9 +163,28 @@ static struct {
 		[ITEM_SAVE] = "Save",
 		[ITEM_LOAD] = "Load",
 		[ITEM_OPTS] = "Options",
+		[ITEM_SAVE_QUIT] = "Save & Quit",
 		[ITEM_QUIT] = "Quit",
 	}
 };
+
+// Save & Quit is opt-in (Settings > System) and only offered once this session
+// has a slot to save into: one it resumed from, or saved/loaded during play.
+// Hidden while save states are blocked (RetroAchievements hardcore mode).
+static int Menu_itemVisible(int item) {
+	if (item == ITEM_SAVE_QUIT)
+		return CFG_getSaveQuitMenu() && session_slot >= 0 && session_slot < USER_STATE_SLOTS && !RA_isHardcoreModeActive();
+	return 1;
+}
+
+// Steps selected by dir (+1/-1) to the next visible item, wrapping around.
+static int Menu_stepItem(int selected, int dir) {
+	for (int n = 0; n < MENU_ITEM_COUNT; n++) {
+		selected = (selected + dir + MENU_ITEM_COUNT) % MENU_ITEM_COUNT;
+		if (Menu_itemVisible(selected)) break;
+	}
+	return selected;
+}
 
 void Menu_init(void) {
 	menu.overlay = SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE,
@@ -1688,7 +1708,7 @@ void Menu_screenshot(void) {
 		Notification_push(NOTIFICATION_SETTING, "Screenshot saved", NULL);
 	}
 }
-void Menu_saveState(void) {
+int Menu_saveState(void) {
 	// LOG_info("Menu_saveState\n");
 	Menu_updateState();
 	
@@ -1718,7 +1738,8 @@ void Menu_saveState(void) {
 	state_slot = menu.slot;
 	putInt(menu.slot_path, menu.slot);
 	int success = State_write();
-	
+	if (success) session_slot = menu.slot;
+
 	// Show notification if enabled
 	if (CFG_getNotifyManualSave()) {
 		char msg[NOTIFICATION_MAX_MESSAGE];
@@ -1726,6 +1747,7 @@ void Menu_saveState(void) {
 		snprintf(msg, sizeof(msg), success ? "State Saved - Slot %d" : "Save Failed - Slot %d", menu.slot + 1);
 		Notification_push(NOTIFICATION_SAVE_STATE, msg, NULL);
 	}
+	return success;
 }
 void Menu_loadState(void) {
 	Menu_updateState();
@@ -1748,8 +1770,9 @@ void Menu_loadState(void) {
 		state_slot = menu.slot;
 		putInt(menu.slot_path, menu.slot);
 		int success = State_read();
+		if (success) session_slot = menu.slot;
 		Rewind_on_state_change();
-		
+
 		// Show notification if enabled
 		if (CFG_getNotifyLoad()) {
 			char msg[NOTIFICATION_MAX_MESSAGE];
@@ -1837,13 +1860,11 @@ void Menu_loop(void) {
 		PAD_poll();
 		
 		if (PAD_justPressed(BTN_UP)) {
-			selected -= 1;
-			if (selected<0) selected += MENU_ITEM_COUNT;
+			selected = Menu_stepItem(selected, -1);
 			dirty = 1;
 		}
 		else if (PAD_justPressed(BTN_DOWN)) {
-			selected += 1;
-			if (selected>=MENU_ITEM_COUNT) selected -= MENU_ITEM_COUNT;
+			selected = Menu_stepItem(selected, 1);
 			dirty = 1;
 		}
 		else if (PAD_justPressed(BTN_LEFT)) {
@@ -1931,6 +1952,17 @@ void Menu_loop(void) {
 					}
 				}
 				break;
+				case ITEM_SAVE_QUIT:
+					// save into this session's slot (not whichever slot Save/Load is
+					// currently browsing), and only quit once that worked
+					menu.slot = session_slot;
+					if (Menu_saveState()) {
+						status = STATUS_QUIT;
+						show_menu = 0;
+						quit = 1;
+					}
+					else dirty = 1;
+				break;
 				case ITEM_QUIT:
 					status = STATUS_QUIT;
 					show_menu = 0;
@@ -1979,48 +2011,63 @@ void Menu_loop(void) {
 			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, 1, screen, 1);
 			
 			// list
-			oy = (((DEVICE_HEIGHT / FIXED_SCALE) - PADDING * 2) - (MENU_ITEM_COUNT * PILL_SIZE)) / 2;
-			for (int i=0; i<MENU_ITEM_COUNT; i++) {
+			int visible_items = 0;
+			for (int i=0; i<MENU_ITEM_COUNT; i++)
+				if (Menu_itemVisible(i)) visible_items += 1;
+
+			// rows sit between the title pill and the button hints; when more items
+			// are shown than fit at PILL_SIZE (eg. Save & Quit on 480p screens) the
+			// rows move closer together, pills keep their size
+			int list_h = (DEVICE_HEIGHT / FIXED_SCALE) - PADDING * 2;
+			int max_list_h = list_h - (PILL_SIZE + BUTTON_MARGIN) * 2;
+			int row_h = PILL_SIZE;
+			if (visible_items * row_h > max_list_h) row_h = MAX(1, max_list_h / visible_items);
+			oy = (list_h - (visible_items * row_h)) / 2;
+
+			for (int i=0, row=0; i<MENU_ITEM_COUNT; i++) {
+				if (!Menu_itemVisible(i)) continue;
 				char* item = menu.items[i];
 				SDL_Color text_color = COLOR_WHITE;
-				
+				int pill_y = SCALE1(oy + PADDING) + row * SCALE1(row_h) + (SCALE1(row_h) - SCALE1(PILL_SIZE)) / 2;
+				row += 1;
+
 				if (i==selected) {
 					text_color = uintToColour(THEME_COLOR5_255);
 
 					// disc change
-					if (menu.total_discs>1 && i==ITEM_CONT) {				
+					if (menu.total_discs>1 && i==ITEM_CONT) {
 						GFX_blitPillDark(ASSET_WHITE_PILL, screen, &(SDL_Rect){
 							SCALE1(PADDING),
-							SCALE1(oy + PADDING),
+							pill_y,
 							screen->w - SCALE1(PADDING * 2),
 							SCALE1(PILL_SIZE)
 						});
 						text = TTF_RenderUTF8_Blended(font.large, disc_name, text_color);
 						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
 							screen->w - SCALE1(PADDING + BUTTON_PADDING) - text->w,
-							SCALE1(oy + PADDING + 4)
+							pill_y + SCALE1(4)
 						});
 						SDL_FreeSurface(text);
 					}
-					
+
 					TTF_SizeUTF8(font.large, item, &ow, NULL);
 					ow += SCALE1(BUTTON_PADDING*2);
-					
+
 					// pill
 					GFX_blitPillDark(ASSET_WHITE_PILL, screen, &(SDL_Rect){
 						SCALE1(PADDING),
-						SCALE1(oy + PADDING + (i * PILL_SIZE)),
+						pill_y,
 						ow,
 						SCALE1(PILL_SIZE)
 					});
 				}
-			
-				
+
+
 				// text
 				text = TTF_RenderUTF8_Blended(font.large, item, text_color);
 				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
 					SCALE1(PADDING + BUTTON_PADDING),
-					SCALE1(oy + PADDING + (i * PILL_SIZE) + 4)
+					pill_y + SCALE1(4)
 				});
 				SDL_FreeSurface(text);
 			}

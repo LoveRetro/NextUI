@@ -81,6 +81,7 @@ void CFG_defaults(NextUISettings *cfg)
         .romsUseFolderBackground = CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND,
         .saveFormat = CFG_DEFAULT_SAVEFORMAT,
         .stateFormat = CFG_DEFAULT_STATEFORMAT,
+        .saveQuitMenu = CFG_DEFAULT_SAVEQUITMENU,
         .useExtractedFileName = CFG_DEFAULT_EXTRACTEDFILENAME,
 
         .ntp = CFG_DEFAULT_NTP,
@@ -339,6 +340,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "stateFormat=%i", &temp_value) == 1)
             {
                 CFG_setStateFormat(temp_value);
+                continue;
+            }
+            if (sscanf(line, "saveQuitMenu=%i", &temp_value) == 1)
+            {
+                CFG_setSaveQuitMenu((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "useExtractedFileName=%i", &temp_value) == 1)
@@ -944,6 +950,17 @@ void CFG_setStateFormat(int f)
     CFG_sync();
 }
 
+bool CFG_getSaveQuitMenu(void)
+{
+    return settings.saveQuitMenu;
+}
+
+void CFG_setSaveQuitMenu(bool on)
+{
+    settings.saveQuitMenu = on;
+    CFG_sync();
+}
+
 bool CFG_getUseExtractedFileName(void)
 {
     return settings.useExtractedFileName;
@@ -1535,6 +1552,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getStateFormat());
     }
+    else if (strcmp(key, "saveQuitMenu") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getSaveQuitMenu()));
+    }
     else if (strcmp(key, "useExtractedFileName") == 0)
     {
         sprintf(value, "%i", CFG_getUseExtractedFileName());
@@ -1758,6 +1779,7 @@ void CFG_sync(void)
     fprintf(file, "romfolderbg=%i\n", settings.romsUseFolderBackground);
     fprintf(file, "saveFormat=%i\n", settings.saveFormat);
     fprintf(file, "stateFormat=%i\n", settings.stateFormat);
+    fprintf(file, "saveQuitMenu=%i\n", settings.saveQuitMenu);
     fprintf(file, "useExtractedFileName=%i\n", settings.useExtractedFileName);
     fprintf(file, "muteLeds=%i\n", settings.muteLeds);
     fprintf(file, "fn1action=%s\n", settings.fnAction[0]);
@@ -1838,6 +1860,7 @@ void CFG_print(void)
     printf("\t\"romfolderbg\": %i,\n", settings.romsUseFolderBackground);
     printf("\t\"saveFormat\": %i,\n", settings.saveFormat);
     printf("\t\"stateFormat\": %i,\n", settings.stateFormat);
+    printf("\t\"saveQuitMenu\": %i,\n", settings.saveQuitMenu);
     printf("\t\"useExtractedFileName\": %i,\n", settings.useExtractedFileName);
     printf("\t\"muteLeds\": %i,\n", settings.muteLeds);
     printf("\t\"fn1action\": \"%s\",\n", settings.fnAction[0]);

@@ -157,6 +157,7 @@ void RTC_write(void) {
 ///////////////////////////////////////
 
 int state_slot = 0;
+int session_slot = -1;
 
 void State_getPath(char* filename) {
 	char work_name[MAX_PATH];
@@ -378,9 +379,13 @@ void State_resume(void) {
 	if (!exists(RESUME_SLOT_PATH)) return;
 
 	int last_state_slot = state_slot;
-	state_slot = getInt(RESUME_SLOT_PATH);
+	int resume_slot = getInt(RESUME_SLOT_PATH);
+	state_slot = resume_slot;
 	unlink(RESUME_SLOT_PATH);
-	State_read();
+	// resuming a user slot (not the hidden default or auto-resume slot) makes it
+	// this session's slot, eg. the target of the menu's Save & Quit
+	if (State_read() && resume_slot >= 0 && resume_slot < USER_STATE_SLOTS)
+		session_slot = resume_slot;
 	state_slot = last_state_slot;
 	Rewind_on_state_change();
 }

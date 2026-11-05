@@ -722,7 +722,11 @@ int main(int argc, char *argv[])
             new MenuItem{ListItemType::Generic, "Use extracted file name", "Use the extracted file name instead of the archive name.\nOnly applies to cores that do not handle archives natively", {false, true}, on_off,
             []() -> std::any{ return CFG_getUseExtractedFileName(); },
             [](const std::any &value){ CFG_setUseExtractedFileName(std::any_cast<bool>(value)); },
-            []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}}
+            []() { CFG_setUseExtractedFileName(CFG_DEFAULT_EXTRACTEDFILENAME);}},
+            new MenuItem{ListItemType::Generic, "Save & Quit in menu", "Add Save & Quit above Quit in the in-game menu\nonce you've resumed from or saved a slot.", {false, true}, on_off,
+            []() -> std::any{ return CFG_getSaveQuitMenu(); },
+            [](const std::any &value){ CFG_setSaveQuitMenu(std::any_cast<bool>(value)); },
+            []() { CFG_setSaveQuitMenu(CFG_DEFAULT_SAVEQUITMENU);}}
         };
 
         if(deviceInfo.getPlatform() == DeviceInfo::tg5040)
