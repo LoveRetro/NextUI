@@ -218,6 +218,11 @@ typedef struct Directory {
 	int grid_col; // first visible column in grid layout
 } Directory;
 
+// "All games" root: when enabled, the root directory lists every game of every
+// system (A-Z) instead of the system list. all_games_root is set by getRoot()
+// each time the root is built.
+static int all_games_root = 0;
+
 static int getIndexChar(char* str) {
 	char i = 0;
 	char c = tolower(str[0]);
@@ -243,6 +248,26 @@ static void getUniqueName(Entry* entry, char* out_name) {
 static void Directory_index(Directory* self) {
     int is_collection = prefixMatch(COLLECTIONS_PATH, self->path);
     int skip_index = exactMatch(FAUX_RECENT_PATH, self->path) || is_collection; // not alphabetized
+
+    if (all_games_root && exactMatch(self->path, SDCARD_PATH)) {
+        // map.txt aliases were already applied per system by getAllGames(), and
+        // duplicate names across systems are intentionally left untagged.
+        int alpha = -1;
+        int index = 0;
+        for (int i = 0; i < self->entries->count; i++) {
+            Entry* entry = self->entries->items[i];
+            int a = getIndexChar(entry->name);
+            // a merged list can contain more than INT_ARRAY_MAX index changes
+            // (eg. symbols sorting after letters), keep the remainder in the last group
+            if (a != alpha && self->alphas->count < INT_ARRAY_MAX) {
+                index = self->alphas->count;
+                IntArray_push(self->alphas, i);
+                alpha = a;
+            }
+            entry->alpha = index;
+        }
+        return;
+    }
 
     Hash* map = NULL;
     char map_path[256];
@@ -855,7 +880,87 @@ static Array* getQuickToggles(void) {
 	return entries;
 }
 
+// Applies <dir_path>/map.txt display-name aliases to entries the same way
+// Directory_index() does for a single folder: renames, drops entries whose
+// alias marks them hidden, and resorts if anything was renamed.
+static Array* applyDirMap(Array* entries, const char* dir_path) {
+	char map_path[256];
+	snprintf(map_path, sizeof(map_path), "%s/map.txt", dir_path);
+	if (!exists(map_path)) return entries;
+
+	FILE* file = fopen(map_path, "r");
+	if (!file) return entries;
+
+	Hash* map = Hash_new();
+	char line[256];
+	while (fgets(line, sizeof(line), file) != NULL) {
+		normalizeNewline(line);
+		trimTrailingNewlines(line);
+		if (strlen(line) == 0) continue;
+
+		char* tmp = strchr(line, '\t');
+		if (tmp) {
+			tmp[0] = '\0';
+			Hash_set(map, line, strdup(tmp + 1));
+		}
+	}
+	fclose(file);
+
+	int resort = 0;
+	Array* kept = Array_new();
+	for (int i = 0; i < entries->count; i++) {
+		Entry* entry = entries->items[i];
+		char* filename = strrchr(entry->path, '/') + 1;
+		char* alias = Hash_get(map, filename);
+		if (alias) {
+			free(entry->name);
+			entry->name = strdup(alias);
+			resort = 1;
+		}
+		if (hide(entry->name)) Entry_free(entry);
+		else Array_push(kept, entry);
+	}
+	Array_free(entries);
+	Hash_free(map);
+
+	if (resort) EntryArray_sort(kept);
+	return kept;
+}
+
+// Every game of every visible system, sorted A-Z, for the "All games" root page.
+// Systems come from getRoms() so hidden/empty systems and collation of sibling
+// folders match the regular system list.
+// Subfolders inside a system (multi-disc games, user folders) stay as folders.
+static Array* getAllGames(void) {
+	Array* all = Array_new();
+	Array* systems = getRoms();
+
+	for (int i = 0; i < systems->count; i++) {
+		Entry* system = systems->items[i];
+		Array* games = applyDirMap(getEntries(system->path), system->path);
+		Array_yoink(all, games);
+	}
+	EntryArray_free(systems);
+
+	EntryArray_sort(all);
+	return all;
+}
+
 static Array* getRoot(void) {
+	if (CFG_getAllGamesView()) {
+		// hasRecents() (re)loads the recents list the Quick Menu and game switcher
+		// rely on, and consumes a pending disc change, so it must still run here
+		hasRecents();
+		Array* all = getAllGames();
+		if (all->count > 0) {
+			all_games_root = 1;
+			return all;
+		}
+		// no games anywhere: fall back to the regular root so Tools etc. stay reachable
+		EntryArray_free(all);
+	}
+	all_games_root = 0;
+
     Array* root = Array_new();
 
     if (hasRecents() && CFG_getShowRecents())
@@ -1589,6 +1694,31 @@ static void loadLast(void) { // call after loading root directory
 	char full_path[256];
 	strcpy(full_path, last_path);
 
+	// "All games" root: games sit directly at the root, so select the game (or the
+	// game's folder, eg. multi-disc) instead of walking Roms/<system>/...
+	if (all_games_root && stack->count == 1 && prefixMatch(ROMS_PATH "/", full_path)) {
+		for (int i = 0; i < top->entries->count; i++) {
+			Entry* entry = top->entries->items[i];
+			size_t len = strlen(entry->path);
+			if (exactMatch(entry->path, full_path) || (prefixMatch(entry->path, full_path) && full_path[len] == '/')) {
+				top->selected = i;
+				if (i >= top->end) {
+					top->start = i;
+					top->end = top->start + MAIN_ROW_COUNT;
+					if (top->end > top->entries->count) {
+						top->end = top->entries->count;
+						top->start = top->end - MAIN_ROW_COUNT;
+						if (top->start < 0) top->start = 0;
+					}
+				}
+				break;
+			}
+		}
+		if (top->selected >= 0 && top->selected < top->entries->count)
+			readyResume(top->entries->items[top->selected]);
+		return;
+	}
+
 	char* tmp;
 	char filename[256];
 	tmp = strrchr(last_path, '/');
@@ -1600,6 +1730,17 @@ static void loadLast(void) { // call after loading root directory
 
 		char* slash = strrchr(last_path, '/');
 		last_path[(slash-last_path)] = '\0';
+	}
+
+	// "All games" root has no Recents/Collections entries (they live in the Quick
+	// Menu), so open that top-level folder directly and restore within it.
+	if (all_games_root && stack->count == 1 && last->count > 0) {
+		char* first = last->items[last->count - 1];
+		if (exactMatch(first, FAUX_RECENT_PATH) || exactMatch(first, COLLECTIONS_PATH)) {
+			char* path = Array_pop(last);
+			openDirectory(path, 0);
+			free(path);
+		}
 	}
 
 	while (last->count>0) {
@@ -3355,7 +3496,8 @@ int main (int argc, char *argv[]) {
 				static int lastType = -1;
 
 				// this is only a choice on the root folder
-				list_show_entry_names = stack->count > 1 || CFG_getShowFolderNamesAtRoot();
+				// (the "All games" root lists games, not folders, so names always show)
+				list_show_entry_names = stack->count > 1 || CFG_getShowFolderNamesAtRoot() || all_games_root;
 
 				// load folder background
 				char defaultBgPath[512];

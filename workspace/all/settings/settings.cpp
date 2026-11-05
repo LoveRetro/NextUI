@@ -529,6 +529,10 @@ int main(int argc, char *argv[])
             [](const std::any &value) { CFG_setGridRows(std::any_cast<int>(value)); },
             []() { CFG_setGridRows(CFG_DEFAULT_GRIDROWS);}};
         appearanceItems.push_back(gridRowsItem);
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "All games view", "Skip the system list and show all games on one page.", {false, true}, on_off,
+            []() -> std::any { return CFG_getAllGamesView(); },
+            [](const std::any &value) { CFG_setAllGamesView(std::any_cast<bool>(value)); },
+            []() { CFG_setAllGamesView(CFG_DEFAULT_ALLGAMESVIEW);}});
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show Recents", "Show \"Recently Played\" menu entry in game list.", {false, true}, on_off,
             []() -> std::any { return CFG_getShowRecents(); },
             [](const std::any &value) { CFG_setShowRecents(std::any_cast<bool>(value)); },

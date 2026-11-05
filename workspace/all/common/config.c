@@ -62,6 +62,7 @@ void CFG_defaults(NextUISettings *cfg)
         .defaultView = CFG_DEFAULT_VIEW,
         .contentLayout = CFG_DEFAULT_CONTENTLAYOUT,
         .gridRows = CFG_DEFAULT_GRIDROWS,
+        .allGamesView = CFG_DEFAULT_ALLGAMESVIEW,
         .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
         .gameSwitcherCurtain = CFG_DEFAULT_GAMESWITCHER_CURTAIN,
 
@@ -392,6 +393,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "gridRows=%i", &temp_value) == 1)
             {
                 CFG_setGridRows(temp_value);
+                continue;
+            }
+            if (sscanf(line, "allGamesView=%i", &temp_value) == 1)
+            {
+                CFG_setAllGamesView((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "quickSwitcherUi=%i", &temp_value) == 1)
@@ -1021,6 +1027,17 @@ void CFG_setGridRows(int rows)
     CFG_sync();
 }
 
+bool CFG_getAllGamesView(void)
+{
+    return settings.allGamesView;
+}
+
+void CFG_setAllGamesView(bool on)
+{
+    settings.allGamesView = on;
+    CFG_sync();
+}
+
 bool CFG_getShowQuickswitcherUI(void)
 {
     return settings.showQuickSwitcherUi;
@@ -1524,6 +1541,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getGridRows());
     }
+    else if (strcmp(key, "allGamesView") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getAllGamesView()));
+    }
     else if (strcmp(key, "quickSwitcherUi") == 0)
     {
         sprintf(value, "%i", (int)(CFG_getShowQuickswitcherUI()));
@@ -1705,6 +1726,7 @@ void CFG_sync(void)
     fprintf(file, "defaultView=%i\n", settings.defaultView);
     fprintf(file, "contentLayout=%i\n", settings.contentLayout);
     fprintf(file, "gridRows=%i\n", settings.gridRows);
+    fprintf(file, "allGamesView=%i\n", settings.allGamesView);
     fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
     fprintf(file, "wifiDiagnostics=%i\n", settings.wifiDiagnostics);
     fprintf(file, "bluetooth=%i\n", settings.bluetooth);
@@ -1782,6 +1804,7 @@ void CFG_print(void)
     printf("\t\"defaultView\": %i,\n", settings.defaultView);
     printf("\t\"contentLayout\": %i,\n", settings.contentLayout);
     printf("\t\"gridRows\": %i,\n", settings.gridRows);
+    printf("\t\"allGamesView\": %i,\n", settings.allGamesView);
     printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
     printf("\t\"wifiDiagnostics\": %i,\n", settings.wifiDiagnostics);
     printf("\t\"bluetooth\": %i,\n", settings.bluetooth);
