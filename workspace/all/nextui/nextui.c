@@ -1932,8 +1932,9 @@ static inline int getNeedDraw(void) { return SDL_AtomicGet(&needDrawAtomic); }
 
 ///////////////////////////////////////
 // Grid layout: tiles laid out column-major (top to bottom, then the next column)
-// so the content scrolls horizontally. Up/Down move within a column, Left/Right
-// move between columns. Used for every game list screen when the content layout
+// so the content scrolls horizontally. Up/Down step through tiles in order
+// (wrapping into the neighbouring column at a column's ends), Left/Right move
+// between columns. Used for every game list screen when the content layout
 // setting is "Grid"; the list renderer is untouched otherwise.
 
 typedef struct GridLayout {
@@ -1977,17 +1978,25 @@ static void Grid_getLayout(GridLayout* g) {
 	g->y = top;
 }
 
-// Returns the new selection after moving by (dx, dy) tiles. wrap allows jumping
-// from the first column to the last (and back), only used on a fresh press so
-// holding the d-pad stops at the edges, same as the list.
+// Returns the new selection after moving by (dx, dy) tiles. Up/Down step through
+// the tiles in order, so the top of a column continues to the bottom of the
+// previous one and the bottom continues to the top of the next. wrap allows
+// jumping from the first tile/column to the last (and back), only used on a fresh
+// press so holding the d-pad stops at the edges, same as the list.
 static int Grid_move(int selected, int total, int rows, int dx, int dy, int wrap) {
 	if (total <= 0) return 0;
 	int row = selected % rows;
 	int col = selected / rows;
 	int last_col = (total - 1) / rows;
 
-	if (dy < 0) return (row > 0) ? selected - 1 : selected;
-	if (dy > 0) return (row < rows - 1 && selected + 1 < total) ? selected + 1 : selected;
+	if (dy < 0) {
+		if (selected > 0) return selected - 1;
+		return wrap ? total - 1 : selected;
+	}
+	if (dy > 0) {
+		if (selected + 1 < total) return selected + 1;
+		return wrap ? 0 : selected;
+	}
 
 	if (dx > 0) {
 		if (col < last_col) return MIN(selected + rows, total - 1);
@@ -3024,9 +3033,9 @@ int main (int argc, char *argv[]) {
 				GridLayout grid;
 				Grid_getLayout(&grid);
 				if (PAD_justRepeated(BTN_UP))
-					selected = Grid_move(selected, total, grid.rows, 0, -1, 0);
+					selected = Grid_move(selected, total, grid.rows, 0, -1, PAD_justPressed(BTN_UP));
 				else if (PAD_justRepeated(BTN_DOWN))
-					selected = Grid_move(selected, total, grid.rows, 0, 1, 0);
+					selected = Grid_move(selected, total, grid.rows, 0, 1, PAD_justPressed(BTN_DOWN));
 				else if (PAD_justRepeated(BTN_LEFT))
 					selected = Grid_move(selected, total, grid.rows, -1, 0, PAD_justPressed(BTN_LEFT));
 				else if (PAD_justRepeated(BTN_RIGHT))
