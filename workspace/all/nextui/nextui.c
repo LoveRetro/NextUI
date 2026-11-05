@@ -1943,9 +1943,10 @@ static int Grid_active(void) {
 
 static void Grid_getLayout(GridLayout* g) {
 	// leave the top row for the title pill and hardware status, the bottom row for button hints
-	int top = SCALE1(PADDING * 2 + PILL_SIZE);
-	int bottom = screen->h - SCALE1(PADDING * 2 + PILL_SIZE);
-	int area_w = screen->w - SCALE1(PADDING * 2);
+	int margin = GFX_getScreenMargin();
+	int top = margin + SCALE1(PILL_SIZE + PADDING);
+	int bottom = screen->h - margin - SCALE1(PILL_SIZE + PADDING);
+	int area_w = screen->w - margin * 2;
 	int area_h = bottom - top;
 
 	g->gap = SCALE1(BUTTON_MARGIN * 2);
@@ -2248,20 +2249,25 @@ static void Grid_render(Directory* dir, int show_names, int ow) {
 		char* label = entry->unique ? entry->unique : entry->name;
 		trimSortingMeta(&label);
 
+		// same screen margin as the status pill and button hints, and at least one
+		// margin of space between the title and the status pill on the right
+		int margin = GFX_getScreenMargin();
 		char display_name[256];
-		int max_width = screen->w - SCALE1(BUTTON_MARGIN + PADDING) - ow;
+		int max_width = MAX(0, screen->w - margin * 3 - ow);
 		SDL_LockMutex(fontMutex);
 		int text_width = GFX_getTextWidth(font.large, label, display_name, max_width, SCALE1(BUTTON_PADDING * 2));
 		int pill_width = MIN(max_width, text_width);
-		GFX_blitPillDark(ASSET_WHITE_PILL, screen, &(SDL_Rect){ SCALE1(BUTTON_MARGIN), SCALE1(PADDING), pill_width, SCALE1(PILL_SIZE) });
+		if (pill_width > 0)
+			GFX_blitPillDark(ASSET_WHITE_PILL, screen, &(SDL_Rect){ margin, margin, pill_width, SCALE1(PILL_SIZE) });
 		SDL_Surface* text = TTF_RenderUTF8_Blended(font.large, display_name, selected_text_color);
 		SDL_UnlockMutex(fontMutex);
-		if (text) {
+		int text_w = pill_width - SCALE1(BUTTON_PADDING * 2);
+		if (text && text_w > 0) {
 			int text_offset_y = (SCALE1(PILL_SIZE) - text->h + 1) >> 1;
-			SDL_BlitSurface(text, &(SDL_Rect){ 0, 0, pill_width - SCALE1(BUTTON_PADDING * 2), text->h }, screen,
-				&(SDL_Rect){ SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING) + text_offset_y });
-			SDL_FreeSurface(text);
+			SDL_BlitSurface(text, &(SDL_Rect){ 0, 0, text_w, text->h }, screen,
+				&(SDL_Rect){ margin + SCALE1(BUTTON_PADDING), margin + text_offset_y });
 		}
+		if (text) SDL_FreeSurface(text);
 	}
 }
 
@@ -3598,8 +3604,9 @@ int main (int argc, char *argv[]) {
 						bool row_is_selected = (j == selected_row);
 						bool row_is_top = (i == top->start);
 						bool row_has_moved = (previous_row != selected_row || previous_depth != stack->count);
+						// a larger screen margin moves the status pill further in, keep clear of it
 						if (row_is_top && !(had_thumb))
-							available_width -= ow;
+							available_width -= ow + MAX(0, GFX_getScreenMargin() - SCALE1(PADDING));
 
 						trimSortingMeta(&entry_name);
 						if (entry_unique) // Only render if a unique name exists
@@ -3853,7 +3860,8 @@ int main (int argc, char *argv[]) {
 					}
 
 					int available_width = (had_thumb ? ox + SCALE1(BUTTON_MARGIN) : screen->w - SCALE1(BUTTON_MARGIN)) - SCALE1(PADDING * 2);
-					if (top->selected == top->start && !had_thumb) available_width -= ow;
+					if (top->selected == top->start && !had_thumb)
+						available_width -= ow + MAX(0, GFX_getScreenMargin() - SCALE1(PADDING));
 
 					SDL_Color text_color = uintToColour(THEME_COLOR5_255);
 

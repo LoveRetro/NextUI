@@ -529,6 +529,11 @@ int main(int argc, char *argv[])
             [](const std::any &value) { CFG_setGridRows(std::any_cast<int>(value)); },
             []() { CFG_setGridRows(CFG_DEFAULT_GRIDROWS);}};
         appearanceItems.push_back(gridRowsItem);
+        // until changed (or after a reset) the margin follows the resolution based PADDING
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Screen margin", "Space between the screen edges and the status\npill, button hints and title.", 0, SCREEN_MARGIN_MAX, "px",
+            []() -> std::any { int margin = CFG_getScreenMargin(); return margin < 0 ? (int)PADDING : margin; },
+            [](const std::any &value) { CFG_setScreenMargin(std::any_cast<int>(value)); },
+            []() { CFG_setScreenMargin(CFG_DEFAULT_SCREENMARGIN);}});
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "All games view", "Skip the system list and show all games on one page.", {false, true}, on_off,
             []() -> std::any { return CFG_getAllGamesView(); },
             [](const std::any &value) { CFG_setAllGamesView(std::any_cast<bool>(value)); },
