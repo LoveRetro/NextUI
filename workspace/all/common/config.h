@@ -147,6 +147,7 @@ typedef struct
 	bool showFolderNamesAtRoot;
 	bool romsUseFolderBackground;
 	bool showQuickSwitcherUi;
+	bool showQuickMenuTitle; // name the selected Quick Menu item in the top-left pill
 	int defaultView;
 	int contentLayout;   // CONTENT_LAYOUT_*
 	int gridRows;        // GRID_ROWS_MIN..GRID_ROWS_MAX
@@ -262,6 +263,7 @@ typedef struct
 #define CFG_DEFAULT_SCREENMARGIN SCREEN_MARGIN_DEFAULT
 #define CFG_DEFAULT_ALLGAMESVIEW false
 #define CFG_DEFAULT_SHOWQUICKWITCHERUI true
+#define CFG_DEFAULT_SHOWQUICKMENUTITLE true
 #define CFG_DEFAULT_WIFI_DIAG false
 #define CFG_DEFAULT_SHOWTOOLS true
 #define CFG_DEFAULT_BLUETOOTH false
@@ -443,6 +445,9 @@ void CFG_setAllGamesView(bool on);
 // Quick switcher UI painting on/off
 bool CFG_getShowQuickswitcherUI(void);
 void CFG_setShowQuickswitcherUI(bool on);
+// Quick Menu title pill (selected item's name) on/off
+bool CFG_getShowQuickMenuTitle(void);
+void CFG_setShowQuickMenuTitle(bool on);
 // WiFi diagnostic logging on/off
 bool CFG_getWifiDiagnostics(void);
 void CFG_setWifiDiagnostics(bool on);

@@ -3230,7 +3230,8 @@ int main (int argc, char *argv[]) {
 
 				if(CFG_getShowQuickswitcherUI()) {
 					// the bottom row is icons only, so name the selected item in the top row
-					drawTitlePill(QuickMenu_label(current), ow);
+					if (CFG_getShowQuickMenuTitle())
+						drawTitlePill(QuickMenu_label(current), ow);
 
 					#define MENU_ITEM_SIZE 72 // item size, top line
 					#define MENU_MARGIN_Y 32 // space between main UI elements and quick menu

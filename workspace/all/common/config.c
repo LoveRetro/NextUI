@@ -65,6 +65,7 @@ void CFG_defaults(NextUISettings *cfg)
         .screenMargin = CFG_DEFAULT_SCREENMARGIN,
         .allGamesView = CFG_DEFAULT_ALLGAMESVIEW,
         .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
+        .showQuickMenuTitle = CFG_DEFAULT_SHOWQUICKMENUTITLE,
         .gameSwitcherCurtain = CFG_DEFAULT_GAMESWITCHER_CURTAIN,
 
         .muteLeds = CFG_DEFAULT_MUTELEDS,
@@ -409,6 +410,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "quickSwitcherUi=%i", &temp_value) == 1)
             {
                 CFG_setShowQuickswitcherUI(temp_value);
+                continue;
+            }
+            if (sscanf(line, "quickMenuTitle=%i", &temp_value) == 1)
+            {
+                CFG_setShowQuickMenuTitle((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "wifiDiagnostics=%i", &temp_value) == 1)
@@ -1066,6 +1072,17 @@ void CFG_setShowQuickswitcherUI(bool on)
     CFG_sync();
 }
 
+bool CFG_getShowQuickMenuTitle(void)
+{
+    return settings.showQuickMenuTitle;
+}
+
+void CFG_setShowQuickMenuTitle(bool on)
+{
+    settings.showQuickMenuTitle = on;
+    CFG_sync();
+}
+
 bool CFG_getWifiDiagnostics(void)
 {
     return settings.wifiDiagnostics;
@@ -1570,6 +1587,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getShowQuickswitcherUI()));
     }
+    else if (strcmp(key, "quickMenuTitle") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getShowQuickMenuTitle()));
+    }
     else if (strcmp(key, "wifiDiagnostics") == 0)
     {
         sprintf(value, "%i", (int)(CFG_getWifiDiagnostics()));
@@ -1750,6 +1771,7 @@ void CFG_sync(void)
     fprintf(file, "screenMargin=%i\n", settings.screenMargin);
     fprintf(file, "allGamesView=%i\n", settings.allGamesView);
     fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
+    fprintf(file, "quickMenuTitle=%i\n", settings.showQuickMenuTitle);
     fprintf(file, "wifiDiagnostics=%i\n", settings.wifiDiagnostics);
     fprintf(file, "bluetooth=%i\n", settings.bluetooth);
     fprintf(file, "btDiagnostics=%i\n", settings.bluetoothDiagnostics);
@@ -1829,6 +1851,7 @@ void CFG_print(void)
     printf("\t\"screenMargin\": %i,\n", settings.screenMargin);
     printf("\t\"allGamesView\": %i,\n", settings.allGamesView);
     printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
+    printf("\t\"quickMenuTitle\": %i,\n", settings.showQuickMenuTitle);
     printf("\t\"wifiDiagnostics\": %i,\n", settings.wifiDiagnostics);
     printf("\t\"bluetooth\": %i,\n", settings.bluetooth);
     printf("\t\"btDiagnostics\": %i,\n", settings.bluetoothDiagnostics);
