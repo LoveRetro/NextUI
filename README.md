@@ -1,3 +1,38 @@
+A fork of NextUI to improve usability for myself and lock down the OS for my parents.
+
+## AI Disclaimer
+
+In the interest of full transparency: this fork was developed using AI tooling, specifically Claude Code.
+
+I am a professional software engineer since 2020 and currently AI agents are just part of my workflow. I have never developed C or C++ professionally (though I do like to use C for hobby projects) so while I've reviewed every code change, I am going to be limited in my lack of experience, esp for C-specific things like safe memory management (if you care, my primary languages are C# for backend/desktop and TypeScript for frontend).
+
+I have done my best to keep PRs and commits small for reviewability should anyone want to cherry pick features out of this fork.
+
+## Context
+
+I got them an ANBERNIC RG 40XXH for Christmas so they could play their childhood games, but I knew immediately I was not going to be using the stock OS. After trying a few options I landed on using NextUI because it was focused and booted in and out of games extremely fast. It still felt open and breakable though, so I started this personal fork to lock it down and remove some footguns that I shot myself with in the past using NextUI on my own ANBERNIC RG SP.
+
+## Changes
+
+Everything was developed as atomic features that could be toggled via the settings. I did my best to develop the features in one PR per feature-setting to make cherry-picking easier if other folks want to take some of these. Every PR is tagged with what feature it touched for easier navigation.
+
+In order of smallest to largest:
+
+| Feature | Setting | Description | Reason | Limitations |
+|-|-|-|-|-|
+| Screen margin | Appearance / Screen margin | Adjusts the margin between the edge of the screen and widgets like the battery and input prompts. | Reclaims space on low resolution devices | Overrides both low res and high res / external displays with the same value when by default they are different. |
+| Quick menu title | Appearance / Show Quick Menu title | Shows a title for each quick setting button in the top left of the screen. | Remove ambiguity in what the icon-only buttons do in the quick menu. | |
+| Quick menu tiles | Appearch / Show X in Quick Menu | A series of options to disable the tiles that appear in the quick menu, specifically recents, games, and tools. | Recents and games as options don't make sense for my needs and at that point it was just tools so I cut it too for a cleaner look. | |
+| All games list | Appearance / All games view | Skips the system menu and just shows all games in a single alphabatized list. | With a small games library (10-12 games) the system menu was more a burden than anything. | Recently played doesn't have anywhere to live so only exists in the quick menu. |
+| Resume with A | System / Resume with A | Swaps the A/X behavior so resume is mapped to A and open is mapped to X | A is the default way someone would try to launch a game so this effectively lets someone make resuming their default action. | |
+| Save & Quit | System / Allow Save & Quit from menu | Adds the Save & Quit option to the in-game menu if the game is targeting a save slot already. | Remembering a hotkey is more annoying than using the menu. | |
+| Grid view | Appearance / Content layout + Appearance / Grid rows | Show the list in a horizontal grid of icon buttons, rendering the game title in the top left corner. | A horizontal grid is more familiar to people trained on smartphones. | Entries that don't have an icon defined use their first letter as their icon and those icons have to be provided manually. |
+
+## Testing
+
+All testing has been done on device with the H700 powered ANBERNIC RG 40XXH. I don't have any devices running other NextUI supported architectures to test on them.
+
+
 <div align="center">
 
   <img width=128px src="github/logo_outline.png">
