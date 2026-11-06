@@ -854,18 +854,22 @@ static Array* getCollections(void)
 static Array* getQuickEntries(void) {
 	Array* entries = Array_new();
 
+	// Recents, Games and Tools can each be hidden in Settings > Appearance; the
+	// top row may then be empty (see the Quick Menu's qm_row handling)
+
 	// We assume Menu_init was already called and populated this
-	if (recents && recents->count)
+	if (recents && recents->count && CFG_getQuickMenuRecents())
 		Array_push(entries, Entry_newNamed(FAUX_RECENT_PATH, ENTRY_DIR, "Recents"));
 
 	if (hasCollections())
 		Array_push(entries, Entry_new(COLLECTIONS_PATH, ENTRY_DIR));
 
 	// Not sure we need this, its just a button press away (B)
-	Array_push(entries, Entry_newNamed(ROMS_PATH, ENTRY_DIR, "Games"));
+	if (CFG_getQuickMenuGames())
+		Array_push(entries, Entry_newNamed(ROMS_PATH, ENTRY_DIR, "Games"));
 
 	// Add tools if applicable
-    if (hasTools() && !simple_mode) {
+    if (hasTools() && !simple_mode && CFG_getQuickMenuTools()) {
 		char tools_path[256];
 		getToolsPath(tools_path, sizeof(tools_path));
         Array_push(entries, Entry_new(tools_path, ENTRY_DIR));
@@ -2852,7 +2856,10 @@ int main (int argc, char *argv[]) {
 	// start my threaded image loader :D
 	initImageLoaderPool();
 	Menu_init();
-	int qm_row = 0;
+	// the top row can be empty when its entries are hidden in Settings, then the
+	// bottom row (always has Reboot/Poweroff) is the only one
+	int qm_top_row = quick->count > 0 ? 0 : 1;
+	int qm_row = qm_top_row;
 	int qm_col = 0;
 	int qm_slot = 0;
 	int qm_shift = 0;
@@ -3026,7 +3033,7 @@ int main (int argc, char *argv[]) {
 				}
 			}
 			else if(PAD_justPressed(BTN_UP)) {
-				if(qm_row == 1) {
+				if(qm_row == 1 && quick->count > 0) {
 					qm_row = 0;
 					qm_col = qm_slot + qm_shift;
 					dirty = 1;
@@ -3079,7 +3086,7 @@ int main (int argc, char *argv[]) {
 			if (PAD_tappedMenu(now)) {
 				currentScreen = SCREEN_QUICKMENU;
 				qm_col = 0;
-				qm_row = 0;
+				qm_row = qm_top_row;
 				qm_shift = 0;
 				qm_slot = 0;
 				dirty = 1;
@@ -3378,6 +3385,9 @@ int main (int argc, char *argv[]) {
 					ox = SCALE1(PADDING + MENU_MARGIN_X);
 					ox += (screen->w - SCALE1(PADDING + MENU_MARGIN_X + MENU_MARGIN_X + PADDING) - SCALE1(quickActions->count * PILL_SIZE) - SCALE1((quickActions->count - 1) * MENU_TOGGLE_MARGIN))/2;
 					oy = SCALE1(PADDING + PILL_SIZE + BUTTON_MARGIN + MENU_MARGIN_Y + MENU_LINE_MARGIN) + item_size + item_extra_y / 2;
+					// no cards in the top row (all hidden in Settings): center the buttons on screen
+					if (quick->count == 0)
+						oy = (screen->h - SCALE1(PILL_SIZE)) / 2;
 					for (int c = 0; c < quickActions->count; c++) {
 						SDL_Rect item_rect = {ox, oy, SCALE1(PILL_SIZE), SCALE1(PILL_SIZE)};
 						Entry *item = quickActions->items[c];

@@ -148,6 +148,9 @@ typedef struct
 	bool romsUseFolderBackground;
 	bool showQuickSwitcherUi;
 	bool showQuickMenuTitle; // name the selected Quick Menu item in the top-left pill
+	bool quickMenuRecents;   // Quick Menu top row shows Recents (when there are any)
+	bool quickMenuGames;     // Quick Menu top row shows Games
+	bool quickMenuTools;     // Quick Menu top row shows Tools (when there are any)
 	int defaultView;
 	int contentLayout;   // CONTENT_LAYOUT_*
 	int gridRows;        // GRID_ROWS_MIN..GRID_ROWS_MAX
@@ -268,6 +271,9 @@ typedef struct
 #define CFG_DEFAULT_RESUMEWITHA false
 #define CFG_DEFAULT_SHOWQUICKWITCHERUI true
 #define CFG_DEFAULT_SHOWQUICKMENUTITLE true
+#define CFG_DEFAULT_QUICKMENURECENTS true
+#define CFG_DEFAULT_QUICKMENUGAMES true
+#define CFG_DEFAULT_QUICKMENUTOOLS true
 #define CFG_DEFAULT_WIFI_DIAG false
 #define CFG_DEFAULT_SHOWTOOLS true
 #define CFG_DEFAULT_BLUETOOTH false
@@ -460,6 +466,13 @@ void CFG_setShowQuickswitcherUI(bool on);
 // Quick Menu title pill (selected item's name) on/off
 bool CFG_getShowQuickMenuTitle(void);
 void CFG_setShowQuickMenuTitle(bool on);
+// Quick Menu top row entries on/off (Recents, Games, Tools)
+bool CFG_getQuickMenuRecents(void);
+void CFG_setQuickMenuRecents(bool on);
+bool CFG_getQuickMenuGames(void);
+void CFG_setQuickMenuGames(bool on);
+bool CFG_getQuickMenuTools(void);
+void CFG_setQuickMenuTools(bool on);
 // WiFi diagnostic logging on/off
 bool CFG_getWifiDiagnostics(void);
 void CFG_setWifiDiagnostics(bool on);

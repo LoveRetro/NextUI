@@ -562,6 +562,18 @@ int main(int argc, char *argv[])
             []() -> std::any{ return CFG_getShowQuickMenuTitle(); },
             [](const std::any &value){ CFG_setShowQuickMenuTitle(std::any_cast<bool>(value)); },
             []() { CFG_setShowQuickMenuTitle(CFG_DEFAULT_SHOWQUICKMENUTITLE);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show Recents in Quick Menu", "Show \"Recents\" in the Quick Menu's top row.", {false, true}, on_off,
+            []() -> std::any{ return CFG_getQuickMenuRecents(); },
+            [](const std::any &value){ CFG_setQuickMenuRecents(std::any_cast<bool>(value)); },
+            []() { CFG_setQuickMenuRecents(CFG_DEFAULT_QUICKMENURECENTS);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show Games in Quick Menu", "Show \"Games\" in the Quick Menu's top row.", {false, true}, on_off,
+            []() -> std::any{ return CFG_getQuickMenuGames(); },
+            [](const std::any &value){ CFG_setQuickMenuGames(std::any_cast<bool>(value)); },
+            []() { CFG_setQuickMenuGames(CFG_DEFAULT_QUICKMENUGAMES);}});
+        appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Show Tools in Quick Menu", "Show \"Tools\" in the Quick Menu's top row.", {false, true}, on_off,
+            []() -> std::any{ return CFG_getQuickMenuTools(); },
+            [](const std::any &value){ CFG_setQuickMenuTools(std::any_cast<bool>(value)); },
+            []() { CFG_setQuickMenuTools(CFG_DEFAULT_QUICKMENUTOOLS);}});
         appearanceItems.push_back(new MenuItem{ListItemType::Generic, "Game switcher curtain opacity", "Show/hide curtain overlay. Helps UI elements to \nstand out when using transparent backgrounds.", curtain_opacity_values, curtain_opacity_labels, 
             []() -> std::any{ return CFG_getGameSwitcherCurtain(); },
             [](const std::any &value){ CFG_setGameSwitcherCurtain(std::any_cast<int>(value)); },

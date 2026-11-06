@@ -67,6 +67,9 @@ void CFG_defaults(NextUISettings *cfg)
         .allGamesView = CFG_DEFAULT_ALLGAMESVIEW,
         .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
         .showQuickMenuTitle = CFG_DEFAULT_SHOWQUICKMENUTITLE,
+        .quickMenuRecents = CFG_DEFAULT_QUICKMENURECENTS,
+        .quickMenuGames = CFG_DEFAULT_QUICKMENUGAMES,
+        .quickMenuTools = CFG_DEFAULT_QUICKMENUTOOLS,
         .gameSwitcherCurtain = CFG_DEFAULT_GAMESWITCHER_CURTAIN,
 
         .muteLeds = CFG_DEFAULT_MUTELEDS,
@@ -427,6 +430,21 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "quickMenuTitle=%i", &temp_value) == 1)
             {
                 CFG_setShowQuickMenuTitle((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "quickMenuRecents=%i", &temp_value) == 1)
+            {
+                CFG_setQuickMenuRecents((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "quickMenuGames=%i", &temp_value) == 1)
+            {
+                CFG_setQuickMenuGames((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "quickMenuTools=%i", &temp_value) == 1)
+            {
+                CFG_setQuickMenuTools((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "wifiDiagnostics=%i", &temp_value) == 1)
@@ -1117,6 +1135,39 @@ void CFG_setShowQuickMenuTitle(bool on)
     CFG_sync();
 }
 
+bool CFG_getQuickMenuRecents(void)
+{
+    return settings.quickMenuRecents;
+}
+
+void CFG_setQuickMenuRecents(bool on)
+{
+    settings.quickMenuRecents = on;
+    CFG_sync();
+}
+
+bool CFG_getQuickMenuGames(void)
+{
+    return settings.quickMenuGames;
+}
+
+void CFG_setQuickMenuGames(bool on)
+{
+    settings.quickMenuGames = on;
+    CFG_sync();
+}
+
+bool CFG_getQuickMenuTools(void)
+{
+    return settings.quickMenuTools;
+}
+
+void CFG_setQuickMenuTools(bool on)
+{
+    settings.quickMenuTools = on;
+    CFG_sync();
+}
+
 bool CFG_getWifiDiagnostics(void)
 {
     return settings.wifiDiagnostics;
@@ -1633,6 +1684,18 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", (int)(CFG_getShowQuickMenuTitle()));
     }
+    else if (strcmp(key, "quickMenuRecents") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getQuickMenuRecents()));
+    }
+    else if (strcmp(key, "quickMenuGames") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getQuickMenuGames()));
+    }
+    else if (strcmp(key, "quickMenuTools") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getQuickMenuTools()));
+    }
     else if (strcmp(key, "wifiDiagnostics") == 0)
     {
         sprintf(value, "%i", (int)(CFG_getWifiDiagnostics()));
@@ -1816,6 +1879,9 @@ void CFG_sync(void)
     fprintf(file, "allGamesView=%i\n", settings.allGamesView);
     fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
     fprintf(file, "quickMenuTitle=%i\n", settings.showQuickMenuTitle);
+    fprintf(file, "quickMenuRecents=%i\n", settings.quickMenuRecents);
+    fprintf(file, "quickMenuGames=%i\n", settings.quickMenuGames);
+    fprintf(file, "quickMenuTools=%i\n", settings.quickMenuTools);
     fprintf(file, "wifiDiagnostics=%i\n", settings.wifiDiagnostics);
     fprintf(file, "bluetooth=%i\n", settings.bluetooth);
     fprintf(file, "btDiagnostics=%i\n", settings.bluetoothDiagnostics);
@@ -1898,6 +1964,9 @@ void CFG_print(void)
     printf("\t\"allGamesView\": %i,\n", settings.allGamesView);
     printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
     printf("\t\"quickMenuTitle\": %i,\n", settings.showQuickMenuTitle);
+    printf("\t\"quickMenuRecents\": %i,\n", settings.quickMenuRecents);
+    printf("\t\"quickMenuGames\": %i,\n", settings.quickMenuGames);
+    printf("\t\"quickMenuTools\": %i,\n", settings.quickMenuTools);
     printf("\t\"wifiDiagnostics\": %i,\n", settings.wifiDiagnostics);
     printf("\t\"bluetooth\": %i,\n", settings.bluetooth);
     printf("\t\"btDiagnostics\": %i,\n", settings.bluetoothDiagnostics);
