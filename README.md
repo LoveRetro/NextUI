@@ -1,16 +1,20 @@
-A fork of NextUI to improve usability for myself and lock down the OS for my parents.
+A fork of NextUI to improve usability for myself and make the OS easier to use for my parents.
+
+**This repo is a hobby project, it is not actively maintained.**
+
+If you want to use NextUI for your own handheld, get it from [Love Retro](https://github.com/LoveRetro/NextUI).
 
 ## AI Disclaimer
 
 In the interest of full transparency: this fork was developed using AI tooling, specifically Claude Code.
 
-I am a professional software engineer since 2020 and currently AI agents are just part of my workflow. I have never developed C or C++ professionally (though I do like to use C for hobby projects) so while I've reviewed every code change, I am going to be limited in my lack of experience, esp for C-specific things like safe memory management (if you care, my primary languages are C# for backend/desktop and TypeScript for frontend).
+I've been a professional software developer since 2020 and AI agents are just part of my workflow. I have never developed C or C++ professionally (though I do like to use C for hobby projects) so while I've reviewed every code change, I am limited by my lack of experience, esp for C-specific things like safe memory management. (If you care, my primary languages are C# for backend/desktop and TypeScript for frontend.)
 
 I have done my best to keep PRs and commits small for reviewability should anyone want to cherry pick features out of this fork.
 
 ## Context
 
-I got them an ANBERNIC RG 40XXH for Christmas so they could play their childhood games, but I knew immediately I was not going to be using the stock OS. After trying a few options I landed on using NextUI because it was focused and booted in and out of games extremely fast. It still felt open and breakable though, so I started this personal fork to lock it down and remove some footguns that I shot myself with in the past using NextUI on my own ANBERNIC RG SP.
+I got my parents an ANBERNIC RG 40XXH for Christmas so they could play their childhood games, but I knew immediately I was not going to be using the stock OS. After trying a few options I landed on using NextUI because it was focused and booted in and out of games extremely fast. It still felt open and breakable though, so I started this personal fork to lock it down and remove some footguns that I shot myself with in the past using NextUI on my own ANBERNIC RG SP.
 
 ## Changes
 
