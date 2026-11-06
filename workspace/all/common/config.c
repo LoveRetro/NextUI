@@ -63,6 +63,7 @@ void CFG_defaults(NextUISettings *cfg)
         .contentLayout = CFG_DEFAULT_CONTENTLAYOUT,
         .gridRows = CFG_DEFAULT_GRIDROWS,
         .screenMargin = CFG_DEFAULT_SCREENMARGIN,
+        .resumeWithA = CFG_DEFAULT_RESUMEWITHA,
         .allGamesView = CFG_DEFAULT_ALLGAMESVIEW,
         .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
         .showQuickMenuTitle = CFG_DEFAULT_SHOWQUICKMENUTITLE,
@@ -81,6 +82,7 @@ void CFG_defaults(NextUISettings *cfg)
         .romsUseFolderBackground = CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND,
         .saveFormat = CFG_DEFAULT_SAVEFORMAT,
         .stateFormat = CFG_DEFAULT_STATEFORMAT,
+        .saveQuitMenu = CFG_DEFAULT_SAVEQUITMENU,
         .useExtractedFileName = CFG_DEFAULT_EXTRACTEDFILENAME,
 
         .ntp = CFG_DEFAULT_NTP,
@@ -341,6 +343,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 CFG_setStateFormat(temp_value);
                 continue;
             }
+            if (sscanf(line, "saveQuitMenu=%i", &temp_value) == 1)
+            {
+                CFG_setSaveQuitMenu((bool)temp_value);
+                continue;
+            }
             if (sscanf(line, "useExtractedFileName=%i", &temp_value) == 1)
             {
                 CFG_setUseExtractedFileName((bool)temp_value);
@@ -395,6 +402,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "gridRows=%i", &temp_value) == 1)
             {
                 CFG_setGridRows(temp_value);
+                continue;
+            }
+            if (sscanf(line, "resumeWithA=%i", &temp_value) == 1)
+            {
+                CFG_setResumeWithA((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "screenMargin=%i", &temp_value) == 1)
@@ -944,6 +956,17 @@ void CFG_setStateFormat(int f)
     CFG_sync();
 }
 
+bool CFG_getSaveQuitMenu(void)
+{
+    return settings.saveQuitMenu;
+}
+
+void CFG_setSaveQuitMenu(bool on)
+{
+    settings.saveQuitMenu = on;
+    CFG_sync();
+}
+
 bool CFG_getUseExtractedFileName(void)
 {
     return settings.useExtractedFileName;
@@ -1047,6 +1070,17 @@ int CFG_getScreenMargin(void)
 void CFG_setScreenMargin(int margin)
 {
     settings.screenMargin = (margin < 0) ? SCREEN_MARGIN_DEFAULT : clamp(margin, 0, SCREEN_MARGIN_MAX);
+    CFG_sync();
+}
+
+bool CFG_getResumeWithA(void)
+{
+    return settings.resumeWithA;
+}
+
+void CFG_setResumeWithA(bool on)
+{
+    settings.resumeWithA = on;
     CFG_sync();
 }
 
@@ -1535,6 +1569,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getStateFormat());
     }
+    else if (strcmp(key, "saveQuitMenu") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getSaveQuitMenu()));
+    }
     else if (strcmp(key, "useExtractedFileName") == 0)
     {
         sprintf(value, "%i", CFG_getUseExtractedFileName());
@@ -1578,6 +1616,10 @@ void CFG_get(const char *key, char *value)
     else if (strcmp(key, "screenMargin") == 0)
     {
         sprintf(value, "%i", CFG_getScreenMargin());
+    }
+    else if (strcmp(key, "resumeWithA") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getResumeWithA()));
     }
     else if (strcmp(key, "allGamesView") == 0)
     {
@@ -1758,6 +1800,7 @@ void CFG_sync(void)
     fprintf(file, "romfolderbg=%i\n", settings.romsUseFolderBackground);
     fprintf(file, "saveFormat=%i\n", settings.saveFormat);
     fprintf(file, "stateFormat=%i\n", settings.stateFormat);
+    fprintf(file, "saveQuitMenu=%i\n", settings.saveQuitMenu);
     fprintf(file, "useExtractedFileName=%i\n", settings.useExtractedFileName);
     fprintf(file, "muteLeds=%i\n", settings.muteLeds);
     fprintf(file, "fn1action=%s\n", settings.fnAction[0]);
@@ -1769,6 +1812,7 @@ void CFG_sync(void)
     fprintf(file, "contentLayout=%i\n", settings.contentLayout);
     fprintf(file, "gridRows=%i\n", settings.gridRows);
     fprintf(file, "screenMargin=%i\n", settings.screenMargin);
+    fprintf(file, "resumeWithA=%i\n", settings.resumeWithA);
     fprintf(file, "allGamesView=%i\n", settings.allGamesView);
     fprintf(file, "quickSwitcherUi=%i\n", settings.showQuickSwitcherUi);
     fprintf(file, "quickMenuTitle=%i\n", settings.showQuickMenuTitle);
@@ -1838,6 +1882,7 @@ void CFG_print(void)
     printf("\t\"romfolderbg\": %i,\n", settings.romsUseFolderBackground);
     printf("\t\"saveFormat\": %i,\n", settings.saveFormat);
     printf("\t\"stateFormat\": %i,\n", settings.stateFormat);
+    printf("\t\"saveQuitMenu\": %i,\n", settings.saveQuitMenu);
     printf("\t\"useExtractedFileName\": %i,\n", settings.useExtractedFileName);
     printf("\t\"muteLeds\": %i,\n", settings.muteLeds);
     printf("\t\"fn1action\": \"%s\",\n", settings.fnAction[0]);
@@ -1849,6 +1894,7 @@ void CFG_print(void)
     printf("\t\"contentLayout\": %i,\n", settings.contentLayout);
     printf("\t\"gridRows\": %i,\n", settings.gridRows);
     printf("\t\"screenMargin\": %i,\n", settings.screenMargin);
+    printf("\t\"resumeWithA\": %i,\n", settings.resumeWithA);
     printf("\t\"allGamesView\": %i,\n", settings.allGamesView);
     printf("\t\"quickSwitcherUi\": %i,\n", settings.showQuickSwitcherUi);
     printf("\t\"quickMenuTitle\": %i,\n", settings.showQuickMenuTitle);

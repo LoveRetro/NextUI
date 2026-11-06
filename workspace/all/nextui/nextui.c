@@ -3205,13 +3205,19 @@ int main (int argc, char *argv[]) {
 			if (dirty && total>0)
 				readyResume(entry);
 
-			if (total>0 && can_resume && PAD_justReleased(BTN_RESUME)) {
+			// "Resume with A" swaps the two buttons, but only when there is something
+			// to resume; otherwise A opens as usual
+			int resume_with_a = can_resume && CFG_getResumeWithA();
+			int resume_pressed = resume_with_a ? PAD_justPressed(BTN_A) : PAD_justReleased(BTN_RESUME);
+			int open_pressed = resume_with_a ? PAD_justReleased(BTN_RESUME) : PAD_justPressed(BTN_A);
+
+			if (total>0 && can_resume && resume_pressed) {
 				should_resume = 1;
 				Entry_open(entry);
 
 				dirty = 1;
 			}
-			else if (total>0 && PAD_justPressed(BTN_A)) {
+			else if (total>0 && open_pressed) {
 				Entry_open(entry);
 				if(entry->type == ENTRY_DIR) {
 					animationdirection = SLIDE_LEFT;
@@ -3656,8 +3662,11 @@ int main (int argc, char *argv[]) {
 				}
 
 				// buttons
+				// with "Resume with A" and something to resume, A and X trade labels
+				int resume_with_a = can_resume && CFG_getResumeWithA();
+				char* a_label = resume_with_a ? "RESUME" : "OPEN";
 				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
-				else if (can_resume) GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, 0, screen, 0);
+				else if (can_resume) GFX_blitButtonGroup((char*[]){ "X", resume_with_a ? "OPEN" : "RESUME",  NULL }, 0, screen, 0);
 				else GFX_blitButtonGroup((char*[]){
 					BTN_SLEEP==BTN_POWER?"POWER":"MENU",
 					BTN_SLEEP==BTN_POWER||simple_mode?"SLEEP":"INFO",
@@ -3670,10 +3679,10 @@ int main (int argc, char *argv[]) {
 				}
 				else {
 					if (stack->count>1) {
-						GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
+						GFX_blitButtonGroup((char*[]){ "B","BACK", "A",a_label, NULL }, 1, screen, 1);
 					}
 					else {
-						GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, 0, screen, 1);
+						GFX_blitButtonGroup((char*[]){ "A",a_label, NULL }, 0, screen, 1);
 					}
 				}
 
