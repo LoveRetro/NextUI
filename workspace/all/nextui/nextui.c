@@ -728,10 +728,28 @@ static int hasRoms(char* dir_name) {
 	return has;
 }
 
+static void getToolsPath(char* out, size_t out_size) {
+	snprintf(out, out_size, "%s/Tools/%s", SDCARD_PATH, PLATFORM);
+}
+
+static int isToolsEntry(Entry* entry) {
+	char tools_path[256];
+	getToolsPath(tools_path, sizeof(tools_path));
+	return exactMatch(entry->path, tools_path);
+}
+
 static int hasTools(void) {
 	char tools_path[256];
-    snprintf(tools_path, sizeof(tools_path), "%s/Tools/%s", SDCARD_PATH, PLATFORM);
+	getToolsPath(tools_path, sizeof(tools_path));
 	return exists(tools_path);
+}
+
+// The Tools folder entry for a root page, when it should be listed there.
+static void pushToolsEntry(Array* root) {
+	if (!hasTools() || !CFG_getShowTools() || simple_mode) return;
+	char tools_path[256];
+	getToolsPath(tools_path, sizeof(tools_path));
+	Array_push(root, Entry_new(tools_path, ENTRY_DIR));
 }
 
 static Array* getRoms()
@@ -849,7 +867,7 @@ static Array* getQuickEntries(void) {
 	// Add tools if applicable
     if (hasTools() && !simple_mode) {
 		char tools_path[256];
-		snprintf(tools_path, sizeof(tools_path), "%s/Tools/%s", SDCARD_PATH, PLATFORM);
+		getToolsPath(tools_path, sizeof(tools_path));
         Array_push(entries, Entry_new(tools_path, ENTRY_DIR));
     }
 
@@ -963,6 +981,8 @@ static Array* getRoot(void) {
 		Array* all = getAllGames();
 		if (all->count > 0) {
 			all_games_root = 1;
+			// after the A-Z games, same as the end of the system list
+			pushToolsEntry(all);
 			return all;
 		}
 		// no games anywhere: fall back to the regular root so Tools etc. stay reachable
@@ -991,11 +1011,7 @@ static Array* getRoot(void) {
 	Array_yoink(root, entries);
 
 	// Add tools if applicable
-    if (hasTools() && CFG_getShowTools() && !simple_mode) {
-		char tools_path[256];
-		snprintf(tools_path, sizeof(tools_path), "%s/Tools/%s", SDCARD_PATH, PLATFORM);
-        Array_push(root, Entry_new(tools_path, ENTRY_DIR));
-    }
+	pushToolsEntry(root);
 
     return root;
 }
@@ -2140,6 +2156,39 @@ static SDL_Surface* Grid_getArt(Entry* entry, int max_w, int max_h) {
 	return slot->surface;
 }
 
+// The Tools tile (system list and all games view) shows the Quick Menu's Tools
+// icon instead of a letter when it has no art of its own. Loaded from the largest
+// asset and scaled down to the tile, kept while the size is unchanged.
+static SDL_Surface* grid_tools_icon = NULL;
+static int grid_tools_icon_px = 0;
+
+static SDL_Surface* Grid_getToolsIcon(int px) {
+	if (grid_tools_icon_px == px) return grid_tools_icon;
+	if (grid_tools_icon) SDL_FreeSurface(grid_tools_icon);
+	grid_tools_icon = NULL;
+	grid_tools_icon_px = px;
+
+	SDL_Surface* image = IMG_Load(SDCARD_PATH "/.system/res/Tools@4x.png");
+	if (!image) return NULL;
+	SDL_Surface* src = SDL_ConvertSurfaceFormat(image, screen->format->format, 0);
+	SDL_FreeSurface(image);
+	if (!src) return NULL;
+
+	SDL_Surface* dst = SDL_CreateRGBSurfaceWithFormat(0, px, px, screen->format->BitsPerPixel, screen->format->format);
+	if (dst) {
+		SDL_FillRect(dst, NULL, 0);
+		SDL_SetSurfaceBlendMode(src, SDL_BLENDMODE_NONE);
+#if SDL_VERSION_ATLEAST(2, 0, 16)
+		if (SDL_SoftStretchLinear(src, NULL, dst, NULL) != 0)
+#endif
+			SDL_BlitScaled(src, NULL, dst, NULL);
+		SDL_SetSurfaceBlendMode(dst, SDL_BLENDMODE_BLEND);
+	}
+	SDL_FreeSurface(src);
+	grid_tools_icon = dst;
+	return grid_tools_icon;
+}
+
 // Tiles without art show the first letter of the name, rendered with the UI font
 // opened at a size that suits the tile (kept open while the tile size is unchanged).
 static TTF_Font* grid_letter_font = NULL;
@@ -2189,6 +2238,9 @@ static void Grid_freeArt(void) {
 	if (grid_letter_font) TTF_CloseFont(grid_letter_font);
 	grid_letter_font = NULL;
 	grid_letter_font_px = 0;
+	if (grid_tools_icon) SDL_FreeSurface(grid_tools_icon);
+	grid_tools_icon = NULL;
+	grid_tools_icon_px = 0;
 }
 
 // Draws label in a pill in the top-left corner, eg. the selected grid tile or
@@ -2267,8 +2319,18 @@ static void Grid_render(Directory* dir, int show_names, int ow) {
 			continue;
 		}
 
-		// no art: a plain tile with the name's first letter
+		// no art: a plain tile with the name's first letter (or the Tools icon)
 		Grid_fillRounded(&tile, is_selected ? THEME_COLOR1 : tile_fill, radius);
+
+		if (isToolsEntry(entry)) {
+			// same share of the tile as the Quick Menu gives its icons (48 of 72)
+			SDL_Surface* icon = Grid_getToolsIcon(MAX(1, MIN(tile.w, tile.h) * 2 / 3));
+			if (icon) {
+				SDL_Rect dst = { tile.x + (tile.w - icon->w) / 2, tile.y + (tile.h - icon->h) / 2, 0, 0 };
+				GFX_blitSurfaceColor(icon, NULL, screen, &dst, is_selected ? THEME_COLOR5 : THEME_COLOR4);
+				continue;
+			}
+		}
 
 		char* label = entry->name;
 		trimSortingMeta(&label);
