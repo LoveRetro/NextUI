@@ -85,3 +85,21 @@ SHORTCUTS_PAK="$SDCARD_PATH/Tools/$PLATFORM/Shortcuts.pak"
 
 "$SHORTCUTS_PAK/shortcuts" --resume-sync-hook >> "$LOGS_PATH/shortcuts-resume-sync.txt" 2>&1
 ```
+
+## Pak-scoped hooks
+
+A Tools pak can register for an event without copying anything into `.hooks/`:
+ship a script named after the event next to its `launch.sh`.
+
+| File in `Tools/$PLATFORM/<Name>.pak/` | Runs at | Exit code |
+|---|---|---|
+| `boot.sh` | `boot.d` | ignored |
+| `pre-launch.sh` | `pre-launch.d` | **non-zero cancels the launch** |
+| `post-launch.sh` | `post-launch.d` | ignored |
+| `pre-sleep.sh` | `pre-sleep.d` | ignored |
+| `post-resume.sh` | `post-resume.d` | ignored |
+
+- `run_hooks.sh` runs them through `bin/pak-hooks.sh`, before the `.hooks/` scripts of the same event, synchronously, in pak-name order, with the same environment variables.
+- Deleting the pak deletes its hooks. The list of paks is cached in `/tmp` and rebuilt after any Tools pak exits.
+- Only a pak-scoped `pre-launch.sh` can veto. `.hooks/` scripts keep their exit code ignored, so an existing hook cannot start blocking launches by accident.
+- A launch is vetoed after the launcher has already called `gametimectl.elf start`. A vetoing hook calls `gametimectl.elf stop_all`, or the refused launch counts as a session.

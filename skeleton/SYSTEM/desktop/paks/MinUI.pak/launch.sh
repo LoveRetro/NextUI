@@ -81,9 +81,11 @@ touch "$EXEC_PATH"  && sync
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
 		parse_hook_cmd "$CMD"
-		"$SYSTEM_PATH/bin/run_hooks.sh" pre-launch.d
-		eval $CMD
-		"$SYSTEM_PATH/bin/run_hooks.sh" post-launch.d
+		# a pre-launch hook that exits non-zero cancels the launch
+		if "$SYSTEM_PATH/bin/run_hooks.sh" pre-launch.d; then
+			eval $CMD
+			"$SYSTEM_PATH/bin/run_hooks.sh" post-launch.d
+		fi
 		rm -f $NEXT_PATH
 	fi
 #done
