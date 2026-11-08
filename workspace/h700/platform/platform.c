@@ -825,7 +825,11 @@ void PLAT_setCPUSpeed(int speed) {
 // synthesised by duty-cycling that switch from a small worker thread. An ERM
 // motor's mechanical time constant is tens of milliseconds, so a 50 Hz carrier
 // is averaged by the rotor into a lower speed rather than felt as pulsing,
-// while keeping sysfs traffic at or below 100 writes per second.
+// while keeping sysfs traffic at or below 100 writes per second. The carrier
+// runs with a fixed phase: a new non-zero strength only takes effect at the
+// next period boundary, so a core that changes its magnitude every frame
+// cannot keep restarting the on-time and defeat the duty cycle. Only a request
+// for 0 is honoured immediately.
 
 #define RUMBLE_PATH "/sys/class/power_supply/axp2202-battery/moto"
 #define RUMBLE_MAX_STRENGTH    0xFFFF
@@ -883,10 +887,12 @@ static int timespec_before(const struct timespec *a, const struct timespec *b) {
 	return a->tv_sec < b->tv_sec || (a->tv_sec == b->tv_sec && a->tv_nsec < b->tv_nsec);
 }
 
-// Sleep until `deadline` or until the target changes away from `target`.
+// Sleep until `deadline`, or until the target drops to 0. Changes to another
+// non-zero strength are deliberately ignored here so the carrier phase is
+// preserved; the loop picks them up at the next period boundary.
 // Lock must be held; it is released while waiting and held again on return.
-static void rumble_wait_until_locked(const struct timespec *deadline, int target) {
-	while (rumble.target == target) {
+static void rumble_wait_until_locked(const struct timespec *deadline) {
+	while (rumble.target > 0) {
 		if (pthread_cond_timedwait(&rumble.cv, &rumble.lock, deadline) == ETIMEDOUT)
 			break;
 	}
@@ -926,19 +932,14 @@ static void *rumble_thread(void *arg) {
 
 		rumble_write_locked(1);
 		timespec_add_us(&deadline, on_us);
-		rumble_wait_until_locked(&deadline, target);
-		if (rumble.target != target) {
-			// re-evaluate with the new target; a request for 0 has already
-			// written the node off under the lock in PLAT_setRumble()
-			clock_gettime(CLOCK_MONOTONIC, &deadline);
-			continue;
-		}
+		rumble_wait_until_locked(&deadline);
+		// a request for 0 has already written the node off under the lock in
+		// PLAT_setRumble(); just go idle. Any other change waits for the boundary.
+		if (rumble.target <= 0) continue;
 
 		rumble_write_locked(0);
 		timespec_add_us(&deadline, RUMBLE_PWM_PERIOD_US - on_us);
-		rumble_wait_until_locked(&deadline, target);
-		if (rumble.target != target)
-			clock_gettime(CLOCK_MONOTONIC, &deadline);
+		rumble_wait_until_locked(&deadline);
 	}
 	return NULL;
 }
