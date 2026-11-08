@@ -3957,6 +3957,18 @@ static struct VIB_Context
 	int queued_strength;
 	int strength;
 } vib = {0};
+// User-facing "Rumble strength" setting, applied to every request right before it
+// reaches the platform. vib.strength stays in core units (0..0xFFFF) so
+// VIB_getStrength() and the change detection above are unaffected.
+static int VIB_applyScale(int strength)
+{
+	int percent = CFG_getRumbleStrength();
+	if (percent >= 100)
+		return strength;
+	if (percent <= 0)
+		return 0;
+	return (int)(((long long)strength * percent) / 100);
+}
 static void *VIB_thread(void *arg)
 {
 #define DEFER_FRAMES 3
@@ -3974,7 +3986,7 @@ static void *VIB_thread(void *arg)
 			vib.strength = vib.queued_strength;
 			defer = 0;
 
-			PLAT_setRumble(vib.strength);
+			PLAT_setRumble(VIB_applyScale(vib.strength));
 		}
 	}
 	return 0;
@@ -3993,6 +4005,11 @@ void VIB_quit(void)
 	VIB_setStrength(0);
 	pthread_cancel(vib.pt);
 	pthread_join(vib.pt, NULL);
+	// the queued 0 above is usually lost (the thread is cancelled inside its
+	// SDL_Delay or still deferring the drop), so stop the motor ourselves
+	vib.strength = vib.queued_strength = 0;
+	PLAT_setRumble(0);
+	vib.initialized = 0;
 }
 void VIB_setStrength(int strength)
 {
@@ -4341,6 +4358,9 @@ void PWR_powerOff(int reboot)
 
 static void PWR_enterSleep(void)
 {
+	// a core may be mid-rumble when the lid closes; without haptics the sleep
+	// pulse below never runs, and the motor would stay on through suspend
+	VIB_setStrength(0);
 #if defined(SND_CLOSE_ON_SLEEP) && SND_CLOSE_ON_SLEEP
 	// On H700, fully close the audio device before sleeping: a PCM left open
 	// across suspend-to-RAM ends up in a state SDL takes ~10s to close on

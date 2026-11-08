@@ -161,6 +161,7 @@ typedef struct
 
 	// Haptic
 	bool haptics;
+	int rumbleStrength; // percent, 0 = off, 100 = full
 
 	// Networking
 	bool ntp;
@@ -232,6 +233,7 @@ typedef struct
 #define CFG_DEFAULT_POWEROFFPROTECTION true
 #define CFG_DEFAULT_KEEPAWAKEWHENUSB false
 #define CFG_DEFAULT_HAPTICS false
+#define CFG_DEFAULT_RUMBLESTRENGTH 100
 #define CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND true
 #define CFG_DEFAULT_SAVEFORMAT SAVE_FORMAT_SAV
 #define CFG_DEFAULT_STATEFORMAT STATE_FORMAT_SAV
@@ -370,6 +372,9 @@ void CFG_setGameSwitcherScaling(int enumValue);
 // Enable/disable haptics.
 bool CFG_getHaptics(void);
 void CFG_setHaptics(bool enable);
+// Scale applied to every rumble/haptic request, in percent (0 = off, 100 = full).
+int CFG_getRumbleStrength(void);
+void CFG_setRumbleStrength(int percent);
 // Save format to use for libretro cores
 // 0 - .sav
 // 1 - .srm (compressed rzip)
