@@ -42,6 +42,7 @@ static int wake_fd = -1;
 #define H700_MCU_PWR "/sys/class/power_supply/axp2202-battery/mcu_pwr"
 static void LED_invalidateCache(void);
 static void LED_shutdown(void);
+static void rumble_clear(void);
 
 #define H700_INPUT_COUNT 12
 #define EV_KEY 0x01
@@ -257,6 +258,7 @@ static void detect_device(void) {
 
 void PLAT_initPlatform(void) {
 	detect_device();
+	rumble_clear();
 
 	// NOTE: should_rotate must stay 0 even on the RG28XX. Its portrait panel is
 	// handled entirely by the mali SDL driver (SDL_ROTATION=1 in launch.sh), so
@@ -815,13 +817,183 @@ void PLAT_setCPUSpeed(int speed) {
 	if (ret != 0) LOG_info("WARNING: governor script exited with status %d for mode '%s'\n", ret, mode);
 }
 
-#define MAX_STRENGTH 0xFFFF
-#define MIN_VOLTAGE 500000
-#define MAX_VOLTAGE 3300000
+///////////////////////////////
+// Rumble
+//
+// The motor hangs off the AXP2202 as a plain on/off switch: the `moto` node
+// takes 0 or 1 and nothing else. Intermediate libretro strengths are therefore
+// synthesised by duty-cycling that switch from a small worker thread. An ERM
+// motor's mechanical time constant is tens of milliseconds, so a 50 Hz carrier
+// is averaged by the rotor into a lower speed rather than felt as pulsing,
+// while keeping sysfs traffic at or below 100 writes per second.
+
 #define RUMBLE_PATH "/sys/class/power_supply/axp2202-battery/moto"
+#define RUMBLE_MAX_STRENGTH    0xFFFF
+#define RUMBLE_PWM_PERIOD_US   20000   // 50 Hz carrier
+#define RUMBLE_PWM_MIN_ON_US    1000   // shortest pulse worth a sysfs write; the motor stalls below it anyway
+#define RUMBLE_SOLID_THRESHOLD 0xF000  // >= ~94%: hold the line high instead of toggling
+#define RUMBLE_THREAD_STACK    (256 * 1024)
+
+static struct {
+	pthread_mutex_t lock;
+	pthread_cond_t cv;      // CLOCK_MONOTONIC, initialised in rumble_start_locked()
+	pthread_t thread;
+	int started;            // worker running and atexit handler registered
+	int failed;             // worker could not be started, fall back to on/off
+	int target;             // requested strength, 0..RUMBLE_MAX_STRENGTH
+	int level;              // last value written to RUMBLE_PATH, -1 = unknown
+} rumble = { .lock = PTHREAD_MUTEX_INITIALIZER, .level = -1 };
+
+// Single choke point for sysfs writes. Lock must be held.
+static void rumble_write_locked(int level) {
+	if (rumble.level == level) return;
+	putInt(RUMBLE_PATH, level);
+	rumble.level = level;
+}
+
+static void rumble_clear(void) {
+	// clear motor state left behind by a crashed predecessor: minarch dying
+	// mid-rumble leaves moto=1 until somebody writes the node again
+	pthread_mutex_lock(&rumble.lock);
+	rumble.target = 0;
+	rumble.level = -1;
+	rumble_write_locked(0);
+	pthread_mutex_unlock(&rumble.lock);
+}
+
+static void rumble_atexit(void) {
+	// the worker never holds the lock while sleeping, so this cannot block for
+	// longer than one sysfs write; afterwards it can only ever write 0 again
+	pthread_mutex_lock(&rumble.lock);
+	rumble.target = 0;
+	rumble_write_locked(0);
+	pthread_mutex_unlock(&rumble.lock);
+}
+
+static void timespec_add_us(struct timespec *ts, long us) {
+	ts->tv_sec += us / 1000000L;
+	ts->tv_nsec += (us % 1000000L) * 1000L;
+	if (ts->tv_nsec >= 1000000000L) {
+		ts->tv_nsec -= 1000000000L;
+		ts->tv_sec += 1;
+	}
+}
+
+static int timespec_before(const struct timespec *a, const struct timespec *b) {
+	return a->tv_sec < b->tv_sec || (a->tv_sec == b->tv_sec && a->tv_nsec < b->tv_nsec);
+}
+
+// Sleep until `deadline` or until the target changes away from `target`.
+// Lock must be held; it is released while waiting and held again on return.
+static void rumble_wait_until_locked(const struct timespec *deadline, int target) {
+	while (rumble.target == target) {
+		if (pthread_cond_timedwait(&rumble.cv, &rumble.lock, deadline) == ETIMEDOUT)
+			break;
+	}
+}
+
+static void *rumble_thread(void *arg) {
+	struct timespec deadline;
+	clock_gettime(CLOCK_MONOTONIC, &deadline);
+
+	pthread_mutex_lock(&rumble.lock);
+	while (1) {
+		int target = rumble.target;
+
+		if (target <= 0) {
+			rumble_write_locked(0);
+			pthread_cond_wait(&rumble.cv, &rumble.lock);
+			clock_gettime(CLOCK_MONOTONIC, &deadline);
+			continue;
+		}
+		if (target >= RUMBLE_SOLID_THRESHOLD) {
+			rumble_write_locked(1);
+			pthread_cond_wait(&rumble.cv, &rumble.lock);
+			clock_gettime(CLOCK_MONOTONIC, &deadline);
+			continue;
+		}
+
+		long on_us = (long)(((long long)RUMBLE_PWM_PERIOD_US * target) / RUMBLE_MAX_STRENGTH);
+		if (on_us < RUMBLE_PWM_MIN_ON_US) on_us = RUMBLE_PWM_MIN_ON_US;
+		if (on_us > RUMBLE_PWM_PERIOD_US - RUMBLE_PWM_MIN_ON_US) on_us = RUMBLE_PWM_PERIOD_US - RUMBLE_PWM_MIN_ON_US;
+
+		// deadlines are chained period to period so timer slop does not
+		// accumulate; if we fell behind (descheduled, or just resumed from
+		// suspend) restart from now instead of bursting to catch up
+		struct timespec now;
+		clock_gettime(CLOCK_MONOTONIC, &now);
+		if (timespec_before(&deadline, &now)) deadline = now;
+
+		rumble_write_locked(1);
+		timespec_add_us(&deadline, on_us);
+		rumble_wait_until_locked(&deadline, target);
+		if (rumble.target != target) {
+			// re-evaluate with the new target; a request for 0 has already
+			// written the node off under the lock in PLAT_setRumble()
+			clock_gettime(CLOCK_MONOTONIC, &deadline);
+			continue;
+		}
+
+		rumble_write_locked(0);
+		timespec_add_us(&deadline, RUMBLE_PWM_PERIOD_US - on_us);
+		rumble_wait_until_locked(&deadline, target);
+		if (rumble.target != target)
+			clock_gettime(CLOCK_MONOTONIC, &deadline);
+	}
+	return NULL;
+}
+
+// Lock must be held. Started lazily so that the dozen other programs linking
+// this file never spawn a thread or register an atexit handler.
+static void rumble_start_locked(void) {
+	if (rumble.started || rumble.failed) return;
+
+	pthread_condattr_t cattr;
+	pthread_condattr_init(&cattr);
+	pthread_condattr_setclock(&cattr, CLOCK_MONOTONIC);
+	pthread_cond_init(&rumble.cv, &cattr);
+	pthread_condattr_destroy(&cattr);
+
+	// the RLIMIT_STACK default (8MB per thread) wastes address space, see
+	// spawn_thread() in api.c (libretro/gpsp#248, NextUI#814)
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setstacksize(&attr, RUMBLE_THREAD_STACK);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	int rc = pthread_create(&rumble.thread, &attr, rumble_thread, NULL);
+	pthread_attr_destroy(&attr);
+	if (rc != 0) {
+		rumble.failed = 1;
+		LOG_warn("rumble: pthread_create failed (%d), falling back to on/off\n", rc);
+		return;
+	}
+	rumble.started = 1;
+	atexit(rumble_atexit);
+	LOG_info("rumble: pwm worker started (%d us carrier)\n", RUMBLE_PWM_PERIOD_US);
+}
 
 void PLAT_setRumble(int strength) {
-	putInt(RUMBLE_PATH, (strength) ? 1 : 0);
+	// Our only caller is the VIB thread, which VIB_quit() pthread_cancels, and
+	// putInt() is full of cancellation points. Never let a cancel land while we
+	// hold the lock or the worker deadlocks on an abandoned mutex.
+	int cancel_state;
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cancel_state);
+
+	pthread_mutex_lock(&rumble.lock);
+	if (strength <= 0) {
+		rumble.target = 0;
+		rumble_write_locked(0); // immediately, do not wait for the worker
+	}
+	else {
+		if (strength > RUMBLE_MAX_STRENGTH) strength = RUMBLE_MAX_STRENGTH;
+		rumble_start_locked();
+		rumble.target = strength;
+		if (!rumble.started) rumble_write_locked(1); // no worker: plain on/off
+	}
+	if (rumble.started) pthread_cond_signal(&rumble.cv);
+	pthread_mutex_unlock(&rumble.lock);
+
+	pthread_setcancelstate(cancel_state, NULL);
 }
 
 int PLAT_pickSampleRate(int requested, int max) {
