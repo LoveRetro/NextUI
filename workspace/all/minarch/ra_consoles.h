@@ -37,6 +37,8 @@ static const RA_ConsoleMapping ra_console_table[] = {
 	{ "COLECO", RC_CONSOLE_COLECOVISION },
 	// Amstrad
 	{ "CPC",     RC_CONSOLE_AMSTRAD_PC },
+	// Dreamcast
+	{ "DC",      RC_CONSOLE_DREAMCAST },
 	// Nintendo
 	{ "FC",      RC_CONSOLE_NINTENDO },
 	// FinalBurn Neo

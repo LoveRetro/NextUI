@@ -13,6 +13,8 @@
 #include <libchdr/chd.h>
 #include <libchdr/cdrom.h>
 
+#define GDROM_HIGH_DENSITY_LBA_START 45000
+
 /*****************************************************************************
  * Track info structure
  *****************************************************************************/
@@ -23,6 +25,8 @@ typedef struct {
     int pregap_frames;  // Pregap frames
     int postgap_frames; // Postgap frames
     int start_frame;    // Starting frame (cumulative)
+    int is_gdrom;
+    uint32_t lba_start;
 } chd_track_info_t;
 
 /*****************************************************************************
@@ -39,6 +43,7 @@ typedef struct {
     
     // Current track info
     int track_start_frame;    // First frame of this track in CHD
+    uint32_t track_lba_start;
     int track_frames;         // Number of frames in track
     int track_type;           // CD_TRACK_* type
     int track_pregap;         // Pregap frames for this track
@@ -94,6 +99,7 @@ static int parse_chd_tracks(chd_file* chd, chd_track_info_t* tracks, int* num_tr
     
     // Try CDROM_TRACK_METADATA2 first (newer format with pregap info)
     for (int i = 0; i < CD_MAX_TRACKS; i++) {
+        int is_gdrom = 0;
         chd_error err = chd_get_metadata(chd, CDROM_TRACK_METADATA2_TAG, i, 
                                          metadata, sizeof(metadata), 
                                          &metadata_size, NULL, NULL);
@@ -107,29 +113,44 @@ static int parse_chd_tracks(chd_file* chd, chd_track_info_t* tracks, int* num_tr
                 err = chd_get_metadata(chd, GDROM_TRACK_METADATA_TAG, i,
                                        metadata, sizeof(metadata),
                                        &metadata_size, NULL, NULL);
-                if (err != CHDERR_NONE)
-                    break;
+                if (err != CHDERR_NONE) {
+                    err = chd_get_metadata(chd, GDROM_OLD_METADATA_TAG, i,
+                                           metadata, sizeof(metadata),
+                                           &metadata_size, NULL, NULL);
+                    if (err != CHDERR_NONE)
+                        break;
+                }
+                is_gdrom = 1;
             }
         }
         
+        if (metadata_size >= sizeof(metadata))
+            metadata_size = sizeof(metadata) - 1;
         metadata[metadata_size] = '\0';
         
         // Parse the metadata string
-        int track_num, frames, pregap = 0, postgap = 0;
+        int track_num = 0, frames = 0, pregap = 0, postgap = 0;
         char type_str[32] = {0};
         char subtype_str[32] = {0};
         char pgtype_str[32] = {0};
         char pgsub_str[32] = {0};
+        int parsed = 0;
         
-        // Full format 2: "TRACK:%d TYPE:%s SUBTYPE:%s FRAMES:%d PREGAP:%d PGTYPE:%s PGSUB:%s POSTGAP:%d"
-        int parsed = sscanf(metadata, "TRACK:%d TYPE:%s SUBTYPE:%s FRAMES:%d PREGAP:%d PGTYPE:%s PGSUB:%s POSTGAP:%d",
-                           &track_num, type_str, subtype_str, &frames, &pregap, pgtype_str, pgsub_str, &postgap);
-        
-        if (parsed < 4) {
-            // Try format 1 (no pregap info)
-            parsed = sscanf(metadata, "TRACK:%d TYPE:%s SUBTYPE:%s FRAMES:%d",
-                           &track_num, type_str, subtype_str, &frames);
-            pregap = 0;
+        if (is_gdrom) {
+            int pad = 0;
+            parsed = sscanf(metadata, "TRACK:%d TYPE:%31s SUBTYPE:%31s FRAMES:%d PAD:%d PREGAP:%d PGTYPE:%31s PGSUB:%31s POSTGAP:%d",
+                            &track_num, type_str, subtype_str, &frames, &pad, &pregap, pgtype_str, pgsub_str, &postgap);
+        } else {
+            // Full format 2: "TRACK:%d TYPE:%s SUBTYPE:%s FRAMES:%d PREGAP:%d PGTYPE:%s PGSUB:%s POSTGAP:%d"
+            parsed = sscanf(metadata, "TRACK:%d TYPE:%s SUBTYPE:%s FRAMES:%d PREGAP:%d PGTYPE:%s PGSUB:%s POSTGAP:%d",
+                            &track_num, type_str, subtype_str, &frames, &pregap, pgtype_str, pgsub_str, &postgap);
+            
+            if (parsed < 4) {
+                // Try format 1 (no pregap info)
+                parsed = sscanf(metadata, "TRACK:%d TYPE:%s SUBTYPE:%s FRAMES:%d",
+                                &track_num, type_str, subtype_str, &frames);
+                pregap = 0;
+            }
         }
         
         if (parsed >= 4) {
@@ -137,6 +158,7 @@ static int parse_chd_tracks(chd_file* chd, chd_track_info_t* tracks, int* num_tr
             tracks[track_idx].frames = frames;
             tracks[track_idx].pregap_frames = pregap;
             tracks[track_idx].postgap_frames = postgap;
+            tracks[track_idx].is_gdrom = is_gdrom;
             
             // CHD format: 'frames' is the actual data frames, NOT including pregap.
             // The cumulative frame_offset points to the first frame of this track's allocation.
@@ -150,7 +172,18 @@ static int parse_chd_tracks(chd_file* chd, chd_track_info_t* tracks, int* num_tr
     }
     
     *num_tracks = track_idx;
-    return track_idx > 0 ? 0 : -1;
+    if (track_idx <= 0) return -1;
+
+    uint32_t disc_lba = 0;
+    for (int i = 0; i < track_idx; i++) {
+        if (tracks[i].is_gdrom && i == 2) {
+            disc_lba = GDROM_HIGH_DENSITY_LBA_START;
+        }
+        tracks[i].lba_start = disc_lba;
+        disc_lba += (uint32_t)tracks[i].frames;
+    }
+
+    return 0;
 }
 
 /*****************************************************************************
@@ -260,6 +293,18 @@ static int find_track(chd_track_handle_t* handle, uint32_t track_request) {
         }
         return largest_idx;
     }
+    else if (track_request == (uint32_t)-4) {
+        // RC_HASH_CDTRACK_FIRST_OF_SECOND_SESSION - first data track following an audio track
+        int seen_audio = 0;
+        for (int i = 0; i < handle->num_tracks; i++) {
+            if (!is_data_track(handle->tracks[i].type)) {
+                seen_audio = 1;
+            } else if (seen_audio) {
+                return i;
+            }
+        }
+        return -1;
+    }
     else if (track_request > 0 && track_request <= (uint32_t)handle->num_tracks) {
         // Specific track number (1-based)
         return track_request - 1;
@@ -338,6 +383,7 @@ void* chd_open_track_iterator(const char* path, uint32_t track, const void* iter
     
     handle->track_num = track_idx + 1; // Convert to 1-based
     handle->track_start_frame = handle->tracks[track_idx].start_frame;
+    handle->track_lba_start = handle->tracks[track_idx].lba_start;
     handle->track_frames = handle->tracks[track_idx].frames;
     handle->track_type = handle->tracks[track_idx].type;
     handle->track_pregap = handle->tracks[track_idx].pregap_frames;
@@ -354,16 +400,11 @@ size_t chd_read_sector(void* track_handle, uint32_t sector, void* buffer, size_t
     if (!handle || !handle->chd)
         return 0;
     
-    // Convert relative sector number to CHD frame number
-    // rcheevos calls: read_sector(first_track_sector() + offset)
-    // Since first_track_sector() returns 0, sector IS the relative offset
-    // We add track_start_frame to get the CHD frame number
-    //
-    // IMPORTANT: CHD allocates frames sequentially including pregap frames.
-    // Even if PGTYPE='V' (virtual/silence), the frames are still allocated.
-    // The FRAMES metadata field is the actual data frames AFTER pregap.
-    // So we must always skip over pregap frames to reach the actual data.
-    uint32_t frame = handle->track_start_frame + sector;
+    if (sector < handle->track_lba_start ||
+        (sector - handle->track_lba_start) >= (uint32_t)handle->track_frames)
+        return 0;
+
+    uint32_t frame = handle->track_start_frame + (sector - handle->track_lba_start);
     
     // Always skip pregap for data tracks - the pregap frames are allocated
     // in the CHD regardless of whether they contain real data or silence.
@@ -451,10 +492,7 @@ uint32_t chd_first_track_sector(void* track_handle) {
     if (!handle)
         return 0;
     
-    // Return 0 to indicate the track starts at relative sector 0.
-    // The read_sector callback will add track_start_frame to convert 
-    // to CHD frame numbers.
-    return 0;
+    return handle->track_lba_start;
 }
 
 /*****************************************************************************
