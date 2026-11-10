@@ -12,7 +12,7 @@
 int Menu_messageWithFont(char* message, char** pairs, TTF_Font* f) {
 	GFX_setMode(MODE_MAIN);
 	int dirty = 1;
-	while (1) {
+	while (!quit) {
 		GFX_startFrame();
 		PAD_poll();
 
@@ -236,7 +236,7 @@ static int OptionControls_bind(MenuList* list, int i) {
 	ButtonMapping* button = &config.controls[item->id];
 
 	int bound = 0;
-	while (!bound) {
+	while (!bound && !quit) {
 		GFX_startFrame();
 		PAD_poll();
 
@@ -259,7 +259,7 @@ static int OptionControls_bind(MenuList* list, int i) {
 		GFX_delay();
 		hdmimon();
 	}
-	return MENU_CALLBACK_NEXT_ITEM;
+	return quit ? MENU_CALLBACK_EXIT : MENU_CALLBACK_NEXT_ITEM;
 }
 static int OptionControls_unbind(MenuList* list, int i) {
 	MenuItem* item = &list->items[i];
@@ -350,7 +350,7 @@ static int OptionShortcuts_bind(MenuList* list, int i) {
 	MenuItem* item = &list->items[i];
 	ButtonMapping* button = &config.shortcuts[item->id];
 	int bound = 0;
-	while (!bound) {
+	while (!bound && !quit) {
 		GFX_startFrame();
 		PAD_poll();
 
@@ -373,7 +373,7 @@ static int OptionShortcuts_bind(MenuList* list, int i) {
 		GFX_delay();
 		hdmimon();
 	}
-	return MENU_CALLBACK_NEXT_ITEM;
+	return quit ? MENU_CALLBACK_EXIT : MENU_CALLBACK_NEXT_ITEM;
 }
 static int OptionShortcuts_unbind(MenuList* list, int i) {
 	MenuItem* item = &list->items[i];
