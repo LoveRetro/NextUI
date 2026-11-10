@@ -178,6 +178,241 @@ void PLAT_clearNotificationSurface(void) {
     notif.clear_frames = 3;  // Clear for 3 frames (triple buffering safety)
 }
 
+#ifndef GL_RGBA8
+#define GL_RGBA8 0x8058
+#endif
+#ifndef GL_DEPTH24_STENCIL8
+#define GL_DEPTH24_STENCIL8 0x88F0
+#endif
+#ifndef GL_DEPTH_STENCIL_ATTACHMENT
+#define GL_DEPTH_STENCIL_ATTACHMENT 0x821A
+#endif
+#ifndef GL_DEPTH_COMPONENT24
+#define GL_DEPTH_COMPONENT24 0x81A6
+#endif
+#ifndef GL_DEPTH_COMPONENT16
+#define GL_DEPTH_COMPONENT16 0x81A5
+#endif
+#ifndef GL_READ_FRAMEBUFFER
+#define GL_READ_FRAMEBUFFER 0x8CA8
+#endif
+#ifndef GL_DRAW_FRAMEBUFFER
+#define GL_DRAW_FRAMEBUFFER 0x8CA9
+#endif
+
+static struct {
+	GLuint fbo;
+	GLuint color_tex;
+	GLuint depth_rb;
+	GLuint orig_fbo;
+	int fbo_w;
+	int fbo_h;
+	int frame_w;
+	int frame_h;
+	int need_depth;
+	int need_stencil;
+	int bottom_left_origin;
+	int frame_ready;
+	int frame_dirty;
+	int shader_state_dirty;
+} hwr = {0};
+
+void PLAT_HWR_makeCurrent(void) {
+	if (vid.window && vid.gl_context) {
+		SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+	}
+}
+
+void* PLAT_HWR_getProcAddress(const char* sym) {
+	return SDL_GL_GetProcAddress(sym);
+}
+
+int PLAT_HWR_maxTextureSize(void) {
+	GLint max_size = 0;
+	PLAT_HWR_makeCurrent();
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_size);
+	return max_size > 0 ? max_size : 2048;
+}
+
+uintptr_t PLAT_HWR_getFramebuffer(void) {
+	return (uintptr_t)hwr.fbo;
+}
+
+int PLAT_HWR_isReady(void) {
+	return hwr.fbo != 0;
+}
+
+static void hwr_allocate_depth_stencil(int width, int height, int need_depth, int need_stencil) {
+	if (!need_depth && !need_stencil) return;
+
+	if (!hwr.depth_rb) {
+		glGenRenderbuffers(1, &hwr.depth_rb);
+	}
+	glBindRenderbuffer(GL_RENDERBUFFER, hwr.depth_rb);
+	if (need_stencil) {
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, hwr.depth_rb);
+	} else {
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+		if (glGetError() != GL_NO_ERROR) {
+			glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+			if (glGetError() != GL_NO_ERROR) {
+				glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
+			}
+		}
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, hwr.depth_rb);
+	}
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+}
+
+void PLAT_HWR_destroy(void) {
+	PLAT_HWR_makeCurrent();
+	if (hwr.orig_fbo) {
+		glDeleteFramebuffers(1, &hwr.orig_fbo);
+		hwr.orig_fbo = 0;
+	}
+	if (hwr.fbo) {
+		glDeleteFramebuffers(1, &hwr.fbo);
+		hwr.fbo = 0;
+	}
+	if (hwr.color_tex) {
+		glDeleteTextures(1, &hwr.color_tex);
+		hwr.color_tex = 0;
+	}
+	if (hwr.depth_rb) {
+		glDeleteRenderbuffers(1, &hwr.depth_rb);
+		hwr.depth_rb = 0;
+	}
+	memset(&hwr, 0, sizeof(hwr));
+	hwr.shader_state_dirty = 1;
+}
+
+int PLAT_HWR_create(int width, int height, int need_depth, int need_stencil) {
+	PLAT_HWR_makeCurrent();
+	if (hwr.fbo) {
+		PLAT_HWR_destroy();
+	}
+
+	glGenTextures(1, &hwr.color_tex);
+	glBindTexture(GL_TEXTURE_2D, hwr.color_tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	if (glGetError() != GL_NO_ERROR) {
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	}
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glGenFramebuffers(1, &hwr.fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, hwr.fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, hwr.color_tex, 0);
+
+	if (need_depth || need_stencil) {
+		hwr_allocate_depth_stencil(width, height, need_depth, need_stencil);
+	}
+
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		LOG_error("HWR: Framebuffer incomplete: 0x%x\n", status);
+		PLAT_HWR_destroy();
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		return 0;
+	}
+
+	glViewport(0, 0, width, height);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	hwr.fbo_w = width;
+	hwr.fbo_h = height;
+	hwr.need_depth = need_depth;
+	hwr.need_stencil = need_stencil;
+	hwr.frame_ready = 0;
+	hwr.frame_dirty = 0;
+	hwr.shader_state_dirty = 1;
+	return 1;
+}
+
+int PLAT_HWR_resize(int width, int height) {
+	if (!hwr.fbo || (width == hwr.fbo_w && height == hwr.fbo_h)) {
+		return hwr.fbo != 0;
+	}
+
+	PLAT_HWR_makeCurrent();
+	glBindTexture(GL_TEXTURE_2D, hwr.color_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	if (glGetError() != GL_NO_ERROR) {
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	}
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, hwr.fbo);
+	if (hwr.need_depth || hwr.need_stencil) {
+		hwr_allocate_depth_stencil(width, height, hwr.need_depth, hwr.need_stencil);
+	}
+
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		LOG_error("HWR: Framebuffer incomplete after resize (%dx%d): 0x%x\n", width, height, status);
+		return 0;
+	}
+
+	hwr.fbo_w = width;
+	hwr.fbo_h = height;
+	hwr.shader_state_dirty = 1;
+	return 1;
+}
+
+void PLAT_HWR_prepareCoreFrame(void) {
+	PLAT_HWR_makeCurrent();
+	if (hwr.fbo) {
+		glBindFramebuffer(GL_FRAMEBUFFER, hwr.fbo);
+	}
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glUseProgram(0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	if (hwr.fbo_w > 0 && hwr.fbo_h > 0) {
+		glViewport(0, 0, hwr.fbo_w, hwr.fbo_h);
+	}
+}
+
+void PLAT_HWR_restoreFrontendState(void) {
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
+	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glDepthMask(GL_TRUE);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glActiveTexture(GL_TEXTURE0);
+	hwr.shader_state_dirty = 1;
+}
+
+void PLAT_HWR_setFrame(int width, int height, int bottom_left_origin) {
+	if (width < 1) width = 1;
+	if (width > hwr.fbo_w) width = hwr.fbo_w;
+	if (height < 1) height = 1;
+	if (height > hwr.fbo_h) height = hwr.fbo_h;
+
+	hwr.frame_w = width;
+	hwr.frame_h = height;
+	hwr.bottom_left_origin = bottom_left_origin;
+	hwr.frame_ready = 1;
+	hwr.frame_dirty = 1;
+}
+
 
 #define MAX_SHADERLINE_LENGTH 512
 int extractPragmaParameters(const char *shaderSource, ShaderParam *params, int maxParams) {
@@ -805,6 +1040,7 @@ void PLAT_quitVideo(void) {
 
 	// Drop current context and delete
 	SDL_GL_MakeCurrent(vid.window, vid.gl_context);
+	PLAT_HWR_destroy();
 	SDL_GL_MakeCurrent(NULL, NULL);
 	SDL_GL_DeleteContext(vid.gl_context);
 	vid.gl_context = NULL;
@@ -1823,6 +2059,12 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		last_bound_texture = 0;
 	}
 
+	if (hwr.shader_state_dirty) {
+		last_program = 0;
+		last_bound_texture = 0;
+		hwr.shader_state_dirty = 0;
+	}
+
 	texelSize[0] = 1.0f / shader_pass->texw;
 	texelSize[1] = 1.0f / shader_pass->texh;
 
@@ -1848,6 +2090,8 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 	}
 
 	if (shader_program_handle != last_program) {
+		glBindVertexArray(static_VAO);
+		glBindBuffer(GL_ARRAY_BUFFER, static_VBO);
 		GLint posAttrib = glGetAttribLocation(shader_program_handle, "VertexCoord");
 		if (posAttrib >= 0) {
 			glVertexAttribPointer(posAttrib, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
@@ -2075,7 +2319,7 @@ void PLAT_GL_Swap() {
     SDL_Rect dst_rect = {0, 0, device_width, device_height};
     setRectToAspectRatio(&dst_rect);
 
-    if (!vid.blit->src) {
+    if (!vid.blit || (!vid.blit->src && !hwr.frame_ready)) {
         return;
     }
 
@@ -2195,17 +2439,53 @@ void PLAT_GL_Swap() {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     }
 
-    glBindTexture(GL_TEXTURE_2D, orig_texture);
-    if (vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last || reloadShaderTextures) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
-        src_w_last = vid.blit->src_w;
-        src_h_last = vid.blit->src_h;
-        orig_w = vid.blit->src_w;
-        orig_h = vid.blit->src_h;
-        origtex_w = vid.blit->src_w;
-        origtex_h = vid.blit->src_h;
+    if (hwr.frame_ready) {
+        PLAT_HWR_restoreFrontendState();
+        glBindTexture(GL_TEXTURE_2D, orig_texture);
+        if (vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last || reloadShaderTextures) {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+            src_w_last = vid.blit->src_w;
+            src_h_last = vid.blit->src_h;
+            orig_w = vid.blit->src_w;
+            orig_h = vid.blit->src_h;
+            origtex_w = vid.blit->src_w;
+            origtex_h = vid.blit->src_h;
+            hwr.frame_dirty = 1;
+        }
+        if (hwr.frame_dirty) {
+            if (!hwr.orig_fbo) {
+                glGenFramebuffers(1, &hwr.orig_fbo);
+            }
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hwr.orig_fbo);
+            glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, orig_texture, 0);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, hwr.fbo);
+            glDisable(GL_SCISSOR_TEST);
+
+            int src_y0 = hwr.bottom_left_origin ? hwr.frame_h : 0;
+            int src_y1 = hwr.bottom_left_origin ? 0 : hwr.frame_h;
+            glBlitFramebuffer(0, src_y0, hwr.frame_w, src_y1, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            hwr.frame_dirty = 0;
+            hwr.shader_state_dirty = 1;
+        }
     } else {
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
+        if (vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last || reloadShaderTextures) {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
+            src_w_last = vid.blit->src_w;
+            src_h_last = vid.blit->src_h;
+            orig_w = vid.blit->src_w;
+            orig_h = vid.blit->src_h;
+            origtex_w = vid.blit->src_w;
+            origtex_h = vid.blit->src_h;
+        } else {
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
+        }
     }
 
     last_w = vid.blit->src_w;
@@ -2363,6 +2643,8 @@ void PLAT_pixelFlipper(uint8_t* pixels, int width, int height) {
 }
 
 unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight) {
+    PLAT_HWR_makeCurrent();
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, device_width, device_height);
     GLint viewport[4];
     glGetIntegerv(GL_VIEWPORT, viewport);

@@ -5,6 +5,7 @@
 #include "scaler.h"
 #include "config.h"
 #include <stdbool.h>
+#include <stdint.h>
 
 ///////////////////////////////
 
@@ -725,6 +726,17 @@ void PLAT_flip(SDL_Surface* screen, int sync);
 int PLAT_captureScreenshot(SDL_Surface* out);
 void PLAT_GL_Swap();
 void GFX_GL_Swap();
+int PLAT_HWR_create(int width, int height, int need_depth, int need_stencil);
+void PLAT_HWR_destroy(void);
+int PLAT_HWR_resize(int width, int height);
+uintptr_t PLAT_HWR_getFramebuffer(void);
+void PLAT_HWR_makeCurrent(void);
+void PLAT_HWR_prepareCoreFrame(void);
+void PLAT_HWR_restoreFrontendState(void);
+void PLAT_HWR_setFrame(int width, int height, int bottom_left_origin);
+int PLAT_HWR_isReady(void);
+void* PLAT_HWR_getProcAddress(const char* sym);
+int PLAT_HWR_maxTextureSize(void);
 unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight);
 void PLAT_setClearColor(uint32_t color);
 void PLAT_GPU_Flip();
