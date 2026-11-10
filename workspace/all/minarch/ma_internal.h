@@ -325,5 +325,14 @@ enum {
 void hdmimon(void);
 void Core_applyCheats(struct Cheats *cheats);
 
+bool HWR_setCallback(struct retro_hw_render_callback *cb);
+int HWR_active(void);
+int HWR_contextReset(unsigned max_width, unsigned max_height);
+void HWR_contextDestroy(void);
+void HWR_beforeRun(void);
+void HWR_makeCurrent(void);
+int HWR_submitFrame(const void *data, unsigned width, unsigned height);
+void HWR_growFramebuffer(unsigned width, unsigned height);
+
 #include "ma_config.h"
 #include "ma_menu.h"

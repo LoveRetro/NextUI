@@ -16,6 +16,31 @@ void Core_getName(char* in_name, char* out_name) {
 	char* tmp = strrchr(out_name, '_');
 	tmp[0] = '\0';
 }
+
+static void (*raw_retro_run)(void) = NULL;
+static void (*raw_retro_reset)(void) = NULL;
+static bool (*raw_retro_serialize)(void*, size_t) = NULL;
+static bool (*raw_retro_unserialize)(const void*, size_t) = NULL;
+
+static void Core_runWrapper(void) {
+	HWR_beforeRun();
+	if (raw_retro_run) raw_retro_run();
+}
+
+static void Core_resetWrapper(void) {
+	HWR_makeCurrent();
+	if (raw_retro_reset) raw_retro_reset();
+}
+
+static bool Core_serializeWrapper(void *data, size_t size) {
+	HWR_makeCurrent();
+	return raw_retro_serialize ? raw_retro_serialize(data, size) : false;
+}
+
+static bool Core_unserializeWrapper(const void *data, size_t size) {
+	HWR_makeCurrent();
+	return raw_retro_unserialize ? raw_retro_unserialize(data, size) : false;
+}
 void Core_open(const char* core_path, const char* tag_name) {
 	LOG_info("Core_open\n");
 	core.handle = dlopen(core_path, RTLD_LAZY);
@@ -27,11 +52,15 @@ void Core_open(const char* core_path, const char* tag_name) {
 	core.get_system_info = dlsym(core.handle, "retro_get_system_info");
 	core.get_system_av_info = dlsym(core.handle, "retro_get_system_av_info");
 	core.set_controller_port_device = dlsym(core.handle, "retro_set_controller_port_device");
-	core.reset = dlsym(core.handle, "retro_reset");
-	core.run = dlsym(core.handle, "retro_run");
+	core.reset = Core_resetWrapper;
+	core.run = Core_runWrapper;
+	raw_retro_reset = dlsym(core.handle, "retro_reset");
+	raw_retro_run = dlsym(core.handle, "retro_run");
 	core.serialize_size = dlsym(core.handle, "retro_serialize_size");
-	core.serialize = dlsym(core.handle, "retro_serialize");
-	core.unserialize = dlsym(core.handle, "retro_unserialize");
+	raw_retro_serialize = dlsym(core.handle, "retro_serialize");
+	raw_retro_unserialize = dlsym(core.handle, "retro_unserialize");
+	core.serialize = raw_retro_serialize ? Core_serializeWrapper : NULL;
+	core.unserialize = raw_retro_unserialize ? Core_unserializeWrapper : NULL;
 	core.cheat_reset = dlsym(core.handle, "retro_cheat_reset");
 	core.cheat_set = dlsym(core.handle, "retro_cheat_set");
 	core.load_game = dlsym(core.handle, "retro_load_game");
@@ -128,6 +157,8 @@ int Core_updateAVInfo(void) {
 
 	if (changed) LOG_info("aspect_ratio: %f (%ix%i) fps: %f\n", a, av_info.geometry.base_width,av_info.geometry.base_height, core.fps);
 
+	HWR_contextReset(av_info.geometry.max_width, av_info.geometry.max_height);
+
 	return changed;
 }
 
@@ -164,7 +195,9 @@ void Core_quit(void) {
 		SRAM_write();
 		Cheats_free();
 		RTC_write();
+		HWR_makeCurrent();
 		core.unload_game();
+		HWR_contextDestroy();
 		core.deinit();
 		core.initialized = 0;
 	}

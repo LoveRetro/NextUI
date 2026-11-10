@@ -735,12 +735,12 @@ static void drawDebugHud(const void* data, unsigned width, unsigned height, size
 	}
 }
 
+static uint32_t last_flip_time = 0;
+
 static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch) {
 	// return;
 
 	Special_render();
-	
-	static uint32_t last_flip_time = 0;
 	
 	// 10 seems to be the sweet spot that allows 2x in NES and SNES and 8x in GB at 60fps
 	// 14 will let GB hit 10x but NES and SNES will drop to 1.5x at 30fps (not sure why)
@@ -935,7 +935,40 @@ static void convert_rgb565_to_rgba(const void* src, uint32_t* dst, unsigned widt
 	}
 }
 
+static void video_refresh_hw(const void *data, unsigned width, unsigned height) {
+	if (!HWR_submitFrame(data, width, height)) return;
+	if (quit || (fast_forward && (SDL_GetTicks() - last_flip_time < 30))) return;
+
+	static int last_width = 0;
+	static int last_height = 0;
+	static double last_aspect = 0;
+
+	if (data == NULL) {
+		width = (unsigned)last_width;
+		height = (unsigned)last_height;
+	}
+
+	if (width > 0 && height > 0 && (renderer.dst_p == 0 || width != last_width || height != last_height || core.aspect_ratio != last_aspect)) {
+		last_width = width;
+		last_height = height;
+		last_aspect = core.aspect_ratio;
+		selectScaler(width, height, width * 4);
+	}
+
+	renderer.src = NULL;
+	renderer.dst = screen->pixels;
+	GFX_blitRenderer(&renderer);
+	screen_flip(screen);
+	last_flip_time = SDL_GetTicks();
+}
+
 void video_refresh_callback(const void* data, unsigned width, unsigned height, size_t pitch) {
+	if (HWR_active()) {
+		video_refresh_hw(data, width, height);
+		return;
+	}
+	if (data == RETRO_HW_FRAME_BUFFER_VALID) return;
+
 	// Log NEON availability once on first call
 	static int neon_logged = 0;
 	if (!neon_logged) {

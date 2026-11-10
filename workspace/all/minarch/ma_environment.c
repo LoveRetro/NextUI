@@ -14,6 +14,179 @@ static bool set_rumble_state(unsigned port, enum retro_rumble_effect effect, uin
 	return 1;
 }
 
+#ifndef RETRO_HW_FRAME_BUFFER_VALID
+#define RETRO_HW_FRAME_BUFFER_VALID ((void*)-1)
+#endif
+
+#ifndef RETRO_SIMD_NEON
+#define RETRO_SIMD_NEON (1 << 3)
+#endif
+#ifndef RETRO_SIMD_ASIMD
+#define RETRO_SIMD_ASIMD (1 << 12)
+#endif
+
+static struct {
+	struct retro_hw_render_callback cb;
+	int requested;
+	int active;
+	int fbo_w;
+	int fbo_h;
+	int last_w;
+	int last_h;
+} hwr_state = {0};
+
+static uintptr_t HWR_getCurrentFramebuffer(void) {
+	return PLAT_HWR_getFramebuffer();
+}
+
+static retro_proc_address_t HWR_getProcAddress(const char *sym) {
+	return (retro_proc_address_t)PLAT_HWR_getProcAddress(sym);
+}
+
+bool HWR_setCallback(struct retro_hw_render_callback *cb) {
+	if (!cb) return false;
+
+	if (cb->context_type == RETRO_HW_CONTEXT_OPENGLES3 && cb->version_major == 0 && cb->version_minor == 0) {
+		cb->context_type = RETRO_HW_CONTEXT_OPENGLES3;
+		cb->version_major = 3;
+		cb->version_minor = 0;
+	}
+
+	switch (cb->context_type) {
+	case RETRO_HW_CONTEXT_OPENGLES2:
+	case RETRO_HW_CONTEXT_OPENGLES3:
+	case RETRO_HW_CONTEXT_OPENGLES_VERSION:
+	case RETRO_HW_CONTEXT_OPENGL:
+	case RETRO_HW_CONTEXT_OPENGL_CORE:
+		break;
+	default:
+		LOG_error("Unsupported HW render context type: %d\n", cb->context_type);
+		return false;
+	}
+
+	cb->get_current_framebuffer = HWR_getCurrentFramebuffer;
+	cb->get_proc_address = HWR_getProcAddress;
+	hwr_state.cb = *cb;
+	hwr_state.requested = 1;
+	return true;
+}
+
+int HWR_active(void) {
+	return hwr_state.active;
+}
+
+int HWR_contextReset(unsigned max_width, unsigned max_height) {
+	if (!hwr_state.requested) return 0;
+
+	int w = max_width > 0 ? (int)max_width : 640;
+	int h = max_height > 0 ? (int)max_height : 480;
+	int max_tex = PLAT_HWR_maxTextureSize();
+	if (w > max_tex) w = max_tex;
+	if (h > max_tex) h = max_tex;
+
+	if (!PLAT_HWR_create(w, h, hwr_state.cb.depth, hwr_state.cb.stencil)) {
+		hwr_state.active = 0;
+		return 0;
+	}
+
+	hwr_state.fbo_w = w;
+	hwr_state.fbo_h = h;
+	hwr_state.active = 1;
+
+	if (hwr_state.cb.context_reset) {
+		hwr_state.cb.context_reset();
+		PLAT_HWR_restoreFrontendState();
+	}
+	return 1;
+}
+
+void HWR_growFramebuffer(unsigned width, unsigned height) {
+	if (!hwr_state.active) return;
+
+	int max_tex = PLAT_HWR_maxTextureSize();
+	int w = (int)width;
+	int h = (int)height;
+	if (w > max_tex) w = max_tex;
+	if (h > max_tex) h = max_tex;
+
+	if (w <= hwr_state.fbo_w && h <= hwr_state.fbo_h) return;
+
+	int new_w = w > hwr_state.fbo_w ? w : hwr_state.fbo_w;
+	int new_h = h > hwr_state.fbo_h ? h : hwr_state.fbo_h;
+
+	if (PLAT_HWR_resize(new_w, new_h)) {
+		hwr_state.fbo_w = new_w;
+		hwr_state.fbo_h = new_h;
+	}
+}
+
+void HWR_contextDestroy(void) {
+	if (hwr_state.active) {
+		PLAT_HWR_makeCurrent();
+		if (hwr_state.cb.context_destroy) {
+			hwr_state.cb.context_destroy();
+		}
+		PLAT_HWR_destroy();
+	}
+	memset(&hwr_state, 0, sizeof(hwr_state));
+}
+
+void HWR_beforeRun(void) {
+	if (hwr_state.active) {
+		PLAT_HWR_prepareCoreFrame();
+	}
+}
+
+void HWR_makeCurrent(void) {
+	if (hwr_state.active) {
+		PLAT_HWR_makeCurrent();
+	}
+}
+
+int HWR_submitFrame(const void *data, unsigned width, unsigned height) {
+	if (!hwr_state.active) return 0;
+
+	PLAT_HWR_restoreFrontendState();
+	if (data == NULL) {
+		if (hwr_state.last_w > 0 && hwr_state.last_h > 0) {
+			PLAT_HWR_setFrame(hwr_state.last_w, hwr_state.last_h, hwr_state.cb.bottom_left_origin);
+			return 1;
+		}
+		return PLAT_HWR_isReady();
+	}
+	if (data != RETRO_HW_FRAME_BUFFER_VALID) return 0;
+
+	hwr_state.last_w = (int)width;
+	hwr_state.last_h = (int)height;
+	PLAT_HWR_setFrame((int)width, (int)height, hwr_state.cb.bottom_left_origin);
+	return 1;
+}
+
+static retro_time_t perf_get_time_usec(void) {
+	return (retro_time_t)getMicroseconds();
+}
+
+static retro_perf_tick_t perf_get_counter(void) {
+	return (retro_perf_tick_t)getMicroseconds();
+}
+
+static uint64_t perf_get_cpu_features(void) {
+#if defined(__aarch64__)
+	return RETRO_SIMD_NEON | RETRO_SIMD_ASIMD;
+#elif defined(__ARM_NEON__) || defined(__ARM_NEON)
+	return RETRO_SIMD_NEON;
+#else
+	return 0;
+#endif
+}
+
+static void perf_noop_counter(struct retro_perf_counter *counter) {
+	(void)counter;
+}
+
+static void perf_noop_log(void) {
+}
+
 bool environment_callback(unsigned cmd, void *data) { // copied from picoarch initially
 	// LOG_info("environment_callback: %i\n", cmd);
 
@@ -130,8 +303,7 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_AUDIO_CALLBACK: { /* 22 */
-		// LOG_info("%i: RETRO_ENVIRONMENT_SET_AUDIO_CALLBACK\n", cmd);
-		break;
+		return false;
 	}
 	case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE: { /* 23 */
 	        struct retro_rumble_interface *iface = (struct retro_rumble_interface*)data;
@@ -161,12 +333,18 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 	case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: { /* 32 */
 		const struct retro_system_av_info *av = (const struct retro_system_av_info *)data;
 		if (av) {
+			HWR_growFramebuffer(av->geometry.max_width, av->geometry.max_height);
+			HWR_growFramebuffer(av->geometry.base_width, av->geometry.base_height);
+
 			double a = av->geometry.aspect_ratio;
 			if (a <= 0) a = (double)av->geometry.base_width / av->geometry.base_height;
-
-			core.fps = av->timing.fps;
-			core.sample_rate = av->timing.sample_rate;
 			core.aspect_ratio = a;
+
+			if (core.fps != av->timing.fps || core.sample_rate != av->timing.sample_rate) {
+				core.fps = av->timing.fps;
+				core.sample_rate = av->timing.sample_rate;
+				SND_resetAudio(core.sample_rate, core.fps);
+			}
 			renderer.dst_p = 0;
 		}
 		return true;
@@ -199,8 +377,11 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 	case RETRO_ENVIRONMENT_SET_GEOMETRY: { /* 37 */
 		const struct retro_game_geometry *geom = (const struct retro_game_geometry *)data;
 		if (geom) {
+			HWR_growFramebuffer(geom->base_width, geom->base_height);
 			double a = geom->aspect_ratio;
-			if (a <= 0) a = (double)geom->base_width / geom->base_height;
+			if (a <= 0) {
+				a = geom->base_height > 0 ? (double)geom->base_width / geom->base_height : core.aspect_ratio;
+			}
 			core.aspect_ratio = a;
 			renderer.dst_p = 0;
 		}
@@ -381,26 +562,34 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 	// 	puts("RETRO_ENVIRONMENT_GET_THROTTLE_STATE"); fflush(stdout);
 	// 	break;
 	// }
-	// case RETRO_ENVIRONMENT_GET_FASTFORWARDING: {
-	// 	puts("RETRO_ENVIRONMENT_GET_FASTFORWARDING"); fflush(stdout);
-	// 	break;
-	// };
-	case RETRO_ENVIRONMENT_SET_HW_RENDER:
-	{
-		struct retro_hw_render_callback *cb = (struct retro_hw_render_callback*)data;
-
-		// Log the requested context
-		LOG_info("Core requested GL context type: %d, version %d.%d\n",
-			cb->context_type, cb->version_major, cb->version_minor);
-
-		// Fallback if version is 0.0 or other unexpected values
-		if (cb->context_type == 4 && cb->version_major == 0 && cb->version_minor == 0) {
-			LOG_info("Core requested invalid GL context type or version, defaulting to GLES 2.0\n");
-			cb->context_type = RETRO_HW_CONTEXT_OPENGLES3;
-			cb->version_major = 3;
-			cb->version_minor = 0;
+	case RETRO_ENVIRONMENT_GET_FASTFORWARDING: {
+		if (data) *(bool*)data = (fast_forward != 0);
+		return true;
+	}
+	case RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER: {
+		if (data) {
+#if defined(USE_GLES)
+			*(unsigned*)data = RETRO_HW_CONTEXT_OPENGLES3;
+#else
+			*(unsigned*)data = RETRO_HW_CONTEXT_OPENGL_CORE;
+#endif
 		}
-
+		return true;
+	}
+	case RETRO_ENVIRONMENT_SET_HW_RENDER: {
+		return HWR_setCallback((struct retro_hw_render_callback*)data);
+	}
+	case RETRO_ENVIRONMENT_GET_PERF_INTERFACE: {
+		struct retro_perf_callback *perf = (struct retro_perf_callback*)data;
+		if (perf) {
+			perf->get_time_usec = perf_get_time_usec;
+			perf->get_perf_counter = perf_get_counter;
+			perf->get_cpu_features = perf_get_cpu_features;
+			perf->perf_register = perf_noop_counter;
+			perf->perf_start = perf_noop_counter;
+			perf->perf_stop = perf_noop_counter;
+			perf->perf_log = perf_noop_log;
+		}
 		return true;
 	}
 	default:
