@@ -20,7 +20,7 @@ struct Core {
 	const char tag[8]; // eg. GBC
 	const char name[128]; // eg. gambatte
 	const char version[128]; // eg. Gambatte (v0.5.0-netlink 7e02df6)
-	const char extensions[128]; // eg. gb|gbc|dmg
+	const char extensions[256]; // eg. gb|gbc|dmg
 
 	const char config_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/h700/GB-gambatte
 	const char states_dir[MAX_PATH]; // eg. /mnt/sdcard/.userdata/arm-480/GB-gambatte

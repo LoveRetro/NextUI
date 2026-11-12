@@ -49,7 +49,7 @@ void Game_open(char* path) {
 		int supports_zip = 0;
 		int i = 0;
 		char* ext;
-		char exts[128];
+		char exts[sizeof(core.extensions)];
 		char* extensions[32];
 		strcpy(exts,core.extensions);
 		while ((ext=strtok(i?NULL:exts,"|"))) {

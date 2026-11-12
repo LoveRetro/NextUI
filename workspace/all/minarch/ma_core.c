@@ -64,7 +64,7 @@ void Core_open(const char* core_path, const char* tag_name) {
 	Core_getName((char*)core_path, (char*)core.name);
 	sprintf((char*)core.version, "%s (%s)", info.library_name, info.library_version);
 	strcpy((char*)core.tag, tag_name);
-	strcpy((char*)core.extensions, info.valid_extensions);
+	snprintf((char*)core.extensions, sizeof(core.extensions), "%s", info.valid_extensions ? info.valid_extensions : "");
 	
 	core.need_fullpath = info.need_fullpath;
 	

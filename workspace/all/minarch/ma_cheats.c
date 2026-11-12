@@ -221,7 +221,7 @@ void Cheat_getPaths(char paths[CHEAT_MAX_PATHS][MAX_PATH], int* count) {
 	{
 		int i = 0;
 		char* ext;
-		char exts[128];
+		char exts[sizeof(core.extensions)];
 		if (core.extensions == NULL || strlen(core.extensions) >= sizeof(exts)) {
 			LOG_info("Invalid or too long core.extensions\n");
 			return;
