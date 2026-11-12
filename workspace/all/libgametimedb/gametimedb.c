@@ -138,6 +138,41 @@ int play_activity_get_total_play_time(void)
     return total_play_time;
 }
 
+int play_activity_get_play_time_since(int since_epoch)
+{
+    int play_time = 0;
+    // play_time is only written when a session is stopped, so the session that
+    // is running right now still has it NULL -- fall back to the elapsed time
+    // since created_at for that one. A *stopped* session can legitimately have
+    // play_time = 0 (launched then immediately backed out), so don't fold that
+    // into the same branch -- it would be misread as still running and grow
+    // unbounded for the rest of the day.
+    char *sql =
+        "SELECT COALESCE(SUM("
+        "    CASE WHEN play_time IS NULL "
+        "         THEN strftime('%s', 'now') - created_at "
+        "         ELSE play_time END"
+        "), 0) FROM play_activity WHERE created_at >= ?;";
+    sqlite3_stmt *stmt;
+
+    sqlite3* game_log_db = play_activity_db_open();
+    stmt = play_activity_db_prepare(game_log_db, sql);
+
+    // an empty or half-written db yields no statement; report 0 rather than
+    // stepping a NULL one, callers may be gating on this
+    if (stmt != NULL) {
+        sqlite3_bind_int(stmt, 1, since_epoch);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            play_time = sqlite3_column_int(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    play_activity_db_close(game_log_db);
+
+    return play_time;
+}
+
 PlayActivities *play_activity_find_all(void)
 {
     PlayActivities *play_activities = NULL;

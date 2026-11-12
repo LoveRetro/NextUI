@@ -35,6 +35,11 @@ void free_play_activities(PlayActivities *pa_ptr);
 PlayActivities *play_activity_find_all(void);
 //int play_activity_get_play_time(const char *rom_path);
 
+// Seconds played across every rom since since_epoch, the session in progress
+// (if any) included. Used to answer "how long has this device been played
+// today", which no per-rom aggregate can express.
+int play_activity_get_play_time_since(int since_epoch);
+
 // Main interface functions for write access
 void play_activity_start(char *rom_file_path);
 void play_activity_resume(void);
