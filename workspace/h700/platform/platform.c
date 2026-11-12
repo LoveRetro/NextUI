@@ -1,6 +1,8 @@
 // h700
 #include <stdio.h>
 #include <stdlib.h>
+#include <strings.h>
+#include <ctype.h>
 #include <linux/fb.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -66,6 +68,8 @@ struct input_event {
 };
 
 static int input_fds[H700_INPUT_COUNT];
+static char input_names[H700_INPUT_COUNT][64]; // evdev device names, for the minput readout
+static uint32_t input_held[H700_INPUT_COUNT]; // buttons each evdev device currently holds down
 static uint32_t last_input_scan = 0;
 
 static void close_evdev_input(int i) {
@@ -73,20 +77,55 @@ static void close_evdev_input(int i) {
 		return;
 	close(input_fds[i]);
 	input_fds[i] = -1;
+
+	// The device is gone, so its release events never arrive. Release whatever
+	// it still held, otherwise the button looks stuck (and auto-repeats) forever.
+	uint32_t held = input_held[i];
+	input_held[i] = BTN_NONE;
+	if (held) {
+		pad.is_pressed &= ~held;
+		pad.just_repeated &= ~held;
+		pad.just_released |= held;
+		if (held & (BTN_ANALOG_LEFT | BTN_ANALOG_RIGHT))
+			pad.laxis.x = 0;
+		if (held & (BTN_ANALOG_UP | BTN_ANALOG_DOWN))
+			pad.laxis.y = 0;
+	}
+}
+
+// Bluetooth and USB pads are read through SDL (poll_sdl_input); reading their
+// evdev nodes with the built-in pad's raw mapping would misinterpret their axes
+// and hats (e.g. a resting value on ABS_HAT0Y reads as DOWN held forever).
+#define BUS_USB       0x03
+#define BUS_BLUETOOTH 0x05
+static int is_external_input(int i) {
+	char bus_path[128];
+	char bus[32] = {0};
+	snprintf(bus_path, sizeof(bus_path), "/sys/class/input/event%i/device/id/bustype", i);
+	getFile(bus_path, bus, sizeof(bus));
+	if (!bus[0])
+		return 0;
+	long bustype = strtol(bus, NULL, 16);
+	return bustype == BUS_USB || bustype == BUS_BLUETOOTH;
 }
 
 static void open_evdev_input(int i) {
 	char path[64];
 	snprintf(path, sizeof(path), "/dev/input/event%i", i);
 
+	if (is_external_input(i))
+		return;
+
 	input_fds[i] = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
 	if (input_fds[i] < 0)
 		return;
+	input_held[i] = BTN_NONE;
 
 	char name_path[128];
 	char name[256] = {0};
 	snprintf(name_path, sizeof(name_path), "/sys/class/input/event%i/device/name", i);
 	getFile(name_path, name, sizeof(name));
+	snprintf(input_names[i], sizeof(input_names[i]), "%s", name);
 	if (name[0])
 		LOG_info("Opening input event%i: %s\n", i, name);
 	else
@@ -280,8 +319,170 @@ static int is_builtin_pad(const char *name) {
 	return name && strcmp(name, "ANBERNIC-keys") == 0;
 }
 
+///////////////////////////////
+// Per-controller SDL button maps
+//
+// External pads report SDL joystick button/axis numbers that differ from model to
+// model, so the fixed JOY_* layout only fits some of them. controllers.cfg lets a
+// pad be remapped by name without recompiling; see the shipped file for the format.
+// The file is read at startup and whenever a joystick is plugged in.
+
+#define JOYMAP_MAX_PROFILES	16
+#define JOYMAP_MAX_BUTTONS	32
+#define JOYMAP_MAX_AXES		16
+#define JOYMAP_UNSET		-2 // not listed in the profile
+#define JOYMAP_IGNORE		-1 // listed as NONE
+#define JOYMAP_STICK_BASE	100 // axis targets LX/LY/RX/RY, above any joymap_targets index
+
+static const struct {
+	const char *name;
+	int btn;
+	int id;
+} joymap_targets[] = {
+	{"UP", BTN_DPAD_UP, BTN_ID_DPAD_UP}, {"DOWN", BTN_DPAD_DOWN, BTN_ID_DPAD_DOWN},
+	{"LEFT", BTN_DPAD_LEFT, BTN_ID_DPAD_LEFT}, {"RIGHT", BTN_DPAD_RIGHT, BTN_ID_DPAD_RIGHT},
+	{"A", BTN_A, BTN_ID_A}, {"B", BTN_B, BTN_ID_B}, {"X", BTN_X, BTN_ID_X}, {"Y", BTN_Y, BTN_ID_Y},
+	{"START", BTN_START, BTN_ID_START}, {"SELECT", BTN_SELECT, BTN_ID_SELECT},
+	{"MENU", BTN_MENU, BTN_ID_MENU},
+	{"L1", BTN_L1, BTN_ID_L1}, {"R1", BTN_R1, BTN_ID_R1},
+	{"L2", BTN_L2, BTN_ID_L2}, {"R2", BTN_R2, BTN_ID_R2},
+	{"L3", BTN_L3, BTN_ID_L3}, {"R3", BTN_R3, BTN_ID_R3},
+	{"L4", BTN_L4, BTN_ID_L4}, {"R4", BTN_R4, BTN_ID_R4},
+	{"PLUS", BTN_PLUS, BTN_ID_PLUS}, {"MINUS", BTN_MINUS, BTN_ID_MINUS},
+	{"POWER", BTN_POWER, BTN_ID_POWER},
+};
+#define JOYMAP_TARGET_COUNT ((int)(sizeof(joymap_targets) / sizeof(joymap_targets[0])))
+
+static const char *joymap_sticks[] = {"LX", "LY", "RX", "RY"};
+
+typedef struct {
+	char name[64]; // matched as a case-insensitive substring of the SDL joystick name
+	int button[JOYMAP_MAX_BUTTONS];
+	int axis[JOYMAP_MAX_AXES];
+} JoyProfile;
+
+static JoyProfile joy_profiles[JOYMAP_MAX_PROFILES];
+static int num_joy_profiles = 0;
+
+static char *joymap_trim(char *s) {
+	while (*s && isspace((unsigned char)*s)) s++;
+	char *end = s + strlen(s);
+	while (end > s && isspace((unsigned char)end[-1])) *--end = '\0';
+	return s;
+}
+
+static int joymap_target(const char *value, int allow_sticks) {
+	if (!strcasecmp(value, "NONE")) return JOYMAP_IGNORE;
+	for (int i = 0; i < JOYMAP_TARGET_COUNT; i++)
+		if (!strcasecmp(value, joymap_targets[i].name)) return i;
+	if (allow_sticks)
+		for (int i = 0; i < 4; i++)
+			if (!strcasecmp(value, joymap_sticks[i])) return JOYMAP_STICK_BASE + i;
+	return JOYMAP_UNSET;
+}
+
+static void joymap_loadFile(const char *path) {
+	FILE *f = fopen(path, "r");
+	if (!f) return;
+
+	JoyProfile *profile = NULL;
+	char line[256];
+	int lineno = 0;
+	while (fgets(line, sizeof(line), f)) {
+		lineno++;
+		char *text = joymap_trim(line);
+		if (!*text || *text == '#' || *text == ';') continue;
+
+		if (*text == '[') {
+			char *end = strchr(text, ']');
+			profile = NULL;
+			if (!end || end == text + 1) {
+				LOG_warn("%s:%d: bad section header\n", path, lineno);
+			}
+			else if (num_joy_profiles >= JOYMAP_MAX_PROFILES) {
+				LOG_warn("%s:%d: too many controllers, ignoring\n", path, lineno);
+			}
+			else {
+				*end = '\0';
+				profile = &joy_profiles[num_joy_profiles++];
+				snprintf(profile->name, sizeof(profile->name), "%s", joymap_trim(text + 1));
+				for (int i = 0; i < JOYMAP_MAX_BUTTONS; i++) profile->button[i] = JOYMAP_UNSET;
+				for (int i = 0; i < JOYMAP_MAX_AXES; i++) profile->axis[i] = JOYMAP_UNSET;
+			}
+			continue;
+		}
+
+		char *eq = strchr(text, '=');
+		if (!profile || !eq) {
+			if (profile) LOG_warn("%s:%d: expected key = value\n", path, lineno);
+			continue;
+		}
+		*eq = '\0';
+		char *key = joymap_trim(text);
+		char *comment = strchr(eq + 1, '#'); // trailing comment
+		if (comment) *comment = '\0';
+		char *value = joymap_trim(eq + 1);
+
+		int index = -1;
+		if (sscanf(key, "button.%d", &index) == 1 && index >= 0 && index < JOYMAP_MAX_BUTTONS) {
+			int target = joymap_target(value, 0);
+			if (target == JOYMAP_UNSET) LOG_warn("%s:%d: unknown button '%s'\n", path, lineno, value);
+			else profile->button[index] = target;
+		}
+		else if (sscanf(key, "axis.%d", &index) == 1 && index >= 0 && index < JOYMAP_MAX_AXES) {
+			int target = joymap_target(value, 1);
+			if (target == JOYMAP_UNSET) LOG_warn("%s:%d: unknown axis target '%s'\n", path, lineno, value);
+			else profile->axis[index] = target;
+		}
+		else LOG_warn("%s:%d: bad key '%s'\n", path, lineno, key);
+	}
+	fclose(f);
+}
+
+static void joymap_load(void) {
+	num_joy_profiles = 0;
+	// user copy first so its entries win over the shipped defaults
+	joymap_loadFile(USERDATA_PATH "/controllers.cfg");
+	joymap_loadFile(SYSTEM_PATH "/etc/controllers.cfg");
+	LOG_info("Loaded %d controller profile(s)\n", num_joy_profiles);
+}
+
+static void set_raw_joystick(SDL_JoystickID instance) {
+	pad.raw_device[0] = '\0';
+	for (int i = 0; i < num_joysticks; i++) {
+		if (SDL_JoystickInstanceID(joysticks[i]) != instance) continue;
+		const char *name = SDL_JoystickName(joysticks[i]);
+		snprintf(pad.raw_device, sizeof(pad.raw_device), "%s", name ? name : "");
+		return;
+	}
+}
+
+static const JoyProfile *joymap_profileFor(SDL_JoystickID instance) {
+	for (int i = 0; i < num_joysticks; i++) {
+		if (SDL_JoystickInstanceID(joysticks[i]) != instance) continue;
+		const char *name = SDL_JoystickName(joysticks[i]);
+		if (!name) return NULL;
+		size_t name_len = strlen(name);
+		for (int p = 0; p < num_joy_profiles; p++) {
+			size_t len = strlen(joy_profiles[p].name);
+			for (size_t o = 0; o + len <= name_len; o++)
+				if (!strncasecmp(name + o, joy_profiles[p].name, len)) return &joy_profiles[p];
+		}
+		return NULL;
+	}
+	return NULL;
+}
+
+static int joymap_button(const JoyProfile *profile, int joy, int *id) {
+	int target = joy >= 0 && joy < JOYMAP_MAX_BUTTONS ? profile->button[joy] : JOYMAP_UNSET;
+	if (target < 0) return BTN_NONE; // unlisted buttons are ignored once a profile matches
+	*id = joymap_targets[target].id;
+	return joymap_targets[target].btn;
+}
+
 void PLAT_initInput(void) {
 	detect_device();
+	joymap_load();
 	for (int i = 0; i < H700_INPUT_COUNT; i++)
 		input_fds[i] = -1;
 	last_input_scan = 0;
@@ -340,11 +541,21 @@ static void poll_sdl_input(uint32_t tick) {
 		int id = -1;
 
 		if (event.type == SDL_JOYBUTTONDOWN || event.type == SDL_JOYBUTTONUP) {
+			pad.raw_kind = 'J';
+			pad.raw_code = event.jbutton.button;
+			pad.raw_value = event.type == SDL_JOYBUTTONDOWN;
+			set_raw_joystick(event.jbutton.which);
 			pressed = event.type == SDL_JOYBUTTONDOWN;
-			btn = button_from_joy(event.jbutton.button, &id);
+			const JoyProfile *profile = joymap_profileFor(event.jbutton.which);
+			btn = profile ? joymap_button(profile, event.jbutton.button, &id)
+			              : button_from_joy(event.jbutton.button, &id);
 		}
 		else if (event.type == SDL_JOYHATMOTION) {
 			int hat = event.jhat.value;
+			pad.raw_kind = 'H';
+			pad.raw_code = event.jhat.hat;
+			pad.raw_value = hat;
+			set_raw_joystick(event.jhat.which);
 			apply_button_state(BTN_DPAD_UP, BTN_ID_DPAD_UP, hat & SDL_HAT_UP, tick);
 			apply_button_state(BTN_DPAD_DOWN, BTN_ID_DPAD_DOWN, hat & SDL_HAT_DOWN, tick);
 			apply_button_state(BTN_DPAD_LEFT, BTN_ID_DPAD_LEFT, hat & SDL_HAT_LEFT, tick);
@@ -354,8 +565,39 @@ static void poll_sdl_input(uint32_t tick) {
 		else if (event.type == SDL_JOYAXISMOTION) {
 			int axis = event.jaxis.axis;
 			int val = event.jaxis.value;
+			if (abs(val) > 16384) { // ignore stick jitter
+				pad.raw_kind = 'A';
+				pad.raw_code = axis;
+				pad.raw_value = val;
+				set_raw_joystick(event.jaxis.which);
+			}
 
-			if (axis == AXIS_L2) {
+			const JoyProfile *profile = joymap_profileFor(event.jaxis.which);
+			int target = profile && axis >= 0 && axis < JOYMAP_MAX_AXES ? profile->axis[axis] : JOYMAP_UNSET;
+
+			if (target == JOYMAP_IGNORE)
+				continue;
+			else if (target >= JOYMAP_STICK_BASE) {
+				switch (target - JOYMAP_STICK_BASE) {
+				case 0:
+					pad.laxis.x = val;
+					PAD_setAnalog(BTN_ID_ANALOG_LEFT, BTN_ID_ANALOG_RIGHT, val, tick + PAD_REPEAT_DELAY);
+					break;
+				case 1:
+					pad.laxis.y = val;
+					PAD_setAnalog(BTN_ID_ANALOG_UP, BTN_ID_ANALOG_DOWN, val, tick + PAD_REPEAT_DELAY);
+					break;
+				case 2: pad.raxis.x = val; break;
+				case 3: pad.raxis.y = val; break;
+				}
+				continue;
+			}
+			else if (target >= 0) { // analog trigger: pressed while pushed past center
+				btn = joymap_targets[target].btn;
+				id = joymap_targets[target].id;
+				pressed = val > 0;
+			}
+			else if (axis == AXIS_L2) {
 				btn = BTN_L2;
 				id = BTN_ID_L2;
 				pressed = val > 0;
@@ -408,6 +650,7 @@ static void poll_evdev_input(uint32_t tick) {
 		if (input < 0)
 			continue;
 
+		uint32_t before = pad.is_pressed;
 		errno = 0;
 		while (read(input, &event, sizeof(event)) == sizeof(event)) {
 			if (event.type != EV_KEY && event.type != EV_ABS)
@@ -418,6 +661,25 @@ static void poll_evdev_input(uint32_t tick) {
 			int id = -1;
 			int code = event.code;
 			int value = event.value;
+
+			if (event.type == EV_KEY) {
+				pad.raw_kind = 'K';
+				pad.raw_code = code;
+				pad.raw_value = value > 0;
+				snprintf(pad.raw_device, sizeof(pad.raw_device), "%s", input_names[i]);
+			}
+			else if (code == RAW_HATX || code == RAW_HATY) {
+				pad.raw_kind = 'H';
+				pad.raw_code = code;
+				pad.raw_value = value;
+				snprintf(pad.raw_device, sizeof(pad.raw_device), "%s", input_names[i]);
+			}
+			else if (abs(value) > 16384) { // ignore stick jitter
+				pad.raw_kind = 'A';
+				pad.raw_code = code;
+				pad.raw_value = value;
+				snprintf(pad.raw_device, sizeof(pad.raw_device), "%s", input_names[i]);
+			}
 
 			if (event.type == EV_KEY) {
 				if (value > 1)
@@ -456,6 +718,10 @@ static void poll_evdev_input(uint32_t tick) {
 
 			apply_button_state(btn, id, pressed, tick);
 		}
+
+		// remember what this device holds so close_evdev_input can release it
+		uint32_t changed = before ^ pad.is_pressed;
+		input_held[i] = (input_held[i] | (changed & pad.is_pressed)) & ~(changed & ~pad.is_pressed);
 
 		if (errno && errno != EAGAIN && errno != EWOULDBLOCK)
 			close_evdev_input(i);
@@ -508,6 +774,10 @@ void PLAT_pollInput(void) {
 void PLAT_updateInput(const SDL_Event *event) {
 	switch (event->type) {
     case SDL_JOYDEVICEADDED: {
+        // a new pad's initial state must not leave buttons latched
+        joymap_load(); // pick up edits to controllers.cfg
+        PAD_reset();
+        pad.laxis.x = pad.laxis.y = pad.raxis.x = pad.raxis.y = 0;
         int device_index = event->jdevice.which;
         const char *name = SDL_JoystickNameForIndex(device_index);
         if (is_builtin_pad(name)) {
@@ -526,6 +796,9 @@ void PLAT_updateInput(const SDL_Event *event) {
     }
 
     case SDL_JOYDEVICEREMOVED: {
+        // the removed pad can no longer send release events
+        PAD_reset();
+        pad.laxis.x = pad.laxis.y = pad.raxis.x = pad.raxis.y = 0;
         SDL_JoystickID removed_id = event->jdevice.which;
         for (int i = 0; i < num_joysticks; ++i) {
             if (SDL_JoystickInstanceID(joysticks[i]) == removed_id) {

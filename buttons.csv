@@ -1,0 +1,17 @@
+Button,Built-in (RAW),Built-in (minput code),8Bitdo (RAW),8bitdo (minput code),Retro Battler GC Pro (RAW),Retro Battler GC Pro (minput code)
+dpad Up,raw hat 17 -1,U=0,raw hat 0 = 0,U=0,raw hat 0 = 0,U=0
+dpasd Right,raw hat 16 1,R=3,raw hat 0 = 2,R=3,raw hat 0 = 2,R=3
+dpad Down,raw hat 17 1,D=1,raw hat 0 = 4,D=1,raw hat 0 = 4,D=1
+dpad Left,raw hat 16 -1,L=2,raw hat 0 = 8,L=2,raw hat 0 = 8,L=2
+A,304,A=4,raw joy 2,Y=7,raw joy 1,B=5
+B,305,B=5,ray joy 1,X=6,raw joy 2,Y=7
+X,307,X=6,raw joy 4,L1=10,raw joy 3,X=6
+Y,306,Y=7,raw joy 3,X=6,raw joy 4,L1=10
+L1,308,L1=10,raw joy 5,R1=11,raw joy 5,R1=11
+R1,309,R1=11,raw joy 6,SELECT=9,raw joy 6,SELECT=9
+L2,314,L2=12,raw axis 2 = 32767,(nothing),raw axis 2 = 32767,(nothing)
+R2,315,R2=13,raw axis 5 = 32767,(nothing),raw axis 5 = 32767,(nothing)
+Start,311,START=8,raw joy 8,MENU=18,raw joy 8,MENU=18
+Select,310,SELECT=9,raw joy 7,START=8,raw joy 7,START=8
+Menu,312 and/or 354,MENU=18,raw joy 0,A=4,raw joy 0,A=4
+Power,116,POWER=21,(not applicable),(not applicable),(not applicable),(not applicable)

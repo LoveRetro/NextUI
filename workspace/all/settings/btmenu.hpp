@@ -17,6 +17,8 @@ namespace Bluetooth
         MenuItem *diagItem;
         // max sample rate
         MenuItem *rateItem = nullptr;
+        // forget all devices and restore defaults
+        MenuItem *resetItem = nullptr;
         
         std::thread worker;
         bool quit = false;
@@ -85,6 +87,12 @@ namespace Bluetooth
 
     public:
         PairNewItem(BT_device n, bool& dirty);
+    };
+
+    class ResetAllItem : public MenuItem
+    {
+    public:
+        ResetAllItem(bool& dirty);
     };
 
     class UnpairItem : public MenuItem

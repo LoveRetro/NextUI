@@ -67,6 +67,9 @@ void PLAT_quitInput(void) {
 void PLAT_updateInput(const SDL_Event *event) {
 	switch (event->type) {
     case SDL_JOYDEVICEADDED: {
+        // a new pad's initial state must not leave buttons latched
+        PAD_reset();
+        pad.laxis.x = pad.laxis.y = pad.raxis.x = pad.raxis.y = 0;
         int device_index = event->jdevice.which;
         SDL_Joystick *new_joy = SDL_JoystickOpen(device_index);
         if (new_joy) {
@@ -80,6 +83,9 @@ void PLAT_updateInput(const SDL_Event *event) {
     }
 
     case SDL_JOYDEVICEREMOVED: {
+        // the removed pad can no longer send release events
+        PAD_reset();
+        pad.laxis.x = pad.laxis.y = pad.raxis.x = pad.raxis.y = 0;
         SDL_JoystickID removed_id = event->jdevice.which;
         for (int i = 0; i < num_joysticks; ++i) {
             if (SDL_JoystickInstanceID(joysticks[i]) == removed_id) {
