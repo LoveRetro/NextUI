@@ -183,6 +183,7 @@ killall -9 show2.elf > /dev/null 2>&1
 EXEC_PATH="/tmp/nextui_exec"
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
+
 while [ -f $EXEC_PATH ]; do
 	nextui.elf &> $LOGS_PATH/nextui.txt	
 	# default launched paks to performance, they can change it themselves after launch if they want

@@ -35,6 +35,9 @@ ifeq ($(PLATFORM), tg5040)
 	cd ./$(PLATFORM)/btmanager && make all
 	cd ./$(PLATFORM)/poweroff_next/ && make
 endif
+ifeq ($(PLATFORM), my355)
+	cd ./$(PLATFORM)/rfkill && make all
+endif
 ifeq ($(PLATFORM), h700)
 	cd ./$(PLATFORM)/poweroff_next/ && make
 endif

@@ -1,0 +1,27 @@
+diff --git forkSrcPrefix/Makefile.libretro forkDstPrefix/Makefile.libretro
+index 5b90d409271332a48ae726dca48a712c3be413be..02958b2d0e6612539ae4545df7bb28a8395c060e 100644
+--- forkSrcPrefix/Makefile.libretro
++++ forkDstPrefix/Makefile.libretro
+@@ -458,5 +458,22 @@ else ifeq ($(platform), miyoo)
+ 	PLATFORM_DEFINES += -fomit-frame-pointer -ffast-math -mcpu=arm926ej-s
+
++# MIYOO FLIP
++else ifeq ($(platform), my355)
++	TARGET := $(TARGET_NAME)_libretro.so
++	CC = $(CROSS_COMPILE)gcc
++	CXX = $(CROSS_COMPILE)g++
++	AR = $(CROSS_COMPILE)ar
++	SHARED := -shared -Wl,--version-script=src/drivers/libretro/link.T -Wl,-no-undefined
++	LDFLAGS += -fPIC -flto
++	CFLAGS += -mcpu=cortex-a55
++	CFLAGS += -fomit-frame-pointer -ffast-math -fPIC -flto
++	OPTIMIZE := -Ofast -DNDEBUG
++	EXTERNAL_ZLIB = 1
++	HAVE_NTSC = 0
++	ifeq (,$(DEBUG))
++		# LDFLAGS += -s
++	endif
++	
+ # Windows MSVC 2017 all architectures
+ else ifneq (,$(findstring windows_msvc2017,$(platform)))
+ 	CC  = cl.exe

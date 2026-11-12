@@ -445,9 +445,9 @@ void getFile(char* path, char* buffer, size_t buffer_size) {
 		size_t size = ftell(file);
 		if (size>buffer_size-1) size = buffer_size - 1;
 		rewind(file);
-		fread(buffer, sizeof(char), size, file);
+		// terminate at what was actually read, sysfs always reports a page
+		buffer[fread(buffer, sizeof(char), size, file)] = '\0';
 		fclose(file);
-		buffer[size] = '\0';
 	}
 }
 char* allocFile(char* path) { // caller must free!

@@ -53,9 +53,13 @@
 #define COLOR_BUTTON_TEXT	(SDL_Color){TRIAD_GRAY}
 
 // all before scale
-#define PILL_SIZE 30
+// the size (height) of the regular menu pill
+#define PILL_SIZE 30 
+// default minimum button/hint size
 #define BUTTON_SIZE 20
+// the margin between the edge of the pill and the button, e.g. the button hints
 #define BUTTON_MARGIN 5 // ((PILL_SIZE - BUTTON_SIZE) / 2)
+// PILL_PADDING, really - the padding between the edge of the pill and the content inside it (text or icons)
 #define BUTTON_PADDING 12
 #define SETTINGS_SIZE 4
 #define SETTINGS_WIDTH 80
@@ -68,6 +72,7 @@
 #define QUICK_SWITCHER_COUNT 3
 #endif
 
+// the outer padding of the entire UI
 #ifndef PADDING
 #define PADDING 10 // PILL_SIZE / 3 (or non-integer part of the previous calculatiom divided by three)
 #endif
@@ -93,9 +98,6 @@ enum
 };
 
 ///////////////////////////////
-
-#define STR_HELPER(x) #x
-#define STR(x) STR_HELPER(x)
 
 #define MAX(a, b) (a) > (b) ? (a) : (b)
 #define MIN(a, b) (a) < (b) ? (a) : (b)
