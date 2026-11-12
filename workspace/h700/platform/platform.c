@@ -636,10 +636,13 @@ static bool bluetoothConnected = false;
 
 void PLAT_getNetworkStatus(int* is_online)
 {
+	struct WIFI_connection next_connection = {0};
+	// Keep the cached signal available while the Wi-Fi commands run.
 	if(WIFI_enabled())
-		WIFI_connectionInfo(&connection);
+		WIFI_connectionInfo(&next_connection);
 	else
-		connection_reset(&connection);
+		connection_reset(&next_connection);
+	connection = next_connection;
 	
 	if(is_online)
 		*is_online = (connection.valid && connection.ssid[0] != '\0');
