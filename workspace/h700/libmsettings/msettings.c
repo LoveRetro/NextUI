@@ -601,13 +601,16 @@ int scaleVolume(int value) {
 	return value * 5; // scale 0-20 to 0-100
 }
 
+// The disp driver drives the backlight PWM at (raw+1)/256 duty and raw 0
+// turns the backlight off, so 1 is the dimmest lit level. The bottom levels
+// double the duty each step (2, 4, 8, 16 of 256) so 0 and 1 are usable in the dark.
 int scaleBrightness(int value) {
 	int raw;
 	switch (value) {
-		case 0: raw=4; break;
-		case 1: raw=6; break;
-		case 2: raw=10; break;
-		case 3: raw=16; break;
+		case 0: raw=1; break;
+		case 1: raw=3; break;
+		case 2: raw=7; break;
+		case 3: raw=15; break;
 		case 4: raw=32; break;
 		case 5: raw=48; break;
 		case 6: raw=64; break;
@@ -824,6 +827,44 @@ static int get_audiocodec_card_num() {
 	return -1;
 }
 
+// Speaker/lineout codec levels per 0-20 volume step, as raw {lineout volume, digital volume}.
+// lineout volume: 0 and 1 are both mute, 2-31 is -43.5dB..0dB in 1.5dB steps.
+// digital volume: attenuator, 0-63 is 0dB..-73.08dB in 1.16dB steps.
+// Writing percentages put step 1 on lineout raw 1 (silent) and step 2 already at
+// -42dB. Lineout alone can't go below -43.5dB, so the lowest steps add digital
+// attenuation; lineout still rises by one every step so each one stays audible.
+static const int SpeakerVolumeLevels[21][2] = {
+	{ 0, 63},	//  0: mute
+	{ 2, 10},	//  1: -55.1dB
+	{ 3,  8},	//  2: -51.3dB
+	{ 4,  6},	//  3: -47.5dB
+	{ 5,  4},	//  4: -43.6dB
+	{ 6,  2},	//  5: -39.8dB
+	{ 7,  0},	//  6: -36.0dB
+	{ 9,  0},	//  7: -33.0dB
+	{10,  0},	//  8: -31.5dB
+	{12,  0},	//  9: -28.5dB
+	{14,  0},	// 10: -25.5dB
+	{16,  0},	// 11: -22.5dB
+	{17,  0},	// 12: -21.0dB
+	{19,  0},	// 13: -18.0dB
+	{21,  0},	// 14: -15.0dB
+	{22,  0},	// 15: -13.5dB
+	{24,  0},	// 16: -10.5dB
+	{26,  0},	// 17: -7.5dB
+	{28,  0},	// 18: -4.5dB
+	{29,  0},	// 19: -3.0dB
+	{31,  0},	// 20: 0dB
+};
+
+// 0-100 back to the 0-20 step, keeping any non-zero value off the mute step
+static int speakerVolumeStep(int val) {
+	if (val <= 0) return 0;
+	if (val >= 100) return 20;
+	int step = (val * 20 + 50) / 100;
+	return step < 1 ? 1 : step;
+}
+
 void SetRawVolume(int val) { // in: 0-100
     if (GetAudioSink() == AUDIO_SINK_BLUETOOTH) {
         // bluealsa is a mixer plugin, not exposed as a separate card
@@ -889,16 +930,18 @@ void SetRawVolume(int val) { // in: 0-100
             return;
         }
 
+		const int *level = SpeakerVolumeLevels[speakerVolumeStep(val)];
+
         struct mixer_ctl *digital = mixer_get_ctl_by_name(mixer, "digital volume");
         if (digital) {
-			mixer_ctl_set_percent(digital, 0, 100 - val); // reversed mapping
-			//printf("Set 'digital volume' to %d%%\n", val); fflush(stdout);
+			mixer_ctl_set_value(digital, 0, level[1]);
+			//printf("Set 'digital volume' to %d\n", level[1]); fflush(stdout);
 		}
 
 		struct mixer_ctl *lineout = mixer_get_ctl_by_name(mixer, "lineout volume");
         if (lineout) {
-			mixer_ctl_set_percent(lineout, 0, val);
-			//printf("Set 'lineout volume' to %d%%\n", val); fflush(stdout);
+			mixer_ctl_set_value(lineout, 0, level[0]);
+			//printf("Set 'lineout volume' to %d\n", level[0]); fflush(stdout);
 		}
 
 		struct mixer_ctl *spk = mixer_get_ctl_by_name(mixer, "SPK");
