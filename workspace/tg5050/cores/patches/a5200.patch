@@ -1,0 +1,23 @@
+diff --git a/Makefile b/Makefile
+index 67a7e1f..184ec33 100644
+--- a/Makefile
++++ b/Makefile
+@@ -326,6 +326,18 @@ else ifeq ($(platform), miyoo)
+ 	FLAGS += -fomit-frame-pointer -ffast-math -mcpu=arm926ej-s
+ 	fpic := -fPIC
+ 
++# target platform tg5050 trimUI smart pro s
++else ifeq ($(platform), tg5050)
++	TARGET := $(TARGET_NAME)_libretro.so
++	CC = $(CROSS_COMPILE)gcc
++	CXX = $(CROSS_COMPILE)g++
++	AR = $(CROSS_COMPILE)ar
++	SHARED := -shared -Wl,--no-undefined
++	LDFLAGS += -shared -Wl,--version-script=link.T
++	FLAGS += -fomit-frame-pointer -ffast-math -mcpu=cortex-a55
++	fpic := -fPIC
++	HAVE_NEON = 1
++
+ # Raspberry Pi 1
+ else ifeq ($(platform), rpi1)
+ 	TARGET := $(TARGET_NAME)_libretro.so

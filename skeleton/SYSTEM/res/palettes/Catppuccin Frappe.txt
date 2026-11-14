@@ -1,0 +1,9 @@
+version=1
+name=Catppuccin Frappe
+color1=0xA6D189FF
+color2=0x292C3CFF
+color3=0x232634FF
+color4=0xC6D0F5FF
+color5=0x232634FF
+color6=0xA5ADCEFF
+color7=0x303446FF

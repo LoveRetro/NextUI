@@ -47,4 +47,6 @@ uint64_t getMicroseconds(void);
 int clamp(int x, int lower, int upper);
 double clampd(double x, double lower, double upper);
 
+char* findFileInDir(const char *directory, const char *filename);
+
 #endif

@@ -5,6 +5,8 @@
 
 namespace Bluetooth
 {
+    class PairingAgent;
+
     class Menu : public MenuList
     {
         const int &globalQuit;
@@ -14,12 +16,13 @@ namespace Bluetooth
         // diagnostics on/off
         MenuItem *diagItem;
         // max sample rate
-        MenuItem *rateItem;
-
+        MenuItem *rateItem = nullptr;
+        
         std::thread worker;
         bool quit = false;
         bool selectionDirty = false;
-
+        
+        PairingAgent* pairingAgent = nullptr;
     public:
         Menu(const int &globalQuit, int &globalDirty);
         ~Menu();

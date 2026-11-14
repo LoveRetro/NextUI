@@ -487,9 +487,9 @@ void renderPage()
     // monochrome is more MinUI, but some colours are nice
     const bool ilikeitcolourful = true;
     if(ilikeitcolourful) {
-        white_pixel_color = SDL_MapRGB(screen->format, 255, 255, 255);
-        red_pixel_color = SDL_MapRGB(screen->format, 255, 170, 170);
-        blue_pixel_color = SDL_MapRGB(screen->format, 89, 167, 255);
+        white_pixel_color = SDL_MapRGBA(screen->format, 255, 255, 255, 255);
+        red_pixel_color = SDL_MapRGBA(screen->format, 255, 170, 170, 255);
+        blue_pixel_color = SDL_MapRGBA(screen->format, 89, 167, 255, 255);
         pixel_color = white_pixel_color;
     }
 
@@ -637,7 +637,7 @@ int main(int argc, char *argv[])
 {
     InitSettings();
 
-    PWR_setCPUSpeed(CPU_SPEED_MENU);
+    PWR_setCPUSpeed(CPU_SPEED_AUTO);
     device_model = PLAT_getModel();
 
     screen = GFX_init(MODE_MAIN);
@@ -653,12 +653,11 @@ int main(int argc, char *argv[])
 
     int dirty = 1;
     int show_setting = 0;
-    int was_online = PLAT_isOnline();
+    int was_online = PWR_isOnline();
     int had_bt = PLAT_btIsConnected();
     while (!quit)
     {
-        uint32_t frame_start = SDL_GetTicks();
-
+        GFX_startFrame();
         PAD_poll();
 
         // This might be too harsh, but ignore all combos with MENU (most likely a shortcut for someone else)
@@ -709,7 +708,7 @@ int main(int argc, char *argv[])
 
         PWR_update(&dirty, &show_setting, NULL, NULL);
 
-        int is_online = PLAT_isOnline();
+        int is_online = PWR_isOnline();
         if (was_online != is_online)
             dirty = 1;
         was_online = is_online;

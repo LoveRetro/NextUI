@@ -1,0 +1,27 @@
+diff --git forkSrcPrefix/Makefile.libretro forkDstPrefix/Makefile.libretro
+index 5b90d409271332a48ae726dca48a712c3be413be..8b6fc14db737e32d47b0c8ad449b0b03e78548c1 100644
+--- forkSrcPrefix/Makefile.libretro
++++ forkDstPrefix/Makefile.libretro
+@@ -458,5 +458,22 @@ else ifeq ($(platform), miyoo)
+ 	PLATFORM_DEFINES += -fomit-frame-pointer -ffast-math -mcpu=arm926ej-s
+ 
++# Anbernic H700
++else ifeq ($(platform), h700)
++	TARGET := $(TARGET_NAME)_libretro.so
++	CC = $(CROSS_COMPILE)gcc
++	CXX = $(CROSS_COMPILE)g++
++	AR = $(CROSS_COMPILE)ar
++	SHARED := -shared -Wl,--version-script=src/drivers/libretro/link.T -Wl,-no-undefined
++	LDFLAGS += -fPIC -flto
++	CFLAGS += -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a
++	CFLAGS += -fomit-frame-pointer -ffast-math -fPIC -flto
++	OPTIMIZE := -Ofast -DNDEBUG
++	EXTERNAL_ZLIB = 1
++	HAVE_NTSC = 0
++	ifeq (,$(DEBUG))
++		# LDFLAGS += -s
++	endif
++	
+ # Windows MSVC 2017 all architectures
+ else ifneq (,$(findstring windows_msvc2017,$(platform)))
+ 	CC  = cl.exe

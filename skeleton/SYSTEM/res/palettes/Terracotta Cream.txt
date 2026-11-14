@@ -1,0 +1,9 @@
+version=1
+name=Terracotta Cream
+color1=0xC1602EFF
+color2=0xF1E8D9FF
+color3=0xFCEEE4FF
+color4=0x2B2118FF
+color5=0xFCEEE4FF
+color6=0x7A6E5CFF
+color7=0xF7F1E7FF

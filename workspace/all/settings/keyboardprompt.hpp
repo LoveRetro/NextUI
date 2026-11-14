@@ -69,9 +69,19 @@ public:
     KeyboardPrompt(const std::string &title, MenuListCallback on_confirm = nullptr);
     ~KeyboardPrompt();
 
-    void drawCustom(SDL_Surface *surface, const SDL_Rect &dst) override;
+    void drawCustom(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle) override;
 
     InputReactionHint handleInput(int &dirty, int &quit) override;
+
+    // Set the initial text to display in the keyboard input field
+    void setInitialText(const std::string &text) {
+        // Reset state to allow re-editing after previous exit
+        state.quitting = false;
+        state.exit_code = ExitCode::Uninitialized;
+        state.keyboard.initial_text = text;
+        state.keyboard.current_text = text;
+        state.redraw = true;
+    }
 
 private:
     // handle_keyboard_input interprets keyboard input events and mutates app state

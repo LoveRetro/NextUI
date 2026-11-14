@@ -11,8 +11,13 @@ TARGET=msettings
 .PHONY: clean
 
 CC = $(CROSS_COMPILE)gcc
+CFLAGS = -I../../all/common
 
-#CFLAGS = -g
+ifeq ($(PROFILE), 1)
+CFLAGS  += -pg
+LDFLAGS += -pg
+endif
+
 #LDFLAGS = -ldl -lrt -s
 LDFLAGS = -ldl
 

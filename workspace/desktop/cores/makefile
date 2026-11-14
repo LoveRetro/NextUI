@@ -7,14 +7,14 @@
 #CORES+= fake-08 (clang)
 #CORES+= fbneo
 #CORES+= fceumm (clang)
-#CORES+= gambatte
-#CORES+= gpsp
+CORES= gambatte
+CORES+= gpsp
 #CORES+= libretro-cap32
 #CORES+= libretro-uae
 #CORES+= mednafen_pce_fast
 #CORES+= mednafen_supafaust
 #CORES+= mednafen_vb
-#CORES+= mgba
+CORES+= mgba
 #CORES+= pcsx_rearmed
 #CORES+= pet
 #CORES+= picodrive (clang)

@@ -8,7 +8,8 @@ index 466fa6b..ec40f1a
  
 +# tg5040
 +else ifneq (,$(findstring tg5040,$(platform)))
-+   CXX=/usr/bin/aarch64-linux-gnu-gcc
++   CC=$(CROSS_COMPILE)gcc
++   CXX=$(CROSS_COMPILE)g++
 +   CFLAGS += $(LTO)
 +   CXXFLAGS += $(LTO) -O3 -Ofast -march=armv8-a+simd -mtune=cortex-a53 -ffast-math
 +   LDFLAGS += $(LTO) -lstdc++ -flto
@@ -16,7 +17,6 @@ index 466fa6b..ec40f1a
 +   fpic := -fPIC
 +   LIBS += -lz
 +   SHARED := -shared -Wl,--version-script=link.T -Wl,-z,defs
-+   
  # ODROIDN2
  else ifneq (,$(findstring CortexA73_G12B,$(platform)))
  	TARGET := $(TARGET_NAME)_libretro.so

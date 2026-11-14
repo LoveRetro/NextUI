@@ -77,20 +77,34 @@ extern uint32_t THEME_COLOR6;
 extern uint32_t THEME_COLOR7;
 extern SDL_Color ALT_BUTTON_TEXT_COLOR;
 
+typedef struct {
+	float ratio;
+    int buffer_free;
+    int avg_buffer_free;
+    int buffer_target;
+    int frame_count;
+    double fps;
+    double req_fps;
+    float buffer_ms;
+    int buffer_size;
+    int samplerate_in;
+    int samplerate_out;
+    int cpu_speed;
+    double cpu_usage;
+    int cpu_temp;
+	int gpu_speed;
+	double gpu_usage;
+    int gpu_temp;
+    double jitter;
+    int frame_drops;
+    double avg_frame_ms;
+    double max_frame_ms;
+} PerfProfile;
+
+extern PerfProfile perf;
+
 // TODO: do we need that many free externs? This should move
 // to a structure or something.
-extern float currentratio;
-extern int currentbufferfree;
-extern int avgbufferfree;
-extern int currentbuffertarget;
-extern int currentframecount;
-extern double currentfps;
-extern double currentreqfps;
-extern float currentbufferms;
-extern int currentbuffersize;
-extern int currentsampleratein;
-extern int currentsamplerateout;
-extern int currentcpuspeed;
 extern int currentshaderpass;
 extern int currentshadersrcw;
 extern int currentshadersrch;
@@ -98,17 +112,19 @@ extern int currentshaderdstw;
 extern int currentshaderdsth;
 extern int currentshadertexw;
 extern int currentshadertexh;
-extern double currentcpuse;
-extern int currentcputemp;
 extern int should_rotate;
-extern volatile int useAutoCpu;
-
+extern int hdmi_active; // output selected at GFX_init; apps restart on HDMI changes
 enum {
 	ASSET_WHITE_PILL,
 	ASSET_BLACK_PILL,
 	ASSET_DARK_GRAY_PILL,
+	ASSET_WHITE_RECT,
+	ASSET_BLACK_RECT,
+	ASSET_DARK_GRAY_RECT,
 	ASSET_OPTION,
+	ASSET_OPTION_RECT,
 	ASSET_BUTTON,
+	ASSET_BUTTON_RECT,
 	ASSET_PAGE_BG,
 	ASSET_STATE_BG,
 	ASSET_PAGE,
@@ -146,6 +162,7 @@ enum {
 	
 	ASSET_CHECKCIRCLE,
 	ASSET_LOCK,
+	ASSET_TROPHY,
 	ASSET_SETTINGS,
 	ASSET_STORE,
 	ASSET_GAMEPAD,
@@ -154,6 +171,50 @@ enum {
 	ASSET_SUSPEND,
 	
 	ASSET_COUNT,
+};
+
+enum {
+	INPUT_BUTTON_A,
+	INPUT_BUTTON_A_ALT1,
+	INPUT_BUTTON_A_ALT2,
+	INPUT_BUTTON_B,
+	INPUT_BUTTON_B_ALT1,
+	INPUT_BUTTON_B_ALT2,
+	INPUT_BUTTON_X,
+	INPUT_BUTTON_X_ALT1,
+	INPUT_BUTTON_X_ALT2,
+	INPUT_BUTTON_Y,
+	INPUT_BUTTON_Y_ALT1,
+	INPUT_BUTTON_Y_ALT2,
+	INPUT_DPAD_UP,
+	INPUT_DPAD_UP_ALT1,
+	INPUT_DPAD_UP_ALT2,
+	INPUT_DPAD_DOWN,
+	INPUT_DPAD_DOWN_ALT1,
+	INPUT_DPAD_DOWN_ALT2,
+	INPUT_DPAD_LEFT,
+	INPUT_DPAD_LEFT_ALT1,
+	INPUT_DPAD_LEFT_ALT2,
+	INPUT_DPAD_RIGHT,
+	INPUT_DPAD_RIGHT_ALT1,
+	INPUT_DPAD_RIGHT_ALT2,
+	INPUT_DPAD_UP_DOWN,
+	INPUT_DPAD_UP_DOWN_ALT1,
+	INPUT_DPAD_UP_DOWN_ALT2,
+	INPUT_DPAD_LEFT_RIGHT,
+	INPUT_DPAD_LEFT_RIGHT_ALT1,
+	INPUT_DPAD_LEFT_RIGHT_ALT2,
+	INPUT_DPAD_ALL,
+	INPUT_DPAD_ALL_ALT1,
+	INPUT_DPAD_ALL_ALT2,
+	INPUT_DPAD,
+	INPUT_DPAD_ALT1,
+	INPUT_DPAD_ALT2,
+
+	INPUT_BUTTON_HOME,
+	INPUT_BUTTON_POWER,
+	
+	INPUT_COUNT
 };
 
 typedef struct GFX_Fonts {
@@ -262,14 +323,16 @@ SDL_Surface* GFX_init(int mode);
 #define GFX_animateSurface PLAT_animateSurface //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateSurfaceOpacity PLAT_animateSurfaceOpacity //(SDL_Surface *inputSurface,int x, int y)
 #define GFX_animateAndFadeSurface PLAT_animateAndFadeSurface //(SDL_Surface *inputSurface,int x, int y)
-#define GFX_resetScrollText PLAT_resetScrollText
-#define GFX_scrollTextTexture PLAT_scrollTextTexture
+#define GFX_textShouldScroll PLAT_textShouldScroll // (TTF_Font* font, const char* in_name,int max_width, SDL_mutex* fontMutex);
+#define GFX_resetScrollText PLAT_resetScrollText // (void);
+#define GFX_scrollTextTexture PLAT_scrollTextTexture // (TTF_Font* font, const char* in_name,int x, int y, int w, int h, SDL_Color color, float transparency, SDL_mutex* fontMutex);
 #define GFX_flipHidden PLAT_flipHidden //(void)
 #define GFX_GL_screenCapture PLAT_GL_screenCapture //(void)
+#define GFX_setClearColor PLAT_setClearColor //(uint32_t color)
 
 void GFX_setMode(int mode);
 int GFX_hdmiChanged(void);
-SDL_Color /*GFX_*/ uintToColour(uint32_t colour);
+SDL_Color /*GFX_*/ uintToColour(uint32_t rgba);
 
 #define GFX_clear PLAT_clearVideo // (SDL_Surface* screen)
 #define GFX_clearAll PLAT_clearAll // (void)
@@ -293,11 +356,13 @@ int GFX_getVsync(void);
 void GFX_setVsync(int vsync);
 
 int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
-int PLAT_resetScrollText(TTF_Font* font, const char* in_name,int max_width);
+int PLAT_textShouldScroll(TTF_Font* font, const char* in_name, int max_width, SDL_mutex* fontMutex);
+void PLAT_resetScrollText(void);
 void GFX_scrollTextSurface(TTF_Font* font, const char* in_name, SDL_Surface** out_surface, int max_width, int height, int padding, SDL_Color color,float heightratio); // returns final width
 int GFX_getTextWidth(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
 int GFX_getTextHeight(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding); // returns final width
 int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
+int GFX_blitWrappedText(TTF_Font* font, const char* text, int max_width, int max_lines, SDL_Color color, SDL_Surface* surface, int y); // returns new y position
 
 #define GFX_getScaler PLAT_getScaler		// scaler_t:(GFX_Renderer* renderer)
 #define GFX_blitRenderer PLAT_blitRenderer	// void:(GFX_Renderer* renderer)
@@ -338,6 +403,39 @@ void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_
 
 int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting);
 void GFX_blitHardwareHints(SDL_Surface* dst, int show_setting);
+void GFX_blitTopCurtain(SDL_Surface* dst);
+void GFX_blitBottomCurtain(SDL_Surface* dst);
+
+void GFX_blitInputAssetColor(int input, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect, uint32_t asset_color);
+void GFX_blitInputAsset(int input, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);
+
+typedef enum {
+	INDICATOR_BRIGHTNESS = 1,
+	INDICATOR_VOLUME = 2,
+	INDICATOR_COLORTEMP = 3,
+} IndicatorType;
+
+/**
+ * Render a hardware indicator (volume/brightness/colortemp) at a specific position.
+ * This is the reusable helper extracted from GFX_blitHardwareGroup for in-game use.
+ * @param dst The destination surface
+ * @param x X position for the indicator
+ * @param y Y position for the indicator  
+ * @param indicator_type Which indicator to display
+ * @return The width of the rendered indicator
+ */
+int GFX_blitHardwareIndicator(SDL_Surface* dst, int x, int y, IndicatorType indicator_type);
+
+/**
+ * Create a surface with the same pixel format as gfx.screen.
+ * This is needed when rendering theme-colored content that will later be
+ * converted to another format (e.g., RGBA for GL overlays).
+ * @param width Surface width
+ * @param height Surface height
+ * @return A new SDL_Surface, or NULL on failure. Caller must free with SDL_FreeSurface.
+ */
+SDL_Surface* GFX_createScreenFormatSurface(int width, int height);
+
 int GFX_blitButtonGroup(char** hints, int primary, SDL_Surface* dst, int align_right);
 
 void GFX_assetRect(int asset, SDL_Rect* dst_rect);
@@ -347,9 +445,10 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 
 void GFX_ApplyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius);
 void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius);
-void GFX_ApplyRoundedCorners_RGBA4444(SDL_Surface* surface, SDL_Rect* rect, int radius);
-void GFX_ApplyRoundedCorners_RGBA8888(SDL_Surface* surface, SDL_Rect* rect, int radius);
-void BlitRGBA4444toRGB565(SDL_Surface* src, SDL_Surface* dest, SDL_Rect* dest_rect);
+// for both ARGB44444 and RGBA4444
+void GFX_ApplyRoundedCorners_4444(SDL_Surface* surface, SDL_Rect* rect, int radius);
+// for both ARGB8888 and RGBA8888
+void GFX_ApplyRoundedCorners_8888(SDL_Surface* surface, SDL_Rect* rect, int radius);
 ///////////////////////////////
 
 typedef struct SND_Frame {
@@ -380,9 +479,11 @@ typedef enum {
 } WatchEvent;
 void PLAT_audioDeviceWatchRegister(void (*cb)(int, int));
 void PLAT_audioDeviceWatchUnregister(void);
+void PLAT_overrideMute(int mute); // Overrules and bypasses any mute state from msettings
 
 #define SND_registerDeviceWatcher PLAT_audioDeviceWatchRegister
 #define SND_removeDeviceWatcher PLAT_audioDeviceWatchUnregister
+#define SND_overrideMute PLAT_overrideMute
 
 ///////////////////////////////
 
@@ -395,6 +496,10 @@ extern LID_Context lid;
 void PLAT_initLid(void);
 int PLAT_lidChanged(int* state);
 void PLAT_getCPUTemp();
+void PLAT_getCPUSpeed();
+void PLAT_getGPUUsage();
+void PLAT_getGPUSpeed();
+void PLAT_getGPUTemp();
 ///////////////////////////////
 
 typedef struct PAD_Axis {
@@ -458,7 +563,6 @@ void VIB_triplePulse(int strength, int duration_ms, int gap_ms);
 typedef void (*PWR_callback_t)();
 void PWR_init(void);
 void PWR_quit(void);
-void PWR_warn(int enable);
 
 int PWR_ignoreSettingInput(int btn, int show_setting);
 void PWR_update(int* dirty, int* show_setting, PWR_callback_t before_sleep, PWR_callback_t after_sleep);
@@ -471,6 +575,7 @@ int PWR_isPoweringOff(void);
 void PWR_sleep(void);
 int PWR_deepSleep(void);
 
+void PWR_requestSleep(void);
 void PWR_disableSleep(void);
 void PWR_enableSleep(void);
 
@@ -479,7 +584,10 @@ void PWR_enableAutosleep(void);
 int PWR_preventAutosleep(void);
 
 int PWR_isCharging(void);
+int PWR_isUSBConnected(void);
 int PWR_getBattery(void);
+
+int PWR_isOnline(void);
 
 // rules-based presets managed and applied by LEDS_applyRules()
 enum LightProfile {
@@ -518,6 +626,9 @@ bool LEDS_popProfileOverride(int profile);
 // returns top of stack, or default if stack is empty
 int LEDS_getProfileOverride();
 
+// number of lights on this device, cached and clamped to [0, MAX_LIGHTS]
+int LEDS_getCount(void);
+
 // changes the active led profile, calls LEDS_updateLeds() implicitly if needed
 void LEDS_setProfile(int profile); // enum LightProfile
 // reapplies the current led config. This should only be necessary
@@ -525,19 +636,25 @@ void LEDS_setProfile(int profile); // enum LightProfile
 void LEDS_updateLeds(bool indicator_only);
 
 enum {
-	CPU_SPEED_MENU,
-	CPU_SPEED_POWERSAVE,
-	CPU_SPEED_NORMAL,
-	CPU_SPEED_PERFORMANCE,
+	CPU_SPEED_AUTO = 0,
+	CPU_SPEED_PERFORMANCE = 1,
+	CPU_SPEED_POWERSAVE = 2,
+	CPU_SPEED_MENU = CPU_SPEED_AUTO, // legacy
 };
-#define CPU_SWITCH_DELAY_MS 500
 #define PWR_setCPUSpeed PLAT_setCPUSpeed
+
+enum {
+	CPU_CORE_EFFICIENCY,
+	CPU_CORE_PERFORMANCE,
+};
+#define PWR_pinToCores PLAT_pinToCores
 
 ///////////////////////////////
 
+void PLAT_initPlatform(void); // *actual* platform-specific init
+
 FILE *PLAT_OpenSettings(const char *filename);
 FILE *PLAT_WriteSettings(const char *filename);
-char* PLAT_findFileInDir(const char *directory, const char *filename);
 void PLAT_initInput(void);
 void PLAT_updateInput(const SDL_Event *event);
 void PLAT_quitInput(void);
@@ -547,7 +664,6 @@ int PLAT_shouldWake(void);
 
 SDL_Surface* PLAT_initVideo(void);
 void PLAT_quitVideo(void);
-uint32_t PLAT_get_dominant_color(void);
 void PLAT_clearVideo(SDL_Surface* screen);
 void PLAT_clearAll(void);
 void PLAT_setVsync(int vsync);
@@ -561,6 +677,11 @@ void PLAT_setOffsetY(int y);
 void PLAT_drawOnLayer(SDL_Surface *inputSurface, int x, int y, int w, int h, float brightness, bool maintainAspectRatio,int layer);
 void PLAT_clearLayers(int layer);
 SDL_Surface* PLAT_captureRendererToSurface();
+
+// Notification overlay for GL rendering (rendered on top of game during PLAT_GL_Swap)
+void PLAT_setNotificationSurface(SDL_Surface* surface, int x, int y);
+void PLAT_clearNotificationSurface(void);
+
 void PLAT_animateSurface(
 	SDL_Surface *inputSurface,
 	int x, int y,
@@ -571,12 +692,18 @@ void PLAT_animateSurface(
 	int target_opacity,
 	int layer
 );
+#define ANIM_LINEAR      0
+#define ANIM_EASE_OUT    1  // fast start, slows to stop
+#define ANIM_EASE_IN     2  // slow start, fast exit
+#define ANIM_EASE_IN_OUT 3  // slow start, fast middle, slow end
+
 void PLAT_animateAndFadeSurface(
 	SDL_Surface *inputSurface,
 	int x, int y, int target_x, int target_y, int w, int h, int duration_ms,
 	SDL_Surface *fadeSurface,
-	int fade_x, int fade_y, int fade_w, int fade_h,
-	int start_opacity, int target_opacity, int layer
+	int fade_x, int fade_y, int fade_target_x, int fade_target_y, int fade_w, int fade_h,
+	int start_opacity, int target_opacity, int layer,
+	int input_easing, int fade_easing, int intensity
 );
 
 void PLAT_animateSurfaceOpacity(SDL_Surface *inputSurface, int x, int y, int w, int h,
@@ -588,58 +715,53 @@ void PLAT_scrollTextTexture(
     int x, int y,      // Position on target layer
     int w, int h,      // Clipping width and height
     SDL_Color color,
-    float transparency
+    float transparency,
+    SDL_mutex* fontMutex  // Mutex for thread-safe font access (can be NULL)
 );
-void drawTextWithCache(TTF_Font* font, const char* text, SDL_Color color, SDL_Rect* destRect);
 void PLAT_vsync(int remaining);
 scaler_t PLAT_getScaler(GFX_Renderer* renderer);
 void PLAT_blitRenderer(GFX_Renderer* renderer);
 void PLAT_flip(SDL_Surface* screen, int sync);
+int PLAT_captureScreenshot(SDL_Surface* out);
 void PLAT_GL_Swap();
 void GFX_GL_Swap();
 unsigned char* PLAT_GL_screenCapture(int* outWidth, int* outHeight);
-unsigned char* PLAT_pixelscaler(const unsigned char* src, int sw, int sh, int scale, int* outW, int* outH);
+void PLAT_setClearColor(uint32_t color);
 void PLAT_GPU_Flip();
 void PLAT_setShaders(int nr);
 void PLAT_resetShaders();
 void PLAT_clearShaders();
-void PLAT_setShader1Filter(int value);
-void PLAT_setShader2Filter(int value);
-void PLAT_setShader3Filter(int value);
-void PLAT_setShaderUpscale1(int nr);
-void PLAT_setShaderUpscale2(int nr);
-void PLAT_setShaderUpscale3(int nr);
-void PLAT_setShader1(const char* filename);
-void PLAT_setShader2(const char* filename);
-void PLAT_setShader3(const char* filename);
 void PLAT_updateShader(int i, const char *filename, int *scale, int *filter, int *scaletype, int *inputtype);
 void PLAT_initShaders();
+void PLAT_initNotificationTexture(void);
 ShaderParam* PLAT_getShaderPragmas(int i);
 int PLAT_supportsOverscan(void);
 
-SDL_Surface* PLAT_initOverlay(void);
-void PLAT_quitOverlay(void);
-void PLAT_enableOverlay(int enable);
-	
 #define PWR_LOW_CHARGE 10
 void PLAT_getBatteryStatus(int* is_charging, int* charge); // 0,1 and 0,10,20,40,60,80,100
 void PLAT_getBatteryStatusFine(int* is_charging, int* charge); // 0,1 and 0-100
+int PLAT_isUSBConnected(void); // 1 if the device is configured as a USB gadget on a host, else 0
 void PLAT_enableBacklight(int enable);
 int PLAT_supportsDeepSleep(void);
 int PLAT_deepSleep(void);
 void PLAT_powerOff(int reboot);
 
+void Perf_setCPUMonitorEnabled(int enabled);
+int Perf_isCPUMonitorEnabled(void);
+int Perf_tryBeginCPUMonitor(void);
+void Perf_endCPUMonitor(void);
+
 void *PLAT_cpu_monitor(void *arg);
 void PLAT_setCPUSpeed(int speed); // enum
-void PLAT_setCustomCPUSpeed(int speed);
+// note: this affects the calling thread and every thread spawned from it (after)
+void PLAT_pinToCores(int core_type); // CPU_CORE_EFFICIENCY or CPU_CORE_PERFORMANCE
 void PLAT_setRumble(int strength);
 int PLAT_pickSampleRate(int requested, int max);
 
 char* PLAT_getModel(void);
 void PLAT_getOsVersionInfo(char *output_str, size_t max_len);
-void PLAT_updateNetworkStatus();
+void PLAT_getNetworkStatus(int* is_online);
 bool PLAT_btIsConnected(void);
-int PLAT_isOnline(void);
 typedef enum {
 	SIGNAL_STRENGTH_OFF = -1,
 	SIGNAL_STRENGTH_DISCONNECTED,
@@ -657,6 +779,27 @@ void PLAT_setLedBrightness(LightSettings *led);
 void PLAT_setLedInbrightness(LightSettings *led);
 void PLAT_setLedEffectSpeed(LightSettings *led);
 void PLAT_setLedEffectCycles(LightSettings *led);
+
+// How many lights this device actually has. MAX_LIGHTS is only a compile-time
+// ceiling: platforms that serve several models (tg5040, h700) populate fewer
+// slots than that, and the unpopulated ones are zeroed globals. Walking them
+// is not harmless -- on the trimui platforms a zeroed slot writes brightness 0
+// to the *global* led_anim/max_scale and extinguishes every LED -- so every
+// platform whose model count differs from MAX_LIGHTS must implement this.
+int PLAT_getNumLeds(void);
+// basename of the LedControl ini inside SHARED_USERDATA_PATH
+const char *PLAT_getLedSettingsFile(void);
+// user-visible name for a light, or NULL to let LedControl use its own table
+const char *PLAT_getLedLabel(int index);
+
+// The effect ids in LightSettings.effect are a shared (trimui-derived) space:
+// LEDS_initLeds() hardcodes 2 (breathe) and 3 (blink) for the battery/charging
+// profiles and GFX_setAmbientColor() hardcodes 4 (static). Platforms expose the
+// subset they can actually render via these hooks and translate internally --
+// they never renumber.
+int PLAT_getLedEffectCount(void);
+int PLAT_getLedEffectId(int index);
+const char *PLAT_getLedEffectName(int effect_id);
 
 bool PLAT_canTurbo(void);
 int PLAT_toggleTurbo(int btn_id);

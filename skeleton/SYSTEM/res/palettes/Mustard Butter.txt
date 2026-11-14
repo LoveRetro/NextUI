@@ -1,0 +1,9 @@
+version=1
+name=Mustard Butter
+color1=0xB08117FF
+color2=0xF5E9C4FF
+color3=0xFDF3DAFF
+color4=0x2E2610FF
+color5=0xFDF3DAFF
+color6=0x8A7A45FF
+color7=0xFBF3DCFF

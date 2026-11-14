@@ -2,7 +2,7 @@ diff --git forkSrcPrefix/Makefile.libretro forkDstPrefix/Makefile.libretro
 index 0d1dc08f81a11cef6b3b7238367b1ff27fcf1ead..1f87c76c3242023c4095f0c9087c52765d93c33c 100644
 --- forkSrcPrefix/Makefile.libretro
 +++ forkDstPrefix/Makefile.libretro
-@@ -497,6 +497,30 @@ else ifeq ($(platform), miyoo)
+@@ -497,6 +497,31 @@ else ifeq ($(platform), miyoo)
  	HAVE_ARMv6 = 0
  	LOW_MEMORY = 1
  
@@ -26,6 +26,7 @@ index 0d1dc08f81a11cef6b3b7238367b1ff27fcf1ead..1f87c76c3242023c4095f0c9087c5276
 +	LDFLAGS += -flto
 +	HAVE_NEON = 1
 +	BUILTIN_GPU = neon
++   ARCH = aarch64
 +	ifeq (,$(DEBUG))
 +		LDFLAGS += -s
 +	endif

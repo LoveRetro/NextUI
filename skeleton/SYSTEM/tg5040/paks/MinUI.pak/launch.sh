@@ -11,17 +11,6 @@
 # 	reboot
 # fi
 
-#######################################
-
-if [ -f "/tmp/poweroff" ]; then
-	poweroff_next
-	exit 0
-fi
-if [ -f "/tmp/reboot" ]; then
-	reboot_next
-	exit 0
-fi
-
 export PLATFORM="tg5040"
 export SDCARD_PATH="/mnt/SDCARD"
 export BIOS_PATH="$SDCARD_PATH/Bios"
@@ -33,7 +22,21 @@ export CORES_PATH="$SYSTEM_PATH/cores"
 export USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
 export SHARED_USERDATA_PATH="$SDCARD_PATH/.userdata/shared"
 export LOGS_PATH="$USERDATA_PATH/logs"
-export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
+export HOOKS_PATH="$USERDATA_PATH/.hooks"
+export HOME="$USERDATA_PATH"
+
+#######################################
+
+if [ -f "/tmp/poweroff" ]; then
+	poweroff_next
+	exit 0
+fi
+if [ -f "/tmp/reboot" ]; then
+	reboot_next
+	exit 0
+fi
+
+#######################################
 
 mkdir -p "$BIOS_PATH"
 mkdir -p "$ROMS_PATH"
@@ -41,11 +44,16 @@ mkdir -p "$SAVES_PATH"
 mkdir -p "$CHEATS_PATH"
 mkdir -p "$USERDATA_PATH"
 mkdir -p "$LOGS_PATH"
+mkdir -p "$HOOKS_PATH"
 mkdir -p "$SHARED_USERDATA_PATH/.minui"
 
 export TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
 if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
 	export DEVICE="brick"
+elif [ "$TRIMUI_MODEL" = "Trimui Brick Pro" ]; then
+	export DEVICE="brickpro"
+else
+	export DEVICE="smartpro"
 fi
 
 export IS_NEXT="yes"
@@ -60,6 +68,9 @@ if [ -f "/etc/init.d/lcservice" ]; then
 	/etc/init.d/lcservice disable
 	rm /etc/init.d/lcservice
 fi
+
+# clear shadercache unconditionally, until it properly invalidates itself
+rm -rf $SDCARD_PATH/.shadercache
 
 #PD11 pull high for VCC-5v
 echo 107 > /sys/class/gpio/export
@@ -103,10 +114,7 @@ fi
 # start stock gpio input daemon
 trimui_inputd &
 
-echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
-CPU_SPEED_PERF=2000000
-echo $CPU_SPEED_PERF > $CPU_PATH
+sh "$SYSTEM_PATH/bin/governor.sh" "auto"
 
 keymon.elf & # &> $SDCARD_PATH/keymon.txt &
 batmon.elf & # &> $SDCARD_PATH/batmon.txt &
@@ -114,8 +122,6 @@ batmon.elf & # &> $SDCARD_PATH/batmon.txt &
 # start fresh, will be populated on the next connect
 rm -f $USERDATA_PATH/.asoundrc
 audiomon.elf & # &> $SDCARD_PATH/audiomon.txt &
-
-#killall MtpDaemon # I dont think we need to micro manage this one
 
 # BT handling
 # on by default, disable based on systemval setting
@@ -145,22 +151,51 @@ if [ -f "$AUTO_PATH" ]; then
 	"$AUTO_PATH"
 fi
 
+# Composable boot hooks (run after auto.sh for backward compatibility)
+"$SYSTEM_PATH/bin/run_hooks.sh" boot.d
+
 cd $(dirname "$0")
 
 #######################################
+# Hook system
+
+parse_hook_cmd() {
+	HOOK_CMD="$1"
+	HOOK_EMU_PATH=$(echo "$HOOK_CMD" | sed "s/^'\\([^']*\\)'.*/\\1/")
+	_remainder=$(echo "$HOOK_CMD" | sed "s/^'[^']*'//")
+	if echo "$_remainder" | grep -q "'"; then
+		HOOK_TYPE="rom"
+		HOOK_ROM_PATH=$(echo "$_remainder" | sed "s/.*'\\([^']*\\)'.*/\\1/")
+	else
+		HOOK_TYPE="pak"
+		HOOK_ROM_PATH=""
+	fi
+	[ -f /tmp/last.txt ] && HOOK_LAST=$(cat /tmp/last.txt) || HOOK_LAST=""
+	export HOOK_CMD HOOK_EMU_PATH HOOK_TYPE HOOK_ROM_PATH HOOK_LAST
+}
+
+#######################################
+
+# kill show2.elf if running
+killall -9 show2.elf > /dev/null 2>&1
 
 EXEC_PATH="/tmp/nextui_exec"
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
 while [ -f $EXEC_PATH ]; do
 	nextui.elf &> $LOGS_PATH/nextui.txt
-	echo $CPU_SPEED_PERF > $CPU_PATH
+	# default launched paks to performance, they can change it themselves after launch if they want
+	sh "$SYSTEM_PATH/bin/governor.sh" "performance"
 	
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
+		parse_hook_cmd "$CMD"
+		"$SYSTEM_PATH/bin/run_hooks.sh" pre-launch.d
 		eval $CMD
+		"$SYSTEM_PATH/bin/run_hooks.sh" post-launch.d
 		rm -f $NEXT_PATH
-		echo $CPU_SPEED_PERF > $CPU_PATH
+		# reset to performance when exiting, UI will reset to auto if needed
+		sh "$SYSTEM_PATH/bin/governor.sh" "performance"
 	fi
 
 	if [ -f "/tmp/poweroff" ]; then

@@ -1,0 +1,9 @@
+version=1
+name=Ink & Gold
+color1=0xF2A93BFF
+color2=0x0C0E17FF
+color3=0x241A05FF
+color4=0xE7E6F2FF
+color5=0x241A05FF
+color6=0x8A87A3FF
+color7=0x12141FFF

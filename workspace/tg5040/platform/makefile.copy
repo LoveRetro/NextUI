@@ -1,22 +1,15 @@
 $(PLATFORM):
-	# $@
-	cp ./workspace/$@/show/show.elf ./build/SYSTEM/$@/bin
 	# installer
 	cp ./workspace/$@/install/boot.sh ./build/BOOT/common/$@.sh
 	cp ./workspace/$@/install/update.sh ./build/SYSTEM/$@/bin/install.sh
 	mkdir -p ./build/BOOT/common/$@/
 	cp ./workspace/$@/install/*.png ./build/BOOT/common/$@/
-	cp -r ./workspace/$@/install/brick ./build/BOOT/common/$@/
-	cp ./workspace/$@/show/show.elf ./build/BOOT/common/$@/
+	cp ./workspace/all/show2/build/$@/show2.elf ./build/BOOT/common/$@/
 	cp ./workspace/$@/other/unzip60/unzip ./build/BOOT/common/$@/
-	# wifi
-	cp ./workspace/$@/wifimanager/daemon/libwifid.so ./build/SYSTEM/$@/lib/
-	cp ./workspace/$@/wifimanager/daemon/wifi_daemon ./build/SYSTEM/$@/bin/
 	# rfkill
 	cp ./workspace/$@/rfkill/rfkill.elf ./build/SYSTEM/$@/bin/
 	# bluetooth
-	cp ./workspace/$@/btmanager/build/nextui.upgrade_bluez.pakz ./build/BASE/
-	cp ./workspace/$@/audiomon/audiomon.elf ./build/SYSTEM/$@/bin/
+	cp ./workspace/$@/btmanager/build/nextui.upgrade_bluez.pakz ./build/BASE/nextui.upgrade_bluez.tg5040.pakz
 
 	# extras
 	cp ./workspace/$@/other/NextCommander/output/NextCommander ./build/EXTRAS/Tools/$@/Files.pak/

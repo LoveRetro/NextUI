@@ -1,0 +1,9 @@
+version=1
+name=Deep Violet
+color1=0x6C4BC9FF
+color2=0xE7DCF7FF
+color3=0xF4EFFDFF
+color4=0x241B3DFF
+color5=0xF4EFFDFF
+color6=0x6E6389FF
+color7=0xF1EAFAFF

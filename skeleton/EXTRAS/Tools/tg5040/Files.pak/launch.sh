@@ -3,7 +3,8 @@
 cd $(dirname "$0")
 
 HOME="$SDCARD_PATH"
-if [ "$DEVICE" = "brick" ]; then
+# brick and brickpro
+if [ "$DEVICE" = "brick" ] || [ "$DEVICE" = "brickpro" ]; then
     CFG="tg3040.cfg"
 else
     CFG="tg5040.cfg"

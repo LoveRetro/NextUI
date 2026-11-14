@@ -20,15 +20,15 @@ enum {
 };
 
 int main(int argc , char* argv[]) {
-	PWR_setCPUSpeed(CPU_SPEED_MENU);
+	PWR_setCPUSpeed(CPU_SPEED_AUTO);
 	
-	SDL_Surface* screen = GFX_init(MODE_MAIN);
+	SDL_Surface* screen = GFX_init(MODE_MENU);
 	PAD_init();
 	PWR_init();
 	InitSettings();
 	
 	// TODO: make use of SCALE1()
-	SDL_Surface* digits = SDL_CreateRGBSurface(SDL_SWSURFACE, SCALE2(120,16), FIXED_DEPTH,RGBA_MASK_AUTO);
+	SDL_Surface* digits =  SDL_CreateRGBSurfaceWithFormat(SDL_SWSURFACE, SCALE1(120), SCALE1(16), 32, screen->format->format);
 	SDL_FillRect(digits, NULL, RGB_BLACK);
 	
 	SDL_Surface* digit;
@@ -141,11 +141,10 @@ int main(int argc , char* argv[]) {
 
 	int dirty = 1;
 	int show_setting = 0;
-	int was_online = PLAT_isOnline();
+	int was_online = PWR_isOnline();
     int had_bt = PLAT_btIsConnected();
 	while(!quit) {
-		uint32_t frame_start = SDL_GetTicks();
-		
+		GFX_startFrame();
 		PAD_poll();
 		
 		if (PAD_justRepeated(BTN_UP)) {
@@ -237,7 +236,7 @@ int main(int argc , char* argv[]) {
 		
 		PWR_update(&dirty, NULL, NULL,NULL);
 		
-		int is_online = PLAT_isOnline();
+		int is_online = PWR_isOnline();
 		if (was_online!=is_online) 
 			dirty = 1;
 		was_online = is_online;

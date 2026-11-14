@@ -1,0 +1,9 @@
+version=1
+name=Forest Lime
+color1=0xB7DD5BFF
+color2=0x0A1712FF
+color3=0x1B2708FF
+color4=0xE7EFE7FF
+color5=0x1B2708FF
+color6=0x7F998AFF
+color7=0x0F1F18FF

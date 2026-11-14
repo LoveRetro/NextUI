@@ -1,0 +1,820 @@
+#define _GNU_SOURCE
+// tg5050
+#include <stdio.h>
+#include <stdlib.h>
+#include <linux/fb.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <assert.h>
+#include <sched.h>
+
+#include <msettings.h>
+
+#include "defines.h"
+#include "platform.h"
+#include "api.h"
+#include "utils.h"
+
+#include "scaler.h"
+#include <time.h>
+#include <pthread.h>
+
+#include <dirent.h>
+
+static SDL_Joystick **joysticks = NULL;
+static int num_joysticks = 0;
+void PLAT_initInput(void) {
+	if(SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0)
+		LOG_error("Failed initializing joysticks: %s\n", SDL_GetError());
+	num_joysticks = SDL_NumJoysticks();
+    if (num_joysticks > 0) {
+        joysticks = (SDL_Joystick **)malloc(sizeof(SDL_Joystick *) * num_joysticks);
+        for (int i = 0; i < num_joysticks; i++) {
+			joysticks[i] = SDL_JoystickOpen(i);
+			LOG_info("Opening joystick %d: %s\n", i, SDL_JoystickName(joysticks[i]));
+        }
+    }
+}
+
+void PLAT_quitInput(void) {
+	if (joysticks) {
+        for (int i = 0; i < num_joysticks; i++) {
+            if (SDL_JoystickGetAttached(joysticks[i])) {
+				LOG_info("Closing joystick %d: %s\n", i, SDL_JoystickName(joysticks[i]));
+				SDL_JoystickClose(joysticks[i]);
+			}
+        }
+        free(joysticks);
+        joysticks = NULL;
+        num_joysticks = 0;
+    }
+	SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+}
+
+void PLAT_updateInput(const SDL_Event *event) {
+	switch (event->type) {
+    case SDL_JOYDEVICEADDED: {
+        int device_index = event->jdevice.which;
+        SDL_Joystick *new_joy = SDL_JoystickOpen(device_index);
+        if (new_joy) {
+            joysticks = realloc(joysticks, sizeof(SDL_Joystick *) * (num_joysticks + 1));
+            joysticks[num_joysticks++] = new_joy;
+            LOG_info("Joystick added at index %d: %s\n", device_index, SDL_JoystickName(new_joy));
+        } else {
+            LOG_error("Failed to open added joystick at index %d: %s\n", device_index, SDL_GetError());
+        }
+        break;
+    }
+
+    case SDL_JOYDEVICEREMOVED: {
+        SDL_JoystickID removed_id = event->jdevice.which;
+        for (int i = 0; i < num_joysticks; ++i) {
+            if (SDL_JoystickInstanceID(joysticks[i]) == removed_id) {
+                LOG_info("Joystick removed: %s\n", SDL_JoystickName(joysticks[i]));
+                SDL_JoystickClose(joysticks[i]);
+
+                // Shift down the remaining entries
+                for (int j = i; j < num_joysticks - 1; ++j)
+                    joysticks[j] = joysticks[j + 1];
+                num_joysticks--;
+
+                if (num_joysticks == 0) {
+                    free(joysticks);
+                    joysticks = NULL;
+                } else {
+                    joysticks = realloc(joysticks, sizeof(SDL_Joystick *) * num_joysticks);
+                }
+                break;
+            }
+        }
+        break;
+    }
+
+    default:
+        break;
+    }
+}
+
+///////////////////////////////
+
+void PLAT_getBatteryStatus(int* is_charging, int* charge) {
+	PLAT_getBatteryStatusFine(is_charging, charge);
+
+	// worry less about battery and more about the game you're playing
+	     if (*charge>80) *charge = 100;
+	else if (*charge>60) *charge =  80;
+	else if (*charge>40) *charge =  60;
+	else if (*charge>20) *charge =  40;
+	else if (*charge>10) *charge =  20;
+	else           		 *charge =  10;
+}
+
+void PLAT_getCPUTemp() {
+	perf.cpu_temp = getInt("/sys/devices/virtual/thermal/thermal_zone0/temp")/1000;
+}
+
+void PLAT_getCPUSpeed()
+{
+	perf.cpu_speed = getInt("/sys/devices/system/cpu/cpu4/cpufreq/scaling_cur_freq")/1000;
+}
+
+void PLAT_getGPUTemp() {
+	perf.gpu_temp = getInt("/sys/devices/virtual/thermal/thermal_zone5/temp")/1000;
+}
+
+void PLAT_getGPUSpeed() {
+	perf.gpu_speed = getInt("/sys/devices/platform/soc@3000000/1800000.gpu/devfreq/1800000.gpu/cur_freq")/1000000;
+}
+
+void PLAT_getGPUUsage() {
+	// cat /sys/devices/platform/soc@3000000/1800000.gpu/sunxi_gpu/sunxi_gpu_freq | grep -o '[0-9]*%' | tr -d '%'
+	
+    char buffer[256];
+    buffer[0] = '\0';
+    getFile("/sys/devices/platform/soc@3000000/1800000.gpu/sunxi_gpu/sunxi_gpu_freq", buffer, sizeof(buffer));
+    
+    // Parse the percentage value from the buffer
+    // Look for a number followed by '%'
+    char *ptr = buffer;
+    while (*ptr) {
+        if (*ptr >= '0' && *ptr <= '9') {
+            // Found start of a number
+            char *start = ptr;
+            while (*ptr >= '0' && *ptr <= '9') {
+                ptr++;
+            }
+            // Check if followed by '%'
+            if (*ptr == '%') {
+                *ptr = '\0'; // Temporarily null-terminate
+                perf.gpu_usage = (double)atoi(start);
+                return;
+            }
+        } else {
+            ptr++;
+        }
+    }
+    
+    // If no percentage found, set to 0.0
+    perf.gpu_usage = 0.0;
+}
+
+static struct WIFI_connection connection = {
+	.valid = false,
+	.freq = -1,
+	.link_speed = -1,
+	.noise = -1,
+	.rssi = -1,
+	.ip = {0},
+	.ssid = {0},
+};
+
+static inline void connection_reset(struct WIFI_connection *connection_info)
+{
+	connection_info->valid = false;
+	connection_info->freq = -1;
+	connection_info->link_speed = -1;
+	connection_info->noise = -1;
+	connection_info->rssi = -1;
+	*connection_info->ip = '\0';
+	*connection_info->ssid = '\0';
+}
+
+static bool bluetoothConnected = false;
+
+void PLAT_getNetworkStatus(int* is_online)
+{
+	if(WIFI_enabled())
+		WIFI_connectionInfo(&connection);
+	else
+		connection_reset(&connection);
+	
+	if(is_online)
+		*is_online = (connection.valid && connection.ssid[0] != '\0');
+	
+	if(BT_enabled()) {
+		bluetoothConnected = PLAT_bluetoothConnected();
+	}
+	else
+		bluetoothConnected = false;
+}
+void PLAT_getBatteryStatusFine(int *is_charging, int *charge)
+{	
+	if(is_charging) {
+		int time_to_full = getInt("/sys/class/power_supply/axp2202-battery/time_to_full_now");
+		int charger_present = getInt("/sys/class/power_supply/axp2202-usb/online"); 
+		*is_charging = (charger_present == 1) && (time_to_full > 0);
+	}
+	if(charge) {
+		*charge = getInt("/sys/class/power_supply/axp2202-battery/capacity");
+	}
+}
+
+int PLAT_isUSBConnected(void)
+{
+	// Not implemented for this platform yet.
+	return 0;
+}
+
+void PLAT_enableBacklight(int enable) {
+	if (enable) {
+		SetBrightness(GetBrightness());
+	}
+	else {
+		SetRawBrightness(0);
+	}
+}
+
+void PLAT_powerOff(int reboot) {
+	if (CFG_getHaptics()) {
+		VIB_singlePulse(VIB_bootStrength, VIB_bootDuration_ms);
+	}
+	system("rm -f /tmp/nextui_exec && sync");
+	sleep(2);
+
+	SetRawVolume(MUTE_VOLUME_RAW);
+	PLAT_enableBacklight(0);
+	SND_quit();
+	VIB_quit();
+	PWR_quit();
+	GFX_quit();
+
+	system("cat /dev/zero > /dev/fb0 2>/dev/null");
+	if(reboot > 0)
+		touch("/tmp/reboot");
+	else
+		touch("/tmp/poweroff");
+	sync();
+	exit(0);
+}
+
+int PLAT_supportsDeepSleep(void) { return 1; }
+
+///////////////////////////////
+
+void PLAT_pinToCores(int core_type)
+{
+	cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    
+    // Add all potential cores to the mask, even if some are sleeping right now
+	int from = core_type == CPU_CORE_EFFICIENCY ? 0 : 4;
+	int to = core_type == CPU_CORE_EFFICIENCY ? 3 : 7;
+    for (int i = from; i <= to; i++) {
+        CPU_SET(i, &cpuset);
+    }
+
+	//// This will SUCCEED as long as at least one of the cores is online
+    pthread_t current_thread = pthread_self();
+    int s = pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+    
+    if (s != 0)
+        LOG_error("Failed to pin: Are all cores sleeping?\n");
+}
+
+void PLAT_setCPUSpeed(int speed) {
+	const char* mode;
+	switch (speed) {
+		case CPU_SPEED_AUTO: mode = "auto"; break;
+		case CPU_SPEED_PERFORMANCE: mode = "performance"; break;
+		case CPU_SPEED_POWERSAVE: mode = "powersave"; break;
+		default: return;
+	}
+	
+	const char* system_path = getenv("SYSTEM_PATH");
+	if (!system_path) {
+		LOG_info("WARNING: SYSTEM_PATH not set, cannot run governor script\n");
+		return;
+	}
+	char cmd[512];
+	int n = snprintf(cmd, sizeof(cmd), "sh \"%s/bin/governor.sh\" \"%s\"", system_path, mode);
+	if (n < 0 || n >= (int)sizeof(cmd)) {
+		LOG_info("WARNING: SYSTEM_PATH too long for governor script path\n");
+		return;
+	}
+	int ret = system(cmd);
+	if (ret != 0) LOG_info("WARNING: governor script exited with status %d for mode '%s'\n", ret, mode);
+}
+
+#define MAX_STRENGTH 0xFFFF
+#define RUMBLE_PATH "/sys/class/gpio/gpio236/value"
+#define RUMBLE_LEVEL_PATH "/sys/class/motor/level"
+
+void PLAT_setRumble(int strength) {
+	if(strength > 0 && strength < MAX_STRENGTH) {
+		putInt(RUMBLE_LEVEL_PATH, strength);
+	}
+	else {
+		putInt(RUMBLE_LEVEL_PATH, 0);
+	}
+
+	putInt(RUMBLE_PATH, (strength) ? 1 : 0);
+}
+
+int PLAT_pickSampleRate(int requested, int max) {
+	// bluetooth: allow limiting the maximum to improve compatibility
+	if(PLAT_bluetoothConnected())
+		return MIN(requested, CFG_getBluetoothSamplingrateLimit());
+
+	return MIN(requested, max);
+}
+
+void PLAT_overrideMute(int mute) {
+	putInt("/sys/class/speaker/mute", mute);
+}
+
+char* PLAT_getModel(void) {
+	char* model = getenv("TRIMUI_MODEL");
+	if (model) return model;
+	return "Trimui Smart Pro S";
+}
+
+void PLAT_getOsVersionInfo(char* output_str, size_t max_len)
+{
+	return getFile("/etc/version", output_str,max_len);
+}
+
+bool PLAT_btIsConnected(void)
+{
+	return bluetoothConnected;
+}
+
+ConnectionStrength PLAT_connectionStrength(void) {
+	if(!WIFI_enabled() || !connection.valid || connection.rssi == -1)
+		return SIGNAL_STRENGTH_OFF;
+	else if (connection.rssi == 0)
+		return SIGNAL_STRENGTH_DISCONNECTED;
+	else if (connection.rssi >= -60)
+		return SIGNAL_STRENGTH_HIGH;
+	else if (connection.rssi >= -70)
+		return SIGNAL_STRENGTH_MED;
+	else
+		return SIGNAL_STRENGTH_LOW;
+}
+
+int PLAT_getNumLeds(void) {
+	// MAX_LIGHTS is 4 but PLAT_initDefaultLeds() below only fills 3. The
+	// spare slot is a zeroed global, and a zeroed slot passes the
+	// filename != "f2" test in PLAT_setLedBrightness and writes brightness 0
+	// to the global max_scale, killing every LED.
+	return 3;
+}
+
+void PLAT_initDefaultLeds() {
+	lightsDefault[0] = (LightSettings) {
+		"Joystick L",
+		"l",
+		4,
+		1000,
+		100,
+		0xFFFFFF,
+		0xFFFFFF,
+		0,
+		{},
+		1,
+		100,
+		0
+	};
+	lightsDefault[1] = (LightSettings) {
+		"Joystick R",
+		"r",
+		4,
+		1000,
+		100,
+		0xFFFFFF,
+		0xFFFFFF,
+		0,
+		{},
+		1,
+		100,
+		0
+	};
+	lightsDefault[2] = (LightSettings) {
+		"Logo",
+		"m",
+		4,
+		1000,
+		100,
+		0xFFFFFF,
+		0xFFFFFF,
+		0,
+		{},
+		1,
+		100,
+		0
+	};
+}
+void PLAT_initLeds(LightSettings *lights) 
+{
+	PLAT_initDefaultLeds();
+	FILE *file = PLAT_OpenSettings("ledsettings.txt");
+
+    if (file == NULL)
+    {
+        LOG_warn("Unable to open led settings file\n");
+    }
+	else {
+		char line[256];
+		int current_light = -1;
+		while (fgets(line, sizeof(line), file))
+		{
+			if (line[0] == '[')
+			{
+				// Section header
+				char light_name[255];
+				if (sscanf(line, "[%49[^]]]", light_name) == 1)
+				{
+					current_light++;
+					if (current_light < MAX_LIGHTS)
+					{
+						strncpy(lights[current_light].name, light_name, 255 - 1);
+						lights[current_light].name[255 - 1] = '\0'; // Ensure null-termination
+						lights[current_light].cycles = -1; // cycles (times animation loops) should basically always be -1 for unlimited unless specifically set
+					}
+					else
+					{
+						LOG_info("Maximum number of lights (%d) exceeded. Ignoring further sections.\n", MAX_LIGHTS);
+						current_light = -1; // Reset if max_lights exceeded
+					}
+				}
+			}
+			else if (current_light >= 0 && current_light < MAX_LIGHTS)
+			{
+				int temp_value;
+				uint32_t temp_color;
+				char filename[255];
+
+				if (sscanf(line, "filename=%s", &filename) == 1)
+				{
+					strncpy(lights[current_light].filename, filename, 255 - 1);
+					continue;
+				}
+				if (sscanf(line, "effect=%d", &temp_value) == 1)
+				{
+					lights[current_light].effect = temp_value;
+					continue;
+				}
+				if (sscanf(line, "color1=%x", &temp_color) == 1)
+				{
+					lights[current_light].color1 = temp_color;
+					continue;
+				}
+				if (sscanf(line, "color2=%x", &temp_color) == 1)
+				{
+					lights[current_light].color2 = temp_color;
+					continue;
+				}
+				if (sscanf(line, "speed=%d", &temp_value) == 1)
+				{
+					lights[current_light].speed = temp_value;
+					continue;
+				}
+				if (sscanf(line, "brightness=%d", &temp_value) == 1)
+				{
+					lights[current_light].brightness = temp_value;
+					continue;
+				}
+				if (sscanf(line, "trigger=%d", &temp_value) == 1)
+				{
+					lights[current_light].trigger = temp_value;
+					continue;
+				}
+				if (sscanf(line, "inbrightness=%d", &temp_value) == 1)
+				{
+					lights[current_light].inbrightness = temp_value;
+					continue;
+				}
+			}
+		}
+		fclose(file);
+	}
+}
+
+#define LED_PATH1 "/sys/class/led_anim/max_scale"
+#define LED_PATH2 "/sys/class/led_anim/max_scale_lr"
+#define LED_PATH3 "/sys/class/led_anim/max_scale_f1f2" 
+
+void PLAT_setLedInbrightness(LightSettings *led)
+{
+    char filepath[256];
+    FILE *file;
+    // first set brightness
+	snprintf(filepath, sizeof(filepath), LED_PATH1);
+	if (strcmp(led->filename, "f2") != 0) {
+		// do nothhing for f2
+		file = fopen(filepath, "w");
+		if (file != NULL)
+		{
+			fprintf(file, "%i\n", led->inbrightness);
+			fclose(file);
+		}
+	}
+}
+void PLAT_setLedBrightness(LightSettings *led)
+{
+    char filepath[256];
+    FILE *file;
+    // first set brightness
+	snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/max_scale");
+	if (strcmp(led->filename, "f2") != 0) {
+		// do nothhing for f2
+		file = fopen(filepath, "w");
+		if (file != NULL)
+		{
+			fprintf(file, "%i\n", led->brightness);
+			fclose(file);
+		}
+	}
+}
+void PLAT_setLedEffect(LightSettings *led)
+{
+    char filepath[256];
+    FILE *file;
+    // first set brightness
+    snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_%s", led->filename);
+    file = fopen(filepath, "w");
+    if (file != NULL)
+    {
+        fprintf(file, "%i\n", led->effect);
+        fclose(file);
+    }
+}
+void PLAT_setLedEffectCycles(LightSettings *led)
+{
+    char filepath[256];
+    FILE *file;
+    // first set brightness
+    snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_cycles_%s", led->filename);
+    file = fopen(filepath, "w");
+    if (file != NULL)
+    {
+        fprintf(file, "%i\n", led->cycles);
+        fclose(file);
+    }
+}
+void PLAT_setLedEffectSpeed(LightSettings *led)
+{
+    char filepath[256];
+    FILE *file;
+    // first set brightness
+    snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_duration_%s", led->filename);
+    file = fopen(filepath, "w");
+    if (file != NULL)
+    {
+        fprintf(file, "%i\n", led->speed);
+        fclose(file);
+    }
+}
+void PLAT_setLedColor(LightSettings *led)
+{
+    char filepath[256];
+    FILE *file;
+    // first set brightness
+    snprintf(filepath, sizeof(filepath), "/sys/class/led_anim/effect_rgb_hex_%s", led->filename);
+    file = fopen(filepath, "w");
+    if (file != NULL)
+    {
+        fprintf(file, "%06X\n", led->color1);
+        fclose(file);
+    }
+}
+
+//////////////////////////////////////////////
+
+bool PLAT_canTurbo(void) { return true; }
+
+#define INPUTD_PATH "/tmp/trimui_inputd"
+
+typedef struct TurboBtnPath {
+	int brn_id;
+	char *path;
+} TurboBtnPath;
+
+static TurboBtnPath turbo_mapping[] = {
+    {BTN_ID_A, INPUTD_PATH "/turbo_a"},
+    {BTN_ID_B, INPUTD_PATH "/turbo_b"},
+    {BTN_ID_X, INPUTD_PATH "/turbo_x"},
+    {BTN_ID_Y, INPUTD_PATH "/turbo_y"},
+    {BTN_ID_L1, INPUTD_PATH "/turbo_l"},
+    {BTN_ID_L2, INPUTD_PATH "/turbo_l2"},
+    {BTN_ID_R1, INPUTD_PATH "/turbo_r"},
+    {BTN_ID_R2, INPUTD_PATH "/turbo_r2"},
+	{0, NULL}
+};
+
+int toggle_file(const char *path) {
+    if (access(path, F_OK) == 0) {
+        unlink(path);
+        return 0;
+    } else {
+        int fd = open(path, O_CREAT | O_WRONLY, 0644);
+        if (fd >= 0) {
+            close(fd);
+            return 1;
+        }
+        return -1; // error
+    }
+}
+
+int PLAT_toggleTurbo(int btn_id)
+{
+	// avoid extra file IO on each call
+	static int initialized = 0;
+	if (!initialized) {
+		mkdir(INPUTD_PATH, 0755);
+		initialized = 1;
+	}
+
+	for (int i = 0; turbo_mapping[i].path; i++) {
+		if (turbo_mapping[i].brn_id == btn_id) {
+			return toggle_file(turbo_mapping[i].path);
+		}
+	}
+	return 0;
+}
+
+void PLAT_clearTurbo() {
+	for (int i = 0; turbo_mapping[i].path; i++) {
+		unlink(turbo_mapping[i].path);
+	}
+}
+
+//////////////////////////////////////////////
+
+int PLAT_setDateTime(int y, int m, int d, int h, int i, int s) {
+	char cmd[512];
+	sprintf(cmd, "date -s '%d-%d-%d %d:%d:%d'; hwclock -u -w", y,m,d,h,i,s);
+	system(cmd);
+	return 0; // why does this return an int?
+}
+
+#define MAX_LINE_LENGTH 200
+#define ZONE_PATH "/usr/share/zoneinfo"
+#define ZONE_TAB_PATH ZONE_PATH "/zone.tab"
+
+static char cached_timezones[MAX_TIMEZONES][MAX_TZ_LENGTH];
+static int cached_tz_count = -1;
+
+int compare_timezones(const void *a, const void *b) {
+    return strcmp((const char *)a, (const char *)b);
+}
+
+void PLAT_initTimezones() {
+    if (cached_tz_count != -1) { // Already initialized
+        return;
+    }
+    
+    FILE *file = fopen(ZONE_TAB_PATH, "r");
+    if (!file) {
+        LOG_info("Error opening file %s\n", ZONE_TAB_PATH);
+        return;
+    }
+    
+    char line[MAX_LINE_LENGTH];
+    cached_tz_count = 0;
+    
+    while (fgets(line, sizeof(line), file)) {
+        // Skip comment lines
+        if (line[0] == '#' || strlen(line) < 3) {
+            continue;
+        }
+        
+        char *token = strtok(line, "\t"); // Skip country code
+        if (!token) continue;
+        
+        token = strtok(NULL, "\t"); // Skip latitude/longitude
+        if (!token) continue;
+        
+        token = strtok(NULL, "\t\n"); // Extract timezone
+        if (!token) continue;
+        
+        // Check for duplicates before adding
+        int duplicate = 0;
+        for (int i = 0; i < cached_tz_count; i++) {
+            if (strcmp(cached_timezones[i], token) == 0) {
+                duplicate = 1;
+                break;
+            }
+        }
+        
+        if (!duplicate && cached_tz_count < MAX_TIMEZONES) {
+            strncpy(cached_timezones[cached_tz_count], token, MAX_TZ_LENGTH - 1);
+            cached_timezones[cached_tz_count][MAX_TZ_LENGTH - 1] = '\0'; // Ensure null-termination
+            cached_tz_count++;
+        }
+    }
+    
+    fclose(file);
+    
+    // Sort the list alphabetically
+    qsort(cached_timezones, cached_tz_count, MAX_TZ_LENGTH, compare_timezones);
+}
+
+void PLAT_getTimezones(char timezones[MAX_TIMEZONES][MAX_TZ_LENGTH], int *tz_count) {
+    if (cached_tz_count == -1) {
+        LOG_warn("Error: Timezones not initialized. Call PLAT_initTimezones first.\n");
+        *tz_count = 0;
+        return;
+    }
+    
+    memcpy(timezones, cached_timezones, sizeof(cached_timezones));
+    *tz_count = cached_tz_count;
+}
+
+char *PLAT_getCurrentTimezone() {
+	// easy enough, get current index from config and return the string
+	int tz_index = CFG_getCurrentTimezone();
+	if (tz_index < 0 || tz_index >= cached_tz_count) {
+		LOG_warn("Error: Current timezone index %d out of bounds.\n", tz_index);
+		return NULL;
+	}
+
+	char *output = (char *)malloc(256);
+	if (!output)
+		return NULL;
+
+	strncpy(output, cached_timezones[tz_index], 256 - 1);
+	output[256 - 1] = '\0'; // Ensure null-termination
+
+	return output;
+}
+
+void PLAT_setCurrentTimezone(const char* tz) {
+	if (cached_tz_count == -1) {
+		LOG_warn("Error: Timezones not initialized. Call PLAT_initTimezones first.\n");
+        return;
+    }
+
+	if(!tz || strlen(tz) == 0) {
+		LOG_warn("Error: Invalid timezone string.\n");
+		return;
+	}
+
+	// get index of timezone
+	int tz_index = -1;
+	for (int i = 0; i < cached_tz_count; i++) {
+		if (strcmp(cached_timezones[i], tz) == 0) {
+			tz_index = i;
+			break;
+		}
+	}
+
+	if (tz_index == -1) {
+		LOG_warn("Error: Timezone %s not found in cached list.\n", tz);
+		return;
+	}
+
+	// set in config
+	CFG_setCurrentTimezone(tz_index);
+
+	// This fixes the timezone until the next reboot
+	char *tz_path = (char *)malloc(256);
+	if (!tz_path) {
+		return;
+	}
+	snprintf(tz_path, 256, ZONE_PATH "/%s", tz);
+	// replace existing symlink
+	if (unlink("/tmp/localtime") == -1) {
+		LOG_debug("Failed to remove existing symlink: %s\n", strerror(errno));
+	}
+	if (symlink(tz_path, "/tmp/localtime") == -1) {
+		LOG_error("Failed to set timezone: %s\n", strerror(errno));
+	}
+	free(tz_path);
+
+	// apply timezone to RTC and kernel
+	system("hwclock -u -w && hwclock --systz -u");
+}
+
+bool PLAT_getNetworkTimeSync(void) {
+	return CFG_getNTP();
+}
+
+void PLAT_setNetworkTimeSync(bool on) {
+	CFG_setNTP(on);
+	if (on) {
+		system("/etc/init.d/S49ntp restart &");
+	} else {
+		system("/etc/init.d/S49ntp stop &");
+	}
+}
+
+/////////////////////////
+
+// We use the generic video implementation here
+#include "generic_video.c"
+
+/////////////////////////
+
+// We use the generic wifi implementation here
+#define WIFI_SOCK_DIR "/etc/wifi/sockets"
+#include "generic_wifi.c"
+
+/////////////////////////
+
+// We use the generic bluetooth implementation here
+#include "generic_bt.c"

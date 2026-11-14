@@ -121,6 +121,13 @@ enum InputReactionHint
     ResetAllItems
 };
 
+enum class OverlayDismissMode
+{
+    None,
+    DismissOnA,
+    DismissOnB
+};
+
 class AbstractMenuItem;
 class MenuList;
 // typedef InputReactionHint (*MenuListCallback)(MenuList* list, int i);
@@ -241,6 +248,11 @@ public:
 
     virtual InputReactionHint handleInput(int &dirty) override;
 
+    // Re-sync the selected index from on_get(). Useful when the underlying value
+    // can change from outside this item (e.g. a palette selection invalidated by
+    // editing an individual color elsewhere in the menu).
+    void reselect() { initSelection(); }
+
     const std::any getValue() const override
     {
         assert(valueIdx >= 0);
@@ -253,6 +265,37 @@ public:
     }
     const std::vector<std::any> getValues() const override{ return values; }
     const std::vector<std::string> getLabels() const override { return labels; }
+};
+
+// A menu item for text input that shows the current value and opens a keyboard when pressed.
+// The label getter is called each time to get the current display value.
+class TextInputMenuItem : public AbstractMenuItem
+{
+    MenuList* keyboardSubmenu;
+
+public:
+    TextInputMenuItem(const std::string &name, const std::string &desc,
+                     ValueGetCallback labelGetter, MenuListCallback on_confirm,
+                     MenuList *submenu)
+        : AbstractMenuItem(ListItemType::Generic, name, desc, labelGetter, nullptr, nullptr, on_confirm, submenu),
+          keyboardSubmenu(submenu) {}
+
+    const std::any getValue() const override {
+        // Return a dummy value so the rendering system shows the label
+        return std::string("");
+    }
+    
+    const std::string getLabel() const override {
+        if (on_get) {
+            auto val = on_get();
+            if (val.has_value()) {
+                return std::any_cast<std::string>(val);
+            }
+        }
+        return "";
+    }
+
+    InputReactionHint handleInput(int &dirty) override;
 };
 
 class MenuList
@@ -284,6 +327,10 @@ public:
     ~MenuList();
     MenuList(MenuList &) = delete;
 
+    static void showOverlay(const std::string& message, OverlayDismissMode dismissMode = OverlayDismissMode::None);
+    static void hideOverlay();
+    static bool isOverlayVisible();
+
     void performLayout(const SDL_Rect &dst);
     bool selectNext();
     bool selectPrev();
@@ -296,16 +343,29 @@ public:
 
     SDL_Rect itemSizeHint(const AbstractMenuItem &item);
 
-    void draw(SDL_Surface *surface, const SDL_Rect &dst);
-    void drawList(SDL_Surface *surface, const SDL_Rect &dst);
+    void draw(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle);
+    void drawList(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle);
     void drawListItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
-    void drawFixed(SDL_Surface *surface, const SDL_Rect &dst);
+    void drawFixed(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle);
     void drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
-    void drawInput(SDL_Surface *surface, const SDL_Rect &dst);
+    void drawInput(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle);
     void drawInputItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
-    void drawMain(SDL_Surface *surface, const SDL_Rect &dst);
+    void drawMain(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle);
     void drawMainItem(SDL_Surface *surface, const SDL_Rect &dst, const AbstractMenuItem &item, bool selected);
-    virtual void drawCustom(SDL_Surface *surface, const SDL_Rect &dst) {};
+    virtual void drawCustom(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle) {};
+};
+
+// Moved here to ensure MenuList is fully defined
+struct ScopedOverlay {
+    ScopedOverlay(const std::string& message, OverlayDismissMode dismissMode = OverlayDismissMode::None) {
+        MenuList::showOverlay(message, dismissMode);
+    }
+    ~ScopedOverlay() {
+        MenuList::hideOverlay();
+    }
+    // Prevent copying to ensure single ownership/cleanup
+    ScopedOverlay(const ScopedOverlay&) = delete;
+    ScopedOverlay& operator=(const ScopedOverlay&) = delete;
 };
 
 const MenuListCallback DeferToSubmenu = [](AbstractMenuItem &itm) -> InputReactionHint
@@ -319,3 +379,4 @@ const MenuListCallback ResetCurrentMenu = [](AbstractMenuItem &itm) -> InputReac
 {
     return InputReactionHint::ResetAllItems;
 };
+

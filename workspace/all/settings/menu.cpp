@@ -7,11 +7,20 @@ extern "C"
 #include "utils.h"
 }
 
+#include <cmath>
 #include <mutex>
 #include <shared_mutex>
 typedef std::shared_mutex Lock;
 typedef std::unique_lock< Lock >  WriteLock;
 typedef std::shared_lock< Lock >  ReadLock;
+
+static std::string overlayMessage;
+static bool overlayVisible = false;
+static OverlayDismissMode overlayDismissMode = OverlayDismissMode::None;
+static SDL_Surface* overlaySurface = nullptr;
+static Lock overlayLock;
+
+static void drawOverlayLocal(SDL_Surface* screen);
 
 ///////////////////////////////////////////////////////////
 
@@ -264,6 +273,34 @@ bool MenuItem::prev(int n)
 
 ///////////////////////////////////////////////////////////
 
+InputReactionHint TextInputMenuItem::handleInput(int &dirty) {
+    // Handle deferred state - route input to keyboard submenu
+    if (deferred) {
+        assert(submenu);
+        int subMenuJustClosed = 0;
+        auto hint = submenu->handleInput(dirty, subMenuJustClosed);
+        if (subMenuJustClosed) {
+            defer(false);
+            dirty = 1;
+            // Don't propagate Exit up - just stay on current menu
+            return NoOp;
+        }
+        return hint;
+    }
+
+    // Open keyboard when A is pressed
+    if (PAD_justPressed(BTN_A)) {
+        if (on_confirm) {
+            auto hint = on_confirm(*this);
+            dirty = 1;
+            return hint;
+        }
+    }
+    return Unhandled;
+}
+
+///////////////////////////////////////////////////////////
+
 MenuList::MenuList(MenuItemType type, const std::string &descp, std::vector<AbstractMenuItem*> items, MenuListCallback on_change, MenuListCallback on_confirm)
     : type(type), desc(descp), items(items), on_change(on_change), on_confirm(on_confirm)
 {
@@ -381,6 +418,28 @@ bool MenuList::selectByName(const std::string &name)
 // returns true if the input was handled
 InputReactionHint MenuList::handleInput(int &dirty, int &quit)
 {
+    bool tryDismiss = false;
+    {
+        ReadLock r(overlayLock);
+        if (overlayVisible) {
+             bool dismissed = false;
+             if (overlayDismissMode == OverlayDismissMode::DismissOnA && PAD_justPressed(BTN_A)) dismissed = true;
+             else if (overlayDismissMode == OverlayDismissMode::DismissOnB && PAD_justPressed(BTN_B)) dismissed = true;
+
+             if (dismissed) {
+                 tryDismiss = true;
+             } else {
+                 return NoOp;
+             }
+        }
+    }
+
+    if (tryDismiss) {
+        hideOverlay();
+        dirty = 1;
+        return NoOp;
+    }
+
     ReadLock r(itemLock);
     InputReactionHint handled = items.at(scope.selected)->handleInput(dirty);
     if(handled == ResetAllItems) {
@@ -483,7 +542,7 @@ SDL_Rect MenuList::itemSizeHint(const AbstractMenuItem &item)
     }
 }
 
-void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
+void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle)
 {
     assert(layout_called);
     ReadLock r(itemLock);
@@ -492,7 +551,7 @@ void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
     if (cur && cur->isDeferred())
     {
         assert(cur->getSubMenu());
-        cur->getSubMenu()->draw(surface, dst);
+        cur->getSubMenu()->draw(surface, dst, dstTitle);
     }
     else
     {
@@ -500,20 +559,20 @@ void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
         switch (type)
         {
         case MenuItemType::List:
-            drawList(surface, dst);
+            drawList(surface, dst, dstTitle);
             break;
         case MenuItemType::Fixed:
-            drawFixed(surface, dst);
+            drawFixed(surface, dst, dstTitle);
             break;
         case MenuItemType::Var:
         case MenuItemType::Input:
-            drawInput(surface, dst);
+            drawInput(surface, dst, dstTitle);
             break;
         case MenuItemType::Main:
-            drawMain(surface, dst);
+            drawMain(surface, dst, dstTitle);
             break;
         case MenuItemType::Custom:
-            drawCustom(surface, dst);
+            drawCustom(surface, dst, dstTitle);
             return; // no further drawing over custom
         default:
             assert(false && "Unknown list type");
@@ -523,18 +582,18 @@ void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
         if (type != MenuItemType::Main && items.size() > scope.max_visible_options)
         {
             const int SCROLL_WIDTH = 24;
-            const int SCROLL_HEIGHT = 4;
+            const int SCROLL_HEIGHT = 6;
             SDL_Rect rect = dst;
             rect = dx(rect, (rect.w - SCALE1(SCROLL_WIDTH)) / 2);
             rect = dy(rect, SCALE1((-SCROLL_HEIGHT) / 2));
+            rect.w = SCALE1(SCROLL_WIDTH);
+            rect.h -= SCALE1(PILL_SIZE); // account for description space at the bottom
 
             if (scope.start > 0)
                 // assumes there is some padding above we can yoink
                 GFX_blitAssetCPP(ASSET_SCROLL_UP, {}, surface, {rect.x, rect.y - SCALE1(PADDING)});
             if (scope.end < scope.count)
-                // this is with 2 * pill_size bottom margin
-                // GFX_blitAssetCPP(ASSET_SCROLL_DOWN, {}, surface, {rect.x, rect.h - SCALE1(PADDING + PILL_SIZE + BUTTON_SIZE) + rect.y});
-                GFX_blitAssetCPP(ASSET_SCROLL_DOWN, {}, surface, {rect.x, rect.h - SCALE1(PADDING + PILL_SIZE) + rect.y});
+                GFX_blitAssetCPP(ASSET_SCROLL_DOWN, {}, surface, {rect.x, rect.y + rect.h + (SCALE1(SCROLL_HEIGHT) / 2)});
         }
 
         if (cur && cur->getDesc().length() > 0)
@@ -545,9 +604,16 @@ void MenuList::draw(SDL_Surface *surface, const SDL_Rect &dst)
             GFX_blitTextCPP(font.tiny, description.c_str(), SCALE1(FONT_SMALL), uintToColour(THEME_COLOR4_255), surface, {(dst.x + dst.w - w) / 2, dst.y + dst.h - h, w, h});
         }
     }
+
+    {
+        WriteLock w(overlayLock);
+        overlaySurface = surface;
+    }
+
+    drawOverlayLocal(surface);
 }
 
-void MenuList::drawList(SDL_Surface *surface, const SDL_Rect &dst)
+void MenuList::drawList(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle)
 {
     // we ignore type here, it all paints the same.
     if (max_width == 0)
@@ -596,7 +662,7 @@ void MenuList::drawListItem(SDL_Surface *surface, const SDL_Rect &dst, const Abs
     SDL_FreeSurface(text);
 }
 
-void MenuList::drawFixed(SDL_Surface *surface, const SDL_Rect &dst)
+void MenuList::drawFixed(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle)
 {
     // NOTE: no need to calculate max width
     int mw = dst.w;
@@ -618,18 +684,19 @@ void MenuList::drawFixed(SDL_Surface *surface, const SDL_Rect &dst)
 // TODO: expose API functions that do the same
 namespace
 {
-    static inline void rgb_unpack(uint32_t col, int *r, int *g, int *b)
+    static inline void rgba_unpack(uint32_t col, int *r, int *g, int *b, int *a)
     {
-        *r = (col >> 16) & 0xff;
-        *g = (col >> 8) & 0xff;
-        *b = col & 0xff;
+        *r = (col >> 24) & 0xff;
+        *g = (col >> 16) & 0xff;
+        *b = (col >> 8) & 0xff;
+        *a = col & 0xff;
     }
 
     static inline uint32_t mapUint(SDL_Surface *surface, uint32_t col)
     {
-        int r, g, b;
-        rgb_unpack(col, &r, &g, &b);
-        return SDL_MapRGB(surface->format, r, g, b);
+        int r, g, b, a;
+        rgba_unpack(col, &r, &g, &b, &a);
+        return SDL_MapRGBA(surface->format, r, g, b, a);
     }
 }
 
@@ -654,7 +721,13 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
 
         if (item.getType() == ListItemType::Color)
         {
-            uint32_t color = mapUint(surface, std::any_cast<uint32_t>(item.getValue()));
+            // Read the live color directly from on_get() so the swatch and hex
+            // label always reflect the current value, even after the RGB picker
+            // sets an arbitrary color that is not in the predefined palette.
+            uint32_t rawColor = item.on_get
+                ? std::any_cast<uint32_t>(item.on_get())
+                : std::any_cast<uint32_t>(item.getValue());
+            uint32_t color = mapUint(surface, rawColor);
             SDL_Rect rect = {
                 dst.x + dst.w - SCALE1(OPTION_PADDING + FONT_TINY),
                 dst.y + SCALE1(BUTTON_SIZE - FONT_TINY) / 2,
@@ -665,6 +738,11 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
             rect.w -= 1;
             SDL_FillRect(surface, &rect, color);
 #define COLOR_PADDING 4
+            // Rerender the label from the live hex value
+            SDL_FreeSurface(text);
+            char hexLabel[12];
+            snprintf(hexLabel, sizeof(hexLabel), "0x%08X", rawColor);
+            text = TTF_RenderUTF8_Blended(font.tiny, hexLabel, text_color_value);
             SDL_BlitSurfaceCPP(text, {}, surface, {dst.x + mw - text->w - SCALE1(OPTION_PADDING + COLOR_PADDING + FONT_TINY), dst.y + ((dst.h - text->h) / 2)});
         }
         else if(item.getType() == ListItemType::Button) {
@@ -694,7 +772,7 @@ void MenuList::drawFixedItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
     SDL_FreeSurface(text);
 }
 
-void MenuList::drawInput(SDL_Surface *surface, const SDL_Rect &dst)
+void MenuList::drawInput(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle)
 {
     // TODO: handle type if we need it
     if (max_width == 0)
@@ -760,7 +838,7 @@ void MenuList::drawInputItem(SDL_Surface *surface, const SDL_Rect &dst, const Ab
     }
 }
 
-void MenuList::drawMain(SDL_Surface *surface, const SDL_Rect &dst)
+void MenuList::drawMain(SDL_Surface *surface, const SDL_Rect &dst, const SDL_Rect &dstTitle)
 {
     // we ignore type here, it all paints the same.
     // no size calc to do here, each line is as wide as needed.
@@ -818,6 +896,74 @@ void MenuList::resetAllItems()
         if(item->on_reset) {
             item->on_reset();
             item->initSelection();
+ 
+        }
+    }
+}
+
+void MenuList::showOverlay(const std::string& message, OverlayDismissMode dismissMode)
+{
+    {
+        WriteLock w(overlayLock);
+        overlayMessage = message;
+        overlayVisible = true;
+        overlayDismissMode = dismissMode;
+    }
+    
+    // We want to force a draw right now since usually we are about to block
+    WriteLock w(overlayLock);
+    if (overlaySurface) {
+        // Clear the surface first to prevent text ghosting from previous
+        // overlay frames (the semi-transparent shadow doesn't fully obscure
+        // old content, causing overlap when updated repeatedly in a loop)
+        SDL_FillRect(overlaySurface, NULL, SDL_MapRGB(overlaySurface->format, 0, 0, 0));
+        drawOverlayLocal(overlaySurface);
+        GFX_flip(overlaySurface);
+    }
+}
+
+void MenuList::hideOverlay()
+{
+    WriteLock w(overlayLock);
+    overlayVisible = false;
+}
+
+bool MenuList::isOverlayVisible()
+{
+    ReadLock r(overlayLock);
+    return overlayVisible;
+}
+
+
+static void drawOverlayLocal(SDL_Surface* screen) {
+    // ReadLock r(overlayLock); // Assumes caller held lock or is safe
+    if (!overlayVisible) return;
+    
+    if (!screen) return;
+
+    // Use a static shadow surface to create a semi-transparent overlay
+    static SDL_Surface* shadow = nullptr;
+    if (!shadow || shadow->w != screen->w || shadow->h != screen->h) {
+        if (shadow) SDL_FreeSurface(shadow);
+        shadow = SDL_CreateRGBSurface(SDL_SWSURFACE, screen->w, screen->h, 
+                                      screen->format->BitsPerPixel, 
+                                      screen->format->Rmask, screen->format->Gmask, screen->format->Bmask, 0);
+        SDL_FillRect(shadow, NULL, SDL_MapRGB(shadow->format, 0, 0, 0));
+        SDLX_SetAlpha(shadow, SDL_SRCALPHA, 200); // Semi-transparent black
+    }
+    SDL_BlitSurface(shadow, NULL, screen, NULL);
+
+    SDL_Rect screenRect = {0, 0, screen->w, screen->h};
+
+    GFX_blitMessageCPP(font.medium, overlayMessage, screen, screenRect);
+    
+    if (overlayDismissMode != OverlayDismissMode::None) {
+        if (overlayDismissMode == OverlayDismissMode::DismissOnB) {
+            char *hints[] = {(char *)("B"), (char *)("BACK"), NULL};
+            GFX_blitButtonGroup(hints, 1, screen, 1);
+        } else if (overlayDismissMode == OverlayDismissMode::DismissOnA) {
+            char *hints[] = {(char *)("A"), (char *)("OK"), NULL};
+            GFX_blitButtonGroup(hints, 1, screen, 1);
         }
     }
 }

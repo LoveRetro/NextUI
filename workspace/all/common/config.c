@@ -1,4 +1,10 @@
 #include "config.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <ctype.h>
+#include <unistd.h>
 #include "defines.h"
 #include "utils.h"
 
@@ -25,7 +31,8 @@ void CFG_defaults(NextUISettings *cfg)
         return;
 
     NextUISettings defaults = {
-        .font = CFG_DEFAULT_FONT_ID,
+        .fontFile = CFG_DEFAULT_FONT_FILE,
+        .fontStyle = CFG_DEFAULT_FONT_STYLE,
         .color1_255 = CFG_DEFAULT_COLOR1,
         .color2_255 = CFG_DEFAULT_COLOR2,
         .color3_255 = CFG_DEFAULT_COLOR3,
@@ -36,6 +43,11 @@ void CFG_defaults(NextUISettings *cfg)
         .thumbRadius = CFG_DEFAULT_THUMBRADIUS,
         .gameArtWidth = CFG_DEFAULT_GAMEARTWIDTH,
 		.showFolderNamesAtRoot = CFG_DEFAULT_SHOWFOLDERNAMESATROOT,
+        .inputPromptStyle = CFG_DEFAULT_INPUT_PROMPT_STYLE,
+        .paletteName = CFG_DEFAULT_PALETTE_NAME,
+        .customColors = {CFG_DEFAULT_COLOR1, CFG_DEFAULT_COLOR2, CFG_DEFAULT_COLOR3,
+                          CFG_DEFAULT_COLOR4, CFG_DEFAULT_COLOR5, CFG_DEFAULT_COLOR6,
+                          CFG_DEFAULT_COLOR7},
 
         .showClock = CFG_DEFAULT_SHOWCLOCK,
         .clock24h = CFG_DEFAULT_CLOCK24H,
@@ -44,15 +56,21 @@ void CFG_defaults(NextUISettings *cfg)
         .showMenuTransitions = CFG_DEFAULT_SHOWMENUTRANSITIONS,
         .showRecents = CFG_DEFAULT_SHOWRECENTS,
         .showTools = CFG_DEFAULT_SHOWTOOLS,
+        .showCollections = CFG_DEFAULT_SHOWCOLLECTIONS,
         .showGameArt = CFG_DEFAULT_SHOWGAMEART,
         .gameSwitcherScaling = CFG_DEFAULT_GAMESWITCHERSCALING,
         .defaultView = CFG_DEFAULT_VIEW,
         .showQuickSwitcherUi = CFG_DEFAULT_SHOWQUICKWITCHERUI,
+        .gameSwitcherCurtain = CFG_DEFAULT_GAMESWITCHER_CURTAIN,
 
         .muteLeds = CFG_DEFAULT_MUTELEDS,
 
+        .fnAction = {CFG_DEFAULT_FN_ACTION, CFG_DEFAULT_FN_ACTION, CFG_DEFAULT_FN_ACTION},
+
         .screenTimeoutSecs = CFG_DEFAULT_SCREENTIMEOUTSECS,
         .suspendTimeoutSecs = CFG_DEFAULT_SUSPENDTIMEOUTSECS,
+        .powerOffProtection = CFG_DEFAULT_POWEROFFPROTECTION,
+        .keepAwakeWhenUSB = CFG_DEFAULT_KEEPAWAKEWHENUSB,
 
         .haptics = CFG_DEFAULT_HAPTICS,
         .romsUseFolderBackground = CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND,
@@ -60,15 +78,67 @@ void CFG_defaults(NextUISettings *cfg)
         .stateFormat = CFG_DEFAULT_STATEFORMAT,
         .useExtractedFileName = CFG_DEFAULT_EXTRACTEDFILENAME,
 
+        .ntp = CFG_DEFAULT_NTP,
+        .currentTimezone = CFG_DEFAULT_TIMEZONE,
         .wifi = CFG_DEFAULT_WIFI,
         .wifiDiagnostics = CFG_DEFAULT_WIFI_DIAG,
         .bluetooth = CFG_DEFAULT_BLUETOOTH,
         .bluetoothDiagnostics = CFG_DEFAULT_BLUETOOTH_DIAG,
         .bluetoothSamplerateLimit = CFG_DEFAULT_BLUETOOTH_MAXRATE,
-};
+
+        .notifyManualSave = CFG_DEFAULT_NOTIFY_MANUAL_SAVE,
+        .notifyLoad = CFG_DEFAULT_NOTIFY_LOAD,
+        .notifyScreenshot = CFG_DEFAULT_NOTIFY_SCREENSHOT,
+        .notifyAdjustments = CFG_DEFAULT_NOTIFY_ADJUSTMENTS,
+        .notifyDuration = CFG_DEFAULT_NOTIFY_DURATION,
+
+        .raEnable = CFG_DEFAULT_RA_ENABLE,
+        .raUsername = CFG_DEFAULT_RA_USERNAME,
+        .raPassword = CFG_DEFAULT_RA_PASSWORD,
+        .raHardcoreMode = CFG_DEFAULT_RA_HARDCOREMODE,
+        .raToken = CFG_DEFAULT_RA_TOKEN,
+        .raServerUsername = CFG_DEFAULT_RA_SERVER_USERNAME,
+        .raAuthenticated = CFG_DEFAULT_RA_AUTHENTICATED,
+        .raShowNotifications = CFG_DEFAULT_RA_SHOW_NOTIFICATIONS,
+        .raShowChallengeIndicators = CFG_DEFAULT_RA_SHOW_CHALLENGE_INDICATORS,
+        .raNotificationDuration = CFG_DEFAULT_RA_NOTIFICATION_DURATION,
+        .raProgressNotificationDuration = CFG_DEFAULT_RA_PROGRESS_NOTIFICATION_DURATION,
+        .raAchievementSortOrder = CFG_DEFAULT_RA_ACHIEVEMENT_SORT_ORDER,
+    };
 
     *cfg = defaults;
 }
+
+static inline uint32_t parseHexColor(const char *hexColor) {
+    // Accept both legacy RGB (RRGGBB) and RGBA (RRGGBBAA) text formats.
+    // Decide by input hex digit count, not numeric value.
+    uint32_t value = HexToUint32_unmapped(hexColor);
+
+    const char *p = hexColor;
+    while (*p == ' ' || *p == '\t') p++;
+    if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X'))
+        p += 2;
+
+    size_t digits = 0;
+    while (isxdigit((unsigned char)p[digits]))
+        digits++;
+
+    if (digits <= 6) {
+        // Legacy RGB -> packed RGBA with opaque alpha.
+        return (value << 8) | 0xFF;
+    }
+
+    // 8+ hex digits are treated as explicit packed RGBA.
+    return value;
+}
+
+uint32_t CFG_parseHexColor(const char *hexColor)
+{
+    return parseHexColor(hexColor);
+}
+
+// Defined below, alongside the rest of the palette-name accessors.
+static void setPaletteNameRaw(const char *name);
 
 void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
 {
@@ -91,47 +161,78 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
         {
             int temp_value;
             uint32_t temp_color;
-            if (sscanf(line, "font=%i", &temp_value) == 1)
+            if (strncmp(line, "font=", 5) == 0)
             {
-                CFG_setFontId(temp_value);
+                char *value = line + 5;
+                value[strcspn(value, "\n")] = 0;
+                // backward compat: "0" -> font2.ttf, "1" -> font1.ttf
+                if (strcmp(value, "0") == 0)
+                    CFG_setFontFile("font2.ttf");
+                else if (strcmp(value, "1") == 0)
+                    CFG_setFontFile("font1.ttf");
+                else
+                    CFG_setFontFile(value);
                 fontLoaded = true;
                 continue;
             }
-            if (sscanf(line, "color1=%x", &temp_color) == 1)
+            if (strncmp(line, "palette=", 8) == 0)
             {
-                char hexColor[7];
-                snprintf(hexColor, sizeof(hexColor), "%06x", temp_color);
-                CFG_setColor(1, HexToUint32_unmapped(hexColor));
+                char *value = line + 8;
+                value[strcspn(value, "\r\n")] = 0;
+                // Restore the persisted name as-is; the colors it names are loaded
+                // independently a few lines below in this same pass, so the pair is
+                // already consistent. Deliberately bypasses CFG_applyPalette, which
+                // would overwrite those colors with a (possibly stale) palette's.
+                setPaletteNameRaw(value);
                 continue;
             }
-            if (sscanf(line, "color2=%x", &temp_color) == 1)
+            if(strncmp(line, "color1=", 7) == 0)
             {
-                CFG_setColor(2, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(1, parseHexColor(value));
                 continue;
             }
-            if (sscanf(line, "color3=%x", &temp_color) == 1)
+            if (strncmp(line, "color2=", 7) == 0)
             {
-                CFG_setColor(3, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(2, parseHexColor(value));
                 continue;
             }
-            if (sscanf(line, "color4=%x", &temp_color) == 1)
+            if (strncmp(line, "color3=", 7) == 0)
             {
-                CFG_setColor(4, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(3, parseHexColor(value));
                 continue;
             }
-            if (sscanf(line, "color5=%x", &temp_color) == 1)
+            if (strncmp(line, "color4=", 7) == 0)
             {
-                CFG_setColor(5, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(4, parseHexColor(value));
                 continue;
             }
-            if (sscanf(line, "color6=%x", &temp_color) == 1)
+            if (strncmp(line, "color5=", 7) == 0)
             {
-                CFG_setColor(6, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(5, parseHexColor(value));
                 continue;
             }
-            if (sscanf(line, "color7=%x", &temp_color) == 1)
+            if (strncmp(line, "color6=", 7) == 0)
             {
-                CFG_setColor(7, temp_color);
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(6, parseHexColor(value));
+                continue;
+            }
+            if (strncmp(line, "color7=", 7) == 0)
+            {
+                char *value = line + 7;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setColor(7, parseHexColor(value));
                 continue;
             }
             if (sscanf(line, "radius=%i", &temp_value) == 1)
@@ -161,7 +262,8 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             }
             if (sscanf(line, "menutransitions=%i", &temp_value) == 1)
             {
-                CFG_setMenuTransitions((bool)temp_value);
+                // Old bool values (0/1) map directly: 0=off, 1=snappy.
+                CFG_setMenuTransitions(temp_value);
                 continue;
             }
             if (sscanf(line, "recents=%i", &temp_value) == 1)
@@ -172,6 +274,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "tools=%i", &temp_value) == 1)
             {
                 CFG_setShowTools((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "collections=%i", &temp_value) == 1)
+            {
+                CFG_setShowCollections((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "gameart=%i", &temp_value) == 1)
@@ -192,6 +299,16 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "suspendTimeout=%i", &temp_value) == 1)
             {
                 CFG_setSuspendTimeoutSecs(temp_value);
+                continue;
+            }
+            if (sscanf(line, "powerOffProtection=%i", &temp_value) == 1)
+            {
+                CFG_setPowerOffProtection((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "keepAwakeWhenUSB=%i", &temp_value) == 1)
+            {
+                CFG_setKeepAwakeWhenUSB((bool)temp_value);
                 continue;
             }
             if (sscanf(line, "switcherscale=%i", &temp_value) == 1)
@@ -227,6 +344,27 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "muteLeds=%i", &temp_value) == 1)
             {
                 CFG_setMuteLEDs(temp_value);
+                continue;
+            }
+            if (strncmp(line, "fn1action=", 10) == 0)
+            {
+                char *value = line + 10;
+                value[strcspn(value, "\r\n")] = 0;
+                CFG_setFnAction(0, value);
+                continue;
+            }
+            if (strncmp(line, "fn2action=", 10) == 0)
+            {
+                char *value = line + 10;
+                value[strcspn(value, "\r\n")] = 0;
+                CFG_setFnAction(1, value);
+                continue;
+            }
+            if (strncmp(line, "fn3action=", 10) == 0)
+            {
+                char *value = line + 10;
+                value[strcspn(value, "\r\n")] = 0;
+                CFG_setFnAction(2, value);
                 continue;
             }
             if (sscanf(line, "artWidth=%i", &temp_value) == 1)
@@ -269,39 +407,168 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
                 CFG_setBluetoothSamplingrateLimit(temp_value);
                 continue;
             }
+            if (sscanf(line, "ntp=%i", &temp_value) == 1)
+            {
+                CFG_setNTP((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "currentTimezone=%i", &temp_value) == 1)
+            {
+                CFG_setCurrentTimezone(temp_value);
+                continue;
+            }
+            if (sscanf(line, "notifyManualSave=%i", &temp_value) == 1)
+            {
+                CFG_setNotifyManualSave((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "notifyLoad=%i", &temp_value) == 1)
+            {
+                CFG_setNotifyLoad((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "notifyScreenshot=%i", &temp_value) == 1)
+            {
+                CFG_setNotifyScreenshot((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "notifyAdjustments=%i", &temp_value) == 1)
+            {
+                CFG_setNotifyAdjustments((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "notifyDuration=%i", &temp_value) == 1)
+            {
+                CFG_setNotifyDuration(temp_value);
+                continue;
+            }
+            if (sscanf(line, "raEnable=%i", &temp_value) == 1)
+            {
+                CFG_setRAEnable((bool)temp_value);
+                continue;
+            }
+            if (strncmp(line, "raUsername=", 11) == 0)
+            {
+                char *value = line + 11;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setRAUsername(value);
+                continue;
+            }
+            if (strncmp(line, "raPassword=", 11) == 0)
+            {
+                char *value = line + 11;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setRAPassword(value);
+                continue;
+            }
+            if (sscanf(line, "raHardcoreMode=%i", &temp_value) == 1)
+            {
+                CFG_setRAHardcoreMode((bool)temp_value);
+                continue;
+            }
+            if (strncmp(line, "raToken=", 8) == 0)
+            {
+                char *value = line + 8;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setRAToken(value);
+                continue;
+            }
+            if (strncmp(line, "raServerUsername=", 17) == 0)
+            {
+                char *value = line + 17;
+                value[strcspn(value, "\n")] = 0;
+                CFG_setRAServerUsername(value);
+                continue;
+            }
+            if (sscanf(line, "raAuthenticated=%i", &temp_value) == 1)
+            {
+                CFG_setRAAuthenticated((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "raShowNotifications=%i", &temp_value) == 1)
+            {
+                CFG_setRAShowNotifications((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "raShowChallengeIndicators=%i", &temp_value) == 1)
+            {
+                CFG_setRAShowChallengeIndicators((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "raNotificationDuration=%i", &temp_value) == 1)
+            {
+                CFG_setRANotificationDuration(temp_value);
+                continue;
+            }
+            if (sscanf(line, "raProgressNotificationDuration=%i", &temp_value) == 1)
+            {
+                CFG_setRAProgressNotificationDuration(temp_value);
+                continue;
+            }
+            if (sscanf(line, "raAchievementSortOrder=%i", &temp_value) == 1)
+            {
+                CFG_setRAAchievementSortOrder(temp_value);
+                continue;
+            }
+            if (sscanf(line, "fontStyle=%i", &temp_value) == 1)
+            {
+                CFG_setFontStyle(temp_value);
+                continue;
+            }
+            if (sscanf(line, "gameSwitcherCurtain=%i", &temp_value) == 1)
+            {
+                CFG_setGameSwitcherCurtain(temp_value);
+                continue;
+            }
+            if (sscanf(line, "inputPromptStyle=%i", &temp_value) == 1)
+            {
+                CFG_setInputPromptStyle(temp_value);
+                continue;
+            }
         }
         fclose(file);
     }
 
     // load gfx related stuff until we drop the indirection
-    CFG_setColor(1, CFG_getColor(1));
-    CFG_setColor(2, CFG_getColor(2));
-    CFG_setColor(3, CFG_getColor(3));
-    CFG_setColor(4, CFG_getColor(4));
-    CFG_setColor(5, CFG_getColor(5));
-    CFG_setColor(6, CFG_getColor(6));
-    CFG_setColor(7, CFG_getColor(7));
+    CFG_setColor(1, CFG_getColor(COLOR_MAIN));
+    CFG_setColor(2, CFG_getColor(COLOR_ACCENT));
+    CFG_setColor(3, CFG_getColor(COLOR_ACCENT2));
+    CFG_setColor(4, CFG_getColor(COLOR_LIST_TEXT));
+    CFG_setColor(5, CFG_getColor(COLOR_LIST_TEXT_SELECTED));
+    CFG_setColor(6, CFG_getColor(COLOR_HINT));
+    CFG_setColor(7, CFG_getColor(COLOR_BACKGROUND));
     // avoid reloading the font if not neccessary
     if (!fontLoaded)
-        CFG_setFontId(CFG_getFontId());
+        CFG_setFontFile(CFG_getFontFile());
 }
 
-int CFG_getFontId(void)
+const char* CFG_getFontFile(void)
 {
-    return settings.font;
+    return settings.fontFile;
 }
 
-void CFG_setFontId(int id)
+void CFG_setFontFile(const char* filename)
 {
-    settings.font = clamp(id, 0, 2);
+    if (!filename || !filename[0]) {
+        strncpy(settings.fontFile, CFG_DEFAULT_FONT_FILE, sizeof(settings.fontFile) - 1);
+        settings.fontFile[sizeof(settings.fontFile) - 1] = '\0';
+    } else {
+        strncpy(settings.fontFile, filename, sizeof(settings.fontFile) - 1);
+        settings.fontFile[sizeof(settings.fontFile) - 1] = '\0';
+    }
 
-    char *fontPath;
-    if (settings.font == 1)
-        fontPath = RES_PATH "/font1.ttf";
-    else
-        fontPath = RES_PATH "/font2.ttf";
+    // resolve full path: all fonts live in RES_PATH
+    char fontPath[512];
+    snprintf(fontPath, sizeof(fontPath), "%s/%s", RES_PATH, settings.fontFile);
 
-    if(settings.onFontChange)
+    // fall back to default if file doesn't exist
+    if (access(fontPath, F_OK) != 0) {
+        strncpy(settings.fontFile, CFG_DEFAULT_FONT_FILE, sizeof(settings.fontFile) - 1);
+        settings.fontFile[sizeof(settings.fontFile) - 1] = '\0';
+        snprintf(fontPath, sizeof(fontPath), "%s/%s", RES_PATH, settings.fontFile);
+    }
+
+    if (settings.onFontChange)
         settings.onFontChange(fontPath);
 }
 
@@ -368,6 +635,65 @@ void CFG_setColor(int color_id, uint32_t color)
         settings.onColorSet();
 }
 
+// Predefined color palette selection (see palette.c for enumeration/loading)
+//
+// A non-empty palette name and the 7 colors it points at must never diverge, so
+// setting a non-empty name is only possible atomically with the colors it names
+// (CFG_applyPalette). setPaletteNameRaw is a private escape hatch used solely to
+// restore already-consistent state read back from minuisettings.txt, where the
+// colors are loaded independently in the same pass.
+
+static void setPaletteNameRaw(const char *name)
+{
+    if (!name)
+        name = "";
+    strncpy(settings.paletteName, name, sizeof(settings.paletteName) - 1);
+    settings.paletteName[sizeof(settings.paletteName) - 1] = '\0';
+}
+
+const char* CFG_getPaletteName(void)
+{
+    return settings.paletteName;
+}
+
+void CFG_applyPalette(const char *name, const uint32_t colors[7])
+{
+    // Snapshot the current colors before they're overwritten, but only when
+    // actually leaving Custom - switching directly between two named palettes must
+    // not clobber the one saved "last custom" backup with an intermediate palette's
+    // colors.
+    if (settings.paletteName[0] == '\0')
+    {
+        settings.customColors[0] = settings.color1_255;
+        settings.customColors[1] = settings.color2_255;
+        settings.customColors[2] = settings.color3_255;
+        settings.customColors[3] = settings.color4_255;
+        settings.customColors[4] = settings.color5_255;
+        settings.customColors[5] = settings.color6_255;
+        settings.customColors[6] = settings.color7_255;
+    }
+
+    for (int i = 0; i < 7; i++)
+        CFG_setColor(i + 1, colors[i]);
+    setPaletteNameRaw(name);
+}
+
+void CFG_clearPalette(void)
+{
+    setPaletteNameRaw("");
+}
+
+void CFG_selectCustomPalette(void)
+{
+    // Only restore when actually transitioning away from a palette: if we're
+    // already Custom, the current colors are whatever the user has been editing
+    // and must not be clobbered by the (now stale) backup.
+    if (settings.paletteName[0] != '\0')
+        for (int i = 0; i < 7; i++)
+            CFG_setColor(i + 1, settings.customColors[i]);
+    setPaletteNameRaw("");
+}
+
 bool CFG_getShowFolderNamesAtRoot(void)
 {
     return settings.showFolderNamesAtRoot;
@@ -398,6 +724,28 @@ uint32_t CFG_getSuspendTimeoutSecs(void)
 void CFG_setSuspendTimeoutSecs(uint32_t secs)
 {
     settings.suspendTimeoutSecs = secs;
+    CFG_sync();
+}
+
+bool CFG_getPowerOffProtection(void)
+{
+    return settings.powerOffProtection;
+}
+
+void CFG_setPowerOffProtection(bool enable)
+{
+    settings.powerOffProtection = enable;
+    CFG_sync();
+}
+
+bool CFG_getKeepAwakeWhenUSB(void)
+{
+    return settings.keepAwakeWhenUSB;
+}
+
+void CFG_setKeepAwakeWhenUSB(bool enable)
+{
+    settings.keepAwakeWhenUSB = enable;
     CFG_sync();
 }
 
@@ -445,14 +793,14 @@ void CFG_setMenuAnimations(bool show)
     CFG_sync();
 }
 
-bool CFG_getMenuTransitions(void)
+int CFG_getMenuTransitions(void)
 {
     return settings.showMenuTransitions;
 }
 
-void CFG_setMenuTransitions(bool show)
+void CFG_setMenuTransitions(int mode)
 {
-    settings.showMenuTransitions = show;
+    settings.showMenuTransitions = mode;
     CFG_sync();
 }
 
@@ -486,6 +834,17 @@ bool CFG_getShowTools(void)
 void CFG_setShowTools(bool show)
 {
     settings.showTools = show;
+    CFG_sync();
+}
+
+bool CFG_getShowCollections(void)
+{
+    return settings.showCollections;
+}
+
+void CFG_setShowCollections(bool show)
+{
+    settings.showCollections = show;
     CFG_sync();
 }
 
@@ -577,6 +936,24 @@ void CFG_setMuteLEDs(bool on)
     CFG_sync();
 }
 
+const char* CFG_getFnAction(int index)
+{
+    if (index < 0 || index >= FN_BUTTON_COUNT)
+        return "";
+    return settings.fnAction[index];
+}
+
+void CFG_setFnAction(int index, const char* action)
+{
+    if (index < 0 || index >= FN_BUTTON_COUNT)
+        return;
+    if (!action)
+        action = "";
+    strncpy(settings.fnAction[index], action, sizeof(settings.fnAction[index]) - 1);
+    settings.fnAction[index][sizeof(settings.fnAction[index]) - 1] = '\0';
+    CFG_sync();
+}
+
 double CFG_getGameArtWidth(void)
 {
     return settings.gameArtWidth;
@@ -665,39 +1042,337 @@ void CFG_setBluetoothSamplingrateLimit(int value)
     CFG_sync();
 }
 
+bool CFG_getNTP(void)
+{
+    return settings.ntp;
+}
+
+void CFG_setNTP(bool on)
+{
+    settings.ntp = on;
+    CFG_sync();
+}
+
+int CFG_getCurrentTimezone(void)
+{
+    return settings.currentTimezone;
+}
+
+void CFG_setCurrentTimezone(int index)
+{
+    settings.currentTimezone = index;
+    CFG_sync();
+}
+
+bool CFG_getNotifyManualSave(void)
+{
+    return settings.notifyManualSave;
+}
+
+void CFG_setNotifyManualSave(bool enable)
+{
+    settings.notifyManualSave = enable;
+    CFG_sync();
+}
+
+bool CFG_getNotifyLoad(void)
+{
+    return settings.notifyLoad;
+}
+
+void CFG_setNotifyLoad(bool enable)
+{
+    settings.notifyLoad = enable;
+    CFG_sync();
+}
+
+bool CFG_getNotifyScreenshot(void)
+{
+    return settings.notifyScreenshot;
+}
+
+void CFG_setNotifyScreenshot(bool enable)
+{
+    settings.notifyScreenshot = enable;
+    CFG_sync();
+}
+
+bool CFG_getNotifyAdjustments(void)
+{
+    return settings.notifyAdjustments;
+}
+
+void CFG_setNotifyAdjustments(bool enable)
+{
+    settings.notifyAdjustments = enable;
+    CFG_sync();
+}
+
+int CFG_getNotifyDuration(void)
+{
+    return settings.notifyDuration;
+}
+
+void CFG_setNotifyDuration(int seconds)
+{
+    settings.notifyDuration = clamp(seconds, 1, 3);
+    CFG_sync();
+}
+
+bool CFG_getRAEnable(void)
+{
+    return settings.raEnable;
+}
+
+void CFG_setRAEnable(bool enable)
+{
+    settings.raEnable = enable;
+    CFG_sync();
+}
+
+const char* CFG_getRAUsername(void)
+{
+    return settings.raUsername;
+}
+
+void CFG_setRAUsername(const char* username)
+{
+    if (username) {
+        strncpy(settings.raUsername, username, sizeof(settings.raUsername) - 1);
+        settings.raUsername[sizeof(settings.raUsername) - 1] = '\0';
+    } else {
+        settings.raUsername[0] = '\0';
+    }
+    CFG_sync();
+}
+
+const char* CFG_getRAPassword(void)
+{
+    return settings.raPassword;
+}
+
+void CFG_setRAPassword(const char* password)
+{
+    if (password) {
+        strncpy(settings.raPassword, password, sizeof(settings.raPassword) - 1);
+        settings.raPassword[sizeof(settings.raPassword) - 1] = '\0';
+    } else {
+        settings.raPassword[0] = '\0';
+    }
+    CFG_sync();
+}
+
+bool CFG_getRAHardcoreMode(void)
+{
+    return settings.raHardcoreMode;
+}
+
+void CFG_setRAHardcoreMode(bool enable)
+{
+    settings.raHardcoreMode = enable;
+    CFG_sync();
+}
+
+const char* CFG_getRAToken(void)
+{
+    return settings.raToken;
+}
+
+void CFG_setRAToken(const char* token)
+{
+    if (token) {
+        strncpy(settings.raToken, token, sizeof(settings.raToken) - 1);
+        settings.raToken[sizeof(settings.raToken) - 1] = '\0';
+    } else {
+        settings.raToken[0] = '\0';
+    }
+    CFG_sync();
+}
+
+const char* CFG_getRAServerUsername(void)
+{
+    return settings.raServerUsername;
+}
+
+void CFG_setRAServerUsername(const char* username)
+{
+    if (username) {
+        strncpy(settings.raServerUsername, username, sizeof(settings.raServerUsername) - 1);
+        settings.raServerUsername[sizeof(settings.raServerUsername) - 1] = '\0';
+    } else {
+        settings.raServerUsername[0] = '\0';
+    }
+    CFG_sync();
+}
+
+bool CFG_setRAServerUsernameFromAvatarUrl(const char* str)
+{
+    if (!str) return false;
+    /* Accept both unescaped "/UserPic/" (rcheevos-decoded strings) and
+     * JSON-escaped "\/UserPic\/" (raw RA API response bodies). */
+    const char* marker = strstr(str, "/UserPic/");
+    size_t marker_skip = 9; /* strlen("/UserPic/") */
+    if (!marker) {
+        marker = strstr(str, "\\/UserPic\\/");
+        marker_skip = 11; /* strlen("\\/UserPic\\/") */
+        if (!marker) return false;
+    }
+    marker += marker_skip;
+    /* Name ends at ".png" (or its escaped form, though ".png" has no slash). */
+    const char* dot = strstr(marker, ".png");
+    if (!dot || dot <= marker) return false;
+    size_t len = (size_t)(dot - marker);
+    if (len == 0 || len >= sizeof(settings.raServerUsername)) return false;
+    char username[64];
+    memcpy(username, marker, len);
+    username[len] = '\0';
+    CFG_setRAServerUsername(username);
+    return true;
+}
+
+bool CFG_getRAAuthenticated(void)
+{
+    return settings.raAuthenticated;
+}
+
+void CFG_setRAAuthenticated(bool authenticated)
+{
+    settings.raAuthenticated = authenticated;
+    CFG_sync();
+}
+
+bool CFG_getRAShowNotifications(void)
+{
+    return settings.raShowNotifications;
+}
+
+void CFG_setRAShowNotifications(bool show)
+{
+    settings.raShowNotifications = show;
+    CFG_sync();
+}
+
+bool CFG_getRAShowChallengeIndicators(void)
+{
+    return settings.raShowChallengeIndicators;
+}
+
+void CFG_setRAShowChallengeIndicators(bool show)
+{
+    settings.raShowChallengeIndicators = show;
+    CFG_sync();
+}
+
+int CFG_getRANotificationDuration(void)
+{
+    return settings.raNotificationDuration;
+}
+
+void CFG_setRANotificationDuration(int seconds)
+{
+    settings.raNotificationDuration = clamp(seconds, 1, 5);
+    CFG_sync();
+}
+
+int CFG_getRAProgressNotificationDuration(void)
+{
+    return settings.raProgressNotificationDuration;
+}
+
+void CFG_setRAProgressNotificationDuration(int seconds)
+{
+    settings.raProgressNotificationDuration = clamp(seconds, 0, 5);
+    CFG_sync();
+}
+
+int CFG_getRAAchievementSortOrder(void)
+{
+    return settings.raAchievementSortOrder;
+}
+
+void CFG_setRAAchievementSortOrder(int sortOrder)
+{
+    settings.raAchievementSortOrder = clamp(sortOrder, 0, RA_SORT_COUNT - 1);
+    CFG_sync();
+}
+
+int CFG_getFontStyle(void)
+{
+    return settings.fontStyle;
+}
+
+void CFG_setFontStyle(int style)
+{
+    settings.fontStyle = clamp(style, 0x00, 0x01);
+    CFG_sync();
+    // reload the font to apply the new style (if the font supports it)
+    CFG_setFontFile(CFG_getFontFile());
+}
+
+int CFG_getGameSwitcherCurtain(void)
+{
+    return settings.gameSwitcherCurtain;
+}
+
+void CFG_setGameSwitcherCurtain(int opacity)
+{
+    settings.gameSwitcherCurtain = clamp(opacity, 0, 100);
+    CFG_sync();
+}
+
+int CFG_getInputPromptStyle(void)
+{
+    return settings.inputPromptStyle;
+}
+
+void CFG_setInputPromptStyle(int style)
+{
+    settings.inputPromptStyle = style;
+    CFG_sync();
+}
+
 void CFG_get(const char *key, char *value)
 {
     if (strcmp(key, "font") == 0)
     {
-        sprintf(value, "%i", CFG_getFontId());
+        // backward compat: always return integer (default 1 for custom fonts)
+        const char *f = CFG_getFontFile();
+        if (strcmp(f, "font2.ttf") == 0)
+            sprintf(value, "0");
+        else
+            sprintf(value, "1");
+    }
+    else if (strcmp(key, "palette") == 0)
+    {
+        sprintf(value, "\"%s\"", CFG_getPaletteName());
     }
     else if (strcmp(key, "color1") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(1));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_MAIN));
     }
     else if (strcmp(key, "color2") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(2));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_ACCENT));
     }
     else if (strcmp(key, "color3") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(3));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_ACCENT2));
     }
     else if (strcmp(key, "color4") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(4));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_LIST_TEXT));
     }
     else if (strcmp(key, "color5") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(5));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_LIST_TEXT_SELECTED));
     }
     else if (strcmp(key, "color6") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(6));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_HINT));
     }
     else if (strcmp(key, "color7") == 0)
     {
-        sprintf(value, "\"0x%06X\"", CFG_getColor(7));
+        sprintf(value, "\"0x%08X\"", CFG_getColor(COLOR_BACKGROUND));
     }
     else if (strcmp(key, "radius") == 0)
     {
@@ -731,6 +1406,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getShowTools());
     }
+	else if (strcmp(key, "collections") == 0)
+	{
+		sprintf(value, "%i", CFG_getShowCollections());
+    }
     else if (strcmp(key, "gameart") == 0)
     {
         sprintf(value, "%i", CFG_getShowGameArt());
@@ -746,6 +1425,14 @@ void CFG_get(const char *key, char *value)
     else if (strcmp(key, "suspendTimeout") == 0)
     {
         sprintf(value, "%i", CFG_getSuspendTimeoutSecs());
+    }
+    else if (strcmp(key, "powerOffProtection") == 0)
+    {
+        sprintf(value, "%i", CFG_getPowerOffProtection());
+    }
+    else if (strcmp(key, "keepAwakeWhenUSB") == 0)
+    {
+        sprintf(value, "%i", CFG_getKeepAwakeWhenUSB());
     }
     else if (strcmp(key, "switcherscale") == 0)
     {
@@ -770,6 +1457,18 @@ void CFG_get(const char *key, char *value)
     else if (strcmp(key, "muteLeds") == 0)
     {
         sprintf(value, "%i", CFG_getMuteLEDs());
+    }
+    else if (strcmp(key, "fn1action") == 0)
+    {
+        sprintf(value, "%s", CFG_getFnAction(0));
+    }
+    else if (strcmp(key, "fn2action") == 0)
+    {
+        sprintf(value, "%s", CFG_getFnAction(1));
+    }
+    else if (strcmp(key, "fn3action") == 0)
+    {
+        sprintf(value, "%s", CFG_getFnAction(2));
     }
     else if (strcmp(key, "artWidth") == 0)
     {
@@ -803,14 +1502,95 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getBluetoothSamplingrateLimit());
     }
+    else if (strcmp(key, "ntp") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getNTP()));
+    }
+    else if (strcmp(key, "currentTimezone") == 0)
+    {
+        sprintf(value, "%i", CFG_getCurrentTimezone());
+    }
+    else if (strcmp(key, "notifyManualSave") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getNotifyManualSave()));
+    }
+    else if (strcmp(key, "notifyLoad") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getNotifyLoad()));
+    }
+    else if (strcmp(key, "notifyScreenshot") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getNotifyScreenshot()));
+    }
+    else if (strcmp(key, "notifyAdjustments") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getNotifyAdjustments()));
+    }
+    else if (strcmp(key, "notifyDuration") == 0)
+    {
+        sprintf(value, "%i", CFG_getNotifyDuration());
+    }
+    else if (strcmp(key, "raEnable") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getRAEnable()));
+    }
+    else if (strcmp(key, "raUsername") == 0)
+    {
+        sprintf(value, "%s", CFG_getRAUsername());
+    }
+    else if (strcmp(key, "raHardcoreMode") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getRAHardcoreMode()));
+    }
+    else if (strcmp(key, "raToken") == 0)
+    {
+        sprintf(value, "%s", CFG_getRAToken());
+    }
+    else if (strcmp(key, "raServerUsername") == 0)
+    {
+        sprintf(value, "%s", CFG_getRAServerUsername());
+    }
+    else if (strcmp(key, "raAuthenticated") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getRAAuthenticated()));
+    }
+    else if (strcmp(key, "raShowNotifications") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getRAShowNotifications()));
+    }
+    else if (strcmp(key, "raShowChallengeIndicators") == 0)
+    {
+        sprintf(value, "%i", (int)(CFG_getRAShowChallengeIndicators()));
+    }
+    else if (strcmp(key, "raNotificationDuration") == 0)
+    {
+        sprintf(value, "%i", CFG_getRANotificationDuration());
+    }
+    else if (strcmp(key, "raProgressNotificationDuration") == 0)
+    {
+        sprintf(value, "%i", CFG_getRAProgressNotificationDuration());
+    }
+    else if (strcmp(key, "raAchievementSortOrder") == 0)
+    {
+        sprintf(value, "%i", CFG_getRAAchievementSortOrder());
+    }
+    else if (strcmp(key, "fontStyle") == 0)
+    {
+        sprintf(value, "%i", CFG_getFontStyle());
+    }
+    else if (strcmp(key, "gameSwitcherCurtain") == 0)
+    {
+        sprintf(value, "%i", CFG_getGameSwitcherCurtain());
+    }
+    else if (strcmp(key, "inputPromptStyle") == 0)
+    {
+        sprintf(value, "%i", CFG_getInputPromptStyle());
+    }
 
     // meta, not a real setting
     else if (strcmp(key, "fontpath") == 0)
     {
-        if (CFG_getFontId() == 1)
-            sprintf(value, "\"%s\"", RES_PATH "/font1.ttf");
-        else
-            sprintf(value, "\"%s\"", RES_PATH "/font2.ttf");
+        sprintf(value, "\"%s/%s\"", RES_PATH, CFG_getFontFile());
     }
 
     else {
@@ -822,7 +1602,14 @@ void CFG_sync(void)
 {
     // write to file
     char settingsPath[MAX_PATH];
-    sprintf(settingsPath, "%s/minuisettings.txt", getenv("SHARED_USERDATA_PATH"));
+    const char *shared_userdata = getenv("SHARED_USERDATA_PATH");
+    if (!shared_userdata || !shared_userdata[0])
+    {
+        printf("[CFG] SHARED_USERDATA_PATH is not set!\n");
+        return;
+    }
+
+    snprintf(settingsPath, sizeof(settingsPath), "%s/minuisettings.txt", shared_userdata);
     FILE *file = fopen(settingsPath, "w");
     if (file == NULL)
     {
@@ -830,14 +1617,22 @@ void CFG_sync(void)
         return;
     }
 
-    fprintf(file, "font=%i\n", settings.font);
-    fprintf(file, "color1=0x%06X\n", settings.color1_255);
-    fprintf(file, "color2=0x%06X\n", settings.color2_255);
-    fprintf(file, "color3=0x%06X\n", settings.color3_255);
-    fprintf(file, "color4=0x%06X\n", settings.color4_255);
-    fprintf(file, "color5=0x%06X\n", settings.color5_255);
-    fprintf(file, "color6=0x%06X\n", settings.color6_255);
-    fprintf(file, "color7=0x%06X\n", settings.color7_255);
+    // backward compat: write integer for built-in fonts so existing paks
+    // that parse "font=" as an int keep working
+    if (strcmp(settings.fontFile, "font1.ttf") == 0)
+        fprintf(file, "font=1\n");
+    else if (strcmp(settings.fontFile, "font2.ttf") == 0)
+        fprintf(file, "font=0\n");
+    else
+        fprintf(file, "font=%s\n", settings.fontFile);
+    fprintf(file, "palette=%s\n", settings.paletteName);
+    fprintf(file, "color1=0x%08X\n", settings.color1_255);
+    fprintf(file, "color2=0x%08X\n", settings.color2_255);
+    fprintf(file, "color3=0x%08X\n", settings.color3_255);
+    fprintf(file, "color4=0x%08X\n", settings.color4_255);
+    fprintf(file, "color5=0x%08X\n", settings.color5_255);
+    fprintf(file, "color6=0x%08X\n", settings.color6_255);
+    fprintf(file, "color7=0x%08X\n", settings.color7_255);
     fprintf(file, "radius=%i\n", settings.thumbRadius);
     fprintf(file, "showclock=%i\n", settings.showClock);
     fprintf(file, "clock24h=%i\n", settings.clock24h);
@@ -846,10 +1641,13 @@ void CFG_sync(void)
     fprintf(file, "menutransitions=%i\n", settings.showMenuTransitions);
     fprintf(file, "recents=%i\n", settings.showRecents);
     fprintf(file, "tools=%i\n", settings.showTools);
+	fprintf(file, "collections=%i\n", settings.showCollections);
     fprintf(file, "gameart=%i\n", settings.showGameArt);
     fprintf(file, "showfoldernamesatroot=%i\n", settings.showFolderNamesAtRoot);
     fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
     fprintf(file, "suspendTimeout=%i\n", settings.suspendTimeoutSecs);
+    fprintf(file, "powerOffProtection=%i\n", settings.powerOffProtection);
+    fprintf(file, "keepAwakeWhenUSB=%i\n", settings.keepAwakeWhenUSB);
     fprintf(file, "switcherscale=%i\n", settings.gameSwitcherScaling);
     fprintf(file, "haptics=%i\n", settings.haptics);
     fprintf(file, "romfolderbg=%i\n", settings.romsUseFolderBackground);
@@ -857,6 +1655,9 @@ void CFG_sync(void)
     fprintf(file, "stateFormat=%i\n", settings.stateFormat);
     fprintf(file, "useExtractedFileName=%i\n", settings.useExtractedFileName);
     fprintf(file, "muteLeds=%i\n", settings.muteLeds);
+    fprintf(file, "fn1action=%s\n", settings.fnAction[0]);
+    fprintf(file, "fn2action=%s\n", settings.fnAction[1]);
+    fprintf(file, "fn3action=%s\n", settings.fnAction[2]);
     fprintf(file, "artWidth=%i\n", (int)(settings.gameArtWidth * 100));
     fprintf(file, "wifi=%i\n", settings.wifi);
     fprintf(file, "defaultView=%i\n", settings.defaultView);
@@ -865,6 +1666,28 @@ void CFG_sync(void)
     fprintf(file, "bluetooth=%i\n", settings.bluetooth);
     fprintf(file, "btDiagnostics=%i\n", settings.bluetoothDiagnostics);
     fprintf(file, "btMaxRate=%i\n", settings.bluetoothSamplerateLimit);
+    fprintf(file, "ntp=%i\n", settings.ntp);
+    fprintf(file, "currentTimezone=%i\n", settings.currentTimezone);
+    fprintf(file, "notifyManualSave=%i\n", settings.notifyManualSave);
+    fprintf(file, "notifyLoad=%i\n", settings.notifyLoad);
+    fprintf(file, "notifyScreenshot=%i\n", settings.notifyScreenshot);
+    fprintf(file, "notifyAdjustments=%i\n", settings.notifyAdjustments);
+    fprintf(file, "notifyDuration=%i\n", settings.notifyDuration);
+    fprintf(file, "raEnable=%i\n", settings.raEnable);
+    fprintf(file, "raUsername=%s\n", settings.raUsername);
+    fprintf(file, "raPassword=%s\n", settings.raPassword);
+    fprintf(file, "raHardcoreMode=%i\n", settings.raHardcoreMode);
+    fprintf(file, "raToken=%s\n", settings.raToken);
+    fprintf(file, "raServerUsername=%s\n", settings.raServerUsername);
+    fprintf(file, "raAuthenticated=%i\n", settings.raAuthenticated);
+    fprintf(file, "raShowNotifications=%i\n", settings.raShowNotifications);
+    fprintf(file, "raShowChallengeIndicators=%i\n", settings.raShowChallengeIndicators);
+    fprintf(file, "raNotificationDuration=%i\n", settings.raNotificationDuration);
+    fprintf(file, "raProgressNotificationDuration=%i\n", settings.raProgressNotificationDuration);
+    fprintf(file, "raAchievementSortOrder=%i\n", settings.raAchievementSortOrder);
+    fprintf(file, "fontStyle=%i\n", settings.fontStyle);
+    fprintf(file, "gameSwitcherCurtain=%i\n", settings.gameSwitcherCurtain);
+    fprintf(file, "inputPromptStyle=%i\n", settings.inputPromptStyle);
 
     fclose(file);
 }
@@ -872,14 +1695,19 @@ void CFG_sync(void)
 void CFG_print(void)
 {
     printf("{\n");
-    printf("\t\"font\": %i,\n", settings.font);
-    printf("\t\"color1\": \"0x%06X\",\n", settings.color1_255);
-    printf("\t\"color2\": \"0x%06X\",\n", settings.color2_255);
-    printf("\t\"color3\": \"0x%06X\",\n", settings.color3_255);
-    printf("\t\"color4\": \"0x%06X\",\n", settings.color4_255);
-    printf("\t\"color5\": \"0x%06X\",\n", settings.color5_255);
-    printf("\t\"color6\": \"0x%06X\",\n", settings.color6_255);
-    printf("\t\"color7\": \"0x%06X\",\n", settings.color7_255);
+    // backward compat: always output integer (default 1 for custom fonts)
+    if (strcmp(settings.fontFile, "font2.ttf") == 0)
+        printf("\t\"font\": 0,\n");
+    else
+        printf("\t\"font\": 1,\n");
+    printf("\t\"palette\": \"%s\",\n", settings.paletteName);
+    printf("\t\"color1\": \"0x%08X\",\n", settings.color1_255);
+    printf("\t\"color2\": \"0x%08X\",\n", settings.color2_255);
+    printf("\t\"color3\": \"0x%08X\",\n", settings.color3_255);
+    printf("\t\"color4\": \"0x%08X\",\n", settings.color4_255);
+    printf("\t\"color5\": \"0x%08X\",\n", settings.color5_255);
+    printf("\t\"color6\": \"0x%08X\",\n", settings.color6_255);
+    printf("\t\"color7\": \"0x%08X\",\n", settings.color7_255);
     printf("\t\"radius\": %i,\n", settings.thumbRadius);
     printf("\t\"showclock\": %i,\n", settings.showClock);
     printf("\t\"clock24h\": %i,\n", settings.clock24h);
@@ -888,10 +1716,13 @@ void CFG_print(void)
     printf("\t\"menutransitions\": %i,\n", settings.showMenuTransitions);
     printf("\t\"recents\": %i,\n", settings.showRecents);
     printf("\t\"tools\": %i,\n", settings.showTools);
+	printf("\t\"collections\": %i,\n", settings.showCollections);
     printf("\t\"gameart\": %i,\n", settings.showGameArt);
-	printf("\t\"showfoldernamesatroot\": %i,\n", settings.showFolderNamesAtRoot);
+    printf("\t\"showfoldernamesatroot\": %i,\n", settings.showFolderNamesAtRoot);
     printf("\t\"screentimeout\": %i,\n", settings.screenTimeoutSecs);
     printf("\t\"suspendTimeout\": %i,\n", settings.suspendTimeoutSecs);
+    printf("\t\"powerOffProtection\": %i,\n", settings.powerOffProtection);
+    printf("\t\"keepAwakeWhenUSB\": %i,\n", settings.keepAwakeWhenUSB);
     printf("\t\"switcherscale\": %i,\n", settings.gameSwitcherScaling);
     printf("\t\"haptics\": %i,\n", settings.haptics);
     printf("\t\"romfolderbg\": %i,\n", settings.romsUseFolderBackground);
@@ -899,6 +1730,9 @@ void CFG_print(void)
     printf("\t\"stateFormat\": %i,\n", settings.stateFormat);
     printf("\t\"useExtractedFileName\": %i,\n", settings.useExtractedFileName);
     printf("\t\"muteLeds\": %i,\n", settings.muteLeds);
+    printf("\t\"fn1action\": \"%s\",\n", settings.fnAction[0]);
+    printf("\t\"fn2action\": \"%s\",\n", settings.fnAction[1]);
+    printf("\t\"fn3action\": \"%s\",\n", settings.fnAction[2]);
     printf("\t\"artWidth\": %i,\n", (int)(settings.gameArtWidth * 100));
     printf("\t\"wifi\": %i,\n", settings.wifi);
     printf("\t\"defaultView\": %i,\n", settings.defaultView);
@@ -907,12 +1741,30 @@ void CFG_print(void)
     printf("\t\"bluetooth\": %i,\n", settings.bluetooth);
     printf("\t\"btDiagnostics\": %i,\n", settings.bluetoothDiagnostics);
     printf("\t\"btMaxRate\": %i,\n", settings.bluetoothSamplerateLimit);
+    printf("\t\"ntp\": %i,\n", settings.ntp);
+    printf("\t\"currentTimezone\": %i,\n", settings.currentTimezone);
+    printf("\t\"notifyManualSave\": %i,\n", settings.notifyManualSave);
+    printf("\t\"notifyLoad\": %i,\n", settings.notifyLoad);
+    printf("\t\"notifyScreenshot\": %i,\n", settings.notifyScreenshot);
+    printf("\t\"notifyAdjustments\": %i,\n", settings.notifyAdjustments);
+    printf("\t\"notifyDuration\": %i,\n", settings.notifyDuration);
+    printf("\t\"raEnable\": %i,\n", settings.raEnable);
+    printf("\t\"raUsername\": \"%s\",\n", settings.raUsername);
+    printf("\t\"raHardcoreMode\": %i,\n", settings.raHardcoreMode);
+    printf("\t\"raToken\": \"%s\",\n", settings.raToken);
+    printf("\t\"raServerUsername\": \"%s\",\n", settings.raServerUsername);
+    printf("\t\"raAuthenticated\": %i,\n", settings.raAuthenticated);
+    printf("\t\"raShowNotifications\": %i,\n", settings.raShowNotifications);
+    printf("\t\"raShowChallengeIndicators\": %i,\n", settings.raShowChallengeIndicators);
+    printf("\t\"raNotificationDuration\": %i,\n", settings.raNotificationDuration);
+    printf("\t\"raProgressNotificationDuration\": %i,\n", settings.raProgressNotificationDuration);
+    printf("\t\"raAchievementSortOrder\": %i,\n", settings.raAchievementSortOrder);
+    printf("\t\"fontStyle\": %i,\n", settings.fontStyle);
+    printf("\t\"gameSwitcherCurtain\": %i,\n", settings.gameSwitcherCurtain);
+    printf("\t\"inputPromptStyle\": %i,\n", settings.inputPromptStyle);
 
     // meta, not a real setting
-    if (settings.font == 1)
-        printf("\t\"fontpath\": \"%s\"\n", RES_PATH "/font1.ttf");
-    else
-        printf("\t\"fontpath\": \"%s\"\n", RES_PATH "/font2.ttf");
+    printf("\t\"fontpath\": \"%s/%s\"\n", RES_PATH, CFG_getFontFile());
 
     printf("}\n");
 }

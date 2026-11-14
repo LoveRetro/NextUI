@@ -16,6 +16,8 @@ export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
 export TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
 if [ "$TRIMUI_MODEL" = "Trimui Brick" ]; then
 	export DEVICE="brick"
+elif [ "$TRIMUI_MODEL" = "Trimui Brick Pro" ]; then
+	export DEVICE="brickpro"
 fi
 
 export IS_NEXT="yes"

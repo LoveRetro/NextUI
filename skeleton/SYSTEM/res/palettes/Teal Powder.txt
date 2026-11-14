@@ -1,0 +1,9 @@
+version=1
+name=Teal Powder
+color1=0x1E6E76FF
+color2=0xDCEBEFFF
+color3=0xE7F5F5FF
+color4=0x17232EFF
+color5=0xE7F5F5FF
+color6=0x5B7480FF
+color7=0xE9F2F5FF

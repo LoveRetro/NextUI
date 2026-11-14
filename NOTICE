@@ -1,0 +1,36 @@
+NOTICE
+
+This project is a fork of MinUI, originally created by Shaun Inman.
+Source: https://github.com/shauninman/MinUI
+
+MinUI was made available for forking and personal use per the following
+statement in its original README:
+
+  "Developers — I am not soliciting source contributions. Please feel
+  free to fork or learn from any of my repos but I don't have time to
+  manage a community or be managed by one."
+
+This fork has been substantially modified and extended across 800+
+commits by the NextUI team and contributors. It is not affiliated with or
+endorsed by the original author.
+
+Upstream Licensing Intent
+
+The original MinUI repository carries no formal license. The author's
+stated intent, as expressed in the original README, was to permit
+personal forking and learning while not inviting community contributions.
+Commercial use of the upstream codebase was not contemplated or
+sanctioned by the original author. The noncommercial terms of this
+fork's license are intended to reflect that intent.
+
+License Transition
+
+This project was previously licensed under GPL 3.0. As of August 15, 2026, it
+is licensed under PolyForm Noncommercial 1.0.0. The full transition
+process is documented at https://github.com/LoveRetro/NextUI/issues/765.
+
+Contributions made prior to August 15, 2026 were made under GPL 3.0. Each
+contributor was contacted for consent to relicense. Contributions
+included under the new license were either consented to by their
+authors, or determined to fall below the threshold of copyrightable
+originality.

@@ -1,5 +1,20 @@
 #! /bin/sh
 
+if [ "$PLATFORM" != "tg5040" ]; then
+	echo "Skipping tg5040 BlueZ update on $PLATFORM"
+	exit 0
+fi
+
+TRIMUI_MODEL=`strings /usr/trimui/bin/MainUI | grep ^Trimui`
+if [ "$TRIMUI_MODEL" = "Trimui Smart Pro S" ]; then
+	return 0
+fi
+
+# if /usr/lib/libsbc.so.1.3.1 exists, we are already updated
+if [ -f "/usr/lib/libsbc.so.1.3.1" ]; then
+    return 0
+fi
+
 BLUEZ_PATH=/mnt/SDCARD/.update_bluez
 if [ -d "$BLUEZ_PATH" ]; then
 	echo "Updating bluez..."

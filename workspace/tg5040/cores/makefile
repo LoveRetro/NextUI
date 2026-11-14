@@ -52,6 +52,7 @@ fbneo_REPO = https://github.com/libretro/FBNeo
 fbneo_CORE = fbneo_libretro.so
 fbneo_BUILD_PATH = fbneo/src/burner/libretro
 fbneo_MAKE = make
+fbneo_HASH = 6a5cc250c2db8d874a06ee86e302a2a78918b4c1
 
 mednafen_pce_fast_REPO = https://github.com/libretro/beetle-pce-fast-libretro
 mednafen_vb_REPO = https://github.com/libretro/beetle-vb-libretro
@@ -66,6 +67,10 @@ gambatte_REPO = https://github.com/libretro/gambatte-libretro
 
 mednafen_supafaust_REPO = https://github.com/libretro/supafaust
 
+# mGBA replaced Makefile.libretro with a CMake-based libretro build.
+mgba_CORE = build-tg5040/mgba_libretro.so
+mgba_MAKE = cmake -S . -B build-tg5040 -DCMAKE_BUILD_TYPE=Release -DLIBMGBA_ONLY=ON -DBUILD_LIBRETRO=ON -DLIBRETRO_STATIC=OFF -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_COMPILER=$(CROSS_COMPILE)gcc -DCMAKE_CXX_COMPILER=$(CROSS_COMPILE)g++ -DCMAKE_C_FLAGS="-fomit-frame-pointer -ffast-math -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a -fno-common -ftree-vectorize -funswitch-loops" -DCMAKE_CXX_FLAGS="-fomit-frame-pointer -ffast-math -mtune=cortex-a53 -mcpu=cortex-a53 -march=armv8-a -fno-common -ftree-vectorize -funswitch-loops" && cmake --build build-tg5040 --target mgba_libretro -- $(PROCS)
+
 pcsx_rearmed_MAKEFILE = Makefile.libretro
 # pcsx has a disabled submodule for gnulib, which takes forever to check out and is unused - skil checkout
 pcsx_rearmed_SUBMODULES = frontend/libpicofe
@@ -74,12 +79,12 @@ picodrive_REPO = https://github.com/irixxxx/picodrive
 picodrive_MAKEFILE = Makefile.libretro
 # No background Audio on Sega CD
 # https://github.com/LoveRetro/NextUI/issues/68
-picodrive_HASH = b0be121
+picodrive_HASH = b0be121b7d58d6ee1ee2809974e62893c80a8264
 
 pokemini_REPO = https://github.com/libretro/PokeMini
 pokemini_MAKEFILE = Makefile.libretro
 # Our patchfile doesn't work on latest Pokemon mini commits, pinning to last working hash for now
-pokemini_HASH = 78656d4
+pokemini_HASH = 78656d4615691c393e65e48672ce5fff5b1f97d3
 
 prboom_REPO = https://github.com/libretro/libretro-prboom
 
@@ -91,7 +96,7 @@ snes9x_CORE = snes9x_libretro.so
 snes9x_BUILD_PATH = snes9x/libretro
 
 libretro-uae_REPO = https://github.com/libretro/libretro-uae
-libretro-uae_HASH = 2.6.1
+libretro-uae_BRANCH = 2.6.1
 libretro-uae_CORE = puae2021_libretro.so
 
 libretro-cap32_REPO = https://github.com/libretro/libretro-cap32
