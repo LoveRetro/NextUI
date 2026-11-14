@@ -58,6 +58,7 @@ typedef struct MenuList {
 // Menu utility (also called from minarch.c achievement section)
 int Menu_message(char* message, char** pairs);
 int Menu_messageWithFont(char* message, char** pairs, TTF_Font* f);
+bool Menu_confirm(char* message);
 
 // Helper (also called from minarch.c)
 char* getSaveDesc(void);

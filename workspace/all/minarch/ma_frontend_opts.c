@@ -38,6 +38,41 @@ int Menu_message(char* message, char** pairs) {
 	return Menu_messageWithFont(message, pairs, font.medium);
 }
 
+bool Menu_confirm(char* message) {
+	GFX_setMode(MODE_MAIN);
+	int dirty = 1;
+	bool confirmed = false;
+	bool ready = false;
+	while (1) {
+		GFX_startFrame();
+		PAD_poll();
+
+		// Require a fresh press after the shortcut and any held buttons are released.
+		if (!ready) {
+			ready = !PAD_isPressed(BTN_A | BTN_B | BTN_X);
+		}
+		else if (PAD_justPressed(BTN_B)) break;
+		else if (PAD_justPressed(BTN_A)) {
+			confirmed = true;
+			break;
+		}
+
+		PWR_update(&dirty, NULL, Menu_beforeSleep, Menu_afterSleep);
+		GFX_clear(screen);
+		GFX_blitMessage(font.medium, message, screen, &(SDL_Rect){
+			SCALE1(PADDING), SCALE1(PADDING),
+			screen->w - SCALE1(2 * PADDING),
+			screen->h - SCALE1(PILL_SIZE + PADDING)
+		});
+		GFX_blitButtonGroup((char*[]){ "B","CANCEL", "A","OKAY", NULL }, 0, screen, 1);
+		GFX_flip(screen);
+		dirty = 0;
+		hdmimon();
+	}
+	GFX_setMode(MODE_MENU);
+	return confirmed;
+}
+
 static int MenuList_freeItems(MenuList* list, int i) {
 	// TODO: what calls this? do menu's register for needing it? then call it on quit for each?
 	if (list->items) free(list->items);

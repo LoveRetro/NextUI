@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -1597,7 +1598,7 @@ static void Menu_scale(SDL_Surface* src, SDL_Surface* dst) {
 
 void Menu_initState(void) {
 	if (exists(menu.slot_path)) menu.slot = getInt(menu.slot_path);
-	if (menu.slot==8) menu.slot = 0;
+	if (menu.slot<0 || menu.slot>=MENU_SLOT_COUNT) menu.slot = 0;
 	
 	menu.save_exists = 0;
 	menu.preview_exists = 0;
@@ -1608,7 +1609,7 @@ static void Menu_updateState(void) {
 	int last_slot = state_slot;
 	state_slot = menu.slot;
 
-	char save_path[256];
+	char save_path[MAX_PATH];
 	State_getPath(save_path);
 
 	state_slot = last_slot;
@@ -1680,7 +1681,7 @@ void Menu_screenshot(void) {
 	args->w = cw;
 	args->h = ch;
 	args->path = SDL_strdup(png_path);
-	SDL_WaitThread(screenshotsavethread, NULL);
+	Menu_waitScreenshot();
 	screenshotsavethread = SDL_CreateThread(save_screenshot_thread, "SaveScreenshotThread", args);
 	
 	// Show notification if enabled
@@ -1706,7 +1707,7 @@ void Menu_saveState(void) {
 		args->w = cw;
 		args->h = ch;
 		args->path = SDL_strdup(menu.bmp_path); 
-		SDL_WaitThread(screenshotsavethread, NULL);
+		Menu_waitScreenshot();
 		screenshotsavethread = SDL_CreateThread(save_screenshot_thread, "SaveScreenshotThread", args);
 		newScreenshot = 0;
 	} else {
@@ -1757,6 +1758,36 @@ void Menu_loadState(void) {
 			snprintf(msg, sizeof(msg), success ? "State Loaded - Slot %d" : "Load Failed - Slot %d", menu.slot + 1);
 			Notification_push(NOTIFICATION_LOAD_STATE, msg, NULL);
 		}
+	}
+}
+
+static bool Menu_removeStateFile(const char* path) {
+	if (unlink(path) == 0 || errno == ENOENT) return true;
+	LOG_error("Could not delete save-slot file %s: %s\n", path, strerror(errno));
+	return false;
+}
+
+static void Menu_deleteState(void) {
+	// A quick save may still be writing its preview. Join it before deleting files.
+	Menu_waitScreenshot();
+	Menu_updateState();
+
+	int last_slot = state_slot;
+	state_slot = menu.slot;
+	char save_path[MAX_PATH];
+	State_getPath(save_path);
+	state_slot = last_slot;
+
+	// Keep the preview and disc information if the state itself cannot be removed.
+	if (!Menu_removeStateFile(save_path)) {
+		Menu_message("Could not delete save state.", (char*[]){ "A","OKAY", NULL });
+		return;
+	}
+	bool preview_removed = Menu_removeStateFile(menu.bmp_path);
+	bool disc_removed = Menu_removeStateFile(menu.txt_path);
+	Menu_updateState();
+	if (!preview_removed || !disc_removed) {
+		Menu_message("State deleted, but some slot files\ncould not be removed.", (char*[]){ "A","OKAY", NULL });
 	}
 }
 
@@ -1881,6 +1912,19 @@ void Menu_loop(void) {
 			status = STATUS_CONT;
 			show_menu = 0;
 		}
+		else if ((selected==ITEM_SAVE || selected==ITEM_LOAD) && PAD_justPressed(BTN_X)) {
+			Menu_updateState();
+			if (!menu.save_exists) {
+				Menu_message("Slot is already empty.", (char*[]){ "A","OKAY", NULL });
+			}
+			else {
+				char message[64];
+				snprintf(message, sizeof(message), "Delete save state in slot %d?", menu.slot + 1);
+				if (Menu_confirm(message)) Menu_deleteState();
+			}
+			Menu_updateState();
+			dirty = 1;
+		}
 		else if (PAD_justPressed(BTN_A)) {
 			switch(selected) {
 				case ITEM_CONT:
@@ -1975,6 +2019,7 @@ void Menu_loop(void) {
 			SDL_FreeSurface(text);
 			
 			if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
+			else if (selected==ITEM_SAVE || selected==ITEM_LOAD) GFX_blitButtonGroup((char*[]){ "X","DELETE", NULL }, 0, screen, 0);
 			else GFX_blitButtonGroup((char*[]){ BTN_SLEEP==BTN_POWER?"POWER":"MENU","SLEEP", NULL }, 0, screen, 0);
 			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, 1, screen, 1);
 			
@@ -2121,5 +2166,8 @@ void Menu_setCoreVersionDesc(const char* version) {
 }
 
 void Menu_waitScreenshot(void) {
-	SDL_WaitThread(screenshotsavethread, NULL);
+	if (screenshotsavethread) {
+		SDL_WaitThread(screenshotsavethread, NULL);
+		screenshotsavethread = NULL;
+	}
 }
