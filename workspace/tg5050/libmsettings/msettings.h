@@ -54,7 +54,7 @@ void SetJack(int value); // 0-1
 
 #define AUDIO_SINK_DEFAULT 0 // use system default, usually speaker (or jack if plugged in)
 #define AUDIO_SINK_BLUETOOTH 1 // software control via bluealsa, not a separate card
-#define AUDIO_SINK_USBDAC 2 // assumes being exposed as card 1 to alsa
+#define AUDIO_SINK_USBDAC 2 // USB DAC card, monitored by audiomon
 int GetAudioSink(void);
 void SetAudioSink(int value);
 
