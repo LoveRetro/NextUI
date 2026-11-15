@@ -27,6 +27,7 @@ extern "C"
 #include "colorpickermenu.hpp"
 #include "palettemenu.hpp"
 #include "fnbuttonmenu.hpp"
+#include "otamenu.hpp"
 
 #define BUSYBOX_STOCK_VERSION "1.27.2"
 
@@ -1111,7 +1112,7 @@ int main(int argc, char *argv[])
                 "reverting to clean stock firmware.",
                 OverlayDismissMode::DismissOnA);
 
-        auto aboutMenu = new MenuList(MenuItemType::Fixed, "About",
+        std::vector<AbstractMenuItem*> aboutItems =
         {
             new StaticMenuItem{ListItemType::Generic, "NextUI version", "",
             []() -> std::any {
@@ -1133,7 +1134,25 @@ int main(int argc, char *argv[])
             new StaticMenuItem{ListItemType::Generic, "Busybox version", "",
             [&]() -> std::any { return bbver; }
             },
-        });
+        };
+
+        if(deviceInfo.hasWifi() || OTA::desktopBuild())
+        {
+            auto otaMenu = new OTA::Menu();
+            aboutItems.push_back(new MenuItem{ListItemType::Button, "OTA Update", "Update NextUI over the air",
+            [otaMenu](AbstractMenuItem &item) -> InputReactionHint {
+                std::string err;
+                if (!otaMenu->refresh(err))
+                {
+                    if (!err.empty())
+                        MenuList::showOverlay(err, OverlayDismissMode::DismissOnA);
+                    return NoOp;
+                }
+                return DeferToSubmenu(item);
+            }, otaMenu});
+        }
+
+        auto aboutMenu = new MenuList(MenuItemType::Fixed, "About", aboutItems);
 
         MenuList *buttonMenu = buildFnButtonMenu(); // nullptr if this device has none
 
