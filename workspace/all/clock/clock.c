@@ -23,6 +23,7 @@ int main(int argc , char* argv[]) {
 	PWR_setCPUSpeed(CPU_SPEED_AUTO);
 	
 	SDL_Surface* screen = GFX_init(MODE_MENU);
+	bool firstFrame = true;
 	PAD_init();
 	PWR_init();
 	InitSettings();
@@ -309,6 +310,10 @@ int main(int argc , char* argv[]) {
 			}
 			blitBar(x,y, (select_cursor==CURSOR_YEAR ? SCALE1(40) : (select_cursor==CURSOR_AMPM ? ampm_w : SCALE1(20))));
 		
+			if (firstFrame) {
+				GFX_animateBlack(LAYER_SCROLLTEXT, 255, 0, CFG_getAppStartExitAnimationDuration());
+				firstFrame = false;
+			}
 			GFX_flip(screen);
 			dirty = 0;
 		}
@@ -320,6 +325,7 @@ int main(int argc , char* argv[]) {
 	QuitSettings();
 	PWR_quit();
 	PAD_quit();
+	GFX_animateBlack(LAYER_SCROLLTEXT, 0, 255, CFG_getAppStartExitAnimationDuration());
 	GFX_quit();
 	
 	if (save_changes) PLAT_setDateTime(year_selected, month_selected, day_selected, hour_selected, minute_selected, seconds_selected);

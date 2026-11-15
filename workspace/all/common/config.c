@@ -793,6 +793,17 @@ void CFG_setMenuAnimations(bool show)
     CFG_sync();
 }
 
+int CFG_getAppStartExitAnimationDuration(void)
+{
+    int transition = CFG_getMenuTransitions();
+    if (transition == TRANSITION_COMFY)
+        return TRANSITION_COMFY_DURATION;
+    else if (transition == TRANSITION_SNAPPY)
+        return TRANSITION_SNAPPY_DURATION;
+    else
+        return 20;
+}
+
 int CFG_getMenuTransitions(void)
 {
     return settings.showMenuTransitions;

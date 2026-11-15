@@ -411,6 +411,7 @@ int main(int argc, char *argv[])
         ctx.dirty = 1;
         ctx.show_setting = 0;
         ctx.screen = GFX_init(MODE_MAIN);
+        bool firstFrame = true;
         PAD_init();
         PWR_init();
         TIME_init();
@@ -1258,6 +1259,11 @@ int main(int argc, char *argv[])
                 ctx.menu->draw(ctx.screen, listRect, titleRect);
 
                 // present
+                if (firstFrame)
+                {
+                    GFX_animateBlack(LAYER_SCROLLTEXT, 255, 0, CFG_getAppStartExitAnimationDuration());
+                    firstFrame = false;
+                }
                 GFX_flip(ctx.screen);
                 ctx.dirty = false;
             }
@@ -1281,6 +1287,7 @@ int main(int argc, char *argv[])
         PWR_quit();
         PAD_quit();
         BT_quit();
+        GFX_animateBlack(LAYER_SCROLLTEXT, 0, 255, CFG_getAppStartExitAnimationDuration());
         GFX_quit();
 
         return EXIT_SUCCESS;

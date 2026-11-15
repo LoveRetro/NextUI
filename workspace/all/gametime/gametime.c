@@ -326,6 +326,7 @@ int main(int argc, char *argv[])
     PWR_setCPUSpeed(CPU_SPEED_AUTO);
 
     screen = GFX_init(MODE_MAIN);
+    bool firstFrame = true;
     PAD_init();
     PWR_init();
 
@@ -429,6 +430,11 @@ int main(int argc, char *argv[])
 
             GFX_blitButtonGroup((char *[]){"B", "BACK", NULL}, 1, screen, 1);
 
+            if (firstFrame)
+            {
+                GFX_animateBlack(LAYER_SCROLLTEXT, 255, 0, CFG_getAppStartExitAnimationDuration());
+                firstFrame = false;
+            }
             GFX_flip(screen);
             dirty = 0;
         }
@@ -442,6 +448,7 @@ int main(int argc, char *argv[])
     QuitSettings();
     PWR_quit();
     PAD_quit();
+    GFX_animateBlack(LAYER_SCROLLTEXT, 0, 255, CFG_getAppStartExitAnimationDuration());
     GFX_quit();
 
     return EXIT_SUCCESS;
