@@ -69,6 +69,7 @@ void CFG_defaults(NextUISettings *cfg)
 
         .screenTimeoutSecs = CFG_DEFAULT_SCREENTIMEOUTSECS,
         .suspendTimeoutSecs = CFG_DEFAULT_SUSPENDTIMEOUTSECS,
+        .shutdownTimeoutSecs = CFG_DEFAULT_SHUTDOWNTIMEOUTSECS,
         .powerOffProtection = CFG_DEFAULT_POWEROFFPROTECTION,
         .keepAwakeWhenUSB = CFG_DEFAULT_KEEPAWAKEWHENUSB,
 
@@ -299,6 +300,12 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "suspendTimeout=%i", &temp_value) == 1)
             {
                 CFG_setSuspendTimeoutSecs(temp_value);
+                continue;
+            }
+            if (sscanf(line, "shutdownTimeout=%i", &temp_value) == 1)
+            {
+                if (temp_value >= 0)
+                    CFG_setShutdownTimeoutSecs((uint32_t)temp_value);
                 continue;
             }
             if (sscanf(line, "powerOffProtection=%i", &temp_value) == 1)
@@ -724,6 +731,17 @@ uint32_t CFG_getSuspendTimeoutSecs(void)
 void CFG_setSuspendTimeoutSecs(uint32_t secs)
 {
     settings.suspendTimeoutSecs = secs;
+    CFG_sync();
+}
+
+uint32_t CFG_getShutdownTimeoutSecs(void)
+{
+    return settings.shutdownTimeoutSecs;
+}
+
+void CFG_setShutdownTimeoutSecs(uint32_t secs)
+{
+    settings.shutdownTimeoutSecs = secs;
     CFG_sync();
 }
 
@@ -1426,6 +1444,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getSuspendTimeoutSecs());
     }
+    else if (strcmp(key, "shutdownTimeout") == 0)
+    {
+        sprintf(value, "%u", CFG_getShutdownTimeoutSecs());
+    }
     else if (strcmp(key, "powerOffProtection") == 0)
     {
         sprintf(value, "%i", CFG_getPowerOffProtection());
@@ -1646,6 +1668,7 @@ void CFG_sync(void)
     fprintf(file, "showfoldernamesatroot=%i\n", settings.showFolderNamesAtRoot);
     fprintf(file, "screentimeout=%i\n", settings.screenTimeoutSecs);
     fprintf(file, "suspendTimeout=%i\n", settings.suspendTimeoutSecs);
+    fprintf(file, "shutdownTimeout=%u\n", settings.shutdownTimeoutSecs);
     fprintf(file, "powerOffProtection=%i\n", settings.powerOffProtection);
     fprintf(file, "keepAwakeWhenUSB=%i\n", settings.keepAwakeWhenUSB);
     fprintf(file, "switcherscale=%i\n", settings.gameSwitcherScaling);
@@ -1721,6 +1744,7 @@ void CFG_print(void)
     printf("\t\"showfoldernamesatroot\": %i,\n", settings.showFolderNamesAtRoot);
     printf("\t\"screentimeout\": %i,\n", settings.screenTimeoutSecs);
     printf("\t\"suspendTimeout\": %i,\n", settings.suspendTimeoutSecs);
+    printf("\t\"shutdownTimeout\": %u,\n", settings.shutdownTimeoutSecs);
     printf("\t\"powerOffProtection\": %i,\n", settings.powerOffProtection);
     printf("\t\"keepAwakeWhenUSB\": %i,\n", settings.keepAwakeWhenUSB);
     printf("\t\"switcherscale\": %i,\n", settings.gameSwitcherScaling);

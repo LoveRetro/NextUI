@@ -9,5 +9,5 @@ void RTC_write(void);
 void State_getPath(char* filename);
 int  State_read(void);
 int  State_write(void);
-void State_autosave(void);
+int State_autosave(void);
 void State_resume(void);

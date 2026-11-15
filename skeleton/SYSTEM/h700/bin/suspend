@@ -16,6 +16,102 @@ sleep_retval=
 
 asound_state_dir=/tmp/asound-suspend
 
+shutdown_timeout_secs=${NEXTUI_SHUTDOWN_TIMEOUT_SECS:-0}
+case "$shutdown_timeout_secs" in
+	''|*[!0-9]*) shutdown_timeout_secs=0 ;;
+esac
+rtc_dir=${NEXTUI_RTC_DIR:-}
+rtc_device=${NEXTUI_RTC_DEVICE:-}
+if [ -z "$rtc_dir" ] && [ -n "$rtc_device" ]; then
+	rtc_dir=/sys/class/rtc/${rtc_device##*/}
+fi
+if [ -z "$rtc_dir" ]; then
+	for rtc_candidate_dir in /sys/class/rtc/rtc*; do
+		[ -d "$rtc_candidate_dir" ] || continue
+		if [ "$(cat "$rtc_candidate_dir/name" 2>/dev/null)" = "sunxi-rtc" ]; then
+			rtc_dir=$rtc_candidate_dir
+			break
+		fi
+	done
+fi
+[ -n "$rtc_dir" ] || rtc_dir=/sys/class/rtc/rtc0
+[ -n "$rtc_device" ] || rtc_device=/dev/${rtc_dir##*/}
+rtc_since_epoch=$rtc_dir/since_epoch
+rtc_wakeup=$rtc_dir/device/power/wakeup
+rtc_name=$(cat "$rtc_dir/name" 2>/dev/null)
+case "$rtc_name" in
+	sunxi-rtc) rtc_alarm_resolution=1 ;;
+	*) rtc_alarm_resolution=60 ;;
+esac
+if [ -n "${NEXTUI_RTC_RESOLUTION_SECONDS:-}" ]; then
+	rtc_alarm_resolution=$NEXTUI_RTC_RESOLUTION_SECONDS
+fi
+case "$rtc_alarm_resolution" in
+	''|*[!0-9]*|0) rtc_alarm_resolution=60 ;;
+esac
+rtc_alarm_tool=${NEXTUI_RTC_ALARM_TOOL:-$SYSTEM_PATH/bin/rtc_alarm}
+shutdown_timeout_deadline=
+shutdown_timeout_rtc_deadline=
+
+arm_shutdown_timeout() {
+	[ "$shutdown_timeout_secs" -gt 0 ] || return 0
+	if [ ! -x "$rtc_alarm_tool" ]; then
+		>&2 echo "Shutdown timeout unavailable: $rtc_alarm_tool is not executable"
+		return 0
+	fi
+
+	rtc_wakeup_status=$(cat "$rtc_wakeup" 2>/dev/null)
+	>&2 echo "RTC wake source: name=${rtc_name:-unknown} device=$rtc_device wakeup=${rtc_wakeup_status:-unknown} resolution=${rtc_alarm_resolution}s"
+
+	rtc_now=$(cat "$rtc_since_epoch" 2>/dev/null)
+	case "$rtc_now" in
+		''|*[!0-9]*)
+			>&2 echo "Shutdown timeout unavailable: invalid RTC epoch '${rtc_now:-empty}'"
+			return 0
+			;;
+	esac
+
+	if ! shutdown_timeout_rtc_deadline=$(NEXTUI_RTC_DEVICE="$rtc_device" NEXTUI_RTC_WAKEUP="$rtc_wakeup" NEXTUI_RTC_RESOLUTION_SECONDS="$rtc_alarm_resolution" \
+		"$rtc_alarm_tool" arm "$shutdown_timeout_secs"); then
+		shutdown_timeout_rtc_deadline=
+		>&2 echo "Shutdown timeout unavailable: failed to replace RTC wake alarm"
+		return 0
+	fi
+
+	case "$shutdown_timeout_rtc_deadline" in
+		''|*[!0-9]*)
+			NEXTUI_RTC_DEVICE="$rtc_device" "$rtc_alarm_tool" clear || true
+			shutdown_timeout_rtc_deadline=
+			>&2 echo "Shutdown timeout unavailable: RTC helper returned an invalid deadline"
+			return 0
+			;;
+	esac
+
+	now=$(date +%s)
+	shutdown_timeout_deadline=$((now + shutdown_timeout_rtc_deadline - rtc_now))
+	>&2 echo "Shutdown timeout armed for $shutdown_timeout_secs seconds (RTC $rtc_now -> $shutdown_timeout_rtc_deadline)"
+	# Persist the armed deadline before an automatic wake and poweroff.
+	sync
+}
+
+clear_shutdown_timeout() {
+	[ -n "$shutdown_timeout_deadline" ] || return 0
+	if ! NEXTUI_RTC_DEVICE="$rtc_device" "$rtc_alarm_tool" clear; then
+		>&2 echo "Shutdown timeout warning: failed to clear RTC wake alarm after resume"
+	fi
+}
+
+shutdown_timeout_expired() {
+	[ -n "$shutdown_timeout_deadline" ] || return 1
+	rtc_now=$(cat "$rtc_since_epoch" 2>/dev/null)
+	case "$rtc_now" in
+		''|*[!0-9]*) ;;
+		*) [ "$rtc_now" -ge "$shutdown_timeout_rtc_deadline" ] && return 0 ;;
+	esac
+	now=$(date +%s)
+	[ "$now" -ge "$shutdown_timeout_deadline" ]
+}
+
 before() {
 	>&2 echo "Preparing for suspend..."
 	echo 0 > /sys/class/power_supply/axp2202-battery/work_led 2>/dev/null || true
@@ -82,6 +178,7 @@ after_async() {
 }
 
 before
+arm_shutdown_timeout
 
 hallkey=/sys/class/power_supply/axp2202-battery/hallkey
 os_sleep=/sys/class/power_supply/axp2202-battery/os_sleep
@@ -99,7 +196,13 @@ while :; do
 		# it, but any non-zero value has the same effect.
 		# Non-SP kernels do not expose this attribute and already use the
 		# full USB-controller suspend path.
-		[ -w "$os_sleep" ] && printf '16' > "$os_sleep"
+		if [ -w "$os_sleep" ]; then
+			if printf '16' > "$os_sleep"; then
+				>&2 echo "Deep sleep policy: Super Standby (os_sleep=16)"
+			else
+				>&2 echo "Deep sleep policy warning: failed to enable Super Standby"
+			fi
+		fi
 
 		# Now issue suspend-to-ram command.
 		echo mem >/sys/power/state
@@ -131,6 +234,13 @@ while :; do
 		sleep 3
 	done
 
+	# An RTC timeout takes priority over the clamshell re-suspend loop so a
+	# closed device can power off without first lighting the display.
+	if [ $sleep_retval -eq 0 ] && shutdown_timeout_expired; then
+		sleep_retval=2
+		break
+	fi
+
 	# Clamshells: a pocketed power press wakes the kernel even with the
 	# lid shut. Only hand control back to the caller (which turns the
 	# screen on) once the lid is actually open; otherwise re-suspend.
@@ -143,6 +253,13 @@ while :; do
 	fi
 	break
 done
+
+clear_shutdown_timeout
+if [ $sleep_retval -eq 2 ]; then
+	>&2 echo "Shutdown timeout reached"
+	# Exit 2 is interpreted by PWR_deepSleep as a requested safe shutdown.
+	exit 2
+fi
 
 after_sync
 after_async &

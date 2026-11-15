@@ -13,6 +13,60 @@ sleep_retval=
 
 asound_state_dir=/tmp/asound-suspend
 
+shutdown_timeout_secs=${NEXTUI_SHUTDOWN_TIMEOUT_SECS:-0}
+case "$shutdown_timeout_secs" in
+	''|*[!0-9]*) shutdown_timeout_secs=0 ;;
+esac
+rtc_wakealarm=/sys/class/rtc/rtc0/wakealarm
+shutdown_timeout_deadline=
+
+rtc_alarm_available() {
+	if ! existing_alarm=$(cat "$rtc_wakealarm" 2>/dev/null); then
+		>&2 echo "Shutdown timeout unavailable: failed to read RTC wake alarm"
+		return 1
+	fi
+
+	case "$existing_alarm" in
+		'') return 0 ;;
+		*[!0-9]*)
+			>&2 echo "Shutdown timeout unavailable: invalid RTC wake alarm '$existing_alarm'"
+			return 1
+			;;
+		*)
+			>&2 echo "Shutdown timeout skipped: preserving existing RTC alarm $existing_alarm"
+			return 1
+			;;
+	esac
+}
+
+arm_shutdown_timeout() {
+	[ "$shutdown_timeout_secs" -gt 0 ] || return 0
+	if [ ! -w "$rtc_wakealarm" ]; then
+		>&2 echo "Shutdown timeout unavailable: RTC wake alarm is not writable"
+		return 0
+	fi
+	rtc_alarm_available || return 0
+
+	now=$(date +%s)
+	if printf '+%s\n' "$shutdown_timeout_secs" > "$rtc_wakealarm" 2>/dev/null; then
+		shutdown_timeout_deadline=$((now + shutdown_timeout_secs))
+		>&2 echo "Shutdown timeout armed for $shutdown_timeout_secs seconds"
+	else
+		>&2 echo "Shutdown timeout unavailable: failed to arm RTC wake alarm"
+	fi
+}
+
+clear_shutdown_timeout() {
+	[ -n "$shutdown_timeout_deadline" ] || return 0
+	printf '0\n' > "$rtc_wakealarm" 2>/dev/null || true
+}
+
+shutdown_timeout_expired() {
+	[ -n "$shutdown_timeout_deadline" ] || return 1
+	now=$(date +%s)
+	[ "$now" -ge "$shutdown_timeout_deadline" ]
+}
+
 before() {
 	>&2 echo "Preparing for suspend..."
 
@@ -59,6 +113,7 @@ after() {
 }
 
 before
+arm_shutdown_timeout
 
 >&2 echo "Suspending..."
 sleep_max_tries=5
@@ -76,6 +131,14 @@ for i in $(seq 1 $sleep_max_tries); do
 	>&2 echo "Deep sleep failed: retrying in 3 seconds"
 	sleep 3
 done
+
+if shutdown_timeout_expired; then
+	clear_shutdown_timeout
+	>&2 echo "Shutdown timeout reached"
+	# Exit 2 is interpreted by PWR_deepSleep as a requested safe shutdown.
+	exit 2
+fi
+clear_shutdown_timeout
 
 # Resume services in background to reduce UI latency
 after &

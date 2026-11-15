@@ -114,6 +114,7 @@ ifeq ($(PLATFORM), h700)
 	# Limbo fix (AXP2202 needs an explicit software power-off)
 	cp ./workspace/$(PLATFORM)/poweroff_next/build/$(PLATFORM)/poweroff_next.elf ./build/SYSTEM/$(PLATFORM)/bin/poweroff_next
 	cp ./workspace/$(PLATFORM)/poweroff_next/build/$(PLATFORM)/reboot_next.elf ./build/SYSTEM/$(PLATFORM)/bin/reboot_next
+	cp ./workspace/$(PLATFORM)/poweroff_next/build/$(PLATFORM)/rtc_alarm.elf ./build/SYSTEM/$(PLATFORM)/bin/rtc_alarm
 endif
 ifneq (,$(filter $(PLATFORM),tg5040 tg5050 h700))
 	cp ./workspace/all/bootlogo/build/$(PLATFORM)/bootlogo.elf ./build/EXTRAS/Tools/$(PLATFORM)/Bootlogo.pak/

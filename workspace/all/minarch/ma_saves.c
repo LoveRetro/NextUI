@@ -368,11 +368,12 @@ error:
 	return success;
 }
 
-void State_autosave(void) {
+int State_autosave(void) {
 	int last_state_slot = state_slot;
 	state_slot = AUTO_RESUME_SLOT;
-	State_write();
+	int success = State_write();
 	state_slot = last_state_slot;
+	return success;
 }
 void State_resume(void) {
 	if (!exists(RESUME_SLOT_PATH)) return;
