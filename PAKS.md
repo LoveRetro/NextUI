@@ -41,7 +41,7 @@ Here's an example "launch.sh":
 	mkdir -p "$CHEATS_PATH/$EMU_TAG"
 	HOME="$USERDATA_PATH"
 	cd "$HOME"
-	minarch.elf "$CORES_PATH/${EMU_EXE}_libretro.so" "$ROM" &> "$LOGS_PATH/$EMU_TAG.txt"
+	minarch.elf "$CORES_PATH/${EMU_EXE}_libretro.so" "$ROM" > "$LOGS_PATH/$EMU_TAG.txt" 2>&1
 
 This will open the requested rom using the "picodrive\_libretro.so" core included with the base NextUI install. To use a different core just change the value of `EMU_EXE` to another core name (minus the "_libretro.so"). If that core is bundled in your pak add the following after the `EMU_EXE` line:
 
@@ -50,8 +50,6 @@ This will open the requested rom using the "picodrive\_libretro.so" core include
 There's no need to edit anything below the line of hash marks. The rest is boilerplate that will extract the pak's tag from its folder name, create corresponding bios and save folders, set the `HOME` envar to "/.userdata/[platform]/", launch the game, and log any output from minarch and the core to "/.userdata/[platform]/logs/[TAG].txt".
 
 That's it! Feel free to experiement with cores from the stock firmware, other compatible devices, or building your own.
-
-Oh, if you're creating a pak for Anbernic's RG*XX line you'll need to change the last part of the last line from ` &> "$LOGS_PATH/$EMU_TAG.txt"` to ` > "$LOGS_PATH/$EMU_TAG.txt" 2>&1` because its default shell is whack.
 
 # Option defaults and button bindings
 
