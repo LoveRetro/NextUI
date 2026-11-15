@@ -1018,14 +1018,27 @@ FALLBACK_IMPLEMENTATION void PLAT_setEffectColor(int next_color) {}
 int GFX_truncateText(TTF_Font *font, const char *in_name, char *out_name, int max_width, int padding)
 {
 	int text_width;
+	int len = strlen(in_name);
+	int keep_bytes = len;
 	strcpy(out_name, in_name);
 	TTF_SizeUTF8(font, out_name, &text_width, NULL);
 	text_width += padding;
 
-	while (text_width > max_width)
+	while (text_width > max_width && keep_bytes > 0)
 	{
-		int len = strlen(out_name);
-		strcpy(&out_name[len - 4], "...\0");
+		// remove whole UTF-8 characters until "..." fits in the bytes of the removed text
+		do
+		{
+			keep_bytes--;
+			while (keep_bytes > 0 && ((unsigned char)out_name[keep_bytes] & 0xC0) == 0x80)
+				keep_bytes--;
+		} while (keep_bytes > 0 && keep_bytes + 3 > len);
+
+		if (keep_bytes + 3 <= len)
+			strcpy(&out_name[keep_bytes], "...");
+		else
+			out_name[0] = '\0';
+
 		TTF_SizeUTF8(font, out_name, &text_width, NULL);
 		text_width += padding;
 	}
