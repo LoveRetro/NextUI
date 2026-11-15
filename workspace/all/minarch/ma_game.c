@@ -8,6 +8,7 @@
 
 #include "ma_internal.h"
 #include "ma_game.h"
+#include "ma_saves.h"
 
 struct Game game;
 struct retro_disk_control_ext_callback disk_control_ext;
@@ -158,6 +159,9 @@ void Game_changeDisc(char* path) {
 
 	disk_control_ext.replace_image_index(0, &game_info);
 	putFile(CHANGE_DISC_PATH, path); // NextUI still needs to know this to update recents.txt
+
+	// any undo snapshot belongs to the disc we just ejected
+	State_invalidateUndo();
 }
 
 int extract_zip(char** extensions)
