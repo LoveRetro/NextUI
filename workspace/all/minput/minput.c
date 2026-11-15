@@ -70,8 +70,8 @@ int main(int argc , char* argv[]) {
 	// one-time
 	int has_L2 = (BUTTON_L2!=BUTTON_NA || CODE_L2!=CODE_NA || JOY_L2!=JOY_NA || AXIS_L2!=AXIS_NA);
 	int has_R2 = (BUTTON_R2!=BUTTON_NA || CODE_R2!=CODE_NA || JOY_R2!=JOY_NA || AXIS_R2!=AXIS_NA);
-	int has_L3 = (BUTTON_L3!=BUTTON_NA || CODE_L3!=CODE_NA || JOY_L3!=JOY_NA);
-	int has_R3 = (BUTTON_R3!=BUTTON_NA || CODE_R3!=CODE_NA || JOY_R3!=JOY_NA);
+	int has_L3 = (BUTTON_L3!=BUTTON_NA || CODE_L3!=CODE_NA || JOY_L3!=JOY_NA || AXIS_LX!=AXIS_NA || AXIS_LY!=AXIS_NA);
+	int has_R3 = (BUTTON_R3!=BUTTON_NA || CODE_R3!=CODE_NA || JOY_R3!=JOY_NA || AXIS_RX!=AXIS_NA || AXIS_RY!=AXIS_NA);
 	int has_L4 = (BUTTON_L4!=BUTTON_NA || CODE_L4!=CODE_NA || JOY_L4!=JOY_NA);
 	int has_R4 = (BUTTON_R4!=BUTTON_NA || CODE_R4!=CODE_NA || JOY_R4!=JOY_NA);
 
