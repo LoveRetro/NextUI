@@ -15,8 +15,13 @@ SYNC_ONLY="${2:-}"
 : "${PLATFORM:=tg5050}"
 : "${USERDATA_PATH:=$SDCARD_PATH/.userdata/$PLATFORM}"
 
+# Pak-scoped hooks run first, and are the only ones that can veto
+# (a pre-launch.d caller cancels the launch on a non-zero exit). See HOOKS.md.
+"$(dirname "$0")/pak-hooks.sh" "${DIR_NAME%.d}"
+VETOED=$?
+
 HOOK_DIR="$USERDATA_PATH/.hooks/$DIR_NAME"
-[ -d "$HOOK_DIR" ] || exit 0
+[ -d "$HOOK_DIR" ] || exit $VETOED
 
 case "$DIR_NAME" in
 	pre-*)  export HOOK_PHASE="pre" ;;
@@ -34,3 +39,4 @@ for script in "$HOOK_DIR"/*.sh; do
 	fi
 done
 wait
+exit $VETOED
