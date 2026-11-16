@@ -100,8 +100,9 @@ static int current_zoom = 1;
 static int current_page = 0;
 static int current_index;
 
-// Zoom level
-static int segment_duration;
+// Zoom level. Input is handled before the first renderPage(), so this must not
+// start at 0 (the LEFT branch divides by segment_duration / GRAPH_SEGMENT_HIGH).
+static int segment_duration = GRAPH_SEGMENT_MED;
 
 static char label[4][4];
 static int estimation_line_size = 0;
@@ -277,6 +278,10 @@ void compute_graph(void)
     int previous_index = graph.layout.graph_max_size - 1;
     bool is_estimation_computed = false;
     bool first_row = true;
+    // values of the previously processed (newer) row; used to paint its time span even
+    // when that row shared a pixel column with the newest row and was not drawn itself
+    int previous_height = 0;
+    bool previous_charging = false;
 
     bat_log_db = open_battery_log_db();
     secondsToHoursMinutes(get_best_session_time(bat_log_db, device_model), session_best);
@@ -320,8 +325,8 @@ void compute_graph(void)
                 {
                     for (int i = 1; i < segment; i++)
                     {
-                        graph.graphic[current_index + i].pixel_height = graph.graphic[previous_index].pixel_height;
-                        graph.graphic[current_index + i].is_charging = graph.graphic[previous_index].is_charging;
+                        graph.graphic[current_index + i].pixel_height = previous_height;
+                        graph.graphic[current_index + i].is_charging = previous_charging;
                     }
                 }
 
@@ -386,6 +391,8 @@ void compute_graph(void)
                     b_quit = true;
 
                 previous_index = current_index;
+                previous_height = battery_to_pixel(bat_perc);
+                previous_charging = is_charging;
             }
         }
         sqlite3_finalize(stmt);
