@@ -100,8 +100,9 @@ static int current_zoom = 1;
 static int current_page = 0;
 static int current_index;
 
-// Zoom level
-static int segment_duration;
+// Zoom level. Input is handled before the first renderPage(), so this must not
+// start at 0 (the LEFT branch divides by segment_duration / GRAPH_SEGMENT_HIGH).
+static int segment_duration = GRAPH_SEGMENT_MED;
 
 static char label[4][4];
 static int estimation_line_size = 0;
@@ -276,7 +277,12 @@ void compute_graph(void)
     int total_duration = 0;
     int previous_index = graph.layout.graph_max_size - 1;
     bool is_estimation_computed = false;
-    
+    bool first_row = true;
+    // values of the previously processed (newer) row; used to paint its time span even
+    // when that row shared a pixel column with the newest row and was not drawn itself
+    int previous_height = 0;
+    bool previous_charging = false;
+
     bat_log_db = open_battery_log_db();
     secondsToHoursMinutes(get_best_session_time(bat_log_db, device_model), session_best);
 
@@ -298,26 +304,29 @@ void compute_graph(void)
                 int duration = sqlite3_column_int(stmt, 3);
                 bool is_charging = sqlite3_column_int(stmt, 4);
 
-                if (total_duration == 0)
-                {
-                    sprintf(current_percentage, "%d%%", bat_perc);
-                }
-
-                current_index = (graph.layout.graph_max_size - 1) - duration_to_pixel(total_duration);
-                graph.graphic[current_index].is_charging = is_charging;
-
                 if (bat_perc > 100)
                     bat_perc = 100;
 
-                graph.graphic[current_index].pixel_height = battery_to_pixel(bat_perc);
+                current_index = (graph.layout.graph_max_size - 1) - duration_to_pixel(total_duration);
+
+                // Several short rows can map to the same pixel column: the newest row always
+                // has duration 0 until batmon fills it in, so the row before it lands on the
+                // same column. The newest row has already written it; do not let an older
+                // row overwrite it (the right edge also feeds the "Remaining" slope).
+                if (first_row || current_index != previous_index)
+                {
+                    graph.graphic[current_index].is_charging = is_charging;
+                    graph.graphic[current_index].pixel_height = battery_to_pixel(bat_perc);
+                }
+                first_row = false;
 
                 int segment = previous_index - current_index;
                 if (segment > 1)
                 {
                     for (int i = 1; i < segment; i++)
                     {
-                        graph.graphic[current_index + i].pixel_height = graph.graphic[previous_index].pixel_height;
-                        graph.graphic[current_index + i].is_charging = graph.graphic[previous_index].is_charging;
+                        graph.graphic[current_index + i].pixel_height = previous_height;
+                        graph.graphic[current_index + i].is_charging = previous_charging;
                     }
                 }
 
@@ -378,10 +387,12 @@ void compute_graph(void)
                 }
 
                 total_duration += duration;
-                if (duration_to_pixel(total_duration) > graph.layout.graph_max_size)
+                if (duration_to_pixel(total_duration) >= graph.layout.graph_max_size)
                     b_quit = true;
 
                 previous_index = current_index;
+                previous_height = battery_to_pixel(bat_perc);
+                previous_charging = is_charging;
             }
         }
         sqlite3_finalize(stmt);
@@ -649,7 +660,10 @@ int main(int argc, char *argv[])
 
     initLayout();
     compute_graph();
-    renderPage();
+    // "Current" is the live gauge value at the time the pak was opened, the same
+    // value the status-bar pill draws. The log's newest row is one step behind
+    // until batmon fills in its duration, so it is not used for this label.
+    sprintf(current_percentage, "%d%%", PWR_getBattery());
 
     int dirty = 1;
     int show_setting = 0;
