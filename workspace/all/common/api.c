@@ -352,14 +352,10 @@ FALLBACK_IMPLEMENTATION void PLAT_getGPUTemp()
 	perf.gpu_temp = 0;
 }
 
-FALLBACK_IMPLEMENTATION void PLAT_getGPUSpeed()
+FALLBACK_IMPLEMENTATION void PLAT_getGPUStats(void)
 {
 	perf.gpu_speed = 0;
-}
-
-FALLBACK_IMPLEMENTATION void PLAT_getGPUUsage()
-{
-	perf.gpu_usage = 0.0;
+	perf.gpu_usage = -1;
 }
 
 int GFX_loadSystemFont(const char *fontPath)

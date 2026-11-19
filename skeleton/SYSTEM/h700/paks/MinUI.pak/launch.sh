@@ -63,6 +63,11 @@ log_runtime_state
 
 h700_prepare_stock_os
 
+# BaseOS 1.0 leaves the vendor Mali driver's debugfs counters unmounted.
+if [ -c /dev/mali0 ] && ! grep -q ' /sys/kernel/debug debugfs ' /proc/mounts; then
+	mount -t debugfs -o nodev,noexec,nosuid debugfs /sys/kernel/debug >> "$LAUNCH_LOG" 2>&1
+fi
+
 # clear shadercache unconditionally, until it properly invalidates itself
 rm -rf "$SDCARD_PATH/.shadercache"
 
