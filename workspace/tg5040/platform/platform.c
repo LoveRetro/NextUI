@@ -133,8 +133,24 @@ void PLAT_getGPUTemp() {
 	perf.gpu_temp = getInt("/sys/devices/virtual/thermal/thermal_zone2/temp")/1000;
 }
 
-void PLAT_getGPUSpeed() {
-	perf.gpu_speed = 660; // MHz
+void PLAT_getGPUStats(void) {
+	perf.gpu_speed = getInt("/sys/kernel/debug/clk/gpu/clk_rate") / 1000000;
+	perf.gpu_usage = -1;
+
+	FILE *status = fopen("/sys/kernel/debug/pvr/status", "r");
+	if (!status) return;
+
+	char line[128];
+	while (fgets(line, sizeof(line), status)) {
+		int usage;
+		char unit;
+		if (sscanf(line, "GPU Utilisation: %d%c", &usage, &unit) == 2 &&
+			unit == '%' && usage >= 0 && usage <= 100) {
+			perf.gpu_usage = usage;
+			break;
+		}
+	}
+	fclose(status);
 }
 
 static struct WIFI_connection connection = {

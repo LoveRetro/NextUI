@@ -92,8 +92,8 @@ typedef struct {
     int cpu_speed;
     double cpu_usage;
     int cpu_temp;
-	int gpu_speed;
-	double gpu_usage;
+    int gpu_speed; // MHz, 0 if unavailable
+    double gpu_usage; // percent, -1 if unavailable
     int gpu_temp;
     double jitter;
     int frame_drops;
@@ -497,8 +497,7 @@ void PLAT_initLid(void);
 int PLAT_lidChanged(int* state);
 void PLAT_getCPUTemp();
 void PLAT_getCPUSpeed();
-void PLAT_getGPUUsage();
-void PLAT_getGPUSpeed();
+void PLAT_getGPUStats(void);
 void PLAT_getGPUTemp();
 ///////////////////////////////
 

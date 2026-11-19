@@ -237,6 +237,16 @@ static const char* bitmap_font[] = {
         "1   1"
         "1   1"
         "1   1",
+	['H'] =
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1"
+		"11111"
+		"1   1"
+		"1   1"
+		"1   1"
+		"1   1",
 	['D'] = 
 		"1111 "
 		"1   1"
@@ -686,8 +696,11 @@ void applyFadeIn(uint32_t **data, size_t pitch, unsigned width, unsigned height,
 
 static void drawDebugHud(const void* data, unsigned width, unsigned height, size_t pitch, enum retro_pixel_format fmt)
 {
-	if (show_debug && !isnan(perf.ratio) && !isnan(perf.fps) && !isnan(perf.req_fps)  && !isnan(perf.buffer_ms) &&
-		perf.buffer_size >= 0  && perf.buffer_free >= 0 && SDL_GetTicks() > 5000) {
+	if (!show_debug) return;
+
+	uint32_t now = SDL_GetTicks();
+	if (!isnan(perf.ratio) && !isnan(perf.fps) && !isnan(perf.req_fps) && !isnan(perf.buffer_ms) &&
+		perf.buffer_size >= 0 && perf.buffer_free >= 0 && now > 5000) {
 		int x = 2 + renderer.src_x;
 		int y = 2 + renderer.src_y;
 		char debug_text[250];
@@ -718,12 +731,20 @@ static void drawDebugHud(const void* data, unsigned width, unsigned height, size
 		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.cpu_usage, perf.cpu_speed, perf.cpu_temp);
 		blitBitmapText(debug_text,x,-y - 14,(uint32_t*)data,pitch / 4, width,height);
 		
-		// GPU stats
-		PLAT_getGPUUsage();
-		PLAT_getGPUSpeed();
-		PLAT_getGPUTemp();
-		sprintf(debug_text, "%.0f%%/%ihz/%ic", perf.gpu_usage, perf.gpu_speed, perf.gpu_temp);
-		blitBitmapText(debug_text,x,-y - 28,(uint32_t*)data,pitch / 4, width,height);
+		static uint32_t last_gpu_sample;
+		static char gpu_text[64];
+		if (now - last_gpu_sample >= 500) {
+			last_gpu_sample = now;
+			PLAT_getGPUStats();
+			PLAT_getGPUTemp();
+
+			char usage[8] = "-";
+			char speed[16] = "-";
+			if (perf.gpu_usage >= 0) snprintf(usage, sizeof(usage), "%.0f%%", perf.gpu_usage);
+			if (perf.gpu_speed > 0) snprintf(speed, sizeof(speed), "%iMHz", perf.gpu_speed);
+			snprintf(gpu_text, sizeof(gpu_text), "%s/%s/%ic", usage, speed, perf.gpu_temp);
+		}
+		blitBitmapText(gpu_text,x,-y - 28,(uint32_t*)data,pitch / 4, width,height);
 
 		if(currentshaderpass>0) {
 			sprintf(debug_text, "%i/%ix%i/%ix%i/%ix%i", currentshaderpass, currentshadersrcw,currentshadersrch,currentshadertexw,currentshadertexh,currentshaderdstw,currentshaderdsth);

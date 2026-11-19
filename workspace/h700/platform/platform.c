@@ -584,31 +584,37 @@ void PLAT_getGPUTemp() {
 	perf.gpu_temp = getInt("/sys/devices/virtual/thermal/thermal_zone1/temp")/1000;
 }
 
-void PLAT_getGPUSpeed() {
-	static char* path = NULL;
-	static int resolved = 0;
+void PLAT_getGPUStats(void) {
+	perf.gpu_speed = 0;
+	perf.gpu_usage = -1;
 
-	if (!resolved) {
-		static char* candidates[] = {
-			"/sys/class/devfreq/gpu/cur_freq",
-			"/sys/devices/platform/gpu/devfreq/gpu/cur_freq",
-			"/sys/devices/platform/soc@03000000/1800000.gpu/devfreq/1800000.gpu/cur_freq",
-			"/sys/devices/platform/soc/1800000.gpu/devfreq/1800000.gpu/cur_freq",
-			"/sys/kernel/debug/clk/gpu0/clk_rate",
-			"/sys/kernel/debug/clk/pll_gpu/clk_rate",
-			NULL,
-		};
-		for (int i = 0; candidates[i]; i++) {
-			if (access(candidates[i], R_OK) == 0) {
-				path = candidates[i];
-				break;
-			}
+	FILE *dump = fopen("/sys/kernel/debug/sunxi_gpu/dump", "r");
+	if (dump) {
+		char line[128];
+		while (fgets(line, sizeof(line), dump)) {
+			int value, end = 0;
+			if (sscanf(line, "Frequency:%dMHz%n", &value, &end) == 1 && end && value > 0)
+				perf.gpu_speed = value;
+			else if (sscanf(line, "Utilisation from last show:%d%%%n", &value, &end) == 1 &&
+				end && value >= 0 && value <= 100)
+				perf.gpu_usage = value;
 		}
-		resolved = 1;
+		fclose(dump);
 	}
 
-	int speed = path ? getInt(path) : 0;
-	perf.gpu_speed = speed > 0 ? speed / 1000000 : 648; // MHz
+	// The vendor dump reports the requested rate. Prefer the core clock when available.
+	static char* const clock_paths[] = {
+		"/sys/kernel/debug/clk/gpu0/clk_rate",
+		"/sys/class/devfreq/1800000.gpu/cur_freq",
+		"/sys/class/devfreq/gpu/cur_freq",
+	};
+	for (size_t i = 0; i < sizeof(clock_paths) / sizeof(clock_paths[0]); i++) {
+		int mhz = getInt(clock_paths[i]) / 1000000;
+		if (mhz > 0) {
+			perf.gpu_speed = mhz;
+			break;
+		}
+	}
 }
 
 static struct WIFI_connection connection = {
