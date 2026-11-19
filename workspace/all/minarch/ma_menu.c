@@ -340,6 +340,7 @@ static int OptionAchievements_showDetail(MenuList* list, int i) {
 	int show_detail = 1;
 	
 	while (show_detail) {
+		if (quit) break;
 		GFX_startFrame();
 		PAD_poll();
 		
@@ -618,7 +619,7 @@ static int OptionAchievements_openMenu(MenuList* list, int i) {
 	// Note: We intentionally show "Unsupported Game Version" so users know to find a supported ROM.
 	bool hide_unknown_emulator = !CFG_getRAHardcoreMode();
 
-	while (show_menu) {
+	while (show_menu && !quit) {
 		GFX_startFrame();
 		PAD_poll();
 
@@ -1072,6 +1073,7 @@ int Menu_options(MenuList* list) {
 	
 	int defer_menu = false;
 	while (show_options) {
+		if (quit) break;
 		if (await_input) {
 			defer_menu = true;
 			list->on_confirm(list, selected);
@@ -1829,7 +1831,7 @@ void Menu_loop(void) {
 
 	//set vid.blit to null for menu drawing no need for blitrender drawing
 	GFX_clearShaders();
-	while (show_menu) {
+	while (show_menu && !quit) {
 
 		GFX_startFrame();
 		uint32_t now = SDL_GetTicks();

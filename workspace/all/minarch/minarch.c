@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <signal.h>
 #include <msettings.h>
 #ifdef __GLIBC__
 #include <malloc.h>
@@ -26,7 +27,7 @@
 ///////////////////////////////////////
 
 SDL_Surface* screen;
-int quit = 0;
+volatile sig_atomic_t quit = 0;
 int newScreenshot = 0;
 int show_menu = 0;
 int simple_mode = 0;
@@ -130,6 +131,11 @@ void hdmimon(void) {
 #define PWR_UPDATE_FREQ 5
 #define PWR_UPDATE_FREQ_INGAME 20
 
+static void handle_quit_signal(int sig) {
+	(void)sig;
+	quit = 1;
+}
+
 int main(int argc , char* argv[]) {
 	//static char asoundpath[MAX_PATH];
 	//sprintf(asoundpath, "%s/.asoundrc", getenv("HOME"));
@@ -164,6 +170,8 @@ int main(int argc , char* argv[]) {
 	LOG_info("rom_path: %s\n", rom_path);
 	
 	screen = GFX_init(MODE_MENU);
+	signal(SIGINT, handle_quit_signal);
+	signal(SIGTERM, handle_quit_signal);
 
 	// initialize default shaders
 	GFX_initShaders();

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SDL2/SDL.h>
+#include <signal.h>
 #include <stdint.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -86,7 +87,7 @@ extern struct retro_disk_control_ext_callback disk_control_ext;
 extern GFX_Renderer renderer;
 extern SDL_Surface *screen;
 
-extern int quit;
+extern volatile sig_atomic_t quit;
 extern int show_menu;
 extern int newScreenshot;
 extern int fast_forward;
