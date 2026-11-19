@@ -155,6 +155,9 @@ fi
 # Composable boot hooks (run after auto.sh for backward compatibility)
 "$SYSTEM_PATH/bin/run_hooks.sh" boot.d
 
+# Enable the built-in TrimUI mic after user boot hooks on every startup.
+sh "$SYSTEM_PATH/bin/mic_default.sh" > "$LOGS_PATH/mic-default.log" 2>&1
+
 cd $(dirname "$0")
 
 #######################################
