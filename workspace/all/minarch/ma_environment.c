@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "ma_internal.h"
+#include "ma_audio.h"
 #include "ma_options.h"
 #include "ma_input.h"
 #include "ra_integration.h"
@@ -163,6 +164,9 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 		if (av) {
 			double a = av->geometry.aspect_ratio;
 			if (a <= 0) a = (double)av->geometry.base_width / av->geometry.base_height;
+
+			if (core.fps != av->timing.fps || core.sample_rate != av->timing.sample_rate)
+				Audio_requestReset();
 
 			core.fps = av->timing.fps;
 			core.sample_rate = av->timing.sample_rate;
