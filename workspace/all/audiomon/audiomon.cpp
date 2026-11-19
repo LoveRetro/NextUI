@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <set>
 #include <cstring>
 #include <cstdlib>
 #include <csignal>
@@ -23,7 +24,9 @@ extern "C"
 #include "defines.h"
 }
 
+#ifndef AUDIO_FILE
 #define AUDIO_FILE "/mnt/SDCARD/.userdata/" PLATFORM "/.asoundrc"
+#endif
 #define UUID_A2DP "0000110b-0000-1000-8000-00805f9b34fb"
 
 enum DeviceType {
@@ -33,6 +36,8 @@ enum DeviceType {
 
 bool use_syslog = false;
 bool running = true;
+std::set<std::string> usbPlaybackNodes;
+std::string selectedUsbPlaybackNode;
 
 void log(const std::string& msg) {
     if (use_syslog) syslog(LOG_INFO, "%s", msg.c_str());
@@ -43,9 +48,9 @@ void ensureDirExists(const std::string& path) {
     mkdir(path.c_str(), 0755);
 }
 
-void writeAudioFile(const std::string& device_identifier, DeviceType type) {
+void writeAudioFile(const std::string& device_identifier, DeviceType type, const std::string& pcm_device = "") {
     ensureDirExists(std::string(USERDATA_PATH));
-    std::ofstream f(std::string(AUDIO_FILE));
+    std::ofstream f(AUDIO_FILE);
     if (!f) {
         log("Failed to write audio config file");
         return;
@@ -74,6 +79,7 @@ void writeAudioFile(const std::string& device_identifier, DeviceType type) {
         f << "pcm.!default {\n"
           << "    type hw\n"
           << "    card " << device_identifier << "\n"
+          << "    device " << pcm_device << "\n"
           << "}\n"
           << "ctl.!default {\n"
           << "    type hw\n"
@@ -112,50 +118,26 @@ std::string pathToMac(const std::string& path) {
     return mac;
 }
 
-std::string getUsbAudioCardNumber(struct udev_device* dev) {
-    // Look for the card number in the device path or properties
-    const char* devnode = udev_device_get_devnode(dev);
-    if (!devnode) return "";
-    
-    // Extract card number from device node like /dev/snd/controlC1
-    std::string devnode_str(devnode);
-    auto pos = devnode_str.find("controlC");
-    if (pos != std::string::npos) {
-        return devnode_str.substr(pos + 8); // Extract number after "controlC"
-    }
-    
-    // Alternative: check ALSA card property
-    const char* card = udev_device_get_property_value(dev, "SOUND_CARD");
-    if (card) return std::string(card);
-    
-    return "";
+bool parsePlaybackNode(const char* name, std::string& card, std::string& pcm) {
+    if (!name || strncmp(name, "pcmC", 4) != 0) return false;
+    const char* card_start = name + 4;
+    size_t card_len = strspn(card_start, "0123456789");
+    if (!card_len || card_start[card_len] != 'D') return false;
+    const char* pcm_start = card_start + card_len + 1;
+    size_t pcm_len = strspn(pcm_start, "0123456789");
+    if (!pcm_len || strcmp(pcm_start + pcm_len, "p") != 0) return false;
+    card.assign(card_start, card_len);
+    pcm.assign(pcm_start, pcm_len);
+    return true;
 }
 
 bool isUsbAudioDevice(struct udev_device* dev) {
     const char* subsystem = udev_device_get_subsystem(dev);
-    const char* devnode = udev_device_get_devnode(dev);
     const char* devpath = udev_device_get_devpath(dev);
-    
-    if (!subsystem || strcmp(subsystem, "sound") != 0) {
-        return false;
-    }
-    
-    if (!devnode) {
-        return false;
-    }
-    
-    // Check if it's a control device (indicates audio capability)
-    std::string devnode_str(devnode);
-    if (devnode_str.find("controlC") == std::string::npos) {
-        return false;
-    }
-    
-    // Check if it's USB-connected by looking at the device path
-    if (devpath && strstr(devpath, "usb")) {
-        return true;
-    }
-    
-    return false;
+    std::string card, pcm;
+    return subsystem && strcmp(subsystem, "sound") == 0 &&
+        devpath && strstr(devpath, "usb") &&
+        parsePlaybackNode(udev_device_get_sysname(dev), card, pcm);
 }
 
 bool hasUUID(DBusConnection* conn, const std::string& path, const std::string& uuid) {
@@ -223,22 +205,38 @@ void handleDeviceDisconnected(DBusConnection* conn, const std::string& path) {
 }
 
 void handleUsbAudioConnected(struct udev_device* dev) {
-    std::string card = getUsbAudioCardNumber(dev);
-    if (!card.empty()) {
-        log("USB audio device connected: card " + card);
-        writeAudioFile(card, DEVICE_USB_AUDIO);
-        SetAudioSink(AUDIO_SINK_USBDAC);
-    }
+    const char* name = udev_device_get_sysname(dev);
+    std::string card, pcm, selected_card, selected_pcm;
+    if (!parsePlaybackNode(name, card, pcm) || !usbPlaybackNodes.insert(name).second) return;
+    if (parsePlaybackNode(selectedUsbPlaybackNode.c_str(), selected_card, selected_pcm) && card == selected_card) return;
+
+    log("USB audio device connected: card " + card + ", device " + pcm);
+    writeAudioFile(card, DEVICE_USB_AUDIO, pcm);
+    selectedUsbPlaybackNode = name;
+    SetAudioSink(AUDIO_SINK_USBDAC);
 }
 
 void handleUsbAudioDisconnected(struct udev_device* dev) {
-    std::string card = getUsbAudioCardNumber(dev);
-    if (!card.empty()) {
-        log("USB audio device disconnected: card " + card);
-        clearAudioFile();
-        // TODO: we could maintain a stack here, if BT was connected before and restore that instead
-        SetAudioSink(AUDIO_SINK_DEFAULT);
+    const char* name = udev_device_get_sysname(dev);
+    std::string card, pcm;
+    if (!parsePlaybackNode(name, card, pcm)) return;
+    usbPlaybackNodes.erase(name);
+    if (selectedUsbPlaybackNode != name) return;
+    selectedUsbPlaybackNode.clear();
+    if (GetAudioSink() != AUDIO_SINK_USBDAC) return;
+
+    for (const auto& node : usbPlaybackNodes) {
+        std::string other_card, other_pcm;
+        if (parsePlaybackNode(node.c_str(), other_card, other_pcm) && other_card == card) {
+            writeAudioFile(other_card, DEVICE_USB_AUDIO, other_pcm);
+            selectedUsbPlaybackNode = node;
+            return;
+        }
     }
+    log("USB audio device disconnected: card " + card);
+    clearAudioFile();
+    // TODO: we could maintain a stack here, if BT was connected before and restore that instead
+    SetAudioSink(AUDIO_SINK_DEFAULT);
 }
 
 void signalHandler(int sig) {
