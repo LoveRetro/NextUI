@@ -1,0 +1,39 @@
+diff --git a/dosbox_pure_libretro.cpp b/dosbox_pure_libretro.cpp
+--- a/dosbox_pure_libretro.cpp
++++ b/dosbox_pure_libretro.cpp
+@@ -614,7 +614,6 @@
+ 			return;
+ 		case_TCM_EMULATION_CONTINUES:
+ 			if (pausedTimeStart) { dbp_paused_work += (Bit32u)(time_cb() - pausedTimeStart); pausedTimeStart = 0; }
+-			if (dbp_serializesize && dbp_serializemode != DBPSERIALIZE_REWIND) dbp_serializesize = 0;
+ 			semDoContinue.Post();
+ 			return;
+ 	}
+@@ -2662,6 +2661,7 @@
+
+ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::string* dbconf = NULL)
+ {
++	dbp_serializesize = 0;
+ 	if (reinit)
+ 	{
+ 		DBP_ASSERT(dbp_state == DBPSTATE_BOOT && control != NULL && !first_shell);
+@@ -2681,7 +2681,6 @@
+ 		dbp_throttle = { RETRO_THROTTLE_NONE };
+ 		dbp_game_running = dbp_had_game_running = false;
+ 		dbp_last_fastforward = false;
+-		dbp_serializesize = 0;
+ 		dbp_audio_remain = 0;
+ 		DBP_SetIntercept(NULL);
+ 		for (size_t i = dbp_images.size(); i--;)
+@@ -3809,8 +3808,10 @@
+
+ size_t retro_serialize_size(void)
+ {
++	if (dbp_serializemode == DBPSERIALIZE_DISABLED) return 0;
+ 	if (dbp_serializesize) return dbp_serializesize;
+-	DBPArchiveCounter ar((dbp_state != DBPSTATE_RUNNING && dbp_state != DBPSTATE_FIRST_FRAME) || dbp_serializemode == DBPSERIALIZE_REWIND);
++	// Frontends may allocate their load buffer before the game fills DOS memory.
++	DBPArchiveCounter ar(true);
+ 	return dbp_serializesize = (retro_serialize_all(ar, false) ? ar.count : 0);
+ }
+
