@@ -579,9 +579,12 @@ void Config_load(void) {
 	config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
 }
 void Config_free(void) {
-	if (config.system_cfg) free(config.system_cfg);
-	if (config.default_cfg) free(config.default_cfg);
-	if (config.user_cfg) free(config.user_cfg);
+	free(config.system_cfg);
+	free(config.default_cfg);
+	free(config.user_cfg);
+	config.system_cfg = NULL;
+	config.default_cfg = NULL;
+	config.user_cfg = NULL;
 }
 void Config_readOptions(void) {
 	Config_readOptionsString(config.system_cfg);

@@ -4,9 +4,9 @@
 #include "ma_internal.h"
 #include "ma_audio.h"
 
-static bool resetAudio = false;
+static SDL_atomic_t resetAudio;
 
-void Audio_onSinkChanged(int device, int watch_event) {
+static void Audio_onSinkChanged(int device, int watch_event) {
 	switch (watch_event) {
 	case DIRWATCH_CREATE:      LOG_info("callback reason: DIRWATCH_CREATE\n");      break;
 	case DIRWATCH_DELETE:      LOG_info("callback reason: DIRWATCH_DELETE\n");      break;
@@ -15,19 +15,29 @@ void Audio_onSinkChanged(int device, int watch_event) {
 	case FILEWATCH_CLOSE_WRITE:LOG_info("callback reason: FILEWATCH_CLOSE_WRITE\n");break;
 	}
 
-	resetAudio = true;
-
 	// FIXME: This shouldnt be necessary, alsa should just read .asoundrc for the changed default device.
 	if (device == AUDIO_SINK_BLUETOOTH)
 		SDL_setenv("AUDIODEV", "bluealsa", 1);
 	else
 		SDL_setenv("AUDIODEV", "default", 1);
+
+	Audio_requestReset();
+}
+
+void Audio_init(void) {
+	// load_game can report timing before the device exists, and SND_init already opens with it
+	SDL_AtomicSet(&resetAudio, 0);
+	SND_init(core.sample_rate, core.fps);
+	SND_registerDeviceWatcher(Audio_onSinkChanged);
+}
+
+void Audio_requestReset(void) {
+	SDL_AtomicSet(&resetAudio, 1);
 }
 
 void Audio_checkAndResetIfNeeded(void) {
-	if (!resetAudio) return;
-	resetAudio = false;
-	LOG_info("Resetting audio device config! (new state: %s)\n", SDL_getenv("AUDIODEV"));
+	if (!SDL_AtomicSet(&resetAudio, 0)) return;
+	LOG_info("Resetting audio (%g Hz, %g fps)\n", core.sample_rate, core.fps);
 	SND_resetAudio(core.sample_rate, core.fps);
 }
 
