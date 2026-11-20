@@ -582,6 +582,8 @@ void PLAT_bluetoothSetVolume(int vol) {
 // bt_device_watcher.c
 
 #include <sys/inotify.h>
+#include <sys/eventfd.h>
+#include <poll.h>
 
 #define WATCHED_DIR_FMT "%s"
 #define WATCHED_FILE ".asoundrc"
@@ -589,6 +591,7 @@ void PLAT_bluetoothSetVolume(int vol) {
 
 static pthread_t watcher_thread;
 static int inotify_fd = -1;
+static int stop_fd = -1;
 static int dir_watch_fd = -1;
 static int file_watch_fd = -1;
 static volatile int running = 0;
@@ -659,13 +662,20 @@ static void *watcher_thread_func(void *arg) {
     // At start try to watch file if exists
     add_file_watch();
 
+    struct pollfd fds[2] = {
+        { .fd = inotify_fd, .events = POLLIN },
+        { .fd = stop_fd, .events = POLLIN },
+    };
     while (running) {
+        if (poll(fds, 2, -1) < 0 && errno != EINTR) {
+            LOG_error("inotify poll error: %s\n", strerror(errno));
+            break;
+        }
+        if (!running) break;
         int length = read(inotify_fd, buffer, EVENT_BUF_LEN);
         if (length < 0) {
-            if (errno == EAGAIN || errno == EINTR) {
-                sleep(1);
+            if (errno == EAGAIN || errno == EINTR)
                 continue;
-            }
             LOG_error("inotify read error: %s\n", strerror(errno));
             break;
         }
@@ -744,12 +754,24 @@ void PLAT_audioDeviceWatchRegister(void (*cb)(int device, int event)) {
 
     file_watch_fd = -1;
 
+    stop_fd = eventfd(0, EFD_NONBLOCK);
+    if (stop_fd < 0) {
+        LOG_error("PLAT_audioDeviceWatchRegister: failed to create eventfd\n");
+        inotify_rm_watch(inotify_fd, dir_watch_fd);
+        close(inotify_fd);
+        inotify_fd = -1;
+        dir_watch_fd = -1;
+        return;
+    }
+
     running = 1;
     if (pthread_create(&watcher_thread, NULL, watcher_thread_func, NULL) != 0) {
         LOG_error("PLAT_audioDeviceWatchRegister: failed to create thread\n");
         inotify_rm_watch(inotify_fd, dir_watch_fd);
         close(inotify_fd);
+        close(stop_fd);
         inotify_fd = -1;
+        stop_fd = -1;
         dir_watch_fd = -1;
         running = 0;
     }
@@ -759,7 +781,10 @@ void PLAT_audioDeviceWatchUnregister(void) {
     if (!running) return;
 
     running = 0;
+    eventfd_write(stop_fd, 1);
     pthread_join(watcher_thread, NULL);
+    close(stop_fd);
+    stop_fd = -1;
 
     if (file_watch_fd >= 0)
         inotify_rm_watch(inotify_fd, file_watch_fd);
