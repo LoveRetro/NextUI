@@ -2204,9 +2204,10 @@ void PLAT_GL_Swap() {
         orig_h = vid.blit->src_h;
         origtex_w = vid.blit->src_w;
         origtex_h = vid.blit->src_h;
-    } else {
+    } else if (vid.blit->src_dirty) {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
     }
+    vid.blit->src_dirty = 0;
 
     last_w = vid.blit->src_w;
     last_h = vid.blit->src_h;

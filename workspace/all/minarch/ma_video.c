@@ -732,6 +732,8 @@ static void drawDebugHud(const void* data, unsigned width, unsigned height, size
 	
 		double buffer_fill = (double) (perf.buffer_size - perf.buffer_free) / (double) perf.buffer_size;
 		drawGauge(x, y + 30, buffer_fill, width / 2, 8, (uint32_t*)data, pitch / 4);
+
+		renderer.src_dirty = 1;
 	}
 }
 
@@ -777,8 +779,11 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	
 	static int frame_counter = 0;
 	const int max_frames = 8; 
-	if(frame_counter<9) {
-		applyFadeIn((uint32_t **) &data, pitch, width, height, &frame_counter, max_frames);
+	if(frame_counter<=max_frames) {
+		if (frame_counter<max_frames) applyFadeIn((uint32_t **) &data, pitch, width, height, &frame_counter, max_frames);
+		else frame_counter++;
+		// includes the first unfaded frame: it has to replace the last faded upload even when it is a duplicate
+		renderer.src_dirty = 1;
 	}
 
 	renderer.src = (void*)data;
@@ -975,6 +980,7 @@ void video_refresh_callback(const void* data, unsigned width, unsigned height, s
 		
 		data = rgbaData;
 		lastframe = data;
+		renderer.src_dirty = 1;
 	}
 	pitch = width * sizeof(Uint32);
 
