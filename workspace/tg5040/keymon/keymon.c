@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -8,6 +9,8 @@
 #include <linux/input.h>
 #include <pthread.h>
 #include <signal.h>
+#include <poll.h>
+#include <time.h>
 
 #include <msettings.h>
 
@@ -47,6 +50,20 @@ static struct input_event ev;
 
 static volatile int quit = 0;
 static void on_term(int sig) { quit = 1; }
+// PWR_enterSleep() SIGSTOPs keymon; input queued until SIGCONT must be dropped.
+static volatile sig_atomic_t resumed = 0;
+static void on_cont(int sig) { resumed = 1; }
+
+static uint32_t now_ms(void) {
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+static int ms_until(uint32_t at, uint32_t now) {
+	int32_t diff = (int32_t)(at - now);
+	return diff > 0 ? diff : 0;
+}
 
 static int getInt(char* path) {
 	int i = 0;
@@ -105,14 +122,33 @@ int main (int argc, char *argv[]) {
 	struct sigaction sa = {0};
 	sa.sa_handler = on_term;
 	sigaction(SIGTERM, &sa, NULL);
+	sa.sa_handler = on_cont;
+	sigaction(SIGCONT, &sa, NULL);
 
 	InitSettings();
+
+	// Signals stay blocked except inside ppoll() so none is lost between the
+	// flag checks and the wait. Block before spawning the mute thread so it
+	// inherits the mask and the signals always reach the main thread.
+	sigset_t blocked, waitmask;
+	sigemptyset(&blocked);
+	sigaddset(&blocked, SIGTERM);
+	sigaddset(&blocked, SIGCONT);
+	sigprocmask(SIG_BLOCK, &blocked, &waitmask);
+	sigset_t continued;
+	sigemptyset(&continued);
+	sigaddset(&continued, SIGCONT);
+	const struct timespec no_wait = {0};
+
 	pthread_create(&mute_pt, NULL, &watchMute, NULL);
 
 	char path[32];
+	struct pollfd fds[INPUT_COUNT];
 	for (int i=0; i<INPUT_COUNT; i++) {
 		sprintf(path, "/dev/input/event%i", i);
 		inputs[i] = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+		fds[i].fd = inputs[i];
+		fds[i].events = POLLIN;
 	}
 	
 	uint32_t input;
@@ -129,29 +165,40 @@ int main (int argc, char *argv[]) {
 	uint32_t down_repeat_at = 0;
 	
 	uint8_t ignore;
-	uint32_t then;
+	uint8_t got_input;
 	uint32_t now;
-	struct timeval tod;
-	
-	gettimeofday(&tod, NULL);
-	then = tod.tv_sec * 1000 + tod.tv_usec / 1000; // essential SDL_GetTicks()
-	ignore = 0;
 	
 	while (!quit) {
-		gettimeofday(&tod, NULL);
-		now = tod.tv_sec * 1000 + tod.tv_usec / 1000;
-		if (now-then>1000) ignore = 1; // ignore input that arrived during sleep
+		int timeout = -1;
+		now = now_ms();
+		if (up_pressed) timeout = ms_until(up_repeat_at, now);
+		if (down_pressed) {
+			int t = ms_until(down_repeat_at, now);
+			if (timeout < 0 || t < timeout) timeout = t;
+		}
+		struct timespec ts = { timeout / 1000, (timeout % 1000) * 1000000L };
+		ppoll(fds, INPUT_COUNT, timeout < 0 ? NULL : &ts, &waitmask);
+		if (quit) break;
+		for (int i=0; i<INPUT_COUNT; i++)
+			if (fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) fds[i].fd = -1; // gone; would wake poll forever
+
+		now = now_ms();
+		ignore = resumed; // ignore input that arrived during sleep
+		resumed = 0;
+		got_input = 0;
+		int jack = -1;
 		
 		for (int i=0; i<INPUT_COUNT; i++) {
 			input = inputs[i];
 			while(read(input, &ev, sizeof(ev))==sizeof(ev)) {
+				got_input = 1;
 				if (ignore) continue;
 				val = ev.value;
 				if (ev.type==EV_SW) {
 					//printf("switch: %i\n", ev.code);
 					if (ev.code==CODE_JACK) {
 						//printf("jack: %i\n", val);
-						SetJack(val);
+						jack = val;
 					}
 				}
 				if (( ev.type != EV_KEY ) || ( val > REPEAT )) continue;
@@ -177,6 +224,14 @@ int main (int argc, char *argv[]) {
 			}
 		}
 		
+		// A stop can land between ppoll and these reads. Consume a pending resume
+		// after draining the descriptors, before applying any of their events.
+		while (sigtimedwait(&continued, NULL, &no_wait) == SIGCONT) {
+			ignore = 1;
+			for (int i = 0; i < INPUT_COUNT; i++)
+				while (read(inputs[i], &ev, sizeof(ev)) == sizeof(ev)) {}
+		}
+		if (!ignore && jack >= 0) SetJack(jack);
 		if (ignore) {
 			menu_pressed = 0;
 			menu2_pressed = 0;
@@ -186,7 +241,7 @@ int main (int argc, char *argv[]) {
 			down_repeat_at = 0;
 		}
 		
-		if (up_just_pressed || (up_pressed && now>=up_repeat_at)) {
+		if (up_just_pressed || (up_pressed && ms_until(up_repeat_at, now) == 0)) {
 			if (menu_pressed) {
 				val = GetBrightness();
 				if (val<BRIGHTNESS_MAX) SetBrightness(++val);
@@ -206,7 +261,7 @@ int main (int argc, char *argv[]) {
 			else up_repeat_at += 100;
 		}
 		
-		if (down_just_pressed || (down_pressed && now>=down_repeat_at)) {
+		if (down_just_pressed || (down_pressed && ms_until(down_repeat_at, now) == 0)) {
 			if (menu_pressed) {
 				val = GetBrightness();
 				if (val>BRIGHTNESS_MIN) SetBrightness(--val);
@@ -226,10 +281,8 @@ int main (int argc, char *argv[]) {
 			else down_repeat_at += 100;
 		}
 		
-		then = now;
-		ignore = 0;
-		
-		usleep(16666); // 60fps
+		// Batch input bursts (analog sticks, autorepeat) at the old 60 Hz rate.
+		if (got_input) usleep(16666);
 	}
 
 	for (int i=0; i<INPUT_COUNT; i++)
