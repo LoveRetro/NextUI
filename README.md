@@ -88,8 +88,10 @@ See [LICENSE](LICENSE) and [NOTICE](NOTICE) for full details.
 
 ## Currently supported devices:
 - Trimui Brick
+- Trimui Brick Pro
 - Trimui Smart Pro
 - Trimui Smart Pro S
+- Anbernic H700 Devices
 
 ---
 

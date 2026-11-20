@@ -2374,9 +2374,8 @@ int GFX_blitHardwareGroup(SDL_Surface *dst, int show_setting)
 	{
 		ConnectionStrength strength = PLAT_connectionStrength();
 		int show_wifi = strength > SIGNAL_STRENGTH_OFF;
-		// no need to handle in PLAT_updateNetworkStatus,
-		// this one is async anyway
-		int show_bt = BT_isConnected();
+		// Read the Bluetooth state cached by the background network poll.
+		int show_bt = PLAT_btIsConnected();
 		int show_external_audio = GetAudioSink() != AUDIO_SINK_DEFAULT;
 		bool show_clock = CFG_getShowClock();
 		SDL_Rect battery_rect = asset_rects[ASSET_BATTERY];
