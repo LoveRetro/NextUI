@@ -34,6 +34,8 @@
 
 static int reloadShaderTextures = 1;
 static int shaderResetRequested = 0;
+// leading user shader passes whose FBO output still matches the source texture
+static int valid_passes = 0;
 
 static SDL_BlendMode getPremultipliedBlendMode(void) {
 	return SDL_ComposeCustomBlendMode(
@@ -484,6 +486,8 @@ void loadShaderPragmas(ShaderProgram *shader, const char *shaderSource) {
 }
 
 ShaderParam* PLAT_getShaderPragmas(int i) {
+    // callers change parameter values through this pointer
+    valid_passes = 0;
     return shaders[i].program->pragmas;
 }
 
@@ -2206,6 +2210,7 @@ void PLAT_GL_Swap() {
 		}
     }
 
+    int new_pixels = 0;
     glBindTexture(GL_TEXTURE_2D, orig_texture);
     if (vid.blit->src) {
         const int pitch565 = vid.blit->src_565_p;
@@ -2217,6 +2222,7 @@ void PLAT_GL_Swap() {
         }
         const int respecify = vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last || format != src_format_last || reloadShaderTextures;
         if (respecify || vid.blit->src_dirty) {
+            new_pixels = 1;
             // the texture this upload leaves idle needs the same storage for the upload after it
             if (respecify) glTexImage2D(GL_TEXTURE_2D, 0, format, vid.blit->src_w, vid.blit->src_h, 0, format, type, NULL);
 
@@ -2247,6 +2253,21 @@ void PLAT_GL_Swap() {
 
     last_w = vid.blit->src_w;
     last_h = vid.blit->src_h;
+
+    // On a duplicate frame the passes would redraw what their FBO textures already hold.
+    static int pass_dims[4];
+    const int dims[4] = {vid.blit->src_w, vid.blit->src_h, dst_rect.w, dst_rect.h};
+    int first_pass = 0;
+    if (!new_pixels && !reloadShaderTextures && memcmp(dims, pass_dims, sizeof(dims)) == 0) {
+        first_pass = valid_passes;
+        for (int i = 0; i < nrofshaders; i++) {
+            // a pass that reads the frame counter draws something new every frame
+            if (shaders[i].target_updated || shaders[i].program->u_FrameCount >= 0) first_pass = 0;
+        }
+    }
+    memcpy(pass_dims, dims, sizeof(dims));
+    // runShaderPass skips the bind when its input is the texture it bound last, but the upload code above bound another one
+    if (first_pass > 0) glBindTexture(GL_TEXTURE_2D, shaders[first_pass - 1].target_texture);
 
     for (int i = 0; i < nrofshaders; i++) {
         int src_w = last_w;
@@ -2288,7 +2309,7 @@ void PLAT_GL_Swap() {
         }
         shaderinfocount++;
 
-        runShaderPass(
+        if (i >= first_pass) runShaderPass(
 			&shaders[i],
 			(i == 0) ? orig_texture : shaders[i - 1].target_texture,
 			&shaders[i].target_texture,
@@ -2298,6 +2319,7 @@ void PLAT_GL_Swap() {
         last_w = dst_w;
         last_h = dst_h;
     }
+    valid_passes = nrofshaders;
 
     if (nrofshaders > 0) {
 		//LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
