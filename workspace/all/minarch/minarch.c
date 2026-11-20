@@ -114,6 +114,10 @@ static void Special_quit(void) {
 void hdmimon(void) {
 	// handle HDMI change
 	static int had_hdmi = -1;
+	static Uint32 last_check = 0;
+	Uint32 now = SDL_GetTicks();
+	if (had_hdmi!=-1 && now - last_check < 250) return;
+	last_check = now;
 	int has_hdmi = GetHDMI();
 	if (had_hdmi==-1) had_hdmi = has_hdmi;
 	if (has_hdmi!=had_hdmi) {
