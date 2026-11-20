@@ -9,7 +9,7 @@ MODE="$1"
 set_policy() {
 	local policy_path="$1"
 	local governor="$2"
-	local max_type="$3"  # "max" or "mid"
+	local max_type="$3"  # "max", or a frequency in kHz (midpoint if unavailable)
 	
 	[ -f "$policy_path/scaling_available_frequencies" ] || return 0
 	FREQS=$(cat "$policy_path/scaling_available_frequencies" | tr ' ' '\n' | grep -v '^$' | sort -n)
@@ -19,10 +19,13 @@ set_policy() {
 		max)
 			MAX_FREQ=$(echo "$FREQS" | tail -1)
 			;;
-		mid)
-			COUNT=$(echo "$FREQS" | wc -l)
-			MID=$(( (COUNT + 1) / 2 ))
-			MAX_FREQ=$(echo "$FREQS" | sed -n "${MID}p")
+		[0-9]*)
+			MAX_FREQ=$(echo "$FREQS" | grep -x "$max_type")
+			if [ -z "$MAX_FREQ" ]; then
+				COUNT=$(echo "$FREQS" | wc -l)
+				MID=$(( (COUNT + 1) / 2 ))
+				MAX_FREQ=$(echo "$FREQS" | sed -n "${MID}p")
+			fi
 			;;
 		*)
 			MAX_FREQ=$(echo "$FREQS" | tail -1)
@@ -75,8 +78,9 @@ case "$MODE" in
 		set_gpu_floor "max"
 		;;
 	powersave)
-		set_policy /sys/devices/system/cpu/cpufreq/policy0 "conservative" "mid"
-		set_policy /sys/devices/system/cpu/cpu0/cpufreq "conservative" "mid"
+		# 936 MHz is the top of the 900 mV band; conservative just sat at its cap
+		set_policy /sys/devices/system/cpu/cpufreq/policy0 "schedutil" 936000
+		set_policy /sys/devices/system/cpu/cpu0/cpufreq "schedutil" 936000
 		set_gpu_floor "min"
 		;;
 	*)
