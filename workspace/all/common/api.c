@@ -2919,9 +2919,11 @@ static int unwritten_frame_count = 0;
 
 size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 {
-	int framecount = (int)frame_count;
-	int consumed = 0;
-	int total_consumed_frames = 0;
+	if (!frames || frame_count == 0)
+		return 0;
+
+	size_t remaining = frame_count;
+	size_t consumed = 0;
 	double ratio = 1.0;
 
 	if (snd.frame_count <= 0)
@@ -3004,9 +3006,9 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 
 	perf.ratio = (ratio > 0.0) ? ratio : current_fps;
 
-	while (framecount > 0)
+	while (remaining > 0)
 	{
-		int amount = MIN(BATCH_SIZE, framecount);
+		int amount = (remaining < BATCH_SIZE) ? (int)remaining : BATCH_SIZE;
 
 		// Copy frames to tmpbuffer for resampling
 		for (int i = 0; i < amount; i++)
@@ -3014,12 +3016,11 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 			tmpbuffer[i] = frames[consumed + i];
 		}
 		consumed += amount;
-		framecount -= amount;
+		remaining -= amount;
 
 		ResampledFrames resampled = resample_audio(
 			tmpbuffer, amount, snd.sample_rate_in, snd.sample_rate_out, ratio);
 
-		int written_frames = 0;
 		pthread_mutex_lock(&audio_mutex);
 		for (int i = 0; i < resampled.frame_count; i++)
 		{
@@ -3031,15 +3032,14 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 			}
 			snd.buffer[snd.frame_in] = resampled.frames[i];
 			snd.frame_in = (snd.frame_in + 1) % snd.frame_count;
-			written_frames++;
 		}
 		pthread_mutex_unlock(&audio_mutex);
 
-		total_consumed_frames += written_frames;
 		free(resampled.frames);
 	}
 
-	return total_consumed_frames;
+	// Libretro expects input frames consumed, not resampled output frames written.
+	return consumed;
 }
 
 enum
@@ -3051,13 +3051,14 @@ enum
 
 size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 {
+	if (!frames || frame_count == 0)
+		return 0;
+
 	static int current_mode = SND_FF_ON_TIME;
 	double ratio = 1.0;
 
-	int framecount = (int)frame_count;
-
-	int consumed = 0;
-	int total_consumed_frames = 0;
+	size_t remaining = frame_count;
+	size_t consumed = 0;
 
 	// printf("received %d audio frames\n", frame_count);
 
@@ -3122,8 +3123,8 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 		ratio = 0.995;
 		break;
 	case SND_FF_VERY_LATE:
-		// just drop the audio if its too late cause its never gonna catch up in fast forward
-		return 0;
+		// Drop audio when too far behind in fast-forward; report frames consumed so cores discard them.
+		return frame_count;
 		// ratio = 0.980;
 		// break;
 	default:
@@ -3131,24 +3132,21 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	}
 	perf.ratio = ratio;
 
-	while (framecount > 0)
+	while (remaining > 0)
 	{
-
-		int amount = MIN(BATCH_SIZE, framecount);
+		int amount = (remaining < BATCH_SIZE) ? (int)remaining : BATCH_SIZE;
 
 		for (int i = 0; i < amount; i++)
 		{
 			tmpbuffer[i] = frames[consumed + i];
 		}
 		consumed += amount;
-		framecount -= amount;
+		remaining -= amount;
 
 		ResampledFrames resampled = resample_audio(
 			tmpbuffer, amount, snd.sample_rate_in, snd.sample_rate_out, ratio);
 
 		// Write resampled frames to the buffer
-		int written_frames = 0;
-
 		pthread_mutex_lock(&audio_mutex);
 		for (int i = 0; i < resampled.frame_count; i++)
 		{
@@ -3159,15 +3157,14 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 			}
 			snd.buffer[snd.frame_in] = resampled.frames[i];
 			snd.frame_in = (snd.frame_in + 1) % snd.frame_count;
-			written_frames++;
 		}
 		pthread_mutex_unlock(&audio_mutex);
 
-		total_consumed_frames += written_frames;
 		free(resampled.frames);
 	}
 
-	return total_consumed_frames;
+	// Libretro expects input frames consumed, not resampled output frames written.
+	return consumed;
 }
 
 void SND_init(double sample_rate, double frame_rate)
