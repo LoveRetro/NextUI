@@ -240,8 +240,9 @@ enum {
 };
 
 typedef struct GFX_Renderer {
-	void* src;
+	void* src; // NULL when the frame only exists in the GL source texture
 	int src_dirty; // src changed since the GL renderer last uploaded it; set by the frontend, cleared by PLAT_GL_Swap
+	int src_565_p; // pitch in bytes when src is RGB565, 0 when it is tightly packed RGBA8888
 	void* dst;
 	void* blit;
 	double aspect; // 0 for integer, -1 for fullscreen, otherwise aspect ratio, used for SDL2 accelerated scaling

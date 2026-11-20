@@ -737,6 +737,9 @@ static void drawDebugHud(const void* data, unsigned width, unsigned height, size
 	}
 }
 
+static int fadein_frame = 0;
+#define FADEIN_FRAMES 8
+
 static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch) {
 	// return;
 
@@ -758,9 +761,6 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	// 10: 30/120 (optimize text off has no effect)
 	//  8: 60/210 (with optimize text off)
 	// eg. PS@10 60/240
-	if (!data) {
-		return;
-	}
 
 	// if source has changed size (or forced by dst_p==0)
 	// eg. true src + cropped src + fixed dst + cropped dst
@@ -775,13 +775,12 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	}
 	
 	// debug
-	drawDebugHud(data, width, height, pitch, fmt);
+	// a duplicate of a frame that was uploaded straight from the core has no CPU copy to draw on
+	if (data) drawDebugHud(data, width, height, pitch, fmt);
 	
-	static int frame_counter = 0;
-	const int max_frames = 8; 
-	if(frame_counter<=max_frames) {
-		if (frame_counter<max_frames) applyFadeIn((uint32_t **) &data, pitch, width, height, &frame_counter, max_frames);
-		else frame_counter++;
+	if(fadein_frame<=FADEIN_FRAMES) {
+		if (fadein_frame<FADEIN_FRAMES) applyFadeIn((uint32_t **) &data, pitch, width, height, &fadein_frame, FADEIN_FRAMES);
+		else fadein_frame++;
 		// includes the first unfaded frame: it has to replace the last faded upload even when it is a duplicate
 		renderer.src_dirty = 1;
 	}
@@ -797,6 +796,8 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 const void* lastframe = NULL;
 static Uint32* rgbaData = NULL;
 static size_t rgbaDataSize = 0;
+// the last new frame was uploaded straight from the core's RGB565 buffer and has no CPU copy
+static int direct_frame = 0;
 
 // ARM NEON SIMD optimization for pixel format conversion
 #if defined(__ARM_NEON) || defined(__aarch64__)
@@ -958,6 +959,7 @@ void video_refresh_callback(const void* data, unsigned width, unsigned height, s
 	// Allocate RGBA buffer if needed
 	if (!rgbaData || rgbaDataSize != width * height) {
 		if (rgbaData) free(rgbaData);
+		lastframe = NULL;
 		rgbaDataSize = width * height;
 		rgbaData = (Uint32*)malloc(rgbaDataSize * sizeof(Uint32));
 		if (!rgbaData) {
@@ -969,17 +971,29 @@ void video_refresh_callback(const void* data, unsigned width, unsigned height, s
 	// Handle NULL data by reusing last frame
 	if (!data) {
 		data = lastframe;
-		if (!data) return;
+		// without a CPU copy the texture can only stand in for a frame of the same size
+		if (!data && (!direct_frame || width != renderer.true_w || height != renderer.true_h)) return;
 	} else {
-		// Convert pixel format to RGBA
-		if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
-			convert_xrgb8888_to_rgba(data, rgbaData, width, height, pitch);
+		// Fast forward drops frames before the upload, and a dropped frame would be lost without the copy.
+		// Cropped scaling keeps the copy: the RGBA upload reads a cropped frame as tightly packed rows,
+		// which a pitch-aware upload would not reproduce.
+		direct_frame = fmt == RETRO_PIXEL_FORMAT_RGB565 && !show_debug && !ambient_mode && !fast_forward
+			&& screen_scaling != SCALE_CROPPED && fadein_frame >= FADEIN_FRAMES;
+		if (direct_frame) {
+			lastframe = NULL;
+			renderer.src_565_p = pitch;
 		} else {
-			convert_rgb565_to_rgba(data, rgbaData, width, height, pitch);
+			// Convert pixel format to RGBA
+			if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
+				convert_xrgb8888_to_rgba(data, rgbaData, width, height, pitch);
+			} else {
+				convert_rgb565_to_rgba(data, rgbaData, width, height, pitch);
+			}
+
+			data = rgbaData;
+			lastframe = data;
+			renderer.src_565_p = 0;
 		}
-		
-		data = rgbaData;
-		lastframe = data;
 		renderer.src_dirty = 1;
 	}
 	pitch = width * sizeof(Uint32);
@@ -992,6 +1006,9 @@ void video_refresh_callback(const void* data, unsigned width, unsigned height, s
 
 	// Render the frame
 	video_refresh_callback_main(data, width, height, pitch);
+
+	// the core may reuse its buffer once this returns
+	if (direct_frame) renderer.src = NULL;
 }
 
 void Video_cleanup(void) {

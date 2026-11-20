@@ -1705,7 +1705,7 @@ void PLAT_flipHidden() {
 void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 	// dont think we need this here tbh
 	// SDL_RenderClear(vid.renderer);
-	if (!vid.blit) {
+	if (!vid.blit || !vid.blit->src) {
         resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
         SDL_UpdateTexture(vid.stream_layer1, NULL, vid.screen->pixels, vid.screen->pitch);
 		SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
@@ -2075,7 +2075,8 @@ void PLAT_GL_Swap() {
     SDL_Rect dst_rect = {0, 0, device_width, device_height};
     setRectToAspectRatio(&dst_rect);
 
-    if (!vid.blit->src) {
+    // src is NULL for a duplicate of a frame that only exists in the source texture
+    if (!vid.blit->src && !orig_texture) {
         return;
     }
 
@@ -2089,10 +2090,12 @@ void PLAT_GL_Swap() {
 
 	static GLuint src_texture = 0;
 	static int src_w_last = 0, src_h_last = 0;
+	static GLenum src_format_last = 0;
 	static int last_w = 0, last_h = 0;
 
 	if (shaderResetRequested) {
-		if (orig_texture) { glDeleteTextures(1, &orig_texture); orig_texture = 0; }
+		// without pixels to refill it, the source texture has to survive the reset
+		if (orig_texture && vid.blit->src) { glDeleteTextures(1, &orig_texture); orig_texture = 0; }
 		src_w_last = src_h_last = 0;
 		last_w = last_h = 0;
 		if (effect_tex) {
@@ -2196,16 +2199,31 @@ void PLAT_GL_Swap() {
     }
 
     glBindTexture(GL_TEXTURE_2D, orig_texture);
-    if (vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last || reloadShaderTextures) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
-        src_w_last = vid.blit->src_w;
-        src_h_last = vid.blit->src_h;
-        orig_w = vid.blit->src_w;
-        orig_h = vid.blit->src_h;
-        origtex_w = vid.blit->src_w;
-        origtex_h = vid.blit->src_h;
-    } else if (vid.blit->src_dirty) {
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
+    if (vid.blit->src) {
+        const int pitch565 = vid.blit->src_565_p;
+        const GLenum format = pitch565 ? GL_RGB : GL_RGBA;
+        const GLenum type = pitch565 ? GL_UNSIGNED_SHORT_5_6_5 : GL_UNSIGNED_BYTE;
+        if (pitch565) {
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, pitch565 / 2);
+        }
+        if (vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last || format != src_format_last || reloadShaderTextures) {
+            glTexImage2D(GL_TEXTURE_2D, 0, format, vid.blit->src_w, vid.blit->src_h, 0, format, type, vid.blit->src);
+            src_w_last = vid.blit->src_w;
+            src_h_last = vid.blit->src_h;
+            src_format_last = format;
+            orig_w = vid.blit->src_w;
+            orig_h = vid.blit->src_h;
+            origtex_w = vid.blit->src_w;
+            origtex_h = vid.blit->src_h;
+        } else if (vid.blit->src_dirty) {
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, format, type, vid.blit->src);
+        }
+        if (pitch565) {
+            // every other upload in this context assumes the defaults
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        }
     }
     vid.blit->src_dirty = 0;
 
