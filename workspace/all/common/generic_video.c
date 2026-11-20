@@ -2088,14 +2088,18 @@ void PLAT_GL_Swap() {
 	static int overlay_w = 0, overlay_h = 0;
 	static int overlayload = 0;
 
-	static GLuint src_texture = 0;
+	static GLuint src_textures[2] = {0, 0};
 	static int src_w_last = 0, src_h_last = 0;
 	static GLenum src_format_last = 0;
 	static int last_w = 0, last_h = 0;
 
 	if (shaderResetRequested) {
-		// without pixels to refill it, the source texture has to survive the reset
-		if (orig_texture && vid.blit->src) { glDeleteTextures(1, &orig_texture); orig_texture = 0; }
+		// without pixels to refill them, the source textures have to survive the reset
+		if (orig_texture && vid.blit->src) {
+			glDeleteTextures(2, src_textures);
+			src_textures[0] = src_textures[1] = 0;
+			orig_texture = 0;
+		}
 		src_w_last = src_h_last = 0;
 		last_w = last_h = 0;
 		if (effect_tex) {
@@ -2189,13 +2193,17 @@ void PLAT_GL_Swap() {
         //     glDeleteTextures(1, &orig_texture);
         //     orig_texture = 0;
         // }
-		if (orig_texture==0)
-			glGenTextures(1, &orig_texture);
-        glBindTexture(GL_TEXTURE_2D, orig_texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, nrofshaders > 0 ? shaders[0].filter : s_pass_finalscale.filter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nrofshaders > 0 ? shaders[0].filter : s_pass_finalscale.filter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		if (orig_texture==0) {
+			glGenTextures(2, src_textures);
+			orig_texture = src_textures[0];
+		}
+		for (int i = 0; i < 2; i++) {
+			glBindTexture(GL_TEXTURE_2D, src_textures[i]);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, nrofshaders > 0 ? shaders[0].filter : s_pass_finalscale.filter);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nrofshaders > 0 ? shaders[0].filter : s_pass_finalscale.filter);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		}
     }
 
     glBindTexture(GL_TEXTURE_2D, orig_texture);
@@ -2207,17 +2215,27 @@ void PLAT_GL_Swap() {
             glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
             glPixelStorei(GL_UNPACK_ROW_LENGTH, pitch565 / 2);
         }
-        if (vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last || format != src_format_last || reloadShaderTextures) {
-            glTexImage2D(GL_TEXTURE_2D, 0, format, vid.blit->src_w, vid.blit->src_h, 0, format, type, vid.blit->src);
-            src_w_last = vid.blit->src_w;
-            src_h_last = vid.blit->src_h;
-            src_format_last = format;
-            orig_w = vid.blit->src_w;
-            orig_h = vid.blit->src_h;
-            origtex_w = vid.blit->src_w;
-            origtex_h = vid.blit->src_h;
-        } else if (vid.blit->src_dirty) {
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, format, type, vid.blit->src);
+        const int respecify = vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last || format != src_format_last || reloadShaderTextures;
+        if (respecify || vid.blit->src_dirty) {
+            // the texture this upload leaves idle needs the same storage for the upload after it
+            if (respecify) glTexImage2D(GL_TEXTURE_2D, 0, format, vid.blit->src_w, vid.blit->src_h, 0, format, type, NULL);
+
+            // The GPU may still be drawing the previous frame from its texture, and PowerVR allocates
+            // fresh storage for an upload into a texture that is in use. Take the other one.
+            orig_texture = src_textures[orig_texture == src_textures[0]];
+            glBindTexture(GL_TEXTURE_2D, orig_texture);
+            if (respecify) {
+                glTexImage2D(GL_TEXTURE_2D, 0, format, vid.blit->src_w, vid.blit->src_h, 0, format, type, vid.blit->src);
+                src_w_last = vid.blit->src_w;
+                src_h_last = vid.blit->src_h;
+                src_format_last = format;
+                orig_w = vid.blit->src_w;
+                orig_h = vid.blit->src_h;
+                origtex_w = vid.blit->src_w;
+                origtex_h = vid.blit->src_h;
+            } else {
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, format, type, vid.blit->src);
+            }
         }
         if (pitch565) {
             // every other upload in this context assumes the defaults
