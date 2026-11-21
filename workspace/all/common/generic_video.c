@@ -495,8 +495,13 @@ void init_shader_program(ShaderProgram * shader, const char * path, const char *
 	char filepath[512];
 	snprintf(filepath, sizeof(filepath), "%s/%s", path, filename);
 
-	const char *shaderSource  = load_shader_source(filepath);
-	loadShaderPragmas(shader,shaderSource);
+	char *source = load_shader_source(filepath);
+	if (!source) return;
+	loadShaderPragmas(shader, source);
+	uint32_t hash = 2166136261u;
+	for (const unsigned char *c = (const unsigned char *)source; *c; c++)
+		hash = (hash ^ *c) * 16777619u;
+	free(source);
 
 	GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, filepath);
 	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, filepath);
@@ -506,7 +511,9 @@ void init_shader_program(ShaderProgram * shader, const char * path, const char *
 		LOG_info("Deleting previous shader %i\n",shader->shader_p);
 		glDeleteProgram(shader->shader_p);
 	}
-	shader->shader_p = link_program(vertex_shader1, fragment_shader1, filename);
+	char cache_key[320];
+	snprintf(cache_key, sizeof(cache_key), "%s.%08x", filename, hash);
+	shader->shader_p = link_program(vertex_shader1, fragment_shader1, cache_key);
 
 
 	if (shader->shader_p == 0) {
@@ -1738,7 +1745,17 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
         return;
     }
 
-    SDL_UpdateTexture(vid.stream_layer1, NULL, vid.blit->src, vid.blit->src_p);
+    if (vid.blit->src_565_p) {
+        void *pixels;
+        int pitch;
+        if (SDL_LockTexture(vid.stream_layer1, NULL, &pixels, &pitch) < 0) return;
+        int result = SDL_ConvertPixels(vid.width, vid.height, SDL_PIXELFORMAT_RGB565,
+                vid.blit->src, vid.blit->src_565_p, SDL_PIXELFORMAT_ARGB8888, pixels, pitch);
+        SDL_UnlockTexture(vid.stream_layer1);
+        if (result < 0) return;
+    } else {
+        SDL_UpdateTexture(vid.stream_layer1, NULL, vid.blit->src, vid.blit->src_p);
+    }
 
     SDL_Texture* target = vid.stream_layer1;
     int x = vid.blit->src_x;
@@ -1906,6 +1923,7 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, dst_width, dst_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 			shader_pass->target_updated = 0;
+			last_bound_texture = *target_texture;
 		}
 		if (fbo == 0) {
 			glGenFramebuffers(1, &fbo);
@@ -2093,8 +2111,7 @@ void PLAT_GL_Swap() {
 	static int overlayload = 0;
 
 	static GLuint src_textures[2] = {0, 0};
-	static int src_w_last = 0, src_h_last = 0;
-	static GLenum src_format_last = 0;
+	static struct { int w, h; GLenum format; } storage[2];
 	static int last_w = 0, last_h = 0;
 
 	if (shaderResetRequested) {
@@ -2104,7 +2121,7 @@ void PLAT_GL_Swap() {
 			src_textures[0] = src_textures[1] = 0;
 			orig_texture = 0;
 		}
-		src_w_last = src_h_last = 0;
+		memset(storage, 0, sizeof(storage));
 		last_w = last_h = 0;
 		if (effect_tex) {
 			glDeleteTextures(1, &effect_tex);
@@ -2220,28 +2237,33 @@ void PLAT_GL_Swap() {
             glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
             glPixelStorei(GL_UNPACK_ROW_LENGTH, pitch565 / 2);
         }
-        const int respecify = vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last || format != src_format_last || reloadShaderTextures;
-        if (respecify || vid.blit->src_dirty) {
-            new_pixels = 1;
-            // the texture this upload leaves idle needs the same storage for the upload after it
-            if (respecify) glTexImage2D(GL_TEXTURE_2D, 0, format, vid.blit->src_w, vid.blit->src_h, 0, format, type, NULL);
-
-            // The GPU may still be drawing the previous frame from its texture, and PowerVR allocates
-            // fresh storage for an upload into a texture that is in use. Take the other one.
-            orig_texture = src_textures[orig_texture == src_textures[0]];
-            glBindTexture(GL_TEXTURE_2D, orig_texture);
-            if (respecify) {
-                glTexImage2D(GL_TEXTURE_2D, 0, format, vid.blit->src_w, vid.blit->src_h, 0, format, type, vid.blit->src);
-                src_w_last = vid.blit->src_w;
-                src_h_last = vid.blit->src_h;
-                src_format_last = format;
-                orig_w = vid.blit->src_w;
-                orig_h = vid.blit->src_h;
-                origtex_w = vid.blit->src_w;
-                origtex_h = vid.blit->src_h;
+        if (vid.blit->src_dirty || reloadShaderTextures || orig_w != vid.blit->src_w || orig_h != vid.blit->src_h || !storage[orig_texture == src_textures[1]].w) {
+            int slot = orig_texture == src_textures[0];
+            glBindTexture(GL_TEXTURE_2D, src_textures[slot]);
+            int w = vid.blit->src_w, h = vid.blit->src_h;
+            if (storage[slot].w != w || storage[slot].h != h || storage[slot].format != format) {
+                // SDL and the shader setup share GL error state. Attribute only this allocation's error to it.
+                while (glGetError() != GL_NO_ERROR) {}
+                glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, format, type, vid.blit->src);
+                GLenum error = glGetError();
+                if (error != GL_NO_ERROR) {
+                    if (vid.blit->src_dirty) LOG_error("Source texture %dx%d allocation failed (GL 0x%x)\n", w, h, error);
+                    storage[slot].w = 0;
+                    vid.blit->src_dirty = 1;
+                    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+                    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+                    return;
+                }
+                storage[slot].w = w;
+                storage[slot].h = h;
+                storage[slot].format = format;
             } else {
-                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, format, type, vid.blit->src);
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, format, type, vid.blit->src);
             }
+            orig_texture = src_textures[slot];
+            orig_w = origtex_w = w;
+            orig_h = origtex_h = h;
+            new_pixels = 1;
         }
         if (pitch565) {
             // every other upload in this context assumes the defaults

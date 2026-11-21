@@ -740,7 +740,7 @@ static void drawDebugHud(const void* data, unsigned width, unsigned height, size
 static int fadein_frame = 0;
 #define FADEIN_FRAMES 8
 
-static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch) {
+static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch, size_t pitch_565) {
 	// return;
 
 	Special_render();
@@ -765,6 +765,8 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	// if source has changed size (or forced by dst_p==0)
 	// eg. true src + cropped src + fixed dst + cropped dst
 	if (renderer.dst_p==0 || width!=renderer.true_w || height!=renderer.true_h) {
+		// Clearing the old layout also presents through SDL before this frame is published.
+		renderer.src = NULL;
 		selectScaler(width, height, pitch);
 		GFX_clearAll();
 		if (!shader_reset_suppressed) {
@@ -775,8 +777,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	}
 	
 	// debug
-	// a duplicate of a frame that was uploaded straight from the core has no CPU copy to draw on
-	if (data) drawDebugHud(data, width, height, pitch, fmt);
+	if (show_debug) drawDebugHud(data, width, height, pitch, fmt);
 	
 	if(fadein_frame<=FADEIN_FRAMES) {
 		if (fadein_frame<FADEIN_FRAMES) applyFadeIn((uint32_t **) &data, pitch, width, height, &fadein_frame, FADEIN_FRAMES);
@@ -786,6 +787,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	}
 
 	renderer.src = (void*)data;
+	renderer.src_565_p = pitch_565;
 	renderer.dst = screen->pixels;
 	GFX_blitRenderer(&renderer);
 
@@ -793,11 +795,10 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	last_flip_time = SDL_GetTicks();
 }
 
-const void* lastframe = NULL;
+static unsigned frame_width, frame_height;
 static Uint32* rgbaData = NULL;
 static size_t rgbaDataSize = 0;
-// the last new frame was uploaded straight from the core's RGB565 buffer and has no CPU copy
-static int direct_frame = 0;
+static int retained_565;
 
 // ARM NEON SIMD optimization for pixel format conversion
 #if defined(__ARM_NEON) || defined(__aarch64__)
@@ -919,10 +920,10 @@ static void convert_rgb565_to_rgba(const void* src, uint32_t* dst, unsigned widt
 			r2 = (r2 << 3) | (r2 >> 2); g2 = (g2 << 2) | (g2 >> 4); b2 = (b2 << 3) | (b2 >> 2);
 			r3 = (r3 << 3) | (r3 >> 2); g3 = (g3 << 2) | (g3 >> 4); b3 = (b3 << 3) | (b3 >> 2);
 			
-			dstRow[x]   = (0xFF << 24) | (b0 << 16) | (g0 << 8) | r0;
-			dstRow[x+1] = (0xFF << 24) | (b1 << 16) | (g1 << 8) | r1;
-			dstRow[x+2] = (0xFF << 24) | (b2 << 16) | (g2 << 8) | r2;
-			dstRow[x+3] = (0xFF << 24) | (b3 << 16) | (g3 << 8) | r3;
+			dstRow[x]   = 0xff000000u | (b0 << 16) | (g0 << 8) | r0;
+			dstRow[x+1] = 0xff000000u | (b1 << 16) | (g1 << 8) | r1;
+			dstRow[x+2] = 0xff000000u | (b2 << 16) | (g2 << 8) | r2;
+			dstRow[x+3] = 0xff000000u | (b3 << 16) | (g3 << 8) | r3;
 		}
 #endif
 		// Handle remaining pixels in the row
@@ -936,7 +937,7 @@ static void convert_rgb565_to_rgba(const void* src, uint32_t* dst, unsigned widt
 			g = (g << 2) | (g >> 4);
 			b = (b << 3) | (b >> 2);
 			
-			dstRow[x] = (0xFF << 24) | (b << 16) | (g << 8) | r;
+			dstRow[x] = 0xff000000u | (b << 16) | (g << 8) | r;
 		}
 	}
 }
@@ -956,46 +957,42 @@ void video_refresh_callback(const void* data, unsigned width, unsigned height, s
 	// Early exit if quitting to avoid rendering stale frames
 	if (quit) return;
 
-	// Allocate RGBA buffer if needed
-	if (!rgbaData || rgbaDataSize != width * height) {
-		if (rgbaData) free(rgbaData);
-		lastframe = NULL;
-		rgbaDataSize = width * height;
-		rgbaData = (Uint32*)malloc(rgbaDataSize * sizeof(Uint32));
-		if (!rgbaData) {
-			printf("Failed to allocate memory for RGBA data.\n");
-			return;
-		}
+	if (!width || !height || (!data && (width != frame_width || height != frame_height))) return;
+	if (height > SIZE_MAX / (sizeof(Uint32) + sizeof(uint16_t)) / width) return;
+	size_t pixels = (size_t)width * height;
+	if (pixels != rgbaDataSize) {
+		Uint32 *buffer = realloc(rgbaData, pixels * (sizeof(Uint32) + sizeof(uint16_t)));
+		if (!buffer) return;
+		renderer.src = NULL;
+		rgbaData = buffer;
+		rgbaDataSize = pixels;
 	}
-
-	// Handle NULL data by reusing last frame
-	if (!data) {
-		data = lastframe;
-		// without a CPU copy the texture can only stand in for a frame of the same size
-		if (!data && (!direct_frame || width != renderer.true_w || height != renderer.true_h)) return;
-	} else {
-		// Fast forward drops frames before the upload, and a dropped frame would be lost without the copy.
-		// Cropped scaling keeps the copy: the RGBA upload reads a cropped frame as tightly packed rows,
-		// which a pitch-aware upload would not reproduce.
-		direct_frame = fmt == RETRO_PIXEL_FORMAT_RGB565 && !show_debug && !ambient_mode && !fast_forward
-			&& screen_scaling != SCALE_CROPPED && fadein_frame >= FADEIN_FRAMES;
-		if (direct_frame) {
-			lastframe = NULL;
-			renderer.src_565_p = pitch;
+	// The core owns its pointer only until this callback returns. Keep packed RGB565 so a
+	// duplicate can be re-uploaded after a context reset or converted when a CPU effect is enabled.
+	uint16_t *packed = (uint16_t *)(rgbaData + pixels);
+	const size_t packed_pitch = width * sizeof(*packed);
+	int can_upload_565 = !show_debug && !ambient_mode &&
+		screen_scaling != SCALE_CROPPED && fadein_frame >= FADEIN_FRAMES;
+	if (data) {
+		frame_width = width;
+		frame_height = height;
+		retained_565 = fmt == RETRO_PIXEL_FORMAT_RGB565 && can_upload_565;
+		if (retained_565) {
+			if (pitch == packed_pitch) memcpy(packed, data, pixels * sizeof(*packed));
+			else for (unsigned y = 0; y < height; y++)
+				memcpy(packed + (size_t)y * width, (const uint8_t *)data + y * pitch, packed_pitch);
+		} else if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
+			convert_xrgb8888_to_rgba(data, rgbaData, width, height, pitch);
 		} else {
-			// Convert pixel format to RGBA
-			if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
-				convert_xrgb8888_to_rgba(data, rgbaData, width, height, pitch);
-			} else {
-				convert_rgb565_to_rgba(data, rgbaData, width, height, pitch);
-			}
-
-			data = rgbaData;
-			lastframe = data;
-			renderer.src_565_p = 0;
+			convert_rgb565_to_rgba(data, rgbaData, width, height, pitch);
 		}
 		renderer.src_dirty = 1;
+	} else if (retained_565 && !can_upload_565) {
+		convert_rgb565_to_rgba(packed, rgbaData, width, height, packed_pitch);
+		retained_565 = 0;
+		renderer.src_dirty = 1;
 	}
+	data = retained_565 ? (const void *)packed : (const void *)rgbaData;
 	pitch = width * sizeof(Uint32);
 
 	// Set ambient lighting color (if enabled)
@@ -1005,15 +1002,14 @@ void video_refresh_callback(const void* data, unsigned width, unsigned height, s
 
 
 	// Render the frame
-	video_refresh_callback_main(data, width, height, pitch);
-
-	// the core may reuse its buffer once this returns
-	if (direct_frame) renderer.src = NULL;
+	video_refresh_callback_main(data, width, height, pitch, retained_565 ? packed_pitch : 0);
 }
 
 void Video_cleanup(void) {
+	renderer.src = NULL;
 	if (rgbaData) {
 		free(rgbaData);
 		rgbaData = NULL;
+		rgbaDataSize = frame_width = frame_height = 0;
 	}
 }
