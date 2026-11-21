@@ -971,7 +971,7 @@ void video_refresh_callback(const void* data, unsigned width, unsigned height, s
 	// duplicate can be re-uploaded after a context reset or converted when a CPU effect is enabled.
 	uint16_t *packed = (uint16_t *)(rgbaData + pixels);
 	const size_t packed_pitch = width * sizeof(*packed);
-	int can_upload_565 = !show_debug && !ambient_mode &&
+	int can_upload_565 = !show_debug &&
 		screen_scaling != SCALE_CROPPED && fadein_frame >= FADEIN_FRAMES;
 	if (data) {
 		frame_width = width;
@@ -997,7 +997,7 @@ void video_refresh_callback(const void* data, unsigned width, unsigned height, s
 
 	// Set ambient lighting color (if enabled)
 	if (ambient_mode && !fast_forward && data) {
-		GFX_setAmbientColor(data, width, height, pitch, ambient_mode);
+		GFX_setAmbientColor(data, width, height, retained_565 ? packed_pitch : pitch, retained_565, ambient_mode);
 	}
 
 

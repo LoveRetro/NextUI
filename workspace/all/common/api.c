@@ -632,14 +632,13 @@ void GFX_startFrame(void)
 	frame_start = SDL_GetTicks();
 }
 
-uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned height, size_t pitch)
+static uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned height, size_t pitch, int is_rgb565)
 {
 	if (!data)
 	{
 		return 0;
 	}
 
-	const uint32_t *pixels = (const uint32_t *)data;
 	int pixel_count = 0;
 
 	uint64_t total_r = 0;
@@ -652,25 +651,36 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 
 	// Downsample 7x7 instead of 8x8 to de-emphasize effect of
 	// repeated scrolling tiles (intentionally interfere with patterns)
-	for (unsigned y = 0; y < height; y+=7)
+	const uint8_t *base = (const uint8_t *)data;
+	for (unsigned y = 0; y < height; y += 7)
 	{
-		for (unsigned x = 0; x < width; x+=7)
+		const uint8_t *row = base + (size_t)y * pitch;
+		for (unsigned x = 0; x < width; x += 7)
 		{
-			uint32_t pixel = pixels[y * (pitch / 4) + x];
+			uint8_t r, g, b;
+			if (is_rgb565)
+			{
+				uint16_t p = ((const uint16_t *)row)[x];
+				uint8_t r5 = (p >> 11) & 0x1F;
+				uint8_t g6 = (p >> 5) & 0x3F;
+				uint8_t b5 = p & 0x1F;
+				r = (r5 << 3) | (r5 >> 2);
+				g = (g6 << 2) | (g6 >> 4);
+				b = (b5 << 3) | (b5 >> 2);
+			}
+			else
+			{
+				// input pixel format: AABBGGRR
+				uint32_t pixel = ((const uint32_t *)row)[x];
+				r =  pixel        & 0xFF;
+				g = (pixel >> 8)  & 0xFF;
+				b = (pixel >> 16) & 0xFF;
+			}
 
-			// input pixel format: AABBGGRR
-			uint8_t r =  pixel        & 0xFF;
-			uint8_t g = (pixel >> 8)  & 0xFF;
-			uint8_t b = (pixel >> 16) & 0xFF;
-
-			// max_c = max(max(r, g), b)
 			uint8_t max_c = r > g ? r : g;
-			max_c = max_c > b ? max_c : b;
-
-			// min_c = min(min(r, g), b)
+			if (b > max_c) max_c = b;
 			uint8_t min_c = r < g ? r : g;
-			min_c = min_c < b ? min_c : b;
-
+			if (b < min_c) min_c = b;
 			uint8_t saturation = max_c == 0 ? 0 : (max_c - min_c) * 255 / max_c;
 
 			total_r += r;
@@ -686,6 +696,8 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 			}
 		}
 	}
+
+	if (!pixel_count) return 0;
 
 	if (colorful_pixel_count > 0)
 	{
@@ -716,18 +728,43 @@ uint32_t GFX_extract_average_color(const void *data, unsigned width, unsigned he
 	return average_color;
 }
 
-void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch, int mode)
+static pthread_mutex_t leds_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static int LEDS_lock(void)
+{
+	int old_cancel;
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancel);
+	pthread_mutex_lock(&leds_mutex);
+	return old_cancel;
+}
+
+static void LEDS_unlock(int old_cancel)
+{
+	pthread_mutex_unlock(&leds_mutex);
+	pthread_setcancelstate(old_cancel, NULL);
+}
+
+void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch, int is_rgb565, int mode)
 {
 	if (mode == 0)
 		return;
 
-	uint32_t dominant_color = GFX_extract_average_color(data, width, height, pitch);
+	static uint32_t last_sample_ms = 0;
+	static int last_mode = 0;
+	uint32_t now = SDL_GetTicks();
+	if (mode == last_mode && now - last_sample_ms < 66) // ~15 Hz
+		return;
+	last_sample_ms = now;
+	last_mode = mode;
+
+	uint32_t dominant_color = GFX_extract_average_color(data, width, height, pitch, is_rgb565);
 
 	// the zone indices below are the Brick layout (0/1 = FN keys or sticks,
 	// 2 = top bar, 3 = L/R). Devices with fewer lights simply don't have the
 	// higher ones, so every index has to be checked -- these are writes into
 	// a MAX_LIGHTS array and slot 3 is out of bounds on a 2-light device.
 	int count = LEDS_getCount();
+	int old_cancel = LEDS_lock();
 
 	if ((mode == 1 || mode == 2 || mode == 5) && count > 2)
 	{
@@ -750,6 +787,8 @@ void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size
 		(lightsAmbient)[3].color1 = dominant_color;
 		(lightsAmbient)[3].effect = 4;
 	}
+
+	LEDS_unlock(old_cancel);
 }
 
 void GFX_flip(SDL_Surface *screen)
@@ -4567,6 +4606,8 @@ int LEDS_getCount(void)
 	return count;
 }
 
+static void LEDS_updateLedsLocked(bool indicator_only);
+
 void LEDS_setProfile(int profile)
 {
 	if(lights_initialized == 0)
@@ -4604,11 +4645,23 @@ void LEDS_setProfile(int profile)
 		default:
 			return;
 	}
-	if (profile != LIGHT_PROFILE_AMBIENT && lights == (LightSettings (*)[MAX_LIGHTS])new_lights)
-		return;
-	lights = (LightSettings (*)[MAX_LIGHTS])new_lights;
-
-	LEDS_updateLeds(indicator);
+	static uint32_t last_ambient_push_ms = 0;
+	int old_cancel = LEDS_lock();
+	if (lights == (LightSettings (*)[MAX_LIGHTS])new_lights) {
+		if (profile == LIGHT_PROFILE_AMBIENT) {
+			uint32_t now = SDL_GetTicks();
+			if (now - last_ambient_push_ms >= 66) { // ~15 Hz
+				last_ambient_push_ms = now;
+				LEDS_updateLedsLocked(indicator);
+			}
+		}
+	} else {
+		lights = (LightSettings (*)[MAX_LIGHTS])new_lights;
+		LEDS_updateLedsLocked(indicator);
+		if (profile == LIGHT_PROFILE_AMBIENT)
+			last_ambient_push_ms = SDL_GetTicks();
+	}
+	LEDS_unlock(old_cancel);
 }
 
 void LEDS_applyRules()
@@ -4656,7 +4709,7 @@ void LEDS_applyRules()
 	}
 }
 
-void LEDS_updateLeds(bool indicator_only)
+static void LEDS_updateLedsLocked(bool indicator_only)
 {
 	if(lights_initialized == 0) {
 		LOG_error("LEDS_updateLeds: lights not initialized, skipping\n");
@@ -4683,6 +4736,13 @@ void LEDS_updateLeds(bool indicator_only)
 		PLAT_setLedColor(&(*lights)[i]);		// set color
 		PLAT_setLedEffect(&(*lights)[i]);		// finally set the effect, on trimui devices this also applies the settings
 	}
+}
+
+void LEDS_updateLeds(bool indicator_only)
+{
+	int old_cancel = LEDS_lock();
+	LEDS_updateLedsLocked(indicator_only);
+	LEDS_unlock(old_cancel);
 }
 
 void LEDS_initLeds()
