@@ -427,7 +427,7 @@ static void Config_readOptionsString(char* cfg) {
 		int device = strtol(gamepad_values[gamepad_type], NULL, 0);
 		core.set_controller_port_device(0, device);
 	}
-	for (int i=0; config.core.options[i].key; i++) {
+	for (int i=0; i<config.core.count; i++) {
 		Option* option = &config.core.options[i];
 		// LOG_info("%s\n",option->key);
 		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
@@ -617,7 +617,7 @@ void Config_write(int override) {
 			fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
 		}
 	}
-	for (int i=0; config.core.options[i].key; i++) {
+	for (int i=0; i<config.core.count; i++) {
 		Option* option = &config.core.options[i];
 		fprintf(file, "%s = %s\n", option->key, option->values[option->value]);
 	}
@@ -679,7 +679,7 @@ void Config_restore(void) {
 		option->value = option->default_value;
 		Config_syncFrontend(option->key, option->value);
 	}
-	for (int i=0; config.core.options[i].key; i++) {
+	for (int i=0; i<config.core.count; i++) {
 		Option* option = &config.core.options[i];
 		option->value = option->default_value;
 	}
@@ -1531,9 +1531,6 @@ struct Config config = {
 	},
 	.core = { // (OptionList)
 		.count = 0,
-		.options = (Option[]){
-			{NULL},
-		},
 	},
 	.shaders = { // (OptionList)
 		.count = 18,
