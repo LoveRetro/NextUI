@@ -65,6 +65,9 @@ typedef struct ShaderProgram {
 	GLint u_Texture;
 	GLint u_OrigTexture;
 	GLint u_texelSize;
+	GLint u_MVPMatrix;
+	GLint a_VertexCoord;
+	GLint a_TexCoord;
 	
 	ShaderParam *pragmas;  // Dynamic array of parsed pragma parameters
 	int num_pragmas;       // Count of valid pragma parameters
@@ -79,6 +82,7 @@ typedef struct ShaderPass {
 	int filter;
 	int alpha;
 	GLuint target_texture;
+	GLuint fbo;
 	int target_updated;
 	int scale;
 	int srctype;
@@ -94,10 +98,11 @@ ShaderPass shaders[MAXSHADERS];
 
 // memcpy these in initShaders()
 const ShaderProgram blank_shader_program = {
-	.shader_p = 0, .filename = "stock.glsl"
+	.shader_p = 0, .filename = "stock.glsl",
+	.u_MVPMatrix = -1, .a_VertexCoord = -1, .a_TexCoord = -1
 };
 const ShaderPass blank_shader_pass = { .program = NULL,
-	.alpha = 0, .target_texture = 0, .target_updated = 1
+	.alpha = 0, .target_texture = 0, .fbo = 0, .target_updated = 1
 };
 
 ShaderPass s_pass_finalscale = { .program = &s_shader_default,
@@ -162,7 +167,6 @@ typedef struct {
     int dirty;
     GLuint tex;
     int tex_w, tex_h;
-    int clear_frames;  // Frames to clear framebuffer after notification ends
 } NotificationOverlay;
 
 static NotificationOverlay notif = {0};
@@ -177,7 +181,6 @@ void PLAT_setNotificationSurface(SDL_Surface* surface, int x, int y) {
 void PLAT_clearNotificationSurface(void) {
     notif.surface = NULL;
     notif.dirty = 0;  // Nothing to update since surface is NULL
-    notif.clear_frames = 3;  // Clear for 3 frames (triple buffering safety)
 }
 
 
@@ -540,6 +543,9 @@ void init_shader_program(ShaderProgram * shader, const char * path, const char *
 		shader->u_Texture = glGetUniformLocation(shader->shader_p, "Texture");
 		shader->u_OrigTexture = glGetUniformLocation(shader->shader_p, "OrigTexture");
 		shader->u_texelSize = glGetUniformLocation(shader->shader_p, "texelSize");
+		shader->u_MVPMatrix = glGetUniformLocation(shader->shader_p, "MVPMatrix");
+		shader->a_VertexCoord = glGetAttribLocation(shader->shader_p, "VertexCoord");
+		shader->a_TexCoord = glGetAttribLocation(shader->shader_p, "TexCoord");
 		for (int i = 0; i < shader->num_pragmas; ++i) {
 			shader->pragmas[i].uniformLocation = glGetUniformLocation(shader->shader_p, shader->pragmas[i].name);
 			shader->pragmas[i].value = shader->pragmas[i].def;
@@ -1689,7 +1695,6 @@ void setRectToAspectRatio(SDL_Rect* dst_rect) {
 
 void PLAT_blitRenderer(GFX_Renderer* renderer) {
 	vid.blit = renderer;
-	SDL_RenderClear(vid.renderer);
 	resizeVideo(vid.blit->true_w,vid.blit->true_h,vid.blit->src_p);
 }
 
@@ -1779,6 +1784,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 
     setRectToAspectRatio(dst_rect);
 
+    SDL_RenderClear(vid.renderer);
     SDL_RenderCopy(vid.renderer, target, src_rect, dst_rect);
 
     SDL_RenderPresent(vid.renderer);
@@ -1799,11 +1805,9 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 	static GLuint last_program = 0;
 	static GLfloat last_texelSize[2] = {-1.0f, -1.0f};
 	static GLfloat texelSize[2] = {-1.0f, -1.0f};
-	static GLuint fbo = 0;
 	static GLuint last_bound_texture = 0;
 	static GLint max_tex_size = 0;
 	static int logged_bad_size = 0;
-	GLenum pre_err;
 
 	if (!shader_pass) return;
 
@@ -1814,10 +1818,6 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 	}
 
 	const GLuint shader_program_handle = shader_program->shader_p;
-
-	while ((pre_err = glGetError()) != GL_NO_ERROR) {
-		(void)pre_err;
-	}
 
 	if (max_tex_size == 0) {
 		glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_tex_size);
@@ -1840,7 +1840,6 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		if (static_VBO) { glDeleteBuffers(1, &static_VBO); static_VBO = 0; }
 		last_program = 0;
 		last_texelSize[0] = last_texelSize[1] = -1.0f;
-		fbo = 0;
 		last_bound_texture = 0;
 	}
 
@@ -1869,12 +1868,12 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 	}
 
 	if (shader_program_handle != last_program) {
-		GLint posAttrib = glGetAttribLocation(shader_program_handle, "VertexCoord");
+		GLint posAttrib = shader_program->a_VertexCoord;
 		if (posAttrib >= 0) {
 			glVertexAttribPointer(posAttrib, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
 			glEnableVertexAttribArray(posAttrib);
 		}
-		GLint texAttrib = glGetAttribLocation(shader_program_handle, "TexCoord");
+		GLint texAttrib = shader_program->a_TexCoord;
 		if (texAttrib >= 0) {
 			glVertexAttribPointer(texAttrib,  4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(4 * sizeof(float)));
 			glEnableVertexAttribArray(texAttrib);
@@ -1891,9 +1890,9 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 			glUniform1f(shader_program->pragmas[i].uniformLocation, shader_program->pragmas[i].value);
 		}
 
-		GLint u_MVP = glGetUniformLocation(shader_program_handle, "MVPMatrix");
+		GLint u_MVP = shader_program->u_MVPMatrix;
 		if (u_MVP >= 0) {
-			float identity[16] = {
+			static const float identity[16] = {
 				1,0,0,0,
 				0,1,0,0,
 				0,0,1,0,
@@ -1904,15 +1903,8 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		glBindVertexArray(static_VAO);
 	}
 	if (target_texture) {
-		if (*target_texture != 0 && !glIsTexture(*target_texture)) {
-			*target_texture = 0;
-			shader_pass->target_updated = 1;
-		}
+		int need_attach = 0;
 		if (*target_texture==0 || shader_pass->target_updated || reloadShaderTextures) {
-
-			// if(target_texture) {
-			// 	glDeleteTextures(1,target_texture);
-			// }
 			if(*target_texture==0)
 				glGenTextures(1, target_texture);
 			glActiveTexture(GL_TEXTURE0);
@@ -1924,30 +1916,24 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, dst_width, dst_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 			shader_pass->target_updated = 0;
 			last_bound_texture = *target_texture;
+			need_attach = 1;
 		}
-		if (fbo == 0) {
-			glGenFramebuffers(1, &fbo);
-		}
-
-        // Always bind before attaching to avoid stale state after swaps
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *target_texture, 0);
-
-		GLenum  err = glGetError();
-		if (err != GL_NO_ERROR) {
-			LOG_error("Framebuffer error: %d\n", err);
-			LOG_info("Failed to bind framebuffer with texture %u\n", *target_texture);
+		if (shader_pass->fbo == 0) {
+			glGenFramebuffers(1, &shader_pass->fbo);
+			need_attach = 1;
 		}
 
-        GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-        if (status != GL_FRAMEBUFFER_COMPLETE) {
-            LOG_error("Framebuffer incomplete: 0x%X\n", status);
-        }
-
-    } else {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    }
+		glBindFramebuffer(GL_FRAMEBUFFER, shader_pass->fbo);
+		if (need_attach) {
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *target_texture, 0);
+			GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+			if (status != GL_FRAMEBUFFER_COMPLETE) {
+				LOG_error("Framebuffer incomplete: 0x%X\n", status);
+			}
+		}
+	} else {
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
 
 	if(shader_pass->alpha==1) {
 		glEnable(GL_BLEND);
@@ -2087,13 +2073,6 @@ void PLAT_GL_Swap() {
         }
     }
 
-    static int lastframecount = 0;
-    if (reloadShaderTextures) lastframecount = frame_count;
-    if (frame_count < lastframecount + 3 || notif.clear_frames > 0) {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (notif.clear_frames > 0) notif.clear_frames--;
-    }
-
     SDL_Rect dst_rect = {0, 0, device_width, device_height};
     setRectToAspectRatio(&dst_rect);
 
@@ -2115,6 +2094,12 @@ void PLAT_GL_Swap() {
 	static int last_w = 0, last_h = 0;
 
 	if (shaderResetRequested) {
+		for (int i = 0; i < MAXSHADERS; i++) {
+			if (shaders[i].fbo) {
+				glDeleteFramebuffers(1, &shaders[i].fbo);
+				shaders[i].fbo = 0;
+			}
+		}
 		// without pixels to refill them, the source textures have to survive the reset
 		if (orig_texture && vid.blit->src) {
 			glDeleteTextures(2, src_textures);
@@ -2342,6 +2327,9 @@ void PLAT_GL_Swap() {
         last_h = dst_h;
     }
     valid_passes = nrofshaders;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     if (nrofshaders > 0) {
 		//LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
