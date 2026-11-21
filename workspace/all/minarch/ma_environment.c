@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "ma_internal.h"
+#include "ma_audio.h"
 #include "ma_options.h"
 #include "ma_input.h"
 #include "ra_integration.h"
@@ -164,6 +165,9 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 			double a = av->geometry.aspect_ratio;
 			if (a <= 0) a = (double)av->geometry.base_width / av->geometry.base_height;
 
+			if (core.fps != av->timing.fps || core.sample_rate != av->timing.sample_rate)
+				Audio_requestReset();
+
 			core.fps = av->timing.fps;
 			core.sample_rate = av->timing.sample_rate;
 			core.aspect_ratio = a;
@@ -247,7 +251,6 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS: { /* 53 */
 		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS");
 		if (data) {
-			OptionList_reset();
 			OptionList_init((const struct retro_core_option_definition *)data);
 			Config_readOptions();
 		}
@@ -257,7 +260,6 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL");
 		const struct retro_core_options_intl *options = (const struct retro_core_options_intl *)data;
 		if (options && options->us) {
-			OptionList_reset();
 			OptionList_init(options->us);
 			Config_readOptions();
 		}
@@ -326,7 +328,6 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 	case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2: { /* 67 */
 		// puts("RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2");
 		if (data) {
-			OptionList_reset();
 			OptionList_v2_init((const struct retro_core_options_v2 *)data);
 			Config_readOptions();
 		}
@@ -337,7 +338,6 @@ bool environment_callback(unsigned cmd, void *data) { // copied from picoarch in
 		if (data) {
 			const struct retro_core_options_v2_intl *intl = (const struct retro_core_options_v2_intl *)data;
 			if (intl && intl->us) {
-				OptionList_reset();
 				OptionList_v2_init(intl->us);
 				Config_readOptions();
 			}

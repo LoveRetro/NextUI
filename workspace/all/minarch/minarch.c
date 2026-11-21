@@ -213,8 +213,7 @@ int main(int argc , char* argv[]) {
 
 	// Mute audio during startup to avoid pops (InitSettings would be logical, but too late)
 	SND_overrideMute(1);
-	SND_init(core.sample_rate, core.fps);
-	SND_registerDeviceWatcher(Audio_onSinkChanged);
+	Audio_init();
 	InitSettings(); // after we initialize audio
 	Menu_init();
 	Notification_init();
@@ -317,7 +316,7 @@ int main(int argc , char* argv[]) {
 			has_pending_opt_change = 0;
 			if (Core_updateAVInfo()) {
 				LOG_info("AV info changed, reset sound system");
-				SND_resetAudio(core.sample_rate, core.fps);
+				Audio_requestReset();
 			}
 			chooseSyncRef();
 		}
@@ -329,6 +328,9 @@ int main(int argc , char* argv[]) {
 			RA_idle();
 			PWR_updateFrequency(PWR_UPDATE_FREQ_INGAME,0);
 			has_pending_opt_change = config.core.changed;
+			// The core can consume the change flag and replace the menu's options here.
+			if (has_pending_opt_change && core.update_visibility_callback)
+				core.update_visibility_callback();
 			chooseSyncRef();
 		}
 

@@ -32,9 +32,12 @@ static const char* getOptionNameFromKey(const char* key, const char* name) {
 	return name;
 }
 
-// the following 3 functions always touch config.core, the rest can operate on arbitrary OptionLists
+static void OptionList_restore(OptionList *previous);
+
 void OptionList_init(const struct retro_core_option_definition *defs) {
 	LOG_info("OptionList_init\n");
+	OptionList previous = config.core;
+	config.core = (OptionList){.changed = previous.changed};
 	int count;
 	for (count=0; defs[count].key; count++);
 
@@ -43,7 +46,6 @@ void OptionList_init(const struct retro_core_option_definition *defs) {
 	// TODO: add frontend options to this? so the can use the same override method? eg. minarch_*
 
 	config.core.count = count;
-	config.core.categories = NULL; // There is no categories in v1 definition
 	if (count) {
 		config.core.options = calloc(count+1, sizeof(Option));
 
@@ -105,10 +107,13 @@ void OptionList_init(const struct retro_core_option_definition *defs) {
 		}
 	}
 	// fflush(stdout);
+	OptionList_restore(&previous);
 }
 
 void OptionList_v2_init(const struct retro_core_options_v2 *opt_defs) {
 	LOG_info("OptionList_v2_init\n");
+	OptionList previous = config.core;
+	config.core = (OptionList){.changed = previous.changed};
 	struct retro_core_option_v2_category   *cats = opt_defs->categories;
 	struct retro_core_option_v2_definition *defs = opt_defs->definitions;
 
@@ -135,10 +140,6 @@ void OptionList_v2_init(const struct retro_core_options_v2 *opt_defs) {
 			printf("CATEGORY %s\n", item->key);
 		}
 	}
-	else {
-		config.core.categories = NULL;
-	}
-
 	config.core.count = count;
 	if (count) {
 		config.core.options = calloc(count+1, sizeof(Option));
@@ -187,6 +188,7 @@ void OptionList_v2_init(const struct retro_core_options_v2 *opt_defs) {
 		}
 	}
 	// fflush(stdout);
+	OptionList_restore(&previous);
 }
 
 void OptionList_vars(const struct retro_variable *vars) {
@@ -246,17 +248,16 @@ void OptionList_vars(const struct retro_variable *vars) {
 	}
 	// fflush(stdout);
 }
-void OptionList_reset(void) {
-	if (!config.core.count) return;
-
-	for (int i=0; i<config.core.count; i++) {
-		Option* item = &config.core.options[i];
+static void OptionList_free(OptionList *list) {
+	for (int i=0; i<list->count; i++) {
+		Option* item = &list->options[i];
 		if (item->var) {
 			// values/labels are all points to var
 			// so no need to free individually
 			free(item->var);
 		}
 		else {
+			free(item->name);
 			if (item->desc) free(item->desc);
 			if (item->full) free(item->full);
 			for (int j=0; j<item->count; j++) {
@@ -269,11 +270,43 @@ void OptionList_reset(void) {
 		free(item->values);
 		free(item->labels);
 		free(item->key);
-		free(item->name);
+		free(item->category);
 	}
-	if (config.core.enabled_options) free(config.core.enabled_options);
-	config.core.enabled_count = 0;
-	free(config.core.options);
+	if (list->categories) {
+		for (OptionCategory *category = list->categories; category->key; ++category) {
+			free(category->key);
+			free(category->desc);
+			free(category->info);
+		}
+		free(list->categories);
+	}
+	free(list->enabled_options);
+	free(list->options);
+}
+
+void OptionList_reset(void) {
+	OptionList_free(&config.core);
+	config.core = (OptionList){.changed = config.core.changed};
+}
+
+static void OptionList_restore(OptionList *previous) {
+	for (int i=0; i<config.core.count; i++) {
+		Option *item = &config.core.options[i];
+		Option *old = OptionList_getOption(previous, item->key);
+		if (!old) continue;
+
+		item->lock = old->lock;
+		if (old->value < 0 || old->value >= old->count) continue;
+
+		const char *value = old->values[old->value];
+		for (int j=0; j<item->count; j++) {
+			if (!strcmp(item->values[j], value)) {
+				item->value = j;
+				break;
+			}
+		}
+	}
+	OptionList_free(previous);
 }
 
 Option* OptionList_getOption(OptionList* list, const char* key) {

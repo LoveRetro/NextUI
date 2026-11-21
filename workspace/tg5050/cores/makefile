@@ -26,6 +26,7 @@ CORES+= vic
 CORES+= prboom
 CORES+= bluemsx
 CORES+= gearcoleco
+CORES+= dosbox_pure
 
 ###############################
 
