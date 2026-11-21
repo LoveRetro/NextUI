@@ -15,6 +15,10 @@ endif
 # commits after this one break save states (as of 20231025)
 # gpsp_HASH = 1d1c719
 
+dosbox_pure_REPO = https://codeberg.org/schelling/dosbox-pure.git
+dosbox_pure_BRANCH = 1.0-preview8
+dosbox_pure_FLAGS = STRIP=$(CROSS_COMPILE)strip LDLIBS="-lpthread -static-libstdc++ -static-libgcc"
+
 ###############################
 
 # this logic was broken out from picoarch's all-in-one makefile

@@ -179,6 +179,7 @@ cores: # TODO: can't assume every platform will have the same stock cores (platf
 	cp ./workspace/$(PLATFORM)/cores/output/vice_xvic_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/VIC.pak
 	cp ./workspace/$(PLATFORM)/cores/output/bluemsx_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/MSX.pak
 	cp ./workspace/$(PLATFORM)/cores/output/gearcoleco_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/COLECO.pak
+	cp ./workspace/$(PLATFORM)/cores/output/dosbox_pure_libretro.so ./build/EXTRAS/Emus/$(PLATFORM)/DOS.pak
 endif
 
 common: build system cores
