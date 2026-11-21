@@ -245,7 +245,24 @@ static void Directory_index(Directory* self) {
 
     Hash* map = NULL;
     char map_path[256];
-    sprintf(map_path, "%s/map.txt", is_collection ? COLLECTIONS_PATH : self->path);
+	char base_path[256];
+
+	strcpy(base_path, self->path);
+	char* tmp = strrchr(base_path, '/') + 1;
+	tmp[0] = '\0';
+
+    sprintf(map_path, "%s/map.txt", is_collection ? COLLECTIONS_PATH : self->path); // previous logic
+	
+	if (is_collection && CFG_getUseCollectionsNestedMap()){
+		if(suffixMatch(".txt", self->path)){
+			sprintf(map_path, "%smap.txt", base_path);
+		} else {
+			sprintf(map_path, "%s/map.txt", self->path);
+		}
+
+		if (!exists(map_path))
+			sprintf(map_path, "%s/map.txt", COLLECTIONS_PATH);
+	}
 
     if (exists(map_path)) {
         FILE* file = fopen(map_path, "r");
@@ -294,7 +311,7 @@ static void Directory_index(Directory* self) {
                 Array_free(self->entries);
                 self->entries = entries;
             }
-            if (resort) EntryArray_sort(self->entries);
+			if ((resort && !is_collection) || (resort && is_collection && CFG_getSortCollectionsEntries())) EntryArray_sort(self->entries);
         }
     }
 
@@ -371,7 +388,7 @@ static Directory* Directory_new(char* path, int selected) {
 		self->entries = getRecents();
 	}
 	else if (exactMatch(path, ROMS_PATH)) {
-		self->entries = getRoms();
+		self->entries = getRoot();
 	}
 	else if (!exactMatch(path, COLLECTIONS_PATH) && prefixMatch(COLLECTIONS_PATH, path) && suffixMatch(".txt", path)) {
 		self->entries = getCollection(path);
@@ -815,7 +832,8 @@ static Array* getQuickEntries(void) {
 		Array_push(entries, Entry_new(COLLECTIONS_PATH, ENTRY_DIR));
 
 	// Not sure we need this, its just a button press away (B)
-	Array_push(entries, Entry_newNamed(ROMS_PATH, ENTRY_DIR, "Games"));
+	if(CFG_getShowQuickswitcherUIGames())
+		Array_push(entries, Entry_newNamed(ROMS_PATH, ENTRY_DIR, "Games"));
 
 	// Add tools if applicable
     if (hasTools() && !simple_mode) {
@@ -861,7 +879,7 @@ static Array* getRoot(void) {
 
 	// Handle collections
 	if (hasCollections() && CFG_getShowCollections()) {
-        if (entries->count) {
+        if (entries->count || !CFG_getShowCollectionsPromotion()) {
             Array_push(root, Entry_new(COLLECTIONS_PATH, ENTRY_DIR));
         } else { // No visible systems, promote collections to root
 			Array *collections = getCollections();
@@ -1049,9 +1067,24 @@ static int isConsoleDir(char* path) {
 static Array* getEntries(char* path){
 	Array* entries = Array_new();
 
-	if (isConsoleDir(path)) { // top-level console folder, might collate
+	char base_path[256];
+	strcpy(base_path, path);
+	char* sub_path = "";
+
+	// Separate the top-level console folder from any subfolders if Collate Subfolders is active
+	if (CFG_getCollateSubfolders() && prefixMatch(ROMS_PATH, path)) {
+		char* slash = strchr(path + strlen(ROMS_PATH) + 1, '/');
+		if (slash) {
+			base_path[slash - path] = '\0'; // Sample base_path result "Roms/Handheld (GB)"
+			sub_path = slash;               // Sample sub_path result "/Nintendo"
+		}
+	}
+
+	int collated = 0;
+	if (isConsoleDir(base_path)) { // top-level console folder, might collate
+		collated = 1;
 		char collated_path[256];
-		strcpy(collated_path, path);
+		strcpy(collated_path, base_path);
 		char* tmp = strrchr(collated_path, '(');
 		// 1 because we want to keep the opening parenthesis to avoid collating "Game Boy Color" and "Game Boy Advance" into "Game Boy"
 		// but conditional so we can continue to support a bare tag name as a folder name
@@ -1070,7 +1103,11 @@ static Array* getEntries(char* path){
 				strcpy(tmp, dp->d_name);
 
 				if (!prefixMatch(collated_path, full_path)) continue;
-				addEntries(entries, full_path);
+				
+				// Re-attach sub_path to search identical subfolders across all collated directories
+				char target_path[512];
+				sprintf(target_path, "%s%s", full_path, sub_path);
+				addEntries(entries, target_path);
 			}
 			closedir(dh);
 		}
@@ -1078,6 +1115,26 @@ static Array* getEntries(char* path){
 	else addEntries(entries, path); // just a subfolder
 
 	EntryArray_sort(entries);
+
+	// Deduplicate only if Collate Subfolders is active and any Subfolders were actually collated
+	if (collated && CFG_getCollateSubfolders()) {
+		int unique_count = 0;
+		for (int i = 0; i < entries->count; i++) {
+			Entry* entry = entries->items[i];
+			
+			if (unique_count > 0 && 
+			    entry->type == ENTRY_DIR && 
+			    ((Entry*)entries->items[unique_count - 1])->type == ENTRY_DIR &&
+			    exactMatch(((Entry*)entries->items[unique_count - 1])->name, entry->name)) {
+				
+				Entry_free(entry); // Remove the duplicate subfolder entry
+			} else {
+				entries->items[unique_count++] = entry; // Keep a unique entry
+			}
+		}
+		entries->count = unique_count;
+	}
+
 	return entries;
 }
 
