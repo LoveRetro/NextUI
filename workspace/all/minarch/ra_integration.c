@@ -23,6 +23,7 @@
 #include <strings.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <zip.h>
 #include <SDL2/SDL.h>
 
 #include <rcheevos/rc_client.h>
@@ -382,6 +383,210 @@ static void ra_init_cdreader(void) {
 	rc_hash_get_default_cdreader(&ra_default_cdreader);
 	
 	RA_LOG_DEBUG("Initializing CHD-aware CD reader\n");
+}
+
+#define RA_ZIP_SKIP_CHUNK_SIZE 4096
+
+typedef struct {
+	bool is_zip;
+	FILE* fp;
+	zip_t* archive;
+	zip_file_t* zfile;
+	zip_uint64_t entry_index;
+	int64_t size;
+	int64_t pos;
+	int64_t stream_pos;
+} ra_file_handle_t;
+
+static bool ra_is_zip_path(const char* path) {
+	if (!path) return false;
+	const char* ext = strrchr(path, '.');
+	return ext && strcasecmp(ext, ".zip") == 0;
+}
+
+static int64_t ra_clamp_seek_target(int64_t base, int64_t offset, int64_t size) {
+	if (offset < 0) {
+		if (offset < -base)
+			return 0;
+		return base + offset;
+	}
+	if (offset > size - base)
+		return size;
+	return base + offset;
+}
+
+static bool ra_zip_find_rom_entry(zip_t* archive, zip_uint64_t* out_index, int64_t* out_size) {
+	zip_int64_t count = zip_get_num_entries(archive, 0);
+	bool found = false;
+	zip_uint64_t best_index = 0;
+	int64_t best_size = 0;
+
+	for (zip_int64_t i = 0; i < count; i++) {
+		zip_stat_t sb;
+		if (zip_stat_index(archive, (zip_uint64_t)i, 0, &sb) != 0)
+			continue;
+		if (!(sb.valid & ZIP_STAT_NAME) || !(sb.valid & ZIP_STAT_SIZE))
+			continue;
+		size_t name_len = strlen(sb.name);
+		if (name_len == 0 || sb.name[name_len - 1] == '/')
+			continue;
+		if ((int64_t)sb.size > best_size) {
+			found = true;
+			best_index = (zip_uint64_t)i;
+			best_size = (int64_t)sb.size;
+		}
+	}
+
+	if (found) {
+		*out_index = best_index;
+		*out_size = best_size;
+	}
+	return found;
+}
+
+static bool ra_zip_reopen_entry(ra_file_handle_t* handle) {
+	if (handle->zfile) {
+		zip_fclose(handle->zfile);
+		handle->zfile = NULL;
+	}
+	handle->pos = 0;
+	handle->stream_pos = 0;
+	handle->zfile = zip_fopen_index(handle->archive, handle->entry_index, 0);
+	return handle->zfile != NULL;
+}
+
+static void* ra_filereader_open(const char* path_utf8) {
+	if (!path_utf8 || !path_utf8[0])
+		return NULL;
+
+	ra_file_handle_t* handle = (ra_file_handle_t*)calloc(1, sizeof(ra_file_handle_t));
+	if (!handle)
+		return NULL;
+
+	if (ra_is_zip_path(path_utf8)) {
+		int err = 0;
+		handle->archive = zip_open(path_utf8, ZIP_RDONLY, &err);
+		if (!handle->archive) {
+			RA_LOG_WARN("Failed to open zip archive '%s' (libzip error %d)\n", path_utf8, err);
+			free(handle);
+			return NULL;
+		}
+		if (!ra_zip_find_rom_entry(handle->archive, &handle->entry_index, &handle->size) ||
+		    !ra_zip_reopen_entry(handle)) {
+			RA_LOG_WARN("No readable ROM entry in zip archive '%s'\n", path_utf8);
+			zip_close(handle->archive);
+			free(handle);
+			return NULL;
+		}
+		handle->is_zip = true;
+		return handle;
+	}
+
+	handle->fp = fopen(path_utf8, "rb");
+	if (!handle->fp) {
+		free(handle);
+		return NULL;
+	}
+	return handle;
+}
+
+static void ra_filereader_seek(void* file_handle, int64_t offset, int origin) {
+	ra_file_handle_t* handle = (ra_file_handle_t*)file_handle;
+	if (!handle)
+		return;
+
+	if (!handle->is_zip) {
+		fseeko(handle->fp, (off_t)offset, origin);
+		return;
+	}
+
+	int64_t target = handle->pos;
+	if (origin == SEEK_SET)
+		target = ra_clamp_seek_target(0, offset, handle->size);
+	else if (origin == SEEK_CUR)
+		target = ra_clamp_seek_target(handle->pos, offset, handle->size);
+	else if (origin == SEEK_END)
+		target = ra_clamp_seek_target(handle->size, offset, handle->size);
+
+	// Seeking to EOF (typically to query file size) does not need to consume the stream.
+	if (target == handle->size) {
+		handle->pos = handle->size;
+		return;
+	}
+	if (handle->zfile && target == handle->stream_pos) {
+		handle->pos = target;
+		return;
+	}
+
+	if ((!handle->zfile || target < handle->stream_pos) && !ra_zip_reopen_entry(handle))
+		return;
+
+	uint8_t discard[RA_ZIP_SKIP_CHUNK_SIZE];
+	while (handle->stream_pos < target) {
+		int64_t remaining = target - handle->stream_pos;
+		zip_uint64_t chunk = (remaining < RA_ZIP_SKIP_CHUNK_SIZE)
+			? (zip_uint64_t)remaining
+			: RA_ZIP_SKIP_CHUNK_SIZE;
+		zip_int64_t n = zip_fread(handle->zfile, discard, chunk);
+		if (n <= 0)
+			break;
+		handle->stream_pos += n;
+	}
+	handle->pos = handle->stream_pos;
+}
+
+static int64_t ra_filereader_tell(void* file_handle) {
+	ra_file_handle_t* handle = (ra_file_handle_t*)file_handle;
+	if (!handle)
+		return 0;
+
+	if (!handle->is_zip) {
+		off_t pos = ftello(handle->fp);
+		return (pos < 0) ? 0 : (int64_t)pos;
+	}
+
+	return handle->pos;
+}
+
+static size_t ra_filereader_read(void* file_handle, void* buffer, size_t requested_bytes) {
+	ra_file_handle_t* handle = (ra_file_handle_t*)file_handle;
+	if (!handle || !buffer || requested_bytes == 0)
+		return 0;
+
+	if (!handle->is_zip)
+		return fread(buffer, 1, requested_bytes, handle->fp);
+
+	if (!handle->zfile || handle->pos >= handle->size)
+		return 0;
+
+	uint8_t* dst = (uint8_t*)buffer;
+	size_t total = 0;
+	while (total < requested_bytes) {
+		zip_int64_t n = zip_fread(handle->zfile, dst + total, requested_bytes - total);
+		if (n <= 0)
+			break;
+		total += (size_t)n;
+		handle->stream_pos += n;
+		handle->pos = handle->stream_pos;
+	}
+	return total;
+}
+
+static void ra_filereader_close(void* file_handle) {
+	ra_file_handle_t* handle = (ra_file_handle_t*)file_handle;
+	if (!handle)
+		return;
+
+	if (!handle->is_zip) {
+		if (handle->fp)
+			fclose(handle->fp);
+	} else {
+		if (handle->zfile)
+			zip_fclose(handle->zfile);
+		if (handle->archive)
+			zip_close(handle->archive);
+	}
+	free(handle);
 }
 
 /*****************************************************************************
@@ -2152,15 +2357,20 @@ void RA_init(void) {
 		rc_hash_callbacks_t hash_callbacks;
 		memset(&hash_callbacks, 0, sizeof(hash_callbacks));
 		
-		// Set up CHD-aware CD reader callbacks
+		// Set up CHD-aware CD reader and zip-aware file reader callbacks
 		hash_callbacks.cdreader.open_track = ra_cdreader_open_track;
 		hash_callbacks.cdreader.open_track_iterator = ra_cdreader_open_track_iterator;
 		hash_callbacks.cdreader.read_sector = ra_cdreader_read_sector;
 		hash_callbacks.cdreader.close_track = ra_cdreader_close_track;
 		hash_callbacks.cdreader.first_track_sector = ra_cdreader_first_track_sector;
+		hash_callbacks.filereader.open = ra_filereader_open;
+		hash_callbacks.filereader.seek = ra_filereader_seek;
+		hash_callbacks.filereader.tell = ra_filereader_tell;
+		hash_callbacks.filereader.read = ra_filereader_read;
+		hash_callbacks.filereader.close = ra_filereader_close;
 		
 		rc_client_set_hash_callbacks(ra_client, &hash_callbacks);
-		RA_LOG_DEBUG("CHD disc image support enabled\n");
+		RA_LOG_DEBUG("CHD disc image and zip ROM hashing support enabled\n");
 	}
 	
 	// Configure hardcore mode from settings
@@ -2393,7 +2603,13 @@ static void ra_do_load_game(const char* rom_path, const uint8_t* rom_data, size_
 	// the console rcheevos identifies.
 	ra_reset_memory_regions();
 
-	// Use rc_client_begin_identify_and_load_game which hashes and identifies the ROM
+	// Use rc_client_begin_identify_and_load_game which hashes and identifies the ROM.
+	// If rom_path is a .zip (core handles zip itself), omit any raw zip buffer so
+	// rcheevos reads the uncompressed entry through ra_filereader_*.
+	if (ra_is_zip_path(rom_path)) {
+		rom_data = NULL;
+		rom_size = 0;
+	}
 #ifdef RC_CLIENT_SUPPORTS_HASH
 	rc_client_begin_identify_and_load_game(ra_client, console_id,
 		rom_path, rom_data, rom_size,
@@ -2410,6 +2626,11 @@ void RA_loadGame(const char* rom_path, const uint8_t* rom_data, size_t rom_size,
 	            ra_login_state_str(ra_get_login_state()), rom_path);
 	if (!ra_client || !CFG_getRAEnable()) {
 		return;
+	}
+
+	if (ra_is_zip_path(rom_path)) {
+		rom_data = NULL;
+		rom_size = 0;
 	}
 	
 	// If not logged in yet, store the game info for deferred loading
