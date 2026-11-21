@@ -59,6 +59,8 @@ static const RA_ConsoleMapping ra_console_table[] = {
 	{ "MGBA",    RC_CONSOLE_GAMEBOY_ADVANCE },
 	// MSX
 	{ "MSX",     RC_CONSOLE_MSX },
+	// Nintendo 64
+	{ "N64",     RC_CONSOLE_NINTENDO_64 },
 	// Neo Geo Pocket
 	{ "NGP",     RC_CONSOLE_NEOGEO_POCKET },
 	// Neo Geo Pocket Color
