@@ -1,4 +1,5 @@
 #include "ma_internal.h"
+#include "ma_audio.h"
 #include "ma_rewind.h"
 
 #include <string.h>
@@ -699,6 +700,8 @@ int Rewind_step_back(void) {
 		pthread_mutex_unlock(&rewind_ctx.lock);
 		return REWIND_STEP_EMPTY;
 	}
+
+	Audio_discard();
 
 	// pop newest
 	rewind_ctx.entry_head = idx;

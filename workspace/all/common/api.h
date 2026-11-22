@@ -459,6 +459,7 @@ typedef struct SND_Frame {
 typedef struct {
 	SND_Frame* frames;
 	int frame_count;
+	int input_used;
 } ResampledFrames;
 
 void SND_init(double sample_rate, double frame_rate);

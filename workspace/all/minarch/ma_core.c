@@ -151,6 +151,7 @@ void Core_load(void) {
 }
 void Core_reset(void) {
 	core.reset();
+	Audio_discard();
 	Rewind_on_state_change();
 }
 void Core_unload(void) {
