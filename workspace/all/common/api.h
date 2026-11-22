@@ -240,7 +240,9 @@ enum {
 };
 
 typedef struct GFX_Renderer {
-	void* src;
+	void* src; // NULL when the frame only exists in the GL source texture
+	int src_dirty; // src changed since the GL renderer last uploaded it; set by the frontend, cleared by PLAT_GL_Swap
+	int src_565_p; // pitch in bytes when src is RGB565, 0 when it is tightly packed RGBA8888
 	void* dst;
 	void* blit;
 	double aspect; // 0 for integer, -1 for fullscreen, otherwise aspect ratio, used for SDL2 accelerated scaling
@@ -441,7 +443,7 @@ int GFX_blitButtonGroup(char** hints, int primary, SDL_Surface* dst, int align_r
 void GFX_assetRect(int asset, SDL_Rect* dst_rect);
 void GFX_sizeText(TTF_Font* font, const char* str, int leading, int* w, int* h);
 void GFX_blitText(TTF_Font* font, const char* str, int leading, SDL_Color color, SDL_Surface* dst, SDL_Rect* dst_rect);
-void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch,int mode);
+void GFX_setAmbientColor(const void *data, unsigned width, unsigned height, size_t pitch, int is_rgb565, int mode);
 
 void GFX_ApplyRoundedCorners(SDL_Surface* surface, SDL_Rect* rect, int radius);
 void GFX_ApplyRoundedCorners16(SDL_Surface* surface, SDL_Rect* rect, int radius);
