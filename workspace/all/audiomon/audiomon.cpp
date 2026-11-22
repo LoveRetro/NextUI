@@ -241,8 +241,16 @@ void handleUsbAudioDisconnected(struct udev_device* dev) {
     }
 }
 
+// Written from the signal handler so select() wakes for shutdown.
+static int wake_pipe[2] = {-1, -1};
+
 void signalHandler(int sig) {
     running = false;
+    if (wake_pipe[1] >= 0) {
+        int saved_errno = errno;
+        (void)write(wake_pipe[1], "", 1);
+        errno = saved_errno;
+    }
 }
 
 void scanExistingUsbAudioDevices(struct udev* udev) {
@@ -288,6 +296,10 @@ int main(int argc, char* argv[]) {
     // This will be updated as soon as something connects
     SetAudioSink(AUDIO_SINK_DEFAULT);
 
+    if (pipe2(wake_pipe, O_NONBLOCK | O_CLOEXEC) < 0) {
+        log("Failed to create wake pipe");
+        return 1;
+    }
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
 
@@ -356,13 +368,12 @@ int main(int argc, char* argv[]) {
         // Add udev file descriptor
         FD_SET(udev_fd, &readfds);
         
+        FD_SET(wake_pipe[0], &readfds);
+
         int max_fd = (dbus_fd > udev_fd) ? dbus_fd : udev_fd;
-        
-        struct timeval timeout;
-        timeout.tv_sec = 1;
-        timeout.tv_usec = 0;
-        
-        int ret = select(max_fd + 1, &readfds, NULL, NULL, &timeout);
+        if (wake_pipe[0] > max_fd) max_fd = wake_pipe[0];
+
+        int ret = select(max_fd + 1, &readfds, NULL, NULL, NULL);
         
         if (ret < 0) {
             if (errno == EINTR) continue;

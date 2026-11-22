@@ -114,6 +114,10 @@ static void Special_quit(void) {
 void hdmimon(void) {
 	// handle HDMI change
 	static int had_hdmi = -1;
+	static Uint32 last_check = 0;
+	Uint32 now = SDL_GetTicks();
+	if (had_hdmi!=-1 && now - last_check < 250) return;
+	last_check = now;
 	int has_hdmi = GetHDMI();
 	if (had_hdmi==-1) had_hdmi = has_hdmi;
 	if (has_hdmi!=had_hdmi) {
@@ -231,7 +235,7 @@ int main(int argc , char* argv[]) {
 
 	PWR_disableAutosleep();
 	// we dont need five second updates while ingame, and wifi status isnt displayed either
-	PWR_updateFrequency(PWR_UPDATE_FREQ, 0); 
+	PWR_updateFrequency(PWR_UPDATE_FREQ_INGAME, 0);
 
 	// force a vsync immediately before loop
 	// for better frame pacing?

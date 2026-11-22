@@ -3953,15 +3953,27 @@ static struct VIB_Context
 {
 	int initialized;
 	pthread_t pt;
+	pthread_mutex_t lock;
+	pthread_cond_t changed;
 	int queued_strength;
 	int strength;
-} vib = {0};
+} vib = {.lock = PTHREAD_MUTEX_INITIALIZER, .changed = PTHREAD_COND_INITIALIZER};
+static void VIB_unlock(void *arg)
+{
+	pthread_mutex_unlock(&vib.lock);
+}
 static void *VIB_thread(void *arg)
 {
 #define DEFER_FRAMES 3
 	static int defer = 0;
 	while (1)
 	{
+		pthread_mutex_lock(&vib.lock);
+		pthread_cleanup_push(VIB_unlock, NULL);
+		while (vib.queued_strength == vib.strength)
+			pthread_cond_wait(&vib.changed, &vib.lock);
+		pthread_cleanup_pop(1);
+
 		SDL_Delay(17);
 		if (vib.queued_strength != vib.strength)
 		{
@@ -3997,7 +4009,10 @@ void VIB_setStrength(int strength)
 {
 	if (vib.queued_strength == strength)
 		return;
+	pthread_mutex_lock(&vib.lock);
 	vib.queued_strength = strength;
+	pthread_cond_signal(&vib.changed);
+	pthread_mutex_unlock(&vib.lock);
 }
 int VIB_getStrength(void)
 {
