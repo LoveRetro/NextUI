@@ -34,6 +34,8 @@
 
 static int reloadShaderTextures = 1;
 static int shaderResetRequested = 0;
+// leading user shader passes whose FBO output still matches the source texture
+static int valid_passes = 0;
 
 static SDL_BlendMode getPremultipliedBlendMode(void) {
 	return SDL_ComposeCustomBlendMode(
@@ -63,6 +65,9 @@ typedef struct ShaderProgram {
 	GLint u_Texture;
 	GLint u_OrigTexture;
 	GLint u_texelSize;
+	GLint u_MVPMatrix;
+	GLint a_VertexCoord;
+	GLint a_TexCoord;
 	
 	ShaderParam *pragmas;  // Dynamic array of parsed pragma parameters
 	int num_pragmas;       // Count of valid pragma parameters
@@ -77,6 +82,7 @@ typedef struct ShaderPass {
 	int filter;
 	int alpha;
 	GLuint target_texture;
+	GLuint fbo;
 	int target_updated;
 	int scale;
 	int srctype;
@@ -92,10 +98,11 @@ ShaderPass shaders[MAXSHADERS];
 
 // memcpy these in initShaders()
 const ShaderProgram blank_shader_program = {
-	.shader_p = 0, .filename = "stock.glsl"
+	.shader_p = 0, .filename = "stock.glsl",
+	.u_MVPMatrix = -1, .a_VertexCoord = -1, .a_TexCoord = -1
 };
 const ShaderPass blank_shader_pass = { .program = NULL,
-	.alpha = 0, .target_texture = 0, .target_updated = 1
+	.alpha = 0, .target_texture = 0, .fbo = 0, .target_updated = 1
 };
 
 ShaderPass s_pass_finalscale = { .program = &s_shader_default,
@@ -160,7 +167,6 @@ typedef struct {
     int dirty;
     GLuint tex;
     int tex_w, tex_h;
-    int clear_frames;  // Frames to clear framebuffer after notification ends
 } NotificationOverlay;
 
 static NotificationOverlay notif = {0};
@@ -175,7 +181,6 @@ void PLAT_setNotificationSurface(SDL_Surface* surface, int x, int y) {
 void PLAT_clearNotificationSurface(void) {
     notif.surface = NULL;
     notif.dirty = 0;  // Nothing to update since surface is NULL
-    notif.clear_frames = 3;  // Clear for 3 frames (triple buffering safety)
 }
 
 
@@ -484,6 +489,8 @@ void loadShaderPragmas(ShaderProgram *shader, const char *shaderSource) {
 }
 
 ShaderParam* PLAT_getShaderPragmas(int i) {
+    // callers change parameter values through this pointer
+    valid_passes = 0;
     return shaders[i].program->pragmas;
 }
 
@@ -491,8 +498,13 @@ void init_shader_program(ShaderProgram * shader, const char * path, const char *
 	char filepath[512];
 	snprintf(filepath, sizeof(filepath), "%s/%s", path, filename);
 
-	const char *shaderSource  = load_shader_source(filepath);
-	loadShaderPragmas(shader,shaderSource);
+	char *source = load_shader_source(filepath);
+	if (!source) return;
+	loadShaderPragmas(shader, source);
+	uint32_t hash = 2166136261u;
+	for (const unsigned char *c = (const unsigned char *)source; *c; c++)
+		hash = (hash ^ *c) * 16777619u;
+	free(source);
 
 	GLuint vertex_shader1 = load_shader_from_file(GL_VERTEX_SHADER, filepath);
 	GLuint fragment_shader1 = load_shader_from_file(GL_FRAGMENT_SHADER, filepath);
@@ -502,7 +514,9 @@ void init_shader_program(ShaderProgram * shader, const char * path, const char *
 		LOG_info("Deleting previous shader %i\n",shader->shader_p);
 		glDeleteProgram(shader->shader_p);
 	}
-	shader->shader_p = link_program(vertex_shader1, fragment_shader1, filename);
+	char cache_key[320];
+	snprintf(cache_key, sizeof(cache_key), "%s.%08x", filename, hash);
+	shader->shader_p = link_program(vertex_shader1, fragment_shader1, cache_key);
 
 
 	if (shader->shader_p == 0) {
@@ -529,6 +543,9 @@ void init_shader_program(ShaderProgram * shader, const char * path, const char *
 		shader->u_Texture = glGetUniformLocation(shader->shader_p, "Texture");
 		shader->u_OrigTexture = glGetUniformLocation(shader->shader_p, "OrigTexture");
 		shader->u_texelSize = glGetUniformLocation(shader->shader_p, "texelSize");
+		shader->u_MVPMatrix = glGetUniformLocation(shader->shader_p, "MVPMatrix");
+		shader->a_VertexCoord = glGetAttribLocation(shader->shader_p, "VertexCoord");
+		shader->a_TexCoord = glGetAttribLocation(shader->shader_p, "TexCoord");
 		for (int i = 0; i < shader->num_pragmas; ++i) {
 			shader->pragmas[i].uniformLocation = glGetUniformLocation(shader->shader_p, shader->pragmas[i].name);
 			shader->pragmas[i].value = shader->pragmas[i].def;
@@ -1678,7 +1695,6 @@ void setRectToAspectRatio(SDL_Rect* dst_rect) {
 
 void PLAT_blitRenderer(GFX_Renderer* renderer) {
 	vid.blit = renderer;
-	SDL_RenderClear(vid.renderer);
 	resizeVideo(vid.blit->true_w,vid.blit->true_h,vid.blit->src_p);
 }
 
@@ -1705,7 +1721,7 @@ void PLAT_flipHidden() {
 void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 	// dont think we need this here tbh
 	// SDL_RenderClear(vid.renderer);
-	if (!vid.blit) {
+	if (!vid.blit || !vid.blit->src) {
         resizeVideo(device_width, device_height, FIXED_PITCH); // !!!???
         SDL_UpdateTexture(vid.stream_layer1, NULL, vid.screen->pixels, vid.screen->pitch);
 		SDL_RenderCopy(vid.renderer, vid.target_layer1, NULL, NULL);
@@ -1734,7 +1750,17 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
         return;
     }
 
-    SDL_UpdateTexture(vid.stream_layer1, NULL, vid.blit->src, vid.blit->src_p);
+    if (vid.blit->src_565_p) {
+        void *pixels;
+        int pitch;
+        if (SDL_LockTexture(vid.stream_layer1, NULL, &pixels, &pitch) < 0) return;
+        int result = SDL_ConvertPixels(vid.width, vid.height, SDL_PIXELFORMAT_RGB565,
+                vid.blit->src, vid.blit->src_565_p, SDL_PIXELFORMAT_ARGB8888, pixels, pitch);
+        SDL_UnlockTexture(vid.stream_layer1);
+        if (result < 0) return;
+    } else {
+        SDL_UpdateTexture(vid.stream_layer1, NULL, vid.blit->src, vid.blit->src_p);
+    }
 
     SDL_Texture* target = vid.stream_layer1;
     int x = vid.blit->src_x;
@@ -1758,6 +1784,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 
     setRectToAspectRatio(dst_rect);
 
+    SDL_RenderClear(vid.renderer);
     SDL_RenderCopy(vid.renderer, target, src_rect, dst_rect);
 
     SDL_RenderPresent(vid.renderer);
@@ -1778,11 +1805,9 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 	static GLuint last_program = 0;
 	static GLfloat last_texelSize[2] = {-1.0f, -1.0f};
 	static GLfloat texelSize[2] = {-1.0f, -1.0f};
-	static GLuint fbo = 0;
 	static GLuint last_bound_texture = 0;
 	static GLint max_tex_size = 0;
 	static int logged_bad_size = 0;
-	GLenum pre_err;
 
 	if (!shader_pass) return;
 
@@ -1793,10 +1818,6 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 	}
 
 	const GLuint shader_program_handle = shader_program->shader_p;
-
-	while ((pre_err = glGetError()) != GL_NO_ERROR) {
-		(void)pre_err;
-	}
 
 	if (max_tex_size == 0) {
 		glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_tex_size);
@@ -1819,7 +1840,6 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		if (static_VBO) { glDeleteBuffers(1, &static_VBO); static_VBO = 0; }
 		last_program = 0;
 		last_texelSize[0] = last_texelSize[1] = -1.0f;
-		fbo = 0;
 		last_bound_texture = 0;
 	}
 
@@ -1848,12 +1868,12 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 	}
 
 	if (shader_program_handle != last_program) {
-		GLint posAttrib = glGetAttribLocation(shader_program_handle, "VertexCoord");
+		GLint posAttrib = shader_program->a_VertexCoord;
 		if (posAttrib >= 0) {
 			glVertexAttribPointer(posAttrib, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
 			glEnableVertexAttribArray(posAttrib);
 		}
-		GLint texAttrib = glGetAttribLocation(shader_program_handle, "TexCoord");
+		GLint texAttrib = shader_program->a_TexCoord;
 		if (texAttrib >= 0) {
 			glVertexAttribPointer(texAttrib,  4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(4 * sizeof(float)));
 			glEnableVertexAttribArray(texAttrib);
@@ -1870,9 +1890,9 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 			glUniform1f(shader_program->pragmas[i].uniformLocation, shader_program->pragmas[i].value);
 		}
 
-		GLint u_MVP = glGetUniformLocation(shader_program_handle, "MVPMatrix");
+		GLint u_MVP = shader_program->u_MVPMatrix;
 		if (u_MVP >= 0) {
-			float identity[16] = {
+			static const float identity[16] = {
 				1,0,0,0,
 				0,1,0,0,
 				0,0,1,0,
@@ -1883,15 +1903,8 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 		glBindVertexArray(static_VAO);
 	}
 	if (target_texture) {
-		if (*target_texture != 0 && !glIsTexture(*target_texture)) {
-			*target_texture = 0;
-			shader_pass->target_updated = 1;
-		}
+		int need_attach = 0;
 		if (*target_texture==0 || shader_pass->target_updated || reloadShaderTextures) {
-
-			// if(target_texture) {
-			// 	glDeleteTextures(1,target_texture);
-			// }
 			if(*target_texture==0)
 				glGenTextures(1, target_texture);
 			glActiveTexture(GL_TEXTURE0);
@@ -1902,30 +1915,25 @@ void runShaderPass(ShaderPass * shader_pass, GLuint src_texture,
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, dst_width, dst_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 			shader_pass->target_updated = 0;
+			last_bound_texture = *target_texture;
+			need_attach = 1;
 		}
-		if (fbo == 0) {
-			glGenFramebuffers(1, &fbo);
-		}
-
-        // Always bind before attaching to avoid stale state after swaps
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *target_texture, 0);
-
-		GLenum  err = glGetError();
-		if (err != GL_NO_ERROR) {
-			LOG_error("Framebuffer error: %d\n", err);
-			LOG_info("Failed to bind framebuffer with texture %u\n", *target_texture);
+		if (shader_pass->fbo == 0) {
+			glGenFramebuffers(1, &shader_pass->fbo);
+			need_attach = 1;
 		}
 
-        GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-        if (status != GL_FRAMEBUFFER_COMPLETE) {
-            LOG_error("Framebuffer incomplete: 0x%X\n", status);
-        }
-
-    } else {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    }
+		glBindFramebuffer(GL_FRAMEBUFFER, shader_pass->fbo);
+		if (need_attach) {
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *target_texture, 0);
+			GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+			if (status != GL_FRAMEBUFFER_COMPLETE) {
+				LOG_error("Framebuffer incomplete: 0x%X\n", status);
+			}
+		}
+	} else {
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
 
 	if(shader_pass->alpha==1) {
 		glEnable(GL_BLEND);
@@ -2065,17 +2073,11 @@ void PLAT_GL_Swap() {
         }
     }
 
-    static int lastframecount = 0;
-    if (reloadShaderTextures) lastframecount = frame_count;
-    if (frame_count < lastframecount + 3 || notif.clear_frames > 0) {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (notif.clear_frames > 0) notif.clear_frames--;
-    }
-
     SDL_Rect dst_rect = {0, 0, device_width, device_height};
     setRectToAspectRatio(&dst_rect);
 
-    if (!vid.blit->src) {
+    // src is NULL for a duplicate of a frame that only exists in the source texture
+    if (!vid.blit->src && !orig_texture) {
         return;
     }
 
@@ -2087,13 +2089,24 @@ void PLAT_GL_Swap() {
 	static int overlay_w = 0, overlay_h = 0;
 	static int overlayload = 0;
 
-	static GLuint src_texture = 0;
-	static int src_w_last = 0, src_h_last = 0;
+	static GLuint src_textures[2] = {0, 0};
+	static struct { int w, h; GLenum format; } storage[2];
 	static int last_w = 0, last_h = 0;
 
 	if (shaderResetRequested) {
-		if (orig_texture) { glDeleteTextures(1, &orig_texture); orig_texture = 0; }
-		src_w_last = src_h_last = 0;
+		for (int i = 0; i < MAXSHADERS; i++) {
+			if (shaders[i].fbo) {
+				glDeleteFramebuffers(1, &shaders[i].fbo);
+				shaders[i].fbo = 0;
+			}
+		}
+		// without pixels to refill them, the source textures have to survive the reset
+		if (orig_texture && vid.blit->src) {
+			glDeleteTextures(2, src_textures);
+			src_textures[0] = src_textures[1] = 0;
+			orig_texture = 0;
+		}
+		memset(storage, 0, sizeof(storage));
 		last_w = last_h = 0;
 		if (effect_tex) {
 			glDeleteTextures(1, &effect_tex);
@@ -2186,30 +2199,82 @@ void PLAT_GL_Swap() {
         //     glDeleteTextures(1, &orig_texture);
         //     orig_texture = 0;
         // }
-		if (orig_texture==0)
-			glGenTextures(1, &orig_texture);
-        glBindTexture(GL_TEXTURE_2D, orig_texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, nrofshaders > 0 ? shaders[0].filter : s_pass_finalscale.filter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nrofshaders > 0 ? shaders[0].filter : s_pass_finalscale.filter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		if (orig_texture==0) {
+			glGenTextures(2, src_textures);
+			orig_texture = src_textures[0];
+		}
+		for (int i = 0; i < 2; i++) {
+			glBindTexture(GL_TEXTURE_2D, src_textures[i]);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, nrofshaders > 0 ? shaders[0].filter : s_pass_finalscale.filter);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nrofshaders > 0 ? shaders[0].filter : s_pass_finalscale.filter);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		}
     }
 
+    int new_pixels = 0;
     glBindTexture(GL_TEXTURE_2D, orig_texture);
-    if (vid.blit->src_w != src_w_last || vid.blit->src_h != src_h_last || reloadShaderTextures) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, vid.blit->src_w, vid.blit->src_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
-        src_w_last = vid.blit->src_w;
-        src_h_last = vid.blit->src_h;
-        orig_w = vid.blit->src_w;
-        orig_h = vid.blit->src_h;
-        origtex_w = vid.blit->src_w;
-        origtex_h = vid.blit->src_h;
-    } else {
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vid.blit->src_w, vid.blit->src_h, GL_RGBA, GL_UNSIGNED_BYTE, vid.blit->src);
+    if (vid.blit->src) {
+        const int pitch565 = vid.blit->src_565_p;
+        const GLenum format = pitch565 ? GL_RGB : GL_RGBA;
+        const GLenum type = pitch565 ? GL_UNSIGNED_SHORT_5_6_5 : GL_UNSIGNED_BYTE;
+        if (pitch565) {
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, pitch565 / 2);
+        }
+        if (vid.blit->src_dirty || reloadShaderTextures || orig_w != vid.blit->src_w || orig_h != vid.blit->src_h || !storage[orig_texture == src_textures[1]].w) {
+            int slot = orig_texture == src_textures[0];
+            glBindTexture(GL_TEXTURE_2D, src_textures[slot]);
+            int w = vid.blit->src_w, h = vid.blit->src_h;
+            if (storage[slot].w != w || storage[slot].h != h || storage[slot].format != format) {
+                // SDL and the shader setup share GL error state. Attribute only this allocation's error to it.
+                while (glGetError() != GL_NO_ERROR) {}
+                glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, format, type, vid.blit->src);
+                GLenum error = glGetError();
+                if (error != GL_NO_ERROR) {
+                    if (vid.blit->src_dirty) LOG_error("Source texture %dx%d allocation failed (GL 0x%x)\n", w, h, error);
+                    storage[slot].w = 0;
+                    vid.blit->src_dirty = 1;
+                    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+                    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+                    return;
+                }
+                storage[slot].w = w;
+                storage[slot].h = h;
+                storage[slot].format = format;
+            } else {
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, format, type, vid.blit->src);
+            }
+            orig_texture = src_textures[slot];
+            orig_w = origtex_w = w;
+            orig_h = origtex_h = h;
+            new_pixels = 1;
+        }
+        if (pitch565) {
+            // every other upload in this context assumes the defaults
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        }
     }
+    vid.blit->src_dirty = 0;
 
     last_w = vid.blit->src_w;
     last_h = vid.blit->src_h;
+
+    // On a duplicate frame the passes would redraw what their FBO textures already hold.
+    static int pass_dims[4];
+    const int dims[4] = {vid.blit->src_w, vid.blit->src_h, dst_rect.w, dst_rect.h};
+    int first_pass = 0;
+    if (!new_pixels && !reloadShaderTextures && memcmp(dims, pass_dims, sizeof(dims)) == 0) {
+        first_pass = valid_passes;
+        for (int i = 0; i < nrofshaders; i++) {
+            // a pass that reads the frame counter draws something new every frame
+            if (shaders[i].target_updated || shaders[i].program->u_FrameCount >= 0) first_pass = 0;
+        }
+    }
+    memcpy(pass_dims, dims, sizeof(dims));
+    // runShaderPass skips the bind when its input is the texture it bound last, but the upload code above bound another one
+    if (first_pass > 0) glBindTexture(GL_TEXTURE_2D, shaders[first_pass - 1].target_texture);
 
     for (int i = 0; i < nrofshaders; i++) {
         int src_w = last_w;
@@ -2251,7 +2316,7 @@ void PLAT_GL_Swap() {
         }
         shaderinfocount++;
 
-        runShaderPass(
+        if (i >= first_pass) runShaderPass(
 			&shaders[i],
 			(i == 0) ? orig_texture : shaders[i - 1].target_texture,
 			&shaders[i].target_texture,
@@ -2261,6 +2326,10 @@ void PLAT_GL_Swap() {
         last_w = dst_w;
         last_h = dst_h;
     }
+    valid_passes = nrofshaders;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     if (nrofshaders > 0) {
 		//LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
