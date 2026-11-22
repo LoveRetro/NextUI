@@ -19,6 +19,7 @@
 
 #include "utils.h"
 #include "config.h"
+#include "cubic_resampler.h"
 
 #include <pthread.h>
 
@@ -169,11 +170,16 @@ static inline uint32_t UintMult(uint32_t color, uint32_t modulate_rgba)
 }
 
 ///////////////////////////////
+// Sentinel for our own Catmull-Rom cubic interpolation (cubic_resampler.c),
+// not a libsamplerate SRC_* converter type. Negative so it cannot collide
+// with libsamplerate's non-negative enum values.
+#define SND_QUALITY_CUBIC -1
 static int qualityLevels[] = {
-	3,
-	4,
-	2,
-	1};
+	SRC_ZERO_ORDER_HOLD,
+	SRC_LINEAR,
+	SND_QUALITY_CUBIC, // our own cubic interpolation (not from libsamplerate)
+	SRC_SINC_FASTEST,
+	SRC_SINC_MEDIUM_QUALITY};
 static struct PWR_Context
 {
 	int initialized;
@@ -2744,15 +2750,16 @@ static void SND_resizeBuffer(void)
 	SDL_UnlockAudio();
 #endif
 }
-static int soundQuality = 2;
+static int soundQuality = SND_QUALITY_CUBIC;
 static int resetSrcState = 0;
+
 void SND_setQuality(int quality)
 {
 	LOG_info("Set sound quality\n");
 	soundQuality = qualityLevels[quality];
 	resetSrcState = 1;
 }
-ResampledFrames resample_audio(const SND_Frame *input_frames,
+static ResampledFrames resample_audio(const SND_Frame *input_frames,
 							   int input_frame_count, int input_sample_rate,
 							   int output_sample_rate, double ratio)
 {
@@ -2763,9 +2770,20 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 
 	double final_ratio = ((double)output_sample_rate / input_sample_rate) * ratio;
 
-	if (!src_state || resetSrcState)
+	if (resetSrcState)
 	{
 		resetSrcState = 0;
+		if (src_state)
+			src_delete(src_state);
+		src_state = NULL;
+		cubic_resampler_reset();
+	}
+
+	if (soundQuality == SND_QUALITY_CUBIC)
+		return cubic_resampler_process(input_frames, input_frame_count, input_sample_rate, output_sample_rate, final_ratio);
+
+	if (!src_state)
+	{
 		src_state = src_new(soundQuality, 2, &error);
 		if (src_state == NULL)
 		{
@@ -2824,7 +2842,7 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 
 	int output_frame_count = src_data.output_frames_gen;
 
-	SND_Frame *output_frames = (SND_Frame *)malloc(output_frame_count * sizeof(SND_Frame));
+	SND_Frame *output_frames = (SND_Frame *)malloc((output_frame_count ? output_frame_count : 1) * sizeof(SND_Frame));
 	if (!output_frames)
 	{
 		fprintf(stderr, "Error allocating output frames\n");
@@ -2851,6 +2869,7 @@ ResampledFrames resample_audio(const SND_Frame *input_frames,
 	ResampledFrames resampled;
 	resampled.frames = output_frames;
 	resampled.frame_count = output_frame_count;
+	resampled.input_used = src_data.input_frames_used;
 
 	return resampled;
 }
@@ -2913,15 +2932,36 @@ float calculateBufferAdjustment(float remaining_space, float targetbuffer_over, 
 	return rolling_average;
 }
 
-static SND_Frame tmpbuffer[BATCH_SIZE];
-static SND_Frame *unwritten_frames = NULL;
-static int unwritten_frame_count = 0;
+static size_t mix_available(const SND_Frame *frames, size_t count, int free_slots, double ratio)
+{
+	// The audio callback can only increase the space in this snapshot. Leave one ring slot empty.
+	int space = free_slots - 1;
+	double output_per_input = ratio * snd.sample_rate_out / snd.sample_rate_in;
+	size_t used = 0;
+	while (used < count && space > 1)
+	{
+		int amount = MIN(count - used, BATCH_SIZE);
+		if (amount * output_per_input + 1 > space)
+			amount = (int)((space - 1) / output_per_input);
+		if (!amount) break;
+		ResampledFrames chunk = resample_audio(frames + used, amount, snd.sample_rate_in, snd.sample_rate_out, ratio);
+		pthread_mutex_lock(&audio_mutex);
+		for (int i = 0; i < chunk.frame_count; i++) {
+			snd.buffer[snd.frame_in] = chunk.frames[i];
+			snd.frame_in = (snd.frame_in + 1) % snd.frame_count;
+		}
+		pthread_mutex_unlock(&audio_mutex);
+		free(chunk.frames);
+		space -= chunk.frame_count;
+		used += chunk.input_used;
+		if (!chunk.frame_count && !chunk.input_used) break;
+	}
+	return used;
+}
 
 size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 {
-	int framecount = (int)frame_count;
-	int consumed = 0;
-	int total_consumed_frames = 0;
+	if (!snd.initialized) return 0;
 	double ratio = 1.0;
 
 	if (snd.frame_count <= 0)
@@ -3004,42 +3044,7 @@ size_t SND_batchSamples(const SND_Frame *frames, size_t frame_count)
 
 	perf.ratio = (ratio > 0.0) ? ratio : current_fps;
 
-	while (framecount > 0)
-	{
-		int amount = MIN(BATCH_SIZE, framecount);
-
-		// Copy frames to tmpbuffer for resampling
-		for (int i = 0; i < amount; i++)
-		{
-			tmpbuffer[i] = frames[consumed + i];
-		}
-		consumed += amount;
-		framecount -= amount;
-
-		ResampledFrames resampled = resample_audio(
-			tmpbuffer, amount, snd.sample_rate_in, snd.sample_rate_out, ratio);
-
-		int written_frames = 0;
-		pthread_mutex_lock(&audio_mutex);
-		for (int i = 0; i < resampled.frame_count; i++)
-		{
-			// Check if buffer full (leave one slot free)
-			if ((snd.frame_in + 1) % snd.frame_count == snd.frame_out)
-			{
-				// Buffer full, break early
-				break;
-			}
-			snd.buffer[snd.frame_in] = resampled.frames[i];
-			snd.frame_in = (snd.frame_in + 1) % snd.frame_count;
-			written_frames++;
-		}
-		pthread_mutex_unlock(&audio_mutex);
-
-		total_consumed_frames += written_frames;
-		free(resampled.frames);
-	}
-
-	return total_consumed_frames;
+	return mix_available(frames, frame_count, remaining_space, ratio);
 }
 
 enum
@@ -3051,13 +3056,11 @@ enum
 
 size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 {
+	if (!snd.initialized) return 0;
 	static int current_mode = SND_FF_ON_TIME;
 	double ratio = 1.0;
 
-	int framecount = (int)frame_count;
 
-	int consumed = 0;
-	int total_consumed_frames = 0;
 
 	// printf("received %d audio frames\n", frame_count);
 
@@ -3131,43 +3134,7 @@ size_t SND_batchSamples_fixed_rate(const SND_Frame *frames, size_t frame_count)
 	}
 	perf.ratio = ratio;
 
-	while (framecount > 0)
-	{
-
-		int amount = MIN(BATCH_SIZE, framecount);
-
-		for (int i = 0; i < amount; i++)
-		{
-			tmpbuffer[i] = frames[consumed + i];
-		}
-		consumed += amount;
-		framecount -= amount;
-
-		ResampledFrames resampled = resample_audio(
-			tmpbuffer, amount, snd.sample_rate_in, snd.sample_rate_out, ratio);
-
-		// Write resampled frames to the buffer
-		int written_frames = 0;
-
-		pthread_mutex_lock(&audio_mutex);
-		for (int i = 0; i < resampled.frame_count; i++)
-		{
-			if ((snd.frame_in + 1) % snd.frame_count == snd.frame_out)
-			{
-				// Buffer is full, break. This should never happen tho, but just to be safe
-				break;
-			}
-			snd.buffer[snd.frame_in] = resampled.frames[i];
-			snd.frame_in = (snd.frame_in + 1) % snd.frame_count;
-			written_frames++;
-		}
-		pthread_mutex_unlock(&audio_mutex);
-
-		total_consumed_frames += written_frames;
-		free(resampled.frames);
-	}
-
-	return total_consumed_frames;
+	return mix_available(frames, frame_count, remaining_space, ratio);
 }
 
 void SND_init(double sample_rate, double frame_rate)
@@ -3232,6 +3199,7 @@ void SND_init(double sample_rate, double frame_rate)
 
 	snd.frame_count = ((float)spec_out.freq / SCREEN_FPS) * 8; // buffer size based on sample rate out (times 12 samples headroom)
 	perf.buffer_size = snd.frame_count;
+	resetSrcState = 1;
 	snd.sample_rate_in = sample_rate;
 	snd.sample_rate_out = spec_out.freq;
 	perf.samplerate_in = snd.sample_rate_in;

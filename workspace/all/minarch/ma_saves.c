@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "ma_internal.h"
+#include "ma_audio.h"
 #include "ra_integration.h"
 #include "notification.h"
 
@@ -297,6 +298,7 @@ error:
 	if (state) free(state);
 	if (state_file) fclose(state_file);
 #endif
+	if (success) Audio_discard();
 	fast_forward = was_ff;
 	return success;
 }

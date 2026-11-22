@@ -1,4 +1,6 @@
 #include "ma_internal.h"
+#include "ma_audio.h"
+#include "ma_core.h"
 #include "ma_input.h"
 
 #include <string.h>
@@ -6,6 +8,8 @@
 int setFastForward(int enable) {
 	int val = enable ? 1 : 0;
 	if (fast_forward != val) {
+		Audio_flush();
+		Audio_discard();
 		LOG_info("FF state -> %i\n", val);
 	}
 	fast_forward = val;
@@ -147,7 +151,7 @@ void input_poll_callback(void) {
 					case SHORTCUT_SCREENSHOT:
 						Menu_screenshot();
 						break;
-					case SHORTCUT_RESET_GAME: core.reset(); break;
+					case SHORTCUT_RESET_GAME: Core_reset(); break;
 					case SHORTCUT_SAVE_QUIT:
 						newScreenshot = 1;
 						quit = 1;

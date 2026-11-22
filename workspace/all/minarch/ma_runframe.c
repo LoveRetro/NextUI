@@ -5,6 +5,7 @@
 #include "ma_input.h"
 #include "ma_config.h"
 #include "ma_runframe.h"
+#include "ma_audio.h"
 
 void chooseSyncRef(void) {
 	switch (sync_ref) {
@@ -59,6 +60,7 @@ void run_frame(void) {
 			rewinding = 1;
 			fast_forward = 0;
 			core.run();
+			Audio_flush();
 		}
 		else if (rewind_result == REWIND_STEP_CADENCE) {
 			// Waiting for cadence - don't run core, just re-render current frame
@@ -88,6 +90,7 @@ void run_frame(void) {
 				}
 				rewinding = 0;
 				core.run();
+				Audio_flush();
 				Rewind_push(0);
 			}
 		}
@@ -102,6 +105,7 @@ void run_frame(void) {
 		}
 
 		core.run();
+		Audio_flush();
 		Rewind_push(0);
 	}
 

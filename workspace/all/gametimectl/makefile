@@ -21,7 +21,7 @@ SDL?=SDL
 
 TARGET = gametimectl
 INCDIR = -I. -I../common/ -I../../$(PLATFORM)/platform/
-SOURCE = $(TARGET).c ../common/utils.c ../common/api.c ../common/scaler.c ../common/config.c ../../$(PLATFORM)/platform/platform.c
+SOURCE = $(TARGET).c ../common/utils.c ../common/api.c ../common/cubic_resampler.c ../common/scaler.c ../common/config.c ../../$(PLATFORM)/platform/platform.c
 
 CC = $(CROSS_COMPILE)gcc
 CFLAGS  += $(OPT)

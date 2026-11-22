@@ -265,6 +265,7 @@ int main(int argc , char* argv[]) {
 	// if the config didn't specify the desired cpu speed, the default is 0 = auto
 	setOverclock(overclock);
 
+	Audio_discard();
 	while (!quit) {
 		GFX_startFrame();
 
