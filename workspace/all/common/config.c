@@ -73,6 +73,7 @@ void CFG_defaults(NextUISettings *cfg)
         .keepAwakeWhenUSB = CFG_DEFAULT_KEEPAWAKEWHENUSB,
 
         .haptics = CFG_DEFAULT_HAPTICS,
+        .rumbleStrength = CFG_DEFAULT_RUMBLESTRENGTH,
         .romsUseFolderBackground = CFG_DEFAULT_ROMSUSEFOLDERBACKGROUND,
         .saveFormat = CFG_DEFAULT_SAVEFORMAT,
         .stateFormat = CFG_DEFAULT_STATEFORMAT,
@@ -319,6 +320,11 @@ void CFG_init(FontLoad_callback_t cb, ColorSet_callback_t ccb)
             if (sscanf(line, "haptics=%i", &temp_value) == 1)
             {
                 CFG_setHaptics((bool)temp_value);
+                continue;
+            }
+            if (sscanf(line, "rumbleStrength=%i", &temp_value) == 1)
+            {
+                CFG_setRumbleStrength(temp_value);
                 continue;
             }
             if (sscanf(line, "romfolderbg=%i", &temp_value) == 1)
@@ -892,6 +898,17 @@ void CFG_setHaptics(bool enable)
     CFG_sync();
 }
 
+int CFG_getRumbleStrength(void)
+{
+    return settings.rumbleStrength;
+}
+
+void CFG_setRumbleStrength(int percent)
+{
+    settings.rumbleStrength = clamp(percent, 0, 100);
+    CFG_sync();
+}
+
 int CFG_getSaveFormat(void)
 {
     return settings.saveFormat;
@@ -1458,6 +1475,10 @@ void CFG_get(const char *key, char *value)
     {
         sprintf(value, "%i", CFG_getMuteLEDs());
     }
+    else if (strcmp(key, "rumbleStrength") == 0)
+    {
+        sprintf(value, "%i", CFG_getRumbleStrength());
+    }
     else if (strcmp(key, "fn1action") == 0)
     {
         sprintf(value, "%s", CFG_getFnAction(0));
@@ -1650,6 +1671,7 @@ void CFG_sync(void)
     fprintf(file, "keepAwakeWhenUSB=%i\n", settings.keepAwakeWhenUSB);
     fprintf(file, "switcherscale=%i\n", settings.gameSwitcherScaling);
     fprintf(file, "haptics=%i\n", settings.haptics);
+    fprintf(file, "rumbleStrength=%i\n", settings.rumbleStrength);
     fprintf(file, "romfolderbg=%i\n", settings.romsUseFolderBackground);
     fprintf(file, "saveFormat=%i\n", settings.saveFormat);
     fprintf(file, "stateFormat=%i\n", settings.stateFormat);
@@ -1725,6 +1747,7 @@ void CFG_print(void)
     printf("\t\"keepAwakeWhenUSB\": %i,\n", settings.keepAwakeWhenUSB);
     printf("\t\"switcherscale\": %i,\n", settings.gameSwitcherScaling);
     printf("\t\"haptics\": %i,\n", settings.haptics);
+    printf("\t\"rumbleStrength\": %i,\n", settings.rumbleStrength);
     printf("\t\"romfolderbg\": %i,\n", settings.romsUseFolderBackground);
     printf("\t\"saveFormat\": %i,\n", settings.saveFormat);
     printf("\t\"stateFormat\": %i,\n", settings.stateFormat);

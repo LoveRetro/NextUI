@@ -156,6 +156,10 @@ static const std::vector<std::string> transition_mode_labels = {"Off", "Snappy",
 static const std::vector<std::any>    curtain_opacity_values = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
 static const std::vector<std::string> curtain_opacity_labels = {"Off", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"};
 
+// Rumble strength options (percent, 0 = off)
+static const std::vector<std::any>    rumble_strength_values = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+static const std::vector<std::string> rumble_strength_labels = {"Off", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"};
+
 // Input prompt style options
 static const std::vector<std::any>    input_prompt_style_values = {(int)INPUT_STYLE_TEXT, (int)INPUT_STYLE_ABXY, (int)INPUT_STYLE_CARDINALS, (int)INPUT_STYLE_SHAPES};
 static const std::vector<std::string> input_prompt_style_labels = {"Text", "ABXY", "Cardinals", "Shapes"};
@@ -657,6 +661,11 @@ int main(int argc, char *argv[])
             { return CFG_getHaptics(); }, [](const std::any &value)
             { CFG_setHaptics(std::any_cast<bool>(value)); },
             []() { CFG_setHaptics(CFG_DEFAULT_HAPTICS);}},
+            new MenuItem{ListItemType::Generic, "Rumble strength", "Strength of game rumble and haptic pulses (Off disables rumble)", rumble_strength_values, rumble_strength_labels, []() -> std::any
+            { // snap to the 10% grid so a hand-edited value still matches a list entry
+              return (CFG_getRumbleStrength() + 5) / 10 * 10; }, [](const std::any &value)
+            { CFG_setRumbleStrength(std::any_cast<int>(value)); },
+            []() { CFG_setRumbleStrength(CFG_DEFAULT_RUMBLESTRENGTH);}},
             new MenuItem{ListItemType::Generic, "Default view", "The initial view to show on boot",
             {(int)SCREEN_GAMELIST, (int)SCREEN_GAMESWITCHER, (int)SCREEN_QUICKMENU},
             {"Content List","Game Switcher","Quick Menu"},
