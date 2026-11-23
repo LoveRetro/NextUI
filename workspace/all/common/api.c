@@ -4308,6 +4308,10 @@ void PWR_disablePowerOff(void)
 }
 void PWR_powerOff(int reboot)
 {
+	// the core is blocked in PWR_update, so its last rumble request would stay
+	// queued and the motor would run through the power-off screen
+	VIB_setStrength(0);
+
 	if (pwr.can_poweroff)
 	{
 
