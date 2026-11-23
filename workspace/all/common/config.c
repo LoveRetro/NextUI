@@ -905,11 +905,7 @@ int CFG_getRumbleStrength(void)
 
 void CFG_setRumbleStrength(int percent)
 {
-    if (percent < 0)
-        percent = 0;
-    else if (percent > 100)
-        percent = 100;
-    settings.rumbleStrength = percent;
+    settings.rumbleStrength = clamp(percent, 0, 100);
     CFG_sync();
 }
 
