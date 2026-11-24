@@ -3124,9 +3124,9 @@ int main (int argc, char *argv[]) {
 							SDL_UnlockMutex(animMutex);
 							updatePillTextSurface(entry_name, max_width, uintToColour(THEME_COLOR5_255));
 							AnimTask* task = malloc(sizeof(AnimTask));
-							task->startX = SCALE1(BUTTON_MARGIN);
+							task->startX = SCALE1(PADDING);
 							task->startY = SCALE1(previousY+PADDING);
-							task->targetX = SCALE1(BUTTON_MARGIN);
+							task->targetX = SCALE1(PADDING);
 							task->targetY = SCALE1(targetY+PADDING);
 							task->targetTextY = SCALE1(PADDING + targetY) + text_offset_y;
 							pilltargetTextY = task->targetTextY;
@@ -3137,7 +3137,7 @@ int main (int argc, char *argv[]) {
 							animPill(task);
 						}
 						SDL_Rect text_rect = { 0, 0, max_width - SCALE1(BUTTON_PADDING*2), text->h };
-						SDL_Rect dest_rect = { SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)) + text_offset_y };
+						SDL_Rect dest_rect = { SCALE1(PADDING + BUTTON_PADDING), SCALE1(PADDING + (j * PILL_SIZE)) + text_offset_y };
 
 						if(list_show_entry_names) {
 							SDL_BlitSurface(text_unique, &text_rect, screen, &dest_rect);
@@ -3188,9 +3188,9 @@ int main (int argc, char *argv[]) {
 					// blinking in after the transition animation ends.
 					if (currentScreen == SCREEN_GAMELIST && total > 0 && globalpill && list_show_entry_names) {
 						SDL_LockMutex(animMutex);
-						GFX_drawOnLayer(globalpill, SCALE1(BUTTON_MARGIN), (int)SCALE1(targetY + PADDING), globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
+						GFX_drawOnLayer(globalpill, SCALE1(PADDING), (int)SCALE1(targetY + PADDING), globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
 						if (globalText) {
-							GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
+							GFX_drawOnLayer(globalText, SCALE1(PADDING + BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
 						}
 						SDL_UnlockMutex(animMutex);
 					}
@@ -3251,7 +3251,7 @@ int main (int argc, char *argv[]) {
 						new_w = (int)(new_h / aspect_ratio);
 					}
 
-					int target_x = screen->w-(new_w + SCALE1(BUTTON_MARGIN*3));
+					int target_x = screen->w-(new_w + SCALE1(BUTTON_MARGIN*3)); // FIX: this factor seems pretty random
 					int target_y = (int)(screen->h * 0.50);
 					int center_y = target_y - (new_h / 2); // FIX: use new_h instead of thumbbmp->h
 					GFX_clearLayers(LAYER_THUMBNAIL);
@@ -3267,7 +3267,7 @@ int main (int argc, char *argv[]) {
 				SDL_LockMutex(animMutex);
 				if (list_show_entry_names) {
 					GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
-					GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
+					GFX_drawOnLayer(globalText, SCALE1(PADDING + BUTTON_PADDING), pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
 				}
 				SDL_UnlockMutex(animMutex);
 			}
@@ -3306,8 +3306,8 @@ int main (int argc, char *argv[]) {
 					new_h = max_h;
 					new_w = (int)(new_h / aspect_ratio);
 				}
-
-				int target_x = screen->w-(new_w + SCALE1(BUTTON_MARGIN*3));
+	
+				int target_x = screen->w-(new_w + SCALE1(BUTTON_MARGIN*3)); // FIX: this factor seems pretty random
 				int target_y = (int)(screen->h * 0.50);
 				int center_y = target_y - (new_h / 2); // FIX: use new_h instead of thumbbmp->h
 				GFX_clearLayers(LAYER_THUMBNAIL);
@@ -3351,7 +3351,7 @@ int main (int argc, char *argv[]) {
 						GFX_scrollTextTexture(
 							font.large,
 							entry_text,
-							SCALE1(BUTTON_MARGIN + BUTTON_PADDING), SCALE1(PADDING + previous_row * PILL_SIZE) + text_offset_y,
+							SCALE1(PADDING + BUTTON_PADDING), SCALE1(PADDING + previous_row * PILL_SIZE) + text_offset_y,
 							max_width - SCALE1(BUTTON_PADDING * 2),
 							0,
 							text_color,
@@ -3366,7 +3366,7 @@ int main (int argc, char *argv[]) {
 					SDL_LockMutex(animMutex);
 					if (list_show_entry_names) {
 						GFX_drawOnLayer(globalpill, pillRect.x, pillRect.y, globallpillW, globalpill->h, 1.0f, 0, LAYER_TRANSITION);
-						GFX_drawOnLayer(globalText, SCALE1(BUTTON_MARGIN + BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
+						GFX_drawOnLayer(globalText, SCALE1(PADDING + BUTTON_PADDING),pilltargetTextY, globalText->w, globalText->h, 1.0f, 0, LAYER_SCROLLTEXT);
 					}
 					SDL_UnlockMutex(animMutex);
 					PLAT_GPU_Flip();

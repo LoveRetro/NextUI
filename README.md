@@ -92,6 +92,7 @@ See [LICENSE](LICENSE) and [NOTICE](NOTICE) for full details.
 - Trimui Smart Pro
 - Trimui Smart Pro S
 - Anbernic H700 Devices
+- Miyoo Flip
 
 ---
 
