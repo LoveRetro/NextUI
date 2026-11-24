@@ -37,18 +37,39 @@ set_policy() {
         echo "$MAX_FREQ" > "$policy_path/scaling_max_freq"
 }
 
+# devfreq governor and min freq (lowest available if "min") for GPU and memory
+set_devfreq() {
+        local node="/sys/class/devfreq/$1"
+        local governor="$2"
+        local min="$3"
+
+        [ -f "$node/governor" ] || return 0
+        grep -qw "$governor" "$node/available_governors" || governor="simple_ondemand"
+        [ "$min" = "min" ] && min=$(tr ' ' '\n' < "$node/available_frequencies" | grep -v '^$' | sort -n | head -1)
+
+        echo "$governor" > "$node/governor" 2>/dev/null || true
+        echo "$min" > "$node/min_freq" 2>/dev/null || true
+}
+
 case "$MODE" in
         auto)
                 # schedutil governor, min freq to one step below max (408-1800 MHz on MY355)
                 set_policy /sys/devices/system/cpu/cpufreq/policy0 "schedutil" "second_max"
+                # GPU floor at 400 MHz, same voltage as 200 MHz
+                set_devfreq fde60000.gpu "simple_ondemand" 400000000
+                set_devfreq dmc "dmc_ondemand" "min"
                 ;;
         performance)
                 # performance governor, one step below max (1800 MHz on MY355, 1992 is turbo)
                 set_policy /sys/devices/system/cpu/cpufreq/policy0 "performance" "second_max"
+                set_devfreq fde60000.gpu "performance" "min"
+                set_devfreq dmc "performance" "min"
                 ;;
         powersave)
                 # conservative governor, min freq to midpoint max (408-1104 MHz on MY355)
                 set_policy /sys/devices/system/cpu/cpufreq/policy0 "conservative" "mid"
+                set_devfreq fde60000.gpu "simple_ondemand" "min"
+                set_devfreq dmc "dmc_ondemand" "min"
                 ;;
         *)
                 echo "governor.sh: unknown mode '$MODE'" >&2
