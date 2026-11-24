@@ -160,7 +160,6 @@ typedef struct {
     int dirty;
     GLuint tex;
     int tex_w, tex_h;
-    int clear_frames;  // Frames to clear framebuffer after notification ends
 } NotificationOverlay;
 
 static NotificationOverlay notif = {0};
@@ -175,7 +174,6 @@ void PLAT_setNotificationSurface(SDL_Surface* surface, int x, int y) {
 void PLAT_clearNotificationSurface(void) {
     notif.surface = NULL;
     notif.dirty = 0;  // Nothing to update since surface is NULL
-    notif.clear_frames = 3;  // Clear for 3 frames (triple buffering safety)
 }
 
 
@@ -2065,13 +2063,6 @@ void PLAT_GL_Swap() {
         }
     }
 
-    static int lastframecount = 0;
-    if (reloadShaderTextures) lastframecount = frame_count;
-    if (frame_count < lastframecount + 3 || notif.clear_frames > 0) {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (notif.clear_frames > 0) notif.clear_frames--;
-    }
-
     SDL_Rect dst_rect = {0, 0, device_width, device_height};
     setRectToAspectRatio(&dst_rect);
 
@@ -2261,6 +2252,15 @@ void PLAT_GL_Swap() {
         last_w = dst_w;
         last_h = dst_h;
     }
+
+    // Clear the screen framebuffer after making vid.gl_context current and
+    // finishing offscreen shader passes so pillarbox/letterbox borders never
+    // retain stale notification or resized-frame pixels.
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDisable(GL_SCISSOR_TEST);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (nrofshaders > 0) {
 		//LOG_info("Shader Pass: Scale to screen (pipeline size: %d)\n", nrofshaders);
